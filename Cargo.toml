@@ -1,0 +1,9 @@
+[package]
+name = "brul-gui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.49.0", features = ["full"] }
+wgpu = "27.0.1"
+winit = "0.30.12"
