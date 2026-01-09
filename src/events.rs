@@ -58,12 +58,9 @@ impl EventContext {
     }
 
     pub fn update(&mut self, event: &Event) {
-        match event {
-            Event::MouseMove { x, y } => {
-                self.x = *x;
-                self.y = *y;
-            }
-            _ => {}
+        if let Event::MouseMove { x, y } = event {
+            self.x = *x;
+            self.y = *y;
         }
     }
 }

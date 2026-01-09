@@ -1,10 +1,16 @@
 use winit::event_loop::{ControlFlow, EventLoop};
 
-use crate::app::App;
-
 mod app;
+mod core;
 mod event_loop;
 mod events;
+mod render;
+mod widget;
+
+pub use app::App;
+pub use core::{Color, Edges, Point, Rect, Size};
+pub use events::{Event, EventContext};
+pub use widget::{Rectangle, Widget};
 
 pub fn start_app() {
     let event_loop = EventLoop::new().unwrap();
