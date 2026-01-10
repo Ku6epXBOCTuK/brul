@@ -1,7 +1,7 @@
 use winit::event_loop::{ControlFlow, EventLoop};
 
 mod app;
-mod core;
+pub mod core;
 mod event_loop;
 mod events;
 mod render;

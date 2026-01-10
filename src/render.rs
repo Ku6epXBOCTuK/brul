@@ -2,7 +2,7 @@ use std::{num::NonZero, sync::Arc};
 
 use crate::{Color, Rect};
 use wgpu;
-use winit::{event_loop::OwnedDisplayHandle, window::Window};
+use winit::window::Window;
 
 pub struct Renderer {
     window: Arc<Window>,
@@ -33,17 +33,19 @@ impl Renderer {
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps.formats[0];
 
-        Self {
+        let renderer = Self {
             window,
             device,
             queue,
             size,
             surface,
             surface_format,
-        }
+        };
+        renderer.configure_surface();
+        renderer
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn _resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
 
         self.configure_surface();
@@ -64,9 +66,9 @@ impl Renderer {
         self.surface.configure(&self.device, &surface_config);
     }
 
-    pub fn render() {}
+    pub fn _render() {}
 
-    fn begin_frame(&mut self) -> Option<wgpu::TextureView> {
+    fn _begin_frame(&mut self) -> Option<wgpu::TextureView> {
         let output = self.surface.get_current_texture().ok()?;
         let view = output
             .texture
@@ -74,15 +76,19 @@ impl Renderer {
         Some(view)
     }
 
-    fn end_frame(&mut self) {
+    fn _end_frame(&mut self) {
         self.queue.submit(None);
     }
 
     pub fn clear(&mut self, color: Color) {
-        let view = match self.begin_frame() {
-            Some(view) => view,
-            None => return,
+        let surface_texture = match self.surface.get_current_texture() {
+            Ok(output) => output,
+            Err(_) => return,
         };
+
+        let texture_view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = self
             .device
@@ -90,39 +96,39 @@ impl Renderer {
                 label: Some("Clear encoder"),
             });
 
-        {
-            let operations = wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color {
-                    r: color.r as f64,
-                    g: color.g as f64,
-                    b: color.b as f64,
-                    a: color.a as f64,
-                }),
-                store: wgpu::StoreOp::Store,
-            };
+        let operations = wgpu::Operations {
+            load: wgpu::LoadOp::Clear(wgpu::Color {
+                r: color.r as f64,
+                g: color.g as f64,
+                b: color.b as f64,
+                a: color.a as f64,
+            }),
+            store: wgpu::StoreOp::Store,
+        };
 
-            let color_atachments = [Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: operations,
-                depth_slice: None,
-            })];
+        let color_atachments = [Some(wgpu::RenderPassColorAttachment {
+            view: &texture_view,
+            resolve_target: None,
+            ops: operations,
+            depth_slice: None,
+        })];
 
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Clear Pass"),
-                color_attachments: &color_atachments,
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: Some(NonZero::new(1).unwrap()),
-            });
-        }
+        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Clear Pass"),
+            color_attachments: &color_atachments,
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: Some(NonZero::new(1).unwrap()),
+        });
+
+        drop(render_pass);
 
         self.queue.submit(Some(encoder.finish()));
-        self.end_frame();
+        surface_texture.present();
     }
 
-    pub fn draw_rect(&mut self, rect: Rect, color: Color) {
+    pub fn _draw_rect(&mut self, _rect: Rect, _color: Color) {
         // TODO:
         todo!()
     }
