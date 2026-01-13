@@ -1,9 +1,23 @@
-[package]
-name = "brul-gui"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "crates/brul",
+    "crates/brul-gui",
+    "crates/brul-macros",
+    "examples/*",
+    "tests/*",
+]
+resolver = "2"
 
-[dependencies]
-tokio = { version = "1.49.0", features = ["full"] }
-wgpu = "28.0.0"
-winit = "0.30.12"
+[workspace.package]
+edition = "2024"
+license = "MIT"
+description = "BRUL - Blazing Rust UI Library"
+authors = ["Ku6epXBOCTuK"]
+repository = "https://github.com/Ku6epXBOCTuK/brul"
+
+[workspace.dependencies]
+proc-macro2 = "1.0.105"
+quote = "1.0.43"
+syn = "2.0.114"
+tokio = "1.49.0"
+
