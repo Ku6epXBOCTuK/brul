@@ -1,0 +1,17 @@
+from_latest_tag = true
+ignore_merge_commits = true
+generate_mono_repository_global_tag = false
+
+[changelog]
+path = "CHANGELOG.md"
+template = "remote"
+remote = "github.com"
+repository = "brul"
+owner = "Ku6epXBOCTuK"
+
+[packages]
+brul = { path = "crates/brul" }
+brul-complier = { path = "crates/brul-complier" }
+brul-gui = { path = "crates/brul-gui" }
+brul-macros = { path = "crates/brul-macros" }
+brul-utils = { path = "crates/brul-utils" }
