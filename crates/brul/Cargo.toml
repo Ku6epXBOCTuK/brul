@@ -1,7 +1,9 @@
 [package]
-name = "brul-core"
+name = "brul"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+brul-macro = { workspace = true }
+brul-utils = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

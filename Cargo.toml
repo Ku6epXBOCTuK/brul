@@ -3,6 +3,7 @@ members = [
     "crates/brul",
     "crates/brul-gui",
     "crates/brul-macros",
+    "crates/brul-utils",
     "examples/*",
     "tests/*",
 ]
@@ -16,8 +17,12 @@ authors = ["Ku6epXBOCTuK"]
 repository = "https://github.com/Ku6epXBOCTuK/brul"
 
 [workspace.dependencies]
+brul = { path = 'crates\brul' }
+brul-macro = { path = 'crates\brul-macros' }
+brul-utils = { path = 'crates\brul-utils' }
 proc-macro2 = "1.0.105"
 quote = "1.0.43"
 syn = "2.0.114"
 tokio = "1.49.0"
-
+wgpu = "28.0.0"
+winit = "0.30.12"

@@ -1,0 +1,23 @@
+use crate::{State, app::handle::AppHandle};
+use brul_utils::Config;
+
+pub trait AppManager {
+    fn app_handle(&self) -> &AppHandle;
+
+    fn config(&self) -> &Config; // is env are configs?
+
+    // fn env(&self) -> &Env; // TODO: path, arguments, etc
+
+    fn manage<T: Send + Sync + 'static>(&mut self, state: T) -> bool;
+
+    fn state<T: Send + Sync + 'static>(&self) -> State<T> {
+        self.try_state().unwrap_or_else(|| {
+            panic!(
+                "State not found for type {}, you need add it with manage() method",
+                std::any::type_name::<T>()
+            )
+        })
+    }
+
+    fn try_state<T: Send + Sync + 'static>(&self) -> Option<State<T>>;
+}

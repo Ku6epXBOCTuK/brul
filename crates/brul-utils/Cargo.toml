@@ -1,11 +1,10 @@
 [package]
-name = "basic-app"
+name = "brul-utils"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 description.workspace = true
 authors.workspace = true
+repository.workspace = true
 
 [dependencies]
-brul = { workspace = true }
-tokio = { workspace = true, features = ["full"] }

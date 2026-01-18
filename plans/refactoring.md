@@ -1,287 +1,177 @@
-Для GUI-библиотеки на winit + wgpu структура будет особенной. Вот пошаговый план рефакторинга с учётом специфики графических библиотек.
+# План рефакторинга BRUL GUI Library
 
-## **Этап 1: Проанализируйте текущий "монолит"**
+## **Текущее состояние проекта**
 
-Сначала определите, какие части у вас уже есть:
+**Workspace структура:**
 
-- Инициализация wgpu/winit
-- Шейдеры/пайплайны
-- Рендер-граф или система отрисовки
-- UI-компоненты (кнопки, панели)
-- Система событий
-- Обработка входных данных
-- Управление состоянием
+- `crates/brul-core/` - базовый крейт (пустой)
+- `crates/brul-gui/` - GUI крейт (пустой)
+- `crates/brul-macros/` - макросы
+- `src/` - старые исходники (app.rs, app_old.rs, core.rs, events.rs, render.rs, widget.rs, brul.rs, event_loop.rs, lib.rs)
 
-## **Этап 2: Целевая архитектура (типичная для GUI-библиотеки)**
+**Анализ старых исходников в `src/`:**
 
-Вот рекомендованная структура для графической библиотеки:
+- `core.rs` - базовые типы: `Point`, `Size`, `Rect`, `Edges`, `Color`
+- `events.rs` - `Event` enum и `EventContext` для обработки событий
+- `render.rs` - `Renderer` struct (wgpu инициализация и рендеринг)
+- `widget.rs` - `Widget` trait и `Rectangle` implementation
+- `app.rs` / `app_old.rs` - `App` struct и event loop logic
+- `brul.rs` - `Brul` builder pattern для состояния и задач
+- `event_loop.rs` - закомментированный код (можно удалить)
+- `lib.rs` - реэкспорт всех модулей
+
+## **Проблема циклических зависимостей**
+
+Point, Size, Rect, Color нужны И в brul-core (для Brul builder) И в brul-gui (для рендеринга и UI).
+Если вынести их в brul-core → brul-gui зависит от brul-core → возможно, brul-core тоже понадобится GUI типы.
+
+## **Решение: Выделить utils крейт**
+
+### **Новая архитектура:**
 
 ```
-src/
-├── lib.rs              # Основной реэкспорт
-├── core/               # Ядро библиотеки
-│   ├── mod.rs
-│   ├── application.rs  # Главный цикл, App/Window
-│   ├── context.rs      # WgpuContext, Surface, Device, Queue
-│   ├── config.rs       # Настройки графики
-│   └── state.rs        # Состояние приложения
-├── render/             # Рендеринг
-│   ├── mod.rs
-│   ├── renderer.rs     # Основной рендерер
-│   ├── pipeline.rs     # Пайплайны wgpu
-│   ├── shaders.rs      # Шейдеры (или shaders/ директория)
-│   ├── texture.rs      # Текстуры, загрузка изображений
-│   ├── font.rs         # Работа со шрифтами
-│   └── passes/         # Рендер-пассы
-│       ├── ui_pass.rs
-│       ├── clear_pass.rs
-│       └── ...
-├── ui/                 # UI компоненты
-│   ├── mod.rs
-│   ├── widget.rs       # Базовый trait Widget
-│   ├── layout.rs       # Компоновка (Flex, Grid)
-│   ├── theme.rs        # Темы, стили
-│   ├── components/     # Конкретные виджеты
-│   │   ├── button.rs
-│   │   ├── label.rs
-│   │   ├── panel.rs
-│   │   └── ...
-│   └── builder.rs      # Builder-паттерн для виджетов
-├── input/              # Обработка ввода
-│   ├── mod.rs
-│   ├── events.rs       # Система событий
-│   ├── mouse.rs        # Обработка мыши
-│   └── keyboard.rs     # Обработка клавиатуры
-├── math/               # Математика для графики
-│   ├── mod.rs
-│   ├── transform.rs    # Матрицы преобразований
-│   ├── geometry.rs     # Примитивы (Rect, Vec2, Color)
-│   └── anim.rs         # Анимации, интерполяция
-├── platform/           # Платформозависимые вещи
-│   ├── mod.rs
-│   ├── window.rs       # Обёртка над winit
-│   └── events.rs       # Конвертация winit событий
-└── utils/              # Утилиты
-    ├── mod.rs
-    ├── logging.rs
-    ├── profiling.rs    # Профилирование (tracing/puffin)
-    └── resources.rs    # Менеджер ресурсов
+crates/
+├── brul-utils/             # Утилиты: базовые типы (без зависимостей)
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── math/
+│       │   ├── mod.rs
+│       │   ├── geometry.rs # Point, Size, Rect, Edges
+│       │   └── color.rs    # Color
+│       └── events/
+│           ├── mod.rs
+│           └── event.rs    # Event, EventContext (без winit)
+│
+├── brul-core/              # Ядро: Brul builder + tokio
+│   ├── Cargo.toml          # Зависит от brul-utils
+│   └── src/
+│       ├── lib.rs
+│       └── brul/
+│           ├── mod.rs
+│           └── builder.rs  # Brul struct
+│
+├── brul-gui/               # GUI: рендеринг и UI
+│   ├── Cargo.toml          # Зависит от brul-utils + wgpu/winit
+│   └── src/
+│       ├── lib.rs
+│       ├── application/    # Приложение
+│       │   ├── mod.rs
+│       │   └── app.rs
+│       ├── render/         # Рендеринг
+│       │   ├── mod.rs
+│       │   └── renderer.rs
+│       └── ui/             # UI виджеты
+│           ├── mod.rs
+│           ├── widget.rs
+│           └── rectangle.rs
+│
+└── brul-macros/            # Макросы
+    ├── Cargo.toml
+    └── src/
+        └── lib.rs
 ```
 
-## **Этап 3: Конкретный план рефакторинга**
+### **Что хранить в utils?**
 
-### **Шаг 1: Создайте модуль `core/`**
+**В `brul-utils`:**
 
-Выделите самое ядро:
+- ✅ Базовые типы данных (Point, Size, Rect, Edges, Color)
+- ✅ Event system (без привязки к winit)
+- ✅ Математические функции
+- ✅ Константы
+- ✅ Утилитарные функции
+
+**НЕ хранить в utils:**
+
+- ❌ Platform-specific код (winit, wgpu)
+- ❌ Async runtime (tokio)
+- ❌ UI компоненты
+- ❌ Сложная бизнес-логика
+
+### **Зависимости после рефакторинга:**
+
+```
+brul-utils  (без внешних зависимостей)
+    ↓
+brul-core   (depends: brul-utils, tokio)
+    ↓
+brul-gui    (depends: brul-utils, wgpu, winit)
+```
+
+**Никаких циклических зависимостей!**
+
+## **Пошаговый план рефакторинга**
+
+### **Шаг 1: Создать brul-utils**
+
+1. Создать `crates/brul-utils/src/math/geometry.rs` - Point, Size, Rect, Edges
+2. Создать `crates/brul-utils/src/math/color.rs` - Color с константами
+3. Создать `crates/brul-utils/src/math/mod.rs` - реэкспорт
+4. Создать `crates/brul-utils/src/events/event.rs` - Event, EventContext (без winit)
+5. Создать `crates/brul-utils/src/events/mod.rs` - реэкспорт
+6. Создать `crates/brul-utils/src/lib.rs` - реэкспорт всех модулей
+7. Обновить `crates/brul-utils/Cargo.toml`
+
+### **Шаг 2: Обновить brul-core**
+
+1. Скопировать `src/brul.rs` → `crates/brul-core/src/brul/builder.rs`
+2. Создать `crates/brul-core/src/brul/mod.rs`
+3. Создать `crates/brul-core/src/lib.rs`
+4. Добавить зависимость `brul-utils = { path = "../brul-utils" }` в Cargo.toml
+5. Обновить импорты в Brul (использовать типы из brul-utils)
+
+### **Шаг 3: Создать brul-gui**
+
+1. `crates/brul-gui/src/render/renderer.rs` - Renderer из src/render.rs
+2. `crates/brul-gui/src/ui/widget.rs` - Widget trait
+3. `crates/brul-gui/src/ui/rectangle.rs` - Rectangle struct
+4. `crates/brul-gui/src/application/app.rs` - App из src/app_old.rs + логика из src/app.rs
+5. Создать модульные файлы (mod.rs)
+6. Обновить `crates/brul-gui/src/lib.rs`
+7. Добавить зависимости: `brul-utils`, `wgpu`, `winit`
+
+### **Шаг 4: Интеграция и очистка**
+
+1. Обновить корневой `Cargo.toml` - проверить members
+2. Проверить компиляцию workspace
+3. Создать примеры в `examples/`
+4. Переместить старые файлы в `examples/legacy/` или удалить
+5. Обновить документацию
+
+## **Альтернатива: facade крейт**
+
+Если хотите упростить для пользователей, можно добавить `brul` крейт:
+
+```
+crates/
+├── brul-utils/
+├── brul-core/
+├── brul-gui/
+└── brul/                    # Facade (re-export всех публичных типов)
+    ├── Cargo.toml
+    └── src/
+        └── lib.rs
+```
+
+В `brul/src/lib.rs`:
 
 ```rust
-// src/core/context.rs
-pub struct GraphicsContext {
-    pub instance: wgpu::Instance,
-    pub surface: wgpu::Surface<'static>,
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
-    pub config: wgpu::SurfaceConfiguration,
-}
-
-// src/core/application.rs
-pub struct Application {
-    context: GraphicsContext,
-    event_loop: Option<EventLoop<()>>,
-    // ...
-}
-
-impl Application {
-    pub fn new() -> Result<Self> {
-        // Инициализация winit + wgpu
-    }
-
-    pub fn run(self) {
-        // Главный цикл
-    }
-}
+pub use brul_utils::{Point, Size, Rect, Color, Event};
+pub use brul_core::Brul;
+pub use brul_gui::{App, Renderer, Widget, Rectangle};
 ```
 
-### **Шаг 2: Выделите рендеринг**
+Тогда пользователи импортируют только `brul`, а внутренняя структура чистая.
 
-```rust
-// src/render/renderer.rs
-pub struct Renderer {
-    context: Arc<GraphicsContext>,
-    pipelines: HashMap<PipelineType, RenderPipeline>,
-    ui_pass: UIPass,
-}
+## **Рекомендация:**
 
-impl Renderer {
-    pub fn new(context: &GraphicsContext) -> Self {
-        // Создание пайплайнов
-    }
+**Используйте Решение 1 (brul-utils + brul-core + brul-gui)**, потому что:
 
-    pub fn render(&mut self, view: &TextureView, ui_components: &[UiComponent]) {
-        // Рендер-граф
-    }
-}
-```
+- ✅ Четкое разделение ответственности
+- ✅ Нет циклических зависимостей
+- ✅ Можно использовать utils отдельно
+- ✅ Легко тестировать
+- ✅ Понятная архитектура
 
-### **Шаг 3: Постройте UI систему**
-
-```rust
-// src/ui/widget.rs
-pub trait Widget {
-    fn draw(&self, renderer: &mut Renderer, position: Rect);
-    fn handle_event(&mut self, event: &Event) -> EventResult;
-    fn layout(&mut self, constraints: Constraints) -> Size;
-}
-
-// src/ui/components/button.rs
-pub struct Button {
-    text: String,
-    bounds: Rect,
-    state: ButtonState,
-}
-
-impl Widget for Button { ... }
-```
-
-### **Шаг 4: Рефакторинг шаг за шагом**
-
-1. **Сначала создайте структуру папок и пустые модули**
-
-2. **Выделите GraphicsContext** - это проще всего:
-   - Найдите всю инициализацию wgpu
-   - Вынесите в отдельный модуль
-   - Убедитесь, что всё ещё компилируется
-
-3. **Создайте Application struct**:
-   - Оберните текущий main loop
-   - Сделайте публичное API: `Application::new()`, `app.run()`
-
-4. **Постепенно выносите UI компоненты**:
-   - Начните с простых (Label, Panel)
-   - Определите общий trait Widget
-   - Создайте систему компоновки
-
-5. **Реорганизуйте шейдеры и пайплайны**:
-   ```rust
-   // Вынести в отдельные файлы
-   const VERTEX_SHADER: &str = include_str!("shaders/ui.vert.wgsl");
-   const FRAGMENT_SHADER: &str = include_str!("shaders/ui.frag.wgsl");
-   ```
-
-## **Этап 4: Ключевые моменты для winit/wgpu**
-
-### **Обработка событий:**
-
-```rust
-// src/platform/events.rs
-pub fn convert_winit_event(event: &winit::event::WindowEvent) -> Option<crate::Event> {
-    match event {
-        winit::event::WindowEvent::MouseInput { state, button, .. } => {
-            Some(Event::MouseButton {
-                button: convert_mouse_button(button),
-                pressed: *state == winit::event::ElementState::Pressed,
-            })
-        }
-        // ...
-    }
-}
-```
-
-### **Рендер-граф:**
-
-```rust
-// src/render/passes/ui_pass.rs
-pub struct UIPass {
-    pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    uniform_buffer: wgpu::Buffer,
-}
-
-impl UIPass {
-    pub fn render(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, widgets: &[&dyn Widget]) {
-        // Рендеринг UI
-    }
-}
-```
-
-## **Этап 5: Публичное API**
-
-После рефакторинга API может выглядеть так:
-
-```rust
-// Основное использование
-fn main() {
-    let app = gui::Application::builder()
-        .with_title("My App")
-        .with_size(800, 600)
-        .build()
-        .unwrap();
-
-    let mut window = app.create_window();
-
-    window.add_widget(Button::new("Click me")
-        .on_click(|| println!("Clicked!")));
-
-    window.add_widget(Label::new("Hello, world!")
-        .with_color(Color::RED));
-
-    app.run();
-}
-```
-
-## **Этап 6: Инструменты для помощи**
-
-1. **Профилирование**: Добавьте `tracing` или `puffin` для отслеживания производительности
-2. **Тестирование**: GUI сложно тестировать, но добавьте unit-тесты для математики, логики компоновки
-3. **Документация**: Обязательно примеры в `examples/`
-   ```bash
-   examples/
-   ├── basic_window/
-   ├── multiple_widgets/
-   └── custom_widget/
-   ```
-
-## **Советы по процессу:**
-
-1. **Начните снизу вверх**:
-   - Сначала GraphicsContext (работает с wgpu напрямую)
-   - Потом Renderer (использует Context)
-   - Потом UI система (использует Renderer)
-
-2. **Используйте `Arc<Mutex<...>>` аккуратно**:
-   - wgpu ресурсы не всегда можно разделять
-   - Рассмотрите ECS (specs, bevy_ecs) для сложных UI
-
-3. **Сохраняйте компиляцию на каждом шаге**:
-   - Рефакторьте небольшими порциями
-   - Используйте `todo!()` для нереализованных частей
-
-4. **Пример первого шага**:
-
-   ```rust
-   // Было: один файл main.rs со всем кодом
-   // Стало:
-   // main.rs
-   fn main() {
-       let app = MyGuiApp::new();
-       app.run();
-   }
-
-   // src/core/application.rs
-   pub struct MyGuiApp {
-       // Пока просто обёртка над старым кодом
-       inner: LegacyMonolith,
-   }
-
-   impl MyGuiApp {
-       pub fn new() -> Self {
-           Self { inner: LegacyMonolith::new() }
-       }
-
-       pub fn run(self) {
-           self.inner.run();
-       }
-   }
-   ```
-
-Начните с выделения GraphicsContext - это даст немедленную выгоду и сделает код чище. Затем двигайтесь к рендереру, а потом к UI системе.
+**Если нужен один крейт для пользователей** → добавьте facade `brul`.
