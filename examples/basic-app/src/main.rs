@@ -1,14 +1,17 @@
-use brul::{AppHandle, State, util::Color};
+use brul::{AppHandle, AppManager, State, util::Color};
 use tokio::time::Instant;
 
+#[derive(Debug)]
 struct AppState {
     start_time: Instant,
 }
+
+#[derive(Debug)]
 struct MyString(String);
 
 fn change_background_color(app_handle: AppHandle) {
     let now = Instant::now();
-    let app_state: AppState = app_handle.state::<AppState>();
+    let app_state = app_handle.state::<AppState>();
     let time = now.duration_since(app_state.start_time).as_secs_f32();
 
     let color = Color::rgb(
@@ -31,7 +34,7 @@ fn log_string_state(state: State<MyString>) {
 }
 
 fn main() {
-    brul::Builder::default()
+    brul::AppBuilder::new()
         .setup(|app| {
             app.manage(MyString("BRUL".into()));
 
@@ -42,7 +45,7 @@ fn main() {
             start_time: Instant::now(),
         })
         .add_task(change_background_color)
-        .add_handlers(brul::generate_handlers![log_app_state, log_string_state])
+        // .add_handlers(brul::generate_handlers![log_app_state, log_string_state])
         .run()
         .expect("Error while running brul application");
 }

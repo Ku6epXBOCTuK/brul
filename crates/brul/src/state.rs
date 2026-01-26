@@ -6,7 +6,7 @@ use std::{
     sync::Mutex,
 };
 
-pub struct State<'s, T: Send + Sync + 'static>(&'s T);
+pub struct State<'s, T: Any + Send + Sync + 'static>(&'s T);
 
 impl<'s, T: Send + Sync + 'static> State<'s, T> {
     pub fn inner(&self) -> &T {
@@ -42,7 +42,7 @@ impl<T: Send + Sync + std::fmt::Debug> std::fmt::Debug for State<'_, T> {
 
 #[derive(Debug)]
 pub struct StateManager {
-    map: Mutex<HashMap<TypeId, Pin<Box<dyn Send + Sync>>>>,
+    map: Mutex<HashMap<TypeId, Pin<Box<dyn Any + Send + Sync>>>>,
 }
 
 impl StateManager {
@@ -52,26 +52,26 @@ impl StateManager {
         }
     }
 
-    pub(crate) fn set<T: Send + Sync + 'static>(&self, state: T) -> bool {
+    pub(crate) fn set<T: Any + Send + Sync + 'static>(&self, state: T) -> bool {
         let mut map = self.map.lock().unwrap();
 
         if map.contains_key(&TypeId::of::<T>()) {
             return false;
         }
 
-        let box_ptr = Box::pin(state) as Pin<Box<dyn Send + Sync>>;
+        let box_ptr = Box::pin(state) as Pin<Box<dyn Any + Send + Sync>>;
 
         map.insert(TypeId::of::<T>(), box_ptr);
 
         true
     }
 
-    pub fn get<T: Send + Sync + 'static>(&self) -> State<'_, T> {
+    pub fn get<T: Any + Send + Sync + 'static>(&self) -> State<'_, T> {
         self.try_get()
             .unwrap_or_else(|| panic!("State not found for type {}", std::any::type_name::<T>()))
     }
 
-    pub fn try_get<T: Send + Sync + 'static>(&self) -> Option<State<'_, T>> {
+    pub fn try_get<T: Any + Send + Sync + 'static>(&self) -> Option<State<'_, T>> {
         let map = self.map.lock().unwrap();
 
         let type_id = TypeId::of::<T>();

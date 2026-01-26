@@ -1,20 +1,20 @@
 use crate::{
-    AppHandle, Manager,
-    control::{CommandReceiver, EventBus},
-    runtime::RuntimeManager,
-    state::StateManager,
-    window::WindowManager,
+    control::EventBus, runtime::RuntimeManager, state::StateManager, window::WindowManager,
 };
 use brul_utils::Config;
 
 mod builder;
+mod core;
 mod handle;
 mod manager;
+
+pub use builder::AppBuilder;
+pub use handle::AppHandle;
+pub use manager::AppManager;
 
 #[non_exhaustive]
 pub struct App {
     handle: AppHandle,
-    setup: Option<SetupHook>,
     runtime: RuntimeManager,
     state: StateManager,
     window: WindowManager,
@@ -23,22 +23,18 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
-        Self {
-            setup: None,
-            runtime: RuntimeManager::new(),
-            state: StateManager::new(),
-            window: WindowManager::default(),
-        }
+    pub fn run(self) -> () {
+        // TODO: Implement
+        println!("App run");
     }
 }
 
-impl Manager for App {
+impl AppManager for App {
     fn app_handle(&self) -> &AppHandle {
         &self.handle
     }
 
-    fn config(&self) -> &brul_utils::Config {
+    fn config(&self) -> &Config {
         todo!()
     }
 

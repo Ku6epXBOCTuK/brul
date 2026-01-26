@@ -10,14 +10,7 @@ pub trait AppManager {
 
     fn manage<T: Send + Sync + 'static>(&mut self, state: T) -> bool;
 
-    fn state<T: Send + Sync + 'static>(&self) -> State<T> {
-        self.try_state().unwrap_or_else(|| {
-            panic!(
-                "State not found for type {}, you need add it with manage() method",
-                std::any::type_name::<T>()
-            )
-        })
-    }
+    fn state<T: Send + Sync + 'static>(&self) -> State<'_, T>;
 
-    fn try_state<T: Send + Sync + 'static>(&self) -> Option<State<T>>;
+    fn try_state<T: Send + Sync + 'static>(&self) -> Option<State<'_, T>>;
 }

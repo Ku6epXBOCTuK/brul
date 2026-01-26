@@ -1,45 +1,44 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    error::Error,
-    pin::Pin,
-};
-
-use brul_utils::Config;
-
 use crate::App;
+use crate::app::handle::AppHandle;
+use crate::control::EventBus;
+use crate::runtime::RuntimeManager;
+use crate::state::StateManager;
+use crate::window::WindowManager;
+use brul_utils::Config;
+use std::{any::TypeId, collections::HashMap, error::Error};
 
-type SetupHookFn = dyn FnOnce(&App) -> () + 'static;
-type SetupHookAsyncFn = Box<dyn FnOnce(&App) -> Pin<Box<dyn Future<Output = ()>>>>;
+type SetupHookFn = dyn FnOnce(&mut App) -> () + 'static;
 
 #[derive(Default)]
 pub struct AppBuilder {
     config: Config,
     setup_hooks: Vec<Box<SetupHookFn>>,
-    setup_hooks_async: Vec<SetupHookAsyncFn>,
     managed_states: HashMap<TypeId, Box<dyn Send + Sync>>,
 }
 
 impl AppBuilder {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
     pub fn default() -> Self {
         Self {
             ..Default::default()
         }
     }
 
-    pub fn setup<F>(mut self, setup_fn: F) -> Self
-    where
-        F: FnOnce(&App) -> (),
-    {
-        self.setup_hooks.push(Box::new(setup_fn));
+    pub fn config(mut self, config: Config) -> Self {
+        self.config = config;
         self
     }
 
-    pub fn setup_async<F>(mut self, setup_fn: F) -> Self
+    pub fn setup<F>(mut self, setup_fn: F) -> Self
     where
-        F: FnOnce(&App) -> Pin<Box<dyn Future<Output = ()>>>,
+        F: FnOnce(&mut App) -> () + 'static,
     {
-        self.setup_hooks_async.push(Box::new(setup_fn));
+        self.setup_hooks.push(Box::new(setup_fn));
         self
     }
 
@@ -47,7 +46,8 @@ impl AppBuilder {
     where
         S: Send + Sync + 'static,
     {
-        self.state.insert(TypeId::of::<S>(), Box::new(state));
+        self.managed_states
+            .insert(TypeId::of::<S>(), Box::new(state));
         self
     }
 
@@ -66,12 +66,31 @@ impl AppBuilder {
     }
 
     pub fn build(self) -> App {
-        todo!()
+        let runtime = RuntimeManager::new();
+
+        let mut app = App {
+            runtime,
+            config: self.config,
+            handle: AppHandle::new(),
+            state: StateManager::new(),
+            window: WindowManager::default(),
+            event_bus: EventBus::new(),
+        };
+
+        for (_, state) in self.managed_states {
+            app.state.set(state);
+        }
+
+        for hook in self.setup_hooks {
+            hook(&mut app);
+        }
+
+        app
     }
 
     pub fn run(self) -> Result<(), Box<dyn Error>> {
-        println!("Run!!!");
-        let _a = "a".parse::<u32>()?;
+        let app = self.build();
+        app.run();
         Ok(())
     }
 }
