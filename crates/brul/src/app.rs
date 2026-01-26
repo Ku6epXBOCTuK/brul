@@ -1,14 +1,14 @@
-use crate::{
-    State, control::EventBus, runtime::RuntimeManager, state::StateManager, window::WindowManager,
-};
+use crate::{State, runtime::RuntimeManager, state::StateManager, window::WindowManager};
 use brul_utils::Config;
 
 mod builder;
 mod core;
+mod event_bus;
 mod handle;
 mod manager;
 
 pub use builder::AppBuilder;
+pub use event_bus::EventBus;
 pub use handle::AppHandle;
 pub use manager::AppManager;
 

@@ -1,9 +1,9 @@
 use proc_macro::TokenStream;
-use quote::quote;
-use syn::{Attribute, Item};
+// use quote::quote;
+// use syn::{Attribute, Item};
 
 #[proc_macro_attribute]
-pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn command(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // let item = syn::parse_macro_input!(item as Item);
 
     // let item = match item {

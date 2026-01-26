@@ -1,6 +1,6 @@
 use crate::App;
+use crate::app::EventBus;
 use crate::app::handle::AppHandle;
-use crate::control::EventBus;
 use crate::runtime::RuntimeManager;
 use crate::state::StateManager;
 use crate::window::WindowManager;
