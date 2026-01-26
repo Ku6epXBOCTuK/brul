@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## brul-0.2.0 - 2026-01-26
+#### Features
+- implement AppHandle, refactor App, AppBuilder - (b3ff53b) - Ku6epXBOCTuK
+- implement eventsub - (9bcee14) - Ku6epXBOCTuK
+- build base interfaces for App - (d940552) - Ku6epXBOCTuK
+#### Bug Fixes
+- implement state methods for App - (eb07121) - Ku6epXBOCTuK
+#### Miscellaneous Chores
+- (**version**) bump packages - (3c56ff1) - Ku6epXBOCTuK
+
+- - -
+
 ## brul-0.1.0 - 2026-01-18
 #### Features
 - continue artitect project - (1bba93e) - Ku6epXBOCTuK

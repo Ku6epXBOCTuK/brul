@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## brul-macros-0.2.0 - 2026-01-26
+#### Features
+- implement eventsub - (9bcee14) - Ku6epXBOCTuK
+#### Miscellaneous Chores
+- (**version**) bump packages - (3c56ff1) - Ku6epXBOCTuK
+
+- - -
+
 ## brul-macros-0.1.0 - 2026-01-18
 #### Features
 - continue artitect project - (1bba93e) - Ku6epXBOCTuK
