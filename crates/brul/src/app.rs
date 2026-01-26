@@ -1,5 +1,5 @@
 use crate::{
-    control::EventBus, runtime::RuntimeManager, state::StateManager, window::WindowManager,
+    State, control::EventBus, runtime::RuntimeManager, state::StateManager, window::WindowManager,
 };
 use brul_utils::Config;
 
@@ -39,14 +39,14 @@ impl AppManager for App {
     }
 
     fn manage<T: Send + Sync + 'static>(&mut self, state: T) -> bool {
-        todo!()
+        self.state.set(state)
     }
 
-    fn state<T: Send + Sync + 'static>(&self) -> crate::State<T> {
-        todo!()
+    fn state<T: Send + Sync + 'static>(&self) -> State<'_, T> {
+        self.state.get::<T>()
     }
 
-    fn try_state<T: Send + Sync + 'static>(&self) -> Option<crate::State<T>> {
-        todo!()
+    fn try_state<T: Send + Sync + 'static>(&self) -> Option<State<'_, T>> {
+        self.state.try_get::<T>()
     }
 }
