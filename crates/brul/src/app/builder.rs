@@ -24,12 +24,6 @@ impl AppBuilder {
         }
     }
 
-    pub fn default() -> Self {
-        Self {
-            ..Default::default()
-        }
-    }
-
     pub fn config(mut self, config: Config) -> Self {
         self.config = config;
         self

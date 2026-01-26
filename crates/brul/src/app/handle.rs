@@ -11,14 +11,14 @@ use crate::{
 #[derive(Clone)]
 pub struct AppHandle {
     inner: Arc<AppInner>,
-    runtime_hande: Handle,
+    runtime_handle: Handle,
 }
 
 impl AppHandle {
-    pub fn new(inner: Arc<AppInner>, runtime_hande: Handle) -> Self {
+    pub fn new(inner: Arc<AppInner>, runtime_handle: Handle) -> Self {
         Self {
             inner,
-            runtime_hande,
+            runtime_handle,
         }
     }
 
@@ -47,5 +47,12 @@ impl AppManager for AppHandle {
 
     fn try_state<T: Send + Sync + 'static>(&self) -> Option<State<'_, T>> {
         self.inner.state.try_get::<T>()
+    }
+
+    fn spawn<F>(&self, future: F) -> tokio::task::JoinHandle<()>
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        self.runtime_handle.spawn(future)
     }
 }

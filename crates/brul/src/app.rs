@@ -56,4 +56,11 @@ impl AppManager for App {
     fn try_state<T: Send + Sync + 'static>(&self) -> Option<State<'_, T>> {
         self.inner.state.try_get::<T>()
     }
+
+    fn spawn<F>(&self, future: F) -> tokio::task::JoinHandle<()>
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        self.runtime.spawn(future)
+    }
 }
