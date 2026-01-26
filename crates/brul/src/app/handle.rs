@@ -3,7 +3,10 @@ use std::sync::Arc;
 use brul_utils::Color;
 use tokio::runtime::Handle;
 
-use crate::app::{AppInner, manager::AppManager};
+use crate::{
+    State,
+    app::{AppInner, manager::AppManager},
+};
 
 #[derive(Clone)]
 pub struct AppHandle {
@@ -31,18 +34,18 @@ impl AppManager for AppHandle {
     }
 
     fn config(&self) -> &brul_utils::Config {
-        todo!()
+        &self.inner.config
     }
 
     fn manage<T: Send + Sync + 'static>(&mut self, state: T) -> bool {
-        todo!()
+        self.inner.state.set(state)
     }
 
-    fn state<T: Send + Sync + 'static>(&self) -> crate::State<'_, T> {
-        todo!()
+    fn state<T: Send + Sync + 'static>(&self) -> State<'_, T> {
+        self.inner.state.get::<T>()
     }
 
-    fn try_state<T: Send + Sync + 'static>(&self) -> Option<crate::State<'_, T>> {
-        todo!()
+    fn try_state<T: Send + Sync + 'static>(&self) -> Option<State<'_, T>> {
+        self.inner.state.try_get::<T>()
     }
 }

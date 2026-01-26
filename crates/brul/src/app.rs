@@ -42,7 +42,7 @@ impl AppManager for App {
     }
 
     fn config(&self) -> &Config {
-        todo!()
+        &self.inner.config
     }
 
     fn manage<T: Send + Sync + 'static>(&mut self, state: T) -> bool {
