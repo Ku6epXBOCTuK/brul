@@ -1,12 +1,13 @@
 use crate::app::EventBus;
 use crate::app::handle::AppHandle;
+use crate::error::Result;
 use crate::runtime::RuntimeManager;
 use crate::state::StateManager;
 use crate::window::WindowManager;
 use crate::{App, app::AppInner};
 use brul_utils::Config;
 use std::sync::Arc;
-use std::{any::TypeId, collections::HashMap, error::Error};
+use std::{any::TypeId, collections::HashMap};
 
 type SetupHookFn = dyn FnOnce(&mut App) -> () + 'static;
 
@@ -89,7 +90,7 @@ impl AppBuilder {
         app
     }
 
-    pub fn run(self) -> Result<(), Box<dyn Error>> {
+    pub fn run(self) -> Result<()> {
         let app = self.build();
         app.run();
         Ok(())
