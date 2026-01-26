@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 brul-macro = { workspace = true }
 brul-utils = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
