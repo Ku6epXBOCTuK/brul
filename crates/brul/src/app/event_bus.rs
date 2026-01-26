@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    panic::UnwindSafe,
+    panic::{RefUnwindSafe, UnwindSafe},
     sync::{Arc, RwLock, atomic::AtomicU64},
 };
 use strum::{EnumDiscriminants, EnumMessage};
@@ -12,9 +12,10 @@ pub enum Event {
     AppShutdown,
 }
 
+#[derive(Clone)]
 struct Handler {
     id: u64,
-    callback: Box<dyn Fn(&Event) + UnwindSafe + Send + Sync + 'static>,
+    callback: Arc<dyn Fn(&Event) + UnwindSafe + RefUnwindSafe + Send + Sync + 'static>,
 }
 
 pub struct EventBus {
@@ -29,16 +30,19 @@ impl EventBus {
     }
 
     pub fn emit(&self, event: &Event) {
-        let handlers = self.handlers.read().unwrap();
+        // let handlers = self.handlers.read().unwrap();
         let discriminant = EventDiscriminants::from(event);
 
         let handlers = {
             let handlers_map = self.handlers.read().unwrap();
-            (&handlers_map.get(&discriminant)).unwrap_or_else(|| &vec![])
+            handlers_map
+                .get(&discriminant)
+                .cloned()
+                .unwrap_or_else(Vec::new)
         };
 
         for handler in handlers {
-            if let Err(err) = std::panic::catch_unwind(move || (handler.callback)(event)) {
+            if let Err(err) = std::panic::catch_unwind(|| (handler.callback)(event)) {
                 // TODO: log error
                 eprintln!("Error in event handler: {:?}", err)
             };
@@ -47,13 +51,13 @@ impl EventBus {
 
     pub fn subscribe<F>(&self, event: EventDiscriminants, callback: F) -> u64
     where
-        F: Fn(&Event) + UnwindSafe + Send + Sync + 'static,
+        F: Fn(&Event) + UnwindSafe + RefUnwindSafe + Send + Sync + 'static,
     {
         let mut handlers = self.handlers.write().unwrap();
         let id = generate_id();
         handlers.entry(event).or_insert(Vec::new()).push(Handler {
             id,
-            callback: Box::new(callback),
+            callback: Arc::new(callback),
         });
         id
     }

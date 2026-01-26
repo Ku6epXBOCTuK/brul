@@ -1,5 +1,4 @@
 mod app;
-mod control;
 mod runtime;
 mod state;
 mod window;
