@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{State, runtime::RuntimeManager, state::StateManager, window::WindowManager};
 use brul_utils::Config;
 
@@ -13,13 +15,18 @@ pub use handle::AppHandle;
 pub use manager::AppManager;
 
 #[non_exhaustive]
-pub struct App {
-    handle: AppHandle,
-    runtime: RuntimeManager,
+pub struct AppInner {
     state: StateManager,
     window: WindowManager,
     config: Config,
     event_bus: EventBus,
+}
+
+#[non_exhaustive]
+pub struct App {
+    handle: AppHandle,
+    runtime: RuntimeManager,
+    inner: Arc<AppInner>,
 }
 
 impl App {
@@ -39,14 +46,14 @@ impl AppManager for App {
     }
 
     fn manage<T: Send + Sync + 'static>(&mut self, state: T) -> bool {
-        self.state.set(state)
+        self.inner.state.set(state)
     }
 
     fn state<T: Send + Sync + 'static>(&self) -> State<'_, T> {
-        self.state.get::<T>()
+        self.inner.state.get::<T>()
     }
 
     fn try_state<T: Send + Sync + 'static>(&self) -> Option<State<'_, T>> {
-        self.state.try_get::<T>()
+        self.inner.state.try_get::<T>()
     }
 }

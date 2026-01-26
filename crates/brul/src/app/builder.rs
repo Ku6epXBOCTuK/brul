@@ -1,10 +1,11 @@
-use crate::App;
 use crate::app::EventBus;
 use crate::app::handle::AppHandle;
 use crate::runtime::RuntimeManager;
 use crate::state::StateManager;
 use crate::window::WindowManager;
+use crate::{App, app::AppInner};
 use brul_utils::Config;
+use std::sync::Arc;
 use std::{any::TypeId, collections::HashMap, error::Error};
 
 type SetupHookFn = dyn FnOnce(&mut App) -> () + 'static;
@@ -68,17 +69,23 @@ impl AppBuilder {
     pub fn build(self) -> App {
         let runtime = RuntimeManager::new();
 
-        let mut app = App {
-            runtime,
+        let inner = Arc::new(AppInner {
             config: self.config,
-            handle: AppHandle::new(),
             state: StateManager::new(),
             window: WindowManager::default(),
             event_bus: EventBus::new(),
+        });
+
+        let handle = AppHandle::new(Arc::clone(&inner), runtime.handle().clone());
+
+        let mut app = App {
+            runtime,
+            handle,
+            inner: inner,
         };
 
         for (_, state) in self.managed_states {
-            app.state.set(state);
+            app.inner.state.set(state);
         }
 
         for hook in self.setup_hooks {

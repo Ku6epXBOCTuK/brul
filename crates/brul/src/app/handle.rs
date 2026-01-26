@@ -1,13 +1,22 @@
-use brul_utils::Color;
+use std::sync::Arc;
 
-use crate::app::manager::AppManager;
+use brul_utils::Color;
+use tokio::runtime::Handle;
+
+use crate::app::{AppInner, manager::AppManager};
 
 #[derive(Clone)]
-pub struct AppHandle {}
+pub struct AppHandle {
+    inner: Arc<AppInner>,
+    runtime_hande: Handle,
+}
 
 impl AppHandle {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(inner: Arc<AppInner>, runtime_hande: Handle) -> Self {
+        Self {
+            inner,
+            runtime_hande,
+        }
     }
 
     pub fn set_background_color(&self, _color: Color) {

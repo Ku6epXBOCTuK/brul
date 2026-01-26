@@ -15,6 +15,10 @@ impl RuntimeManager {
         Self { handle }
     }
 
+    pub(crate) fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
     pub(crate) fn spawn<F>(&self, spawn_fn: F) -> JoinHandle<()>
     where
         F: Future<Output = ()> + Send + 'static,
