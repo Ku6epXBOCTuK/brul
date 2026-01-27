@@ -1,11 +1,10 @@
 use crate::app::EventBus;
 use crate::app::handle::AppHandle;
-use crate::error::Result;
 use crate::runtime::RuntimeManager;
 use crate::state::StateManager;
 use crate::window::WindowManager;
 use crate::{App, app::AppInner};
-use brul_utils::Config;
+use brul_utils::{Config, Result};
 use std::sync::Arc;
 use std::{any::TypeId, collections::HashMap};
 

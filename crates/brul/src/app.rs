@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{State, runtime::RuntimeManager, state::StateManager, window::WindowManager};
-use brul_utils::Config;
+use brul_utils::{Config, Result};
 
 mod builder;
 mod core;
@@ -30,9 +30,14 @@ pub struct App {
 }
 
 impl App {
-    pub fn run(self) -> () {
+    pub fn run(self) -> Result<()> {
         // TODO: Implement
         tracing::info!("App run");
+        tracing::info!("Try run gui eventloop");
+
+        let gui_backend = brul_gui::GuiBackend::new();
+        gui_backend.run()?;
+        Ok(())
     }
 }
 
