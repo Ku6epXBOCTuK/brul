@@ -32,7 +32,7 @@ pub struct App {
 impl App {
     pub fn run(self) -> () {
         // TODO: Implement
-        println!("App run");
+        tracing::info!("App run");
     }
 }
 

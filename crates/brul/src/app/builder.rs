@@ -62,6 +62,7 @@ impl AppBuilder {
     }
 
     pub fn build(self) -> App {
+        tracing::info!("Building app");
         let runtime = RuntimeManager::new();
 
         let inner = Arc::new(AppInner {
@@ -92,6 +93,7 @@ impl AppBuilder {
 
     pub fn run(self) -> Result<()> {
         let app = self.build();
+        tracing::info!("Running app");
         app.run();
         Ok(())
     }

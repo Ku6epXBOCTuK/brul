@@ -44,7 +44,7 @@ impl EventBus {
         for handler in handlers {
             if let Err(err) = std::panic::catch_unwind(|| (handler.callback)(event)) {
                 // TODO: log error
-                eprintln!("Error in event handler: {:?}", err)
+                tracing::error!("Error in event handler: {:?}", err)
             };
         }
     }

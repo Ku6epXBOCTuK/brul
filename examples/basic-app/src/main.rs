@@ -34,12 +34,15 @@ fn log_string_state(state: State<MyString>) {
 }
 
 fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter("brul=trace,basic_app=debug")
+        .init();
     brul::AppBuilder::new()
         .setup(|app| {
             app.manage(MyString("BRUL".into()));
 
             let string = app.state::<MyString>();
-            println!("String stored in state: {}", string.0);
+            tracing::debug!("String stored in state: {}", string.0);
         })
         .manage(AppState {
             start_time: Instant::now(),

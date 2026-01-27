@@ -9,3 +9,5 @@ authors.workspace = true
 [dependencies]
 brul = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
