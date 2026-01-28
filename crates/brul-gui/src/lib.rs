@@ -2,7 +2,7 @@ use brul_utils::{Point, Result};
 use tokio::{runtime::Handle, time::Instant};
 use winit::{
     application::ApplicationHandler,
-    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     window::Window,
 };
 
@@ -57,6 +57,7 @@ impl GuiBackend {
 
     pub fn run(mut self) -> Result<()> {
         let event_loop = EventLoop::new()?;
+        event_loop.set_control_flow(ControlFlow::Poll);
         self.event_loop_proxy = Some(event_loop.create_proxy());
 
         event_loop.run_app(&mut self)?;
