@@ -26,17 +26,35 @@ pub struct AppInner {
 pub struct App {
     handle: AppHandle,
     runtime: RuntimeManager,
+    tasks: Vec<Box<dyn Fn(&AppHandle) -> () + 'static>>,
     inner: Arc<AppInner>,
 }
 
 impl App {
-    pub fn run(self) -> Result<()> {
-        // TODO: Implement
+    pub fn run(mut self) -> Result<()> {
         tracing::info!("App run");
         tracing::info!("Try run gui eventloop");
 
-        let gui_backend = brul_gui::GuiBackend::new();
+        let runtime_handle = self.runtime.handle().clone();
+
+        // TODO: do i need tasks later, or i can give ownership?
+        let tasks = std::mem::take(&mut self.tasks);
+        let app_handle = self.app_handle().clone();
+        let tasks: Vec<Box<dyn Fn() -> () + 'static>> = tasks
+            .into_iter()
+            .map(|task| {
+                // TODO: how convert task(app_handle) to task() ?
+                // let task = *task;
+                let app_handle = app_handle.clone();
+                let task_fn = Box::new(move || task(&app_handle));
+                task_fn as Box<dyn Fn()>
+            })
+            .collect();
+
+        let gui_backend = brul_gui::GuiBackend::new(runtime_handle, tasks);
         gui_backend.run()?;
+
+        tracing::info!("App ended ok");
         Ok(())
     }
 }

@@ -1,4 +1,5 @@
 use brul_utils::{Point, Result};
+use tokio::{runtime::Handle, time::Instant};
 use winit::{
     application::ApplicationHandler,
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
@@ -23,14 +24,24 @@ pub struct GuiBackend {
     // event_loop: EventLoop<()>,
     event_loop_proxy: Option<EventLoopProxy<()>>,
     window: Option<Window>,
+    tasks: Vec<Box<dyn Fn() -> () + 'static>>,
+    start_time: Instant,
+    last_task_time: Instant,
+    runtime: Handle,
 }
 
 impl GuiBackend {
-    pub fn new() -> Self {
+    pub fn new(runtime: Handle, tasks: Vec<Box<dyn Fn() -> () + 'static>>) -> Self {
+        let start_time = Instant::now();
+        let last_task_time = Instant::now();
         Self {
             // event_loop,
             event_loop_proxy: None,
             window: None,
+            start_time,
+            tasks,
+            last_task_time,
+            runtime,
         }
     }
 
@@ -77,6 +88,20 @@ impl ApplicationHandler for GuiBackend {
             }
             event => {
                 tracing::info!("Window({:?}) event: {:?}", window_id, event);
+            }
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let now = Instant::now();
+
+        let elapsed = now.duration_since(self.last_task_time);
+
+        if elapsed.as_millis() > 100 {
+            self.last_task_time = now;
+            tracing::info!("Try run tasks");
+            for task in self.tasks.iter() {
+                task();
             }
         }
     }

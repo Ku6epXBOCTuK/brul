@@ -15,6 +15,7 @@ pub struct AppBuilder {
     config: Config,
     setup_hooks: Vec<Box<SetupHookFn>>,
     managed_states: HashMap<TypeId, Box<dyn Send + Sync>>,
+    tasks: Vec<Box<dyn Fn(&AppHandle) -> () + 'static>>,
 }
 
 impl AppBuilder {
@@ -46,8 +47,11 @@ impl AppBuilder {
         self
     }
 
-    pub fn add_task<T>(self, _task: T) -> Self {
-        // TODO: add task to App when build
+    pub fn add_task<F>(mut self, task: F) -> Self
+    where
+        F: Fn(&AppHandle) -> () + 'static,
+    {
+        self.tasks.push(Box::new(task));
         self
     }
 
@@ -73,9 +77,12 @@ impl AppBuilder {
 
         let handle = AppHandle::new(Arc::clone(&inner), runtime.handle().clone());
 
+        let tasks = self.tasks;
+
         let mut app = App {
             runtime,
             handle,
+            tasks,
             inner: inner,
         };
 
@@ -93,7 +100,8 @@ impl AppBuilder {
     pub fn run(self) -> Result<()> {
         let app = self.build();
         tracing::info!("Running app");
-        app.run();
+        let result = app.run();
+        tracing::debug!("App finished with result: {:?}", result);
         Ok(())
     }
 }

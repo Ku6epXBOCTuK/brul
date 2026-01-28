@@ -9,18 +9,19 @@ struct AppState {
 #[derive(Debug)]
 struct MyString(String);
 
-fn change_background_color(app_handle: AppHandle) {
-    let now = Instant::now();
-    let app_state = app_handle.state::<AppState>();
-    let time = now.duration_since(app_state.start_time).as_secs_f32();
+fn change_background_color(app_handle: &AppHandle) {
+    // let now = Instant::now();
+    // let app_state = app_handle.state::<AppState>();
+    // let time = now.duration_since(app_state.start_time).as_secs_f32();
 
-    let color = Color::rgb(
-        (time.sin() * 0.5 + 0.5) as f32,
-        ((time + 2.0).sin() * 0.5 + 0.5) as f32,
-        ((time + 4.0).sin() * 0.5 + 0.5) as f32,
-    );
+    // let color = Color::rgb(
+    //     (time.sin() * 0.5 + 0.5) as f32,
+    //     ((time + 2.0).sin() * 0.5 + 0.5) as f32,
+    //     ((time + 4.0).sin() * 0.5 + 0.5) as f32,
+    // );
 
-    app_handle.set_background_color(color);
+    // app_handle.set_background_color(color);
+    tracing::info!("Changing background color");
 }
 
 #[brul::command]
