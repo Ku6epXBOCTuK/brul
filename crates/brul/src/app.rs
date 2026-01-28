@@ -43,8 +43,6 @@ impl App {
         let tasks: Vec<Box<dyn Fn() -> () + 'static>> = tasks
             .into_iter()
             .map(|task| {
-                // TODO: how convert task(app_handle) to task() ?
-                // let task = *task;
                 let app_handle = app_handle.clone();
                 let task_fn = Box::new(move || task(&app_handle));
                 task_fn as Box<dyn Fn()>

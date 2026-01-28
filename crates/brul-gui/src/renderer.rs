@@ -1,6 +1,6 @@
 use std::{num::NonZero, sync::Arc};
 
-use crate::{Color, Rect};
+use brul_utils::{Color, Rect};
 use wgpu;
 use winit::window::Window;
 
@@ -126,10 +126,5 @@ impl Renderer {
 
         self.queue.submit(Some(encoder.finish()));
         surface_texture.present();
-    }
-
-    pub fn _draw_rect(&mut self, _rect: Rect, _color: Color) {
-        // TODO:
-        todo!()
     }
 }

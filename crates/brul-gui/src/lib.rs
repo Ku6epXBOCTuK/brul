@@ -1,4 +1,7 @@
-use brul_utils::{Point, Result};
+use std::sync::Arc;
+
+use crate::renderer::Renderer;
+use brul_utils::{Color, Point, Result};
 use tokio::{runtime::Handle, time::Instant};
 use winit::{
     application::ApplicationHandler,
@@ -6,34 +9,25 @@ use winit::{
     window::Window,
 };
 
-// pub trait Window {
-//     fn set_title(&self, title: &str);
-//     fn set_size(&self, width: u32, height: u32);
-//     fn show(&self);
-//     fn hide(&self);
-//     fn is_visible(&self) -> bool;
-// }
-
-pub trait Renderer {
-    fn clear(&self, color: [f32; 4]);
-    fn draw_text(&self, texture: &str, position: Point);
-}
+mod renderer;
 
 #[non_exhaustive]
 pub struct GuiBackend {
     // event_loop: EventLoop<()>,
     event_loop_proxy: Option<EventLoopProxy<()>>,
-    window: Option<Window>,
+    window: Option<Arc<Window>>,
     tasks: Vec<Box<dyn Fn() -> () + 'static>>,
     start_time: Instant,
     last_task_time: Instant,
     runtime: Handle,
+    renderer: Option<Renderer>,
 }
 
 impl GuiBackend {
     pub fn new(runtime: Handle, tasks: Vec<Box<dyn Fn() -> () + 'static>>) -> Self {
         let start_time = Instant::now();
         let last_task_time = Instant::now();
+
         Self {
             // event_loop,
             event_loop_proxy: None,
@@ -42,16 +36,27 @@ impl GuiBackend {
             tasks,
             last_task_time,
             runtime,
+            renderer: None,
+        }
+    }
+
+    pub async fn create_renderer(&mut self) {
+        if self.renderer.is_some() {
+            tracing::info!("Renderer already created");
+            return;
+        }
+        if let Some(window) = &self.window {
+            let window = Arc::clone(window);
+            let renderer = Renderer::new(window).await;
+            self.renderer = Some(renderer);
+            tracing::info!("Renderer created");
+        } else {
+            tracing::info!("Window dont exist");
         }
     }
 
     pub fn create_window(&self, title: &str, width: u32, height: u32) -> Window {
-        // TODO: create window
-        todo!()
-    }
-
-    pub fn create_renderer(&self) -> Box<dyn Renderer> {
-        // TODO: create renderer
+        // TODO: create window (primary window already exist)
         todo!()
     }
 
@@ -68,11 +73,13 @@ impl GuiBackend {
 
 impl ApplicationHandler for GuiBackend {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.window = Some(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
+        let window = event_loop
+            .create_window(Window::default_attributes())
+            .unwrap();
+        let window = Arc::new(window);
+        self.window = Some(Arc::clone(&window));
+        let renderer = self.runtime.block_on(Renderer::new(window));
+        self.renderer = Some(renderer);
     }
 
     fn window_event(
@@ -93,17 +100,32 @@ impl ApplicationHandler for GuiBackend {
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         let now = Instant::now();
 
         let elapsed = now.duration_since(self.last_task_time);
 
-        if elapsed.as_millis() > 100 {
-            self.last_task_time = now;
-            tracing::info!("Try run tasks");
-            for task in self.tasks.iter() {
-                task();
-            }
+        // TODO: add rate for each task (eg 60 per second\100 per second)
+        if elapsed.as_millis() < 100 {
+            return;
+        }
+
+        self.last_task_time = now;
+        tracing::info!("Try run tasks");
+        for task in self.tasks.iter() {
+            task();
+        }
+
+        if let Some(renderer) = &mut self.renderer {
+            let elapsed = self.start_time.elapsed().as_secs_f32();
+
+            let color = Color {
+                r: (elapsed.sin() * 0.5 + 0.5) as f32,
+                g: ((elapsed + 2.0).sin() * 0.5 + 0.5) as f32,
+                b: ((elapsed + 4.0).sin() * 0.5 + 0.5) as f32,
+                a: 1.0,
+            };
+            renderer.clear(color);
         }
     }
 }
