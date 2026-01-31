@@ -49,8 +49,8 @@ pub struct EventContext {
     y: f32,
 }
 
-static EVENT_CONTEXT: LazyLock<Arc<Mutex<EventContext>>> =
-    LazyLock::new(|| Arc::new(Mutex::new(EventContext::new())));
+static EVENT_CONTEXT: LazyLock<EventContext>> =
+    LazyLock::new(|| EventContext::new());
 
 impl EventContext {
     pub fn new() -> Self {
@@ -69,7 +69,7 @@ impl From<WindowEvent> for Event {
     fn from(event: WindowEvent) -> Self {
         match event {
             WindowEvent::CursorMoved { position, .. } => {
-                EVENT_CONTEXT.lock().unwrap().update(&Event::MouseMove {
+                EVENT_CONTEXT.update(&Event::MouseMove {
                     x: position.x as f32,
                     y: position.y as f32,
                 });
@@ -79,7 +79,7 @@ impl From<WindowEvent> for Event {
                 }
             }
             WindowEvent::MouseInput { button, state, .. } => {
-                let EventContext { x, y } = *EVENT_CONTEXT.lock().unwrap();
+                let EventContext { x, y } = *EVENT_CONTEXT;
                 match state {
                     ElementState::Pressed => Event::MouseDown { button, x: x, y: y },
                     ElementState::Released => Event::MouseUp { button, x: x, y: y },

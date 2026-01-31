@@ -4,7 +4,7 @@ use crate::runtime::RuntimeManager;
 use crate::state::StateManager;
 use crate::window::WindowManager;
 use crate::{App, app::AppInner};
-use brul_utils::{Config, Result};
+use brul_utils::{Config, EVProxy, Result};
 use std::sync::Arc;
 use std::{any::TypeId, collections::HashMap};
 
@@ -13,9 +13,10 @@ type SetupHookFn = dyn FnOnce(&mut App) -> () + 'static;
 #[derive(Default)]
 pub struct AppBuilder {
     config: Config,
+    proxy: EVProxy,
     setup_hooks: Vec<Box<SetupHookFn>>,
     managed_states: HashMap<TypeId, Box<dyn Send + Sync>>,
-    tasks: Vec<Box<dyn Fn(&AppHandle) -> () + 'static>>,
+    tasks: Vec<Box<dyn Fn(&AppHandle) -> () + Send + 'static>>,
 }
 
 impl AppBuilder {
@@ -49,7 +50,7 @@ impl AppBuilder {
 
     pub fn add_task<F>(mut self, task: F) -> Self
     where
-        F: Fn(&AppHandle) -> () + 'static,
+        F: Fn(&AppHandle) -> () + Send + 'static,
     {
         self.tasks.push(Box::new(task));
         self
@@ -81,6 +82,7 @@ impl AppBuilder {
 
         let mut app = App {
             runtime,
+            event_loop_proxy: EVProxy::new(),
             handle,
             tasks,
             inner: inner,

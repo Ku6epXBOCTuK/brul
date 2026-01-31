@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use crate::{State, runtime::RuntimeManager, state::StateManager, window::WindowManager};
-use brul_utils::{Config, Result};
+use brul_utils::{AppControlMessage, Config, EVProxy, GuiControlMessage, Result};
+use std::sync::{Arc, mpsc};
 
 mod builder;
 mod core;
@@ -25,34 +24,68 @@ pub struct AppInner {
 #[non_exhaustive]
 pub struct App {
     handle: AppHandle,
+    event_loop_proxy: EVProxy,
     runtime: RuntimeManager,
-    tasks: Vec<Box<dyn Fn(&AppHandle) -> () + 'static>>,
+    tasks: Vec<Box<dyn Fn(&AppHandle) -> () + Send + 'static>>,
     inner: Arc<AppInner>,
 }
 
 impl App {
     pub fn run(mut self) -> Result<()> {
         tracing::info!("App run");
-        tracing::info!("Try run gui eventloop");
 
-        let runtime_handle = self.runtime.handle().clone();
+        let (tx, rx) = mpsc::channel::<AppControlMessage>();
+        tx.send(AppControlMessage::AppStarted).unwrap();
+
+        let gui_backend = brul_gui::GuiBackend::new(tx.clone())?;
+        let event_loop_proxy = gui_backend.get_proxy();
+        self.event_loop_proxy.set_proxy(event_loop_proxy.clone());
 
         // TODO: do i need tasks later, or i can give ownership?
         let tasks = std::mem::take(&mut self.tasks);
         let app_handle = self.app_handle().clone();
-        let tasks: Vec<Box<dyn Fn() -> () + 'static>> = tasks
+        let tasks: Vec<Box<dyn Fn() -> () + Send + 'static>> = tasks
             .into_iter()
             .map(|task| {
                 let app_handle = app_handle.clone();
                 let task_fn = Box::new(move || task(&app_handle));
-                task_fn as Box<dyn Fn()>
+                task_fn as Box<dyn Fn() + Send>
             })
             .collect();
 
-        let gui_backend = brul_gui::GuiBackend::new(runtime_handle, tasks);
-        gui_backend.run()?;
+        for task in tasks {
+            self.runtime.spawn(async move {
+                task();
+            });
+        }
 
+        let handle = self.runtime.spawn(async move {
+            tracing::info!("Event receiver start");
+            while let Ok(event) = rx.recv() {
+                match event {
+                    AppControlMessage::RequestShutdown => {
+                        tracing::info!("Received shutdown event");
+                        break;
+                    }
+                    AppControlMessage::AppStarted => {
+                        tracing::info!("Received app started event");
+                    }
+                    _ => {
+                        tracing::info!("Received unknown event");
+                    }
+                }
+            }
+            // TODO: send shotdown to gui backend
+            let result = event_loop_proxy.send_event(GuiControlMessage::Shutdown);
+
+            tracing::debug!("Try send shutdown event: {:?}", result);
+            tracing::info!("Event loop ended");
+        });
+
+        tracing::info!("Try run gui eventloop");
+        gui_backend.run()?;
         tracing::info!("App ended ok");
+
         Ok(())
     }
 }

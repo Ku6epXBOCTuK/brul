@@ -36,7 +36,7 @@ fn log_string_state(state: State<MyString>) {
 
 fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter("brul=trace,basic_app=debug")
+        .with_env_filter("brul=debug,basic_app=debug")
         .init();
     brul::AppBuilder::new()
         .setup(|app| {

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 brul-utils = { workspace = true }
+pollster = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 wgpu = { workspace = true }
