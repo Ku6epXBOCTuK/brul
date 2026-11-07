@@ -1,0 +1,92 @@
+<markup>
+component CheckRow {
+    prop label: String = ""
+    prop checked: Bool = false
+    event toggled()
+
+    Row (check-row) {
+        View (checkbox, checked: checked, on click: toggle) { }
+        Text (text-muted) { label }
+    }
+}
+
+component BrowserItem {
+    prop index: Number = 0
+    prop icon: Image = empty
+    prop emoji: String = ""
+    prop name: String = ""
+    prop isDefault: Bool = false
+    prop selected: Bool = false
+    event clicked(i: Number)
+
+    View (browser-item) {
+        View (item-panel, selected: selected, on click: itemClicked) {
+            View (item-icon) {
+                if (emoji == "") {
+                    Image (item-image) { icon }
+                }
+            }
+
+            Column (item-body) {
+                Row (item-title) {
+                    Text (text-main) { name }
+                    if (isDefault) {
+                        View (default-badge) {
+                            Text (badge-text) { "По умолчанию" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+window Picker (title: "bropicker", width: 488, height: 800,
+               frameless: true, transparent: true, on key: handleKey) {
+    Column (root) {
+        each item, i in browsers {
+            BrowserItem (index: i, name: item.name, icon: item.icon,
+                         emoji: item.emoji, isDefault: item.isDefault,
+                         selected: i == selectedIndex,
+                         on clicked: launch) { }
+        }
+    }
+}
+</markup>
+
+<style>
+theme dark {
+    accent: #6c8cff;
+    border-main: #2a2d34;
+}
+
+.checkbox {
+    width: 20px;
+    radius: 6px;
+    background: transparent;
+    border: 2px theme.border-main;
+}
+.checkbox:checked {
+    background: theme.accent;
+    border-color: theme.accent;
+}
+</style>
+
+<script>
+let selectedIndex = 0;
+
+function toggle() {
+  checked = !checked;
+  toggled();
+}
+
+function itemClicked() {
+  clicked(index);
+}
+
+function handleKey(ev) {
+  if (ev.code == "Escape") {
+    exit();
+  }
+}
+</script>
