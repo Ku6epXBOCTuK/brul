@@ -1,0 +1,24 @@
+{
+	"name": "brul",
+	"version": "0.1.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"format:docs": "biome format --write ."
+	},
+	"keywords": [],
+	"author": "",
+	"license": "MIT",
+	"devEngines": {
+		"packageManager": {
+			"name": "pnpm",
+			"version": "12.18.0",
+			"onFail": "download"
+		}
+	},
+	"packageManager": "pnpm@12.18.0",
+	"type": "module",
+	"dependencies": {
+		"@biomejs/biome": "^2.6.5"
+	}
+}
