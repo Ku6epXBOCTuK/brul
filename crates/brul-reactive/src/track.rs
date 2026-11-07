@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -36,6 +36,7 @@ impl Subs {
 
 thread_local! {
     static TRACKERS: RefCell<Vec<Rc<dyn Node>>> = const { RefCell::new(Vec::new()) };
+    static UNTRACKED: Cell<usize> = const { Cell::new(0) };
 }
 
 pub(crate) fn next_id() -> u32 {
@@ -44,12 +45,28 @@ pub(crate) fn next_id() -> u32 {
 }
 
 pub(crate) fn track(subs: &Rc<Subs>) {
+    if UNTRACKED.with(Cell::get) > 0 {
+        return;
+    }
     TRACKERS.with(|trackers| {
         if let Some(node) = trackers.borrow().last() {
             subs.add(node);
             node.depends_on(Rc::clone(subs));
         }
     });
+}
+
+pub(crate) fn untrack<R>(f: impl FnOnce() -> R) -> R {
+    struct Restore;
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            UNTRACKED.with(|depth| depth.set(depth.get() - 1));
+        }
+    }
+
+    UNTRACKED.with(|depth| depth.set(depth.get() + 1));
+    let _restore = Restore;
+    f()
 }
 
 pub(crate) fn with<R>(node: Rc<dyn Node>, f: impl FnOnce() -> R) -> R {

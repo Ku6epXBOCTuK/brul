@@ -74,9 +74,13 @@
 //! переиспользования слотов арены: узел живёт до сброса области. Глубина
 //! графа ограничена только памятью.
 
+mod effect;
 mod memo;
+mod scope;
 mod signal;
 mod track;
 
+pub use effect::{Effect, batch, flush, untrack};
 pub use memo::Memo;
+pub use scope::EffectScope;
 pub use signal::Signal;
