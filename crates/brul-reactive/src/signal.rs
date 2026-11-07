@@ -25,13 +25,11 @@ pub struct Signal<T> {
     value: PhantomData<fn() -> T>,
 }
 
+impl<T> Copy for Signal<T> {}
+
 impl<T> Clone for Signal<T> {
     fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            not_send: PhantomData,
-            value: PhantomData,
-        }
+        *self
     }
 }
 

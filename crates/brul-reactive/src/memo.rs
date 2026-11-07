@@ -10,10 +10,7 @@ use crate::graph::{self, Kind};
 /// use brul_reactive::{Memo, Signal};
 ///
 /// let count = Signal::new(1);
-/// let doubled = Memo::new({
-///     let count = count.clone();
-///     move || count.get() * 2
-/// });
+/// let doubled = Memo::new(move || count.get() * 2);
 ///
 /// assert_eq!(doubled.get(), 2);
 /// count.set(5);
@@ -25,13 +22,11 @@ pub struct Memo<T> {
     value: PhantomData<fn() -> T>,
 }
 
+impl<T> Copy for Memo<T> {}
+
 impl<T> Clone for Memo<T> {
     fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            not_send: PhantomData,
-            value: PhantomData,
-        }
+        *self
     }
 }
 

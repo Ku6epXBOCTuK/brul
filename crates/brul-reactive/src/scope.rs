@@ -20,11 +20,8 @@ thread_local! {
 /// let count = Signal::new(0);
 /// let runs = Rc::new(Cell::new(0));
 /// scope.run({
-///     let count = count.clone();
 ///     let runs = Rc::clone(&runs);
 ///     move || {
-///         let count = count.clone();
-///         let runs = Rc::clone(&runs);
 ///         Effect::new(move || {
 ///             count.get();
 ///             runs.set(runs.get() + 1);

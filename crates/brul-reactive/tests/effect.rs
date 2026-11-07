@@ -13,12 +13,9 @@ fn counter() -> (Rc<Cell<u32>>, Rc<dyn Fn()>) {
 fn effect_runs_at_creation_and_waits_for_flush() {
     let source = Signal::new(1);
     let (runs, count) = counter();
-    let _effect = Effect::new({
-        let source = source.clone();
-        move || {
-            source.get();
-            count();
-        }
+    let _effect = Effect::new(move || {
+        source.get();
+        count();
     });
 
     assert_eq!(runs.get(), 1, "effect runs on creation");
@@ -34,12 +31,9 @@ fn effect_runs_at_creation_and_waits_for_flush() {
 fn batch_runs_effects_once_at_the_end() {
     let source = Signal::new(0);
     let (runs, count) = counter();
-    let _effect = Effect::new({
-        let source = source.clone();
-        move || {
-            source.get();
-            count();
-        }
+    let _effect = Effect::new(move || {
+        source.get();
+        count();
     });
 
     batch(|| {
@@ -62,14 +56,10 @@ fn untrack_reads_without_subscribing() {
     let tracked = Signal::new(0);
     let hidden = Signal::new(0);
     let (runs, count) = counter();
-    let _effect = Effect::new({
-        let tracked = tracked.clone();
-        let hidden = hidden.clone();
-        move || {
-            tracked.get();
-            untrack(|| hidden.get());
-            count();
-        }
+    let _effect = Effect::new(move || {
+        tracked.get();
+        untrack(|| hidden.get());
+        count();
     });
 
     hidden.set(1);
@@ -86,14 +76,11 @@ fn scope_dispose_stops_effects_and_subscriptions() {
     let scope = EffectScope::new();
     let source = Signal::new(0);
     let (runs, count) = counter();
-    scope.run({
-        let source = source.clone();
-        move || {
-            Effect::new(move || {
-                source.get();
-                count();
-            });
-        }
+    scope.run(move || {
+        Effect::new(move || {
+            source.get();
+            count();
+        });
     });
 
     assert_eq!(runs.get(), 1);
@@ -110,16 +97,10 @@ fn scope_dispose_stops_effects_and_subscriptions() {
 #[test]
 fn effect_follows_memo_chain() {
     let source = Signal::new(1);
-    let doubled = Memo::new({
-        let source = source.clone();
-        move || source.get() * 2
-    });
+    let doubled = Memo::new(move || source.get() * 2);
     let seen = Rc::new(RefCell::new(Vec::new()));
     let log = Rc::clone(&seen);
-    let _effect = Effect::new({
-        let doubled = doubled.clone();
-        move || log.borrow_mut().push(doubled.get())
-    });
+    let _effect = Effect::new(move || log.borrow_mut().push(doubled.get()));
 
     assert_eq!(*seen.borrow(), vec![2]);
     source.set(3);
@@ -132,15 +113,11 @@ fn effect_write_schedules_second_pass() {
     let source = Signal::new(0);
     let mirror = Signal::new(0);
     let (runs, count) = counter();
-    let _effect = Effect::new({
-        let source = source.clone();
-        let mirror = mirror.clone();
-        move || {
-            let value = source.get();
-            count();
-            if mirror.get() != value {
-                mirror.set(value);
-            }
+    let _effect = Effect::new(move || {
+        let value = source.get();
+        count();
+        if mirror.get() != value {
+            mirror.set(value);
         }
     });
 
@@ -157,18 +134,13 @@ fn effect_drops_stale_dependencies() {
     let left = Signal::new(1);
     let right = Signal::new(10);
     let (runs, count) = counter();
-    let _effect = Effect::new({
-        let flag = flag.clone();
-        let left = left.clone();
-        let right = right.clone();
-        move || {
-            if flag.get() {
-                left.get()
-            } else {
-                right.get()
-            };
-            count();
-        }
+    let _effect = Effect::new(move || {
+        if flag.get() {
+            left.get()
+        } else {
+            right.get()
+        };
+        count();
     });
 
     assert_eq!(runs.get(), 1);

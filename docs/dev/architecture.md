@@ -79,17 +79,18 @@ CSS-каскад со специфичностью на каждое движе�
 
 ### Реактивное ядро
 
-Своё минимальное ядро по алгоритму
-[alien-signals](https://github.com/stackblitz-labs/alien-signals): push-pull,
-ленивый пересчёт. Публичный API — `Signal`, `Memo`, `Effect`, `EffectScope`,
-`batch`, `untrack`; сигнатуры повторяют `reactive_graph`, чтобы замена ядра была
-механической. Реализация — арена `Vec<Node>` + `u32`-индексы, интрузивные
-двусвязные списки подписок, стеки вместо рекурсии; в графе нет
-`Rc`/`RefCell`/`Box<dyn>`. Граф однопоточный и живёт на UI-потоке, фоновые
+Своё минимальное ядро: ленивый пересчёт и push-pull, как в
+[alien-signals](https://github.com/stackblitz-labs/alien-signals). Публичный API
+— `Signal`, `Memo`, `Effect`, `EffectScope`, `batch`, `untrack`, `flush`.
+Реализация — арена `Vec<Node>` + `u32`-индексы, списки подписок в `Vec`, явный
+стек для пометки; значения и замыкания — в типизированных ячейках
+`Rc<RefCell<...>>`. Сравнения версий и флага `Watched` нет: запись жадно
+помечает весь низ графа. Граф однопоточный и живёт на UI-потоке, фоновые
 tokio-задачи присылают обновления через канал.
 
 Почему: чужое ядро тянет owners, contexts и `Arc<RwLock>` — оверхэд ради
-возможностей, которых в BRUL нет.
+возможностей, которых в BRUL нет. `alien-signals` и `reactive_graph` — источники
+best practices, а не шаблон API.
 
 Отвергнуто: `reactive_graph` (движок Leptos), `sycamore-reactive` (lifetimes под
 чужой фреймворк, нестабильные релизы), `futures-signals` (push-only,

@@ -14,7 +14,6 @@ fn memo_is_lazy_and_cached() {
     let (calls, count) = counter();
     let source = Signal::new(2);
     let doubled = Memo::new({
-        let source = source.clone();
         let count = Rc::clone(&count);
         move || {
             count();
@@ -40,19 +39,13 @@ fn chain_recomputes_each_node_once() {
     let (inner_calls, inner_count) = counter();
     let (outer_calls, outer_count) = counter();
 
-    let inner = Memo::new({
-        let source = source.clone();
-        move || {
-            inner_count();
-            source.get() + 1
-        }
+    let inner = Memo::new(move || {
+        inner_count();
+        source.get() + 1
     });
-    let outer = Memo::new({
-        let inner = inner.clone();
-        move || {
-            outer_count();
-            inner.get() * 10
-        }
+    let outer = Memo::new(move || {
+        outer_count();
+        inner.get() * 10
     });
 
     assert_eq!(outer.get(), 20);
@@ -69,12 +62,9 @@ fn dependency_switch_drops_old_source() {
     let flag = Signal::new(true);
     let left = Signal::new(1);
     let right = Signal::new(10);
-    let picked = Memo::new({
-        let (flag, left, right) = (flag.clone(), left.clone(), right.clone());
-        move || {
-            count();
-            if flag.get() { left.get() } else { right.get() }
-        }
+    let picked = Memo::new(move || {
+        count();
+        if flag.get() { left.get() } else { right.get() }
     });
 
     assert_eq!(picked.get(), 1);
@@ -97,12 +87,9 @@ fn dependency_switch_drops_old_source() {
 fn repeated_read_subscribes_once() {
     let (calls, count) = counter();
     let source = Signal::new(1);
-    let sum = Memo::new({
-        let source = source.clone();
-        move || {
-            count();
-            source.get() + source.get()
-        }
+    let sum = Memo::new(move || {
+        count();
+        source.get() + source.get()
     });
 
     assert_eq!(sum.get(), 2);

@@ -20,8 +20,7 @@ use crate::scope;
 /// let count = Signal::new(0);
 /// let seen = Rc::new(RefCell::new(Vec::new()));
 /// let log = Rc::clone(&seen);
-/// let source = count.clone();
-/// let _effect = Effect::new(move || log.borrow_mut().push(source.get()));
+/// let _effect = Effect::new(move || log.borrow_mut().push(count.get()));
 /// assert_eq!(*seen.borrow(), vec![0]);
 ///
 /// count.set(1);
@@ -29,18 +28,11 @@ use crate::scope;
 /// flush();
 /// assert_eq!(*seen.borrow(), vec![0, 1]);
 /// ```
+#[derive(Clone, Copy)]
 pub struct Effect {
+    #[expect(dead_code, reason = "arena index identifies the effect")]
     id: u32,
     marker: PhantomData<*const ()>,
-}
-
-impl Clone for Effect {
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            marker: PhantomData,
-        }
-    }
 }
 
 thread_local! {
@@ -65,6 +57,27 @@ impl Effect {
 ///
 /// Запись из эффекта планирует ещё один проход того же вызова, а не
 /// перезапускает текущий.
+///
+/// ```
+/// use std::cell::Cell;
+/// use std::rc::Rc;
+///
+/// use brul_reactive::{flush, Effect, Signal};
+///
+/// let count = Signal::new(0);
+/// let runs = Rc::new(Cell::new(0));
+/// let seen = Rc::clone(&runs);
+/// let _effect = Effect::new(move || {
+///     count.get();
+///     seen.set(seen.get() + 1);
+/// });
+/// assert_eq!(runs.get(), 1);
+///
+/// count.set(1);
+/// assert_eq!(runs.get(), 1, "write only schedules");
+/// flush();
+/// assert_eq!(runs.get(), 2);
+/// ```
 pub fn flush() {
     if BATCH_DEPTH.with(Cell::get) > 0 {
         return;
@@ -91,9 +104,8 @@ pub fn flush() {
 /// let count = Signal::new(0);
 /// let runs = Rc::new(Cell::new(0));
 /// let seen = Rc::clone(&runs);
-/// let source = count.clone();
 /// let _effect = Effect::new(move || {
-///     source.get();
+///     count.get();
 ///     seen.set(seen.get() + 1);
 /// });
 /// assert_eq!(runs.get(), 1);
@@ -132,11 +144,9 @@ pub fn batch<R>(f: impl FnOnce() -> R) -> R {
 /// let hidden = Signal::new(0);
 /// let runs = Rc::new(Cell::new(0));
 /// let seen = Rc::clone(&runs);
-/// let watched = tracked.clone();
-/// let ignored = hidden.clone();
 /// let _effect = Effect::new(move || {
-///     watched.get();
-///     untrack(|| ignored.get());
+///     tracked.get();
+///     untrack(|| hidden.get());
 ///     seen.set(seen.get() + 1);
 /// });
 ///
