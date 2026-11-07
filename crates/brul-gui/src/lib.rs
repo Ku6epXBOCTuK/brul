@@ -1,4 +1,4 @@
-//! Слой отрисовки BRUL: примитивы, текст и окно.
+//! Слой отрисовки BRUL: примитивы, текст, окно и лейаут.
 //!
 //! # Модель
 //!
@@ -64,6 +64,29 @@
 //! run(WindowConfig::default()).expect("window");
 //! ```
 //!
+//! Лейаут — [`layout`]: меряет листья снизу вверх, затем размещает контейнеры
+//! сверху вниз. [`Dimension`] задаёт auto/px/%, [`LayoutStyle::stretch`] делит
+//! остаток главной оси, `justify` и `align` двигают по главной и поперечной.
+//! Координаты и размеры результата — целые физические пиксели.
+//!
+//! ```
+//! use brul_gui::{Dimension, LayoutNode, LayoutStyle, Padding, Size, layout};
+//!
+//! let root = LayoutNode::column(vec![
+//!     LayoutNode::leaf(50, 20),
+//!     LayoutNode::leaf(50, 20),
+//! ])
+//! .with_style(LayoutStyle {
+//!     width: Dimension::Px(200),
+//!     height: Dimension::Px(120),
+//!     padding: Padding::all(10),
+//!     spacing: 5,
+//!     ..LayoutStyle::default()
+//! });
+//! let placed = layout(&root, Size { width: 200, height: 120 }).expect("layout");
+//! assert_eq!(placed.children[1].y, 35);
+//! ```
+//!
 //! # Пределы MVP
 //!
 //! Окно умеет только показать прозрачный фон: GPU-рендера виджетов ещё нет.
@@ -72,10 +95,13 @@
 //! места нет, [`TextEngine::layout`] возвращает [`TextError::AtlasFull`].
 //! Субпиксельное сглаживание сведено к маске, цвет обычных глифов задаёт
 //! отрисовщик, а не движок текста. Режим прозрачности выбирается из возможностей
-//! поверхности; если остаётся `Opaque`, окно будет непрозрачным.
+//! поверхности; если остаётся `Opaque`, окно будет непрозрачным. Лейаут получает
+//! готовый размер листа: измерение текста и перенос строк подключаются вместе с
+//! виджетами.
 
 mod atlas;
 mod color;
+mod layout;
 mod rect;
 mod text;
 mod texture;
@@ -83,6 +109,10 @@ pub mod window;
 
 pub use atlas::{Atlas, AtlasFormat, AtlasSlot};
 pub use color::Color;
+pub use layout::{
+    Align, Dimension, Direction, Justify, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset,
+    Padding, Size, layout,
+};
 pub use rect::{Rect, RectSample};
 pub use text::{PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize, TextStyle};
 pub use texture::{Texture, TextureError};
