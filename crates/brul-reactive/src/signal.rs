@@ -1,7 +1,8 @@
 use std::cell::RefCell;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::track::{self, Subs};
+use crate::graph::{self, Kind};
 
 /// Реактивная ячейка значения.
 ///
@@ -19,43 +20,53 @@ use crate::track::{self, Subs};
 /// assert_eq!(count.get(), 3);
 /// ```
 pub struct Signal<T> {
-    value: Rc<RefCell<T>>,
-    subs: Rc<Subs>,
+    id: u32,
+    not_send: PhantomData<*const ()>,
+    value: PhantomData<fn() -> T>,
 }
 
 impl<T> Clone for Signal<T> {
     fn clone(&self) -> Self {
         Self {
-            value: Rc::clone(&self.value),
-            subs: Rc::clone(&self.subs),
+            id: self.id,
+            not_send: PhantomData,
+            value: PhantomData,
         }
     }
 }
 
-impl<T> Signal<T> {
+impl<T: 'static> Signal<T> {
     pub fn new(value: T) -> Self {
         Self {
-            value: Rc::new(RefCell::new(value)),
-            subs: Subs::new(),
+            id: graph::create(Kind::Signal, Rc::new(RefCell::new(value))),
+            not_send: PhantomData,
+            value: PhantomData,
         }
     }
 }
 
-impl<T: Clone> Signal<T> {
+impl<T: Clone + 'static> Signal<T> {
     pub fn get(&self) -> T {
-        track::track(&self.subs);
-        self.value.borrow().clone()
+        graph::track(self.id);
+        let cell = graph::payload::<RefCell<T>>(self.id);
+        cell.borrow().clone()
     }
 
     pub fn set(&self, value: T) {
-        *self.value.borrow_mut() = value;
-        self.subs.notify();
+        {
+            let cell = graph::payload::<RefCell<T>>(self.id);
+            *cell.borrow_mut() = value;
+        }
+        graph::notify(self.id);
     }
 }
 
-impl<T> Signal<T> {
+impl<T: 'static> Signal<T> {
     pub fn update(&self, f: impl FnOnce(&mut T)) {
-        f(&mut self.value.borrow_mut());
-        self.subs.notify();
+        {
+            let cell = graph::payload::<RefCell<T>>(self.id);
+            f(&mut cell.borrow_mut());
+        }
+        graph::notify(self.id);
     }
 }

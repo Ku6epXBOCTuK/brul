@@ -1,12 +1,10 @@
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::track::{self, Node, Subs};
+use crate::graph::{self, Kind};
 
-/// Производное значение: кэш, который пересчитывается при чтении после
-/// изменения зависимостей.
-///
-/// Создание не считает: первое вычисление происходит при первом `get`.
+/// Производное значение: считается лениво и кэшируется между проходами.
 ///
 /// ```
 /// use brul_reactive::{Memo, Signal};
@@ -22,85 +20,64 @@ use crate::track::{self, Node, Subs};
 /// assert_eq!(doubled.get(), 10);
 /// ```
 pub struct Memo<T> {
-    inner: Rc<Inner<T>>,
+    id: u32,
+    not_send: PhantomData<*const ()>,
+    value: PhantomData<fn() -> T>,
 }
 
 impl<T> Clone for Memo<T> {
     fn clone(&self) -> Self {
         Self {
-            inner: Rc::clone(&self.inner),
+            id: self.id,
+            not_send: PhantomData,
+            value: PhantomData,
         }
     }
 }
 
-struct Inner<T> {
-    id: u32,
+struct MemoCell<T> {
     compute: RefCell<Box<dyn Fn() -> T>>,
-    deps: RefCell<Vec<Rc<Subs>>>,
-    subs: Rc<Subs>,
     value: RefCell<Option<T>>,
-    dirty: Cell<bool>,
 }
 
 impl<T: Clone + 'static> Memo<T> {
     pub fn new(compute: impl Fn() -> T + 'static) -> Self {
-        Self {
-            inner: Rc::new(Inner {
-                id: track::next_id(),
-                compute: RefCell::new(Box::new(compute)),
-                deps: RefCell::new(Vec::new()),
-                subs: Subs::new(),
-                value: RefCell::new(None),
-                dirty: Cell::new(true),
-            }),
-        }
+        let memo = Self {
+            id: graph::create(
+                Kind::Memo,
+                Rc::new(MemoCell {
+                    compute: RefCell::new(Box::new(compute)),
+                    value: RefCell::new(None),
+                }),
+            ),
+            not_send: PhantomData,
+            value: PhantomData,
+        };
+        graph::set_dirty(memo.id, true);
+        memo
     }
 
     pub fn get(&self) -> T {
-        self.inner.refresh();
-        self.inner
-            .value
+        self.refresh();
+        let cell = graph::payload::<MemoCell<T>>(self.id);
+        cell.value
             .borrow()
             .clone()
             .expect("memo computed after refresh")
     }
-}
 
-impl<T: Clone + 'static> Inner<T> {
-    fn refresh(self: &Rc<Self>) {
-        track::track(&self.subs);
-        if !self.dirty.get() {
+    fn refresh(&self) {
+        graph::track(self.id);
+        if !graph::is_dirty(self.id) {
             return;
         }
-        self.drop_dependencies();
+        graph::clear_dependencies(self.id);
+        let cell = graph::payload::<MemoCell<T>>(self.id);
         let value = {
-            let compute = self.compute.borrow();
-            let node: Rc<dyn Node> = Rc::clone(self) as Rc<dyn Node>;
-            track::with(node, &**compute)
+            let compute = cell.compute.borrow();
+            graph::with_tracker(self.id, &**compute)
         };
-        *self.value.borrow_mut() = Some(value);
-        self.dirty.set(false);
-    }
-
-    fn drop_dependencies(&self) {
-        for subs in self.deps.borrow_mut().drain(..) {
-            subs.remove(self.id);
-        }
-    }
-}
-
-impl<T: Clone + 'static> Node for Inner<T> {
-    fn id(&self) -> u32 {
-        self.id
-    }
-
-    fn invalidate(&self) {
-        if !self.dirty.replace(true) {
-            self.subs.notify();
-        }
-    }
-
-    fn depends_on(&self, subs: Rc<Subs>) {
-        self.deps.borrow_mut().push(subs);
+        *cell.value.borrow_mut() = Some(value);
+        graph::set_dirty(self.id, false);
     }
 }

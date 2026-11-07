@@ -1,15 +1,15 @@
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, VecDeque};
+use std::marker::PhantomData;
 use std::rc::Rc;
 
+use crate::graph::{self, Kind};
 use crate::scope;
-use crate::track::{self, Node, Subs};
 
 /// Побочный эффект: выполняется при создании и после каждой записи в
 /// прочитанные сигналы — на ближайшем [`flush`].
 ///
-/// Дескриптор можно отпустить: пока эффект не остановлен областью или
-/// программой, он живёт в реестре и продолжает работу.
+/// Дескриптор можно отпустить: пока эффект не остановлен областью, он живёт в
+/// арене и продолжает работу.
 ///
 /// ```
 /// use std::cell::RefCell;
@@ -30,97 +30,33 @@ use crate::track::{self, Node, Subs};
 /// assert_eq!(*seen.borrow(), vec![0, 1]);
 /// ```
 pub struct Effect {
-    inner: Rc<Inner>,
+    id: u32,
+    marker: PhantomData<*const ()>,
 }
 
 impl Clone for Effect {
     fn clone(&self) -> Self {
         Self {
-            inner: Rc::clone(&self.inner),
+            id: self.id,
+            marker: PhantomData,
         }
     }
 }
 
-struct Inner {
-    id: u32,
-    callback: RefCell<Box<dyn Fn()>>,
-    deps: RefCell<Vec<Rc<Subs>>>,
-    dirty: Cell<bool>,
-    queued: Cell<bool>,
-    disposed: Cell<bool>,
-}
-
 thread_local! {
-    static QUEUE: RefCell<VecDeque<u32>> = const { RefCell::new(VecDeque::new()) };
-    static REGISTRY: RefCell<HashMap<u32, Rc<Inner>>> = RefCell::new(HashMap::new());
     static BATCH_DEPTH: Cell<usize> = const { Cell::new(0) };
 }
 
 impl Effect {
     pub fn new(callback: impl Fn() + 'static) -> Self {
-        let inner = Rc::new(Inner {
-            id: track::next_id(),
-            callback: RefCell::new(Box::new(callback)),
-            deps: RefCell::new(Vec::new()),
-            dirty: Cell::new(false),
-            queued: Cell::new(false),
-            disposed: Cell::new(false),
-        });
-        REGISTRY.with(|registry| registry.borrow_mut().insert(inner.id, Rc::clone(&inner)));
-        scope::own({
-            let inner = Rc::clone(&inner);
-            Box::new(move || inner.dispose())
-        });
-        inner.run();
-        Self { inner }
-    }
-}
-
-impl Inner {
-    fn run(self: &Rc<Self>) {
-        if self.disposed.get() {
-            return;
+        let callback: Box<dyn Fn()> = Box::new(callback);
+        let id = graph::create(Kind::Effect, Rc::new(RefCell::new(callback)));
+        scope::own(id);
+        graph::run(id);
+        Self {
+            id,
+            marker: PhantomData,
         }
-        self.drop_dependencies();
-        self.dirty.set(false);
-        let callback = self.callback.borrow();
-        let node: Rc<dyn Node> = Rc::clone(self) as Rc<dyn Node>;
-        track::with(node, &**callback);
-    }
-
-    fn dispose(&self) {
-        if self.disposed.replace(true) {
-            return;
-        }
-        self.drop_dependencies();
-        REGISTRY.with(|registry| registry.borrow_mut().remove(&self.id));
-    }
-
-    fn drop_dependencies(&self) {
-        for subs in self.deps.borrow_mut().drain(..) {
-            subs.remove(self.id);
-        }
-    }
-}
-
-impl Node for Inner {
-    fn id(&self) -> u32 {
-        self.id
-    }
-
-    fn invalidate(&self) {
-        if self.disposed.get() {
-            return;
-        }
-        self.dirty.set(true);
-        if self.queued.replace(true) {
-            return;
-        }
-        QUEUE.with(|queue| queue.borrow_mut().push_back(self.id));
-    }
-
-    fn depends_on(&self, subs: Rc<Subs>) {
-        self.deps.borrow_mut().push(subs);
     }
 }
 
@@ -133,14 +69,13 @@ pub fn flush() {
     if BATCH_DEPTH.with(Cell::get) > 0 {
         return;
     }
-    while let Some(id) = QUEUE.with(|queue| queue.borrow_mut().pop_front()) {
-        let effect = REGISTRY.with(|registry| registry.borrow().get(&id).cloned());
-        let Some(effect) = effect else {
+    while let Some(id) = graph::pop_queued() {
+        graph::clear_queued(id);
+        if graph::disposed(id) {
             continue;
-        };
-        effect.queued.set(false);
-        if effect.dirty.replace(false) {
-            effect.run();
+        }
+        if graph::take_dirty(id) {
+            graph::run(id);
         }
     }
 }
@@ -214,5 +149,5 @@ pub fn batch<R>(f: impl FnOnce() -> R) -> R {
 /// assert_eq!(runs.get(), 2);
 /// ```
 pub fn untrack<R>(f: impl FnOnce() -> R) -> R {
-    track::untrack(f)
+    graph::untrack(f)
 }

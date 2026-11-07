@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::graph;
+
 thread_local! {
     static SCOPES: RefCell<Vec<Rc<Inner>>> = const { RefCell::new(Vec::new()) };
 }
@@ -45,14 +47,14 @@ pub struct EffectScope {
 }
 
 struct Inner {
-    cleanups: RefCell<Vec<Box<dyn Fn()>>>,
+    effects: RefCell<Vec<u32>>,
 }
 
 impl EffectScope {
     pub fn new() -> Self {
         Self {
             inner: Rc::new(Inner {
-                cleanups: RefCell::new(Vec::new()),
+                effects: RefCell::new(Vec::new()),
             }),
         }
     }
@@ -75,9 +77,9 @@ impl EffectScope {
 
     /// Останавливает эффекты области и снимает их подписки.
     pub fn dispose(self) {
-        let cleanups: Vec<_> = self.inner.cleanups.borrow_mut().drain(..).collect();
-        for cleanup in cleanups {
-            cleanup();
+        let effects: Vec<_> = self.inner.effects.borrow_mut().drain(..).collect();
+        for effect in effects {
+            graph::dispose(effect);
         }
     }
 }
@@ -88,10 +90,10 @@ impl Default for EffectScope {
     }
 }
 
-pub(crate) fn own(cleanup: Box<dyn Fn()>) {
+pub(crate) fn own(id: u32) {
     SCOPES.with(|scopes| {
         if let Some(scope) = scopes.borrow().last() {
-            scope.cleanups.borrow_mut().push(cleanup);
+            scope.effects.borrow_mut().push(id);
         }
     });
 }
