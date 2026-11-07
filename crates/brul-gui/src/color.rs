@@ -22,4 +22,17 @@ impl Color {
     pub const fn with_alpha(self, a: u8) -> Self {
         Self { a, ..self }
     }
+
+    pub fn multiply(self, other: Self) -> Self {
+        Self {
+            r: multiply_channel(self.r, other.r),
+            g: multiply_channel(self.g, other.g),
+            b: multiply_channel(self.b, other.b),
+            a: multiply_channel(self.a, other.a),
+        }
+    }
+}
+
+fn multiply_channel(left: u8, right: u8) -> u8 {
+    ((u16::from(left) * u16::from(right) + 127) / 255) as u8
 }
