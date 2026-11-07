@@ -8,9 +8,7 @@
 
 ## Фаза 0 — фундамент
 
-- 0.1 — workspace: `Cargo.toml`, `rust-toolchain.toml`, `.gitignore`, cargo-jobs
-  в CI.
-- 0.2 — SFC-сплиттер на pest: разбиение `.brl` на блоки, фикстура из
+- 0.1 — SFC-сплиттер на pest: разбиение `.brl` на блоки, фикстура из
   [lang/](../lang/README.md).
 
 Готово, когда: workspace собирается, сплиттер делит пример спеки, CI зелёный.
