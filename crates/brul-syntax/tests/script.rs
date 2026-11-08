@@ -1,5 +1,5 @@
 use brul_syntax::ast::{AssignOp, BinaryOp, Expr};
-use brul_syntax::script::{Import, Program, Statement, parse};
+use brul_syntax::script::{Function, Import, Program, Statement, parse};
 
 #[test]
 fn empty_script_is_an_empty_program() {
@@ -7,6 +7,7 @@ fn empty_script_is_an_empty_program() {
         parse("").unwrap(),
         Program {
             imports: vec![],
+            functions: vec![],
             statements: vec![],
         }
     );
@@ -260,6 +261,83 @@ fn if_without_block_is_rejected() {
     let error = parse("if (ready) launch();").unwrap_err();
     assert_eq!(error.message, "expected '{'");
     assert_eq!((error.line, error.column), (1, 12));
+}
+
+#[test]
+fn function_parses_params_and_body() {
+    let program = parse("function launch(i) { let browser = browsers[i]; }").unwrap();
+    assert_eq!(
+        program.functions,
+        vec![Function {
+            name: "launch".to_owned(),
+            params: vec!["i".to_owned()],
+            body: vec![Statement::Let {
+                constant: false,
+                name: "browser".to_owned(),
+                value: Some(Expr::Index {
+                    target: Box::new(Expr::Ident("browsers".to_owned())),
+                    index: Box::new(Expr::Ident("i".to_owned())),
+                }),
+            }],
+        }]
+    );
+}
+
+#[test]
+fn function_without_params_parses_empty_list() {
+    let program = parse("function exit() { quit(); }").unwrap();
+    assert_eq!(
+        program.functions,
+        vec![Function {
+            name: "exit".to_owned(),
+            params: vec![],
+            body: vec![Statement::Expr(Expr::Call {
+                target: Box::new(Expr::Ident("quit".to_owned())),
+                args: vec![],
+            })],
+        }]
+    );
+}
+
+#[test]
+fn function_parses_several_params() {
+    let program = parse("function move(x, y) { }").unwrap();
+    assert_eq!(program.functions[0].params, vec!["x", "y"]);
+}
+
+#[test]
+fn function_without_name_is_rejected() {
+    let error = parse("function () { }").unwrap_err();
+    assert_eq!(error.message, "expected function name");
+    assert_eq!((error.line, error.column), (1, 10));
+}
+
+#[test]
+fn function_without_body_is_rejected() {
+    let error = parse("function f() launch();").unwrap_err();
+    assert_eq!(error.message, "expected '{'");
+    assert_eq!((error.line, error.column), (1, 14));
+}
+
+#[test]
+fn function_param_with_trailing_comma_is_rejected() {
+    let error = parse("function f(a,) { }").unwrap_err();
+    assert_eq!(error.message, "expected parameter name");
+    assert_eq!((error.line, error.column), (1, 14));
+}
+
+#[test]
+fn nested_function_is_rejected() {
+    let error = parse("function f() { function g() { } }").unwrap_err();
+    assert_eq!(error.message, "functions are only allowed at the top level");
+    assert_eq!((error.line, error.column), (1, 16));
+}
+
+#[test]
+fn function_between_statements_is_a_top_level_item() {
+    let program = parse("let a = 1; function f() { } let b = 2;").unwrap();
+    assert_eq!(program.statements.len(), 2);
+    assert_eq!(program.functions.len(), 1);
 }
 
 #[test]

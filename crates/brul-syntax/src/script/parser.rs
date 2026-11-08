@@ -1,7 +1,7 @@
 use crate::ast::Expr;
 use crate::error::Error;
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
-use crate::script::ast::{Import, Program, Statement};
+use crate::script::ast::{Function, Import, Program, Statement};
 
 pub fn parse(source: &str) -> Result<Program, Error> {
     let tokens = lexer::tokenize(source)?;
@@ -14,12 +14,18 @@ pub fn parse(source: &str) -> Result<Program, Error> {
     while parser.at_keyword("import") {
         imports.push(parser.import()?);
     }
+    let mut functions = Vec::new();
     let mut statements = Vec::new();
     while !parser.at_end() {
-        statements.push(parser.statement()?);
+        if parser.at_keyword("function") {
+            functions.push(parser.function()?);
+        } else {
+            statements.push(parser.statement()?);
+        }
     }
     Ok(Program {
         imports,
+        functions,
         statements,
     })
 }
@@ -50,6 +56,12 @@ impl Parser<'_> {
         if self.at_keyword("if") {
             return self.if_statement();
         }
+        if self.at_keyword("function") {
+            return Err(self.error(
+                self.tokens[self.at].span,
+                "functions are only allowed at the top level",
+            ));
+        }
         if self.tokens[self.at].kind == TokenKind::Punct(Punct::LBrace) {
             return self.block();
         }
@@ -75,6 +87,25 @@ impl Parser<'_> {
             name,
             value,
         })
+    }
+
+    fn function(&mut self) -> Result<Function, Error> {
+        self.expect_keyword("function")?;
+        let name = self.ident("expected function name")?;
+        self.expect_punct(Punct::LParen, "expected '('")?;
+        let mut params = Vec::new();
+        if self.tokens[self.at].kind != TokenKind::Punct(Punct::RParen) {
+            loop {
+                params.push(self.ident("expected parameter name")?);
+                if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
+                    break;
+                }
+                self.at += 1;
+            }
+        }
+        self.expect_punct(Punct::RParen, "expected ')'")?;
+        let body = self.block_statements()?;
+        Ok(Function { name, params, body })
     }
 
     fn if_statement(&mut self) -> Result<Statement, Error> {
