@@ -1,5 +1,5 @@
 use brul_syntax::style::{
-    ClassRule, Color, Gradient, Property, Stylesheet, Theme, Value, parse_file,
+    Border, ClassRule, Color, Gradient, Property, Stylesheet, Theme, Value, parse_file,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -205,6 +205,36 @@ fn gradients_parse() {
 }
 
 #[test]
+fn border_shortcut_parses() {
+    let source = r#".box {
+        border: 2px #3b82f6;
+        border-bottom: 1.5px white;
+    }"#;
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "box",
+            vec![
+                property(
+                    "border",
+                    Value::Border(Border {
+                        width: 2.0,
+                        color: Color::rgb(0x3b, 0x82, 0xf6),
+                    }),
+                ),
+                property(
+                    "border-bottom",
+                    Value::Border(Border {
+                        width: 1.5,
+                        color: Color::WHITE,
+                    }),
+                ),
+            ],
+        )])
+    );
+}
+
+#[test]
 fn errors_point_at_the_source() {
     let sources = [
         ("a { }", "expected '.'", 1, 1),
@@ -265,6 +295,8 @@ fn errors_point_at_the_source() {
             1,
             25,
         ),
+        (".a { b: 4px theme.x; }", "expected color", 1, 13),
+        (".a { b: 4px 5px; }", "expected ';'", 1, 13),
     ];
     for (source, message, line, column) in sources {
         let error = parse_file(source).unwrap_err();

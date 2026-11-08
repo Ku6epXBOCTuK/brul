@@ -32,6 +32,13 @@ pub enum Value {
     Color(Color),
     ThemeRef(String),
     Gradient(Gradient),
+    Border(Border),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Border {
+    pub width: f64,
+    pub color: Color,
 }
 
 #[derive(Debug, Clone, PartialEq)]

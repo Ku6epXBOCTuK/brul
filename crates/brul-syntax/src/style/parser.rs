@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::style::ast::{ClassRule, Color, Gradient, Property, Stylesheet, Theme, Value};
+use crate::style::ast::{Border, ClassRule, Color, Gradient, Property, Stylesheet, Theme, Value};
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser { source, pos: 0 };
@@ -72,7 +72,7 @@ impl Parser<'_> {
     fn value(&mut self) -> Result<Value, Error> {
         self.skip_trivia();
         match self.peek() {
-            Some(ch) if ch.is_ascii_digit() => self.number(),
+            Some(ch) if ch.is_ascii_digit() => self.number_or_border(),
             Some('"') => self.string(),
             Some('#') => Ok(Value::Color(self.color()?)),
             Some(ch) if ch.is_ascii_alphabetic() => {
@@ -162,6 +162,22 @@ impl Parser<'_> {
                 start,
                 "expected 3, 6 or 8 hex digits",
             )),
+        }
+    }
+
+    fn number_or_border(&mut self) -> Result<Value, Error> {
+        match self.number()? {
+            Value::Px(width) => {
+                self.skip_trivia();
+                if self.peek() == Some('#')
+                    || self.peek().is_some_and(|ch| ch.is_ascii_alphabetic())
+                {
+                    let color = self.color()?;
+                    return Ok(Value::Border(Border { width, color }));
+                }
+                Ok(Value::Px(width))
+            }
+            other => Ok(other),
         }
     }
 
