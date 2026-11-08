@@ -1,5 +1,7 @@
 use crate::error::Error;
-use crate::markup::ast::{Arg, Component, Declaration, File, Window};
+use crate::markup::ast::{
+    Arg, Component, Declaration, Event, EventParam, File, Member, Prop, PropType, Window,
+};
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
     let mut parser = Parser { source, pos: 0 };
@@ -37,8 +39,8 @@ impl Parser<'_> {
 
     fn component(&mut self) -> Result<Declaration, Error> {
         let name = self.ident()?;
-        self.empty_block()?;
-        Ok(Declaration::Component(Component { name }))
+        let members = self.members()?;
+        Ok(Declaration::Component(Component { name, members }))
     }
 
     fn window(&mut self) -> Result<Declaration, Error> {
@@ -57,13 +59,98 @@ impl Parser<'_> {
                 _ => return Err(self.error("expected ',' or ')'")),
             }
         }
-        self.empty_block()?;
-        Ok(Declaration::Window(Window { name, args }))
+        let members = self.members()?;
+        Ok(Declaration::Window(Window {
+            name,
+            args,
+            members,
+        }))
     }
 
-    fn empty_block(&mut self) -> Result<(), Error> {
+    fn members(&mut self) -> Result<Vec<Member>, Error> {
         self.expect('{')?;
-        self.expect('}')
+        let mut members = Vec::new();
+        loop {
+            self.skip_trivia();
+            match self.peek() {
+                Some('}') => {
+                    self.bump();
+                    return Ok(members);
+                }
+                None => return Err(self.error("expected '}'")),
+                _ => members.push(self.member()?),
+            }
+        }
+    }
+
+    fn member(&mut self) -> Result<Member, Error> {
+        self.skip_trivia();
+        let start = self.pos;
+        let keyword = self.ident()?;
+        match keyword.as_str() {
+            "prop" => self.prop(),
+            "event" => self.event(),
+            _ => Err(Error::at(self.source, start, "expected 'prop' or 'event'")),
+        }
+    }
+
+    fn prop(&mut self) -> Result<Member, Error> {
+        let name = self.ident()?;
+        self.expect(':')?;
+        let ty = self.prop_type()?;
+        self.skip_trivia();
+        let default = if self.peek() == Some('=') {
+            self.bump();
+            let (expr, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
+            self.pos = end;
+            Some(expr)
+        } else {
+            None
+        };
+        Ok(Member::Prop(Prop { name, ty, default }))
+    }
+
+    fn event(&mut self) -> Result<Member, Error> {
+        let name = self.ident()?;
+        let mut params = Vec::new();
+        self.skip_trivia();
+        if self.peek() == Some('(') {
+            self.bump();
+            self.skip_trivia();
+            if self.peek() == Some(')') {
+                self.bump();
+            } else {
+                loop {
+                    let param = self.ident()?;
+                    self.expect(':')?;
+                    let ty = self.prop_type()?;
+                    params.push(EventParam { name: param, ty });
+                    self.skip_trivia();
+                    match self.peek() {
+                        Some(',') => self.bump(),
+                        Some(')') => {
+                            self.bump();
+                            break;
+                        }
+                        _ => return Err(self.error("expected ',' or ')'")),
+                    }
+                }
+            }
+        }
+        Ok(Member::Event(Event { name, params }))
+    }
+
+    fn prop_type(&mut self) -> Result<PropType, Error> {
+        self.skip_trivia();
+        let start = self.pos;
+        let name = self.ident()?;
+        match name.as_str() {
+            "Bool" => Ok(PropType::Bool),
+            "Number" => Ok(PropType::Number),
+            "String" => Ok(PropType::String),
+            "Image" => Ok(PropType::Image),
+            _ => Err(Error::at(self.source, start, "expected property type")),
+        }
     }
 
     fn expect(&mut self, ch: char) -> Result<(), Error> {

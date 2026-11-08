@@ -1,4 +1,8 @@
-use brul_syntax::markup::{Arg, Component, Declaration, File, Window, parse_file};
+use brul_syntax::ast::Expr;
+use brul_syntax::markup::{
+    Arg, Component, Declaration, Event, EventParam, File, Member, Prop, PropType, Window,
+    parse_file,
+};
 
 #[test]
 fn component_with_empty_block_parses() {
@@ -7,6 +11,7 @@ fn component_with_empty_block_parses() {
         file.declarations,
         vec![Declaration::Component(Component {
             name: "CheckRow".to_owned(),
+            members: Vec::new(),
         })]
     );
 }
@@ -22,7 +27,91 @@ fn window_parses_class_args() {
                 Arg::Class("root".to_owned()),
                 Arg::Class("draggable".to_owned())
             ],
+            members: Vec::new(),
         })]
+    );
+}
+
+#[test]
+fn props_with_types_and_defaults_parse() {
+    let source = r#"component CheckRow {
+        prop label: String = ""
+        prop checked: Bool = false
+        prop count: Number = 0
+        prop icon: Image = null
+        prop plain: Bool
+    }"#;
+    let file = parse_file(source).unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    assert_eq!(
+        component.members,
+        vec![
+            Member::Prop(Prop {
+                name: "label".to_owned(),
+                ty: PropType::String,
+                default: Some(Expr::String(String::new())),
+            }),
+            Member::Prop(Prop {
+                name: "checked".to_owned(),
+                ty: PropType::Bool,
+                default: Some(Expr::Bool(false)),
+            }),
+            Member::Prop(Prop {
+                name: "count".to_owned(),
+                ty: PropType::Number,
+                default: Some(Expr::Number(0.0)),
+            }),
+            Member::Prop(Prop {
+                name: "icon".to_owned(),
+                ty: PropType::Image,
+                default: Some(Expr::Null),
+            }),
+            Member::Prop(Prop {
+                name: "plain".to_owned(),
+                ty: PropType::Bool,
+                default: None,
+            }),
+        ]
+    );
+}
+
+#[test]
+fn events_parse_params() {
+    let source = "component A { event clicked(i: Number) event toggled() event moved(x: Number, y: Number) }";
+    let file = parse_file(source).unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    assert_eq!(
+        component.members,
+        vec![
+            Member::Event(Event {
+                name: "clicked".to_owned(),
+                params: vec![EventParam {
+                    name: "i".to_owned(),
+                    ty: PropType::Number,
+                }],
+            }),
+            Member::Event(Event {
+                name: "toggled".to_owned(),
+                params: Vec::new(),
+            }),
+            Member::Event(Event {
+                name: "moved".to_owned(),
+                params: vec![
+                    EventParam {
+                        name: "x".to_owned(),
+                        ty: PropType::Number,
+                    },
+                    EventParam {
+                        name: "y".to_owned(),
+                        ty: PropType::Number,
+                    },
+                ],
+            }),
+        ]
     );
 }
 
@@ -57,10 +146,29 @@ fn declaration_errors_point_at_the_source() {
     assert_eq!((error.line, error.column), (1, 12));
 
     let error = parse_file("component A { x }").unwrap_err();
-    assert_eq!(error.message, "expected '}'");
+    assert_eq!(error.message, "expected 'prop' or 'event'");
     assert_eq!((error.line, error.column), (1, 15));
 
     let error = parse_file("window Picker () { }").unwrap_err();
     assert_eq!(error.message, "expected name");
     assert_eq!((error.line, error.column), (1, 16));
+}
+
+#[test]
+fn member_errors_point_at_the_source() {
+    let error = parse_file("component A { prop x: Text = 0 }").unwrap_err();
+    assert_eq!(error.message, "expected property type");
+    assert_eq!((error.line, error.column), (1, 23));
+
+    let error = parse_file("component A { prop x Bool }").unwrap_err();
+    assert_eq!(error.message, "expected ':'");
+    assert_eq!((error.line, error.column), (1, 22));
+
+    let error = parse_file("component A { event clicked(i) }").unwrap_err();
+    assert_eq!(error.message, "expected ':'");
+    assert_eq!((error.line, error.column), (1, 30));
+
+    let error = parse_file("component A { prop x: Bool = }").unwrap_err();
+    assert_eq!(error.message, "expected expression");
+    assert_eq!((error.line, error.column), (1, 30));
 }

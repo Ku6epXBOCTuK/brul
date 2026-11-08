@@ -10,7 +10,16 @@ pub struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Result<Self, Error> {
-        let tokens = lexer::tokenize(source)?;
+        Self::at(source, 0)
+    }
+
+    fn at(source: &'a str, offset: usize) -> Result<Self, Error> {
+        let mut tokens =
+            lexer::tokenize(&source[offset..]).map_err(|error| rebase(source, offset, error))?;
+        for token in &mut tokens {
+            token.span.start += offset;
+            token.span.end += offset;
+        }
         Ok(Self {
             source,
             tokens,
@@ -345,4 +354,29 @@ pub fn parse_expression(source: &str) -> Result<Expr, Error> {
     let expr = parser.parse_expression()?;
     parser.expect_end()?;
     Ok(expr)
+}
+
+pub fn parse_expression_at(source: &str, offset: usize) -> Result<(Expr, usize), Error> {
+    let mut parser = Parser::at(source, offset)?;
+    let expr = parser.parse_expression()?;
+    let end = parser.tokens[parser.at - 1].span.end;
+    Ok((expr, end))
+}
+
+fn rebase(source: &str, offset: usize, error: lexer::Error) -> Error {
+    let (base_line, base_column) = Span {
+        start: offset,
+        end: offset,
+    }
+    .line_col(source);
+    let (line, column) = if error.line == 1 {
+        (base_line, base_column + error.column - 1)
+    } else {
+        (base_line + error.line - 1, error.column)
+    };
+    Error {
+        message: error.message,
+        line,
+        column,
+    }
 }
