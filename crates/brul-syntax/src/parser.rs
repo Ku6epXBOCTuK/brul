@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::ast::{BinaryOp, Expr, UnaryOp};
+use crate::ast::{AssignOp, BinaryOp, Expr, UnaryOp};
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,7 +49,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_expression(&mut self) -> Result<Expr, Error> {
-        self.logic_or()
+        self.assignment()
     }
 
     pub fn expect_end(&mut self) -> Result<(), Error> {
@@ -85,6 +85,39 @@ impl<'a> Parser<'a> {
             }
             _ => Err(self.error(span, "ожидалось выражение")),
         }
+    }
+
+    fn assignment(&mut self) -> Result<Expr, Error> {
+        let target = self.ternary()?;
+        let op = match &self.tokens[self.at].kind {
+            TokenKind::Punct(Punct::Assign) => AssignOp::Set,
+            TokenKind::Punct(Punct::PlusAssign) => AssignOp::Add,
+            TokenKind::Punct(Punct::MinusAssign) => AssignOp::Sub,
+            _ => return Ok(target),
+        };
+        self.at += 1;
+        let value = self.assignment()?;
+        Ok(Expr::Assign {
+            target: Box::new(target),
+            op,
+            value: Box::new(value),
+        })
+    }
+
+    fn ternary(&mut self) -> Result<Expr, Error> {
+        let condition = self.logic_or()?;
+        if self.tokens[self.at].kind != TokenKind::Punct(Punct::Question) {
+            return Ok(condition);
+        }
+        self.at += 1;
+        let then_branch = self.parse_expression()?;
+        self.expect_punct(Punct::Colon, "ожидался ':'")?;
+        let else_branch = self.ternary()?;
+        Ok(Expr::Ternary {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            else_branch: Box::new(else_branch),
+        })
     }
 
     fn logic_or(&mut self) -> Result<Expr, Error> {

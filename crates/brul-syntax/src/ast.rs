@@ -21,6 +21,13 @@ pub enum BinaryOp {
     Or,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssignOp {
+    Set,
+    Add,
+    Sub,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Number(f64),
@@ -48,5 +55,15 @@ pub enum Expr {
         op: BinaryOp,
         left: Box<Expr>,
         right: Box<Expr>,
+    },
+    Ternary {
+        condition: Box<Expr>,
+        then_branch: Box<Expr>,
+        else_branch: Box<Expr>,
+    },
+    Assign {
+        target: Box<Expr>,
+        op: AssignOp,
+        value: Box<Expr>,
     },
 }

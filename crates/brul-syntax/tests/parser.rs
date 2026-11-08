@@ -1,4 +1,4 @@
-use brul_syntax::ast::{BinaryOp, Expr, UnaryOp};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr, UnaryOp};
 use brul_syntax::parser::parse_expression;
 
 fn ident(name: &str) -> Expr {
@@ -42,6 +42,22 @@ fn unary(op: UnaryOp, operand: Expr) -> Expr {
     Expr::Unary {
         op,
         operand: Box::new(operand),
+    }
+}
+
+fn ternary(condition: Expr, then_branch: Expr, else_branch: Expr) -> Expr {
+    Expr::Ternary {
+        condition: Box::new(condition),
+        then_branch: Box::new(then_branch),
+        else_branch: Box::new(else_branch),
+    }
+}
+
+fn assign(op: AssignOp, target: Expr, value: Expr) -> Expr {
+    Expr::Assign {
+        target: Box::new(target),
+        op,
+        value: Box::new(value),
     }
 }
 
@@ -185,4 +201,55 @@ fn lexer_errors_reach_the_entry() {
     let error = parse_expression("\"abc").unwrap_err();
     assert_eq!(error.message, "незакрытая строка");
     assert_eq!((error.line, error.column), (1, 1));
+}
+
+#[test]
+fn ternary_is_right_associative() {
+    assert_eq!(
+        parse_expression("a ? b : c ? d : e").unwrap(),
+        ternary(
+            ident("a"),
+            ident("b"),
+            ternary(ident("c"), ident("d"), ident("e"))
+        )
+    );
+    assert_eq!(
+        parse_expression("a ? b ? c : d : e").unwrap(),
+        ternary(
+            ident("a"),
+            ternary(ident("b"), ident("c"), ident("d")),
+            ident("e")
+        )
+    );
+}
+
+#[test]
+fn assignment_binds_looser_than_ternary_and_right() {
+    assert_eq!(
+        parse_expression("a = b ? c : d").unwrap(),
+        assign(
+            AssignOp::Set,
+            ident("a"),
+            ternary(ident("b"), ident("c"), ident("d"))
+        )
+    );
+    assert_eq!(
+        parse_expression("a = b += 1").unwrap(),
+        assign(
+            AssignOp::Set,
+            ident("a"),
+            assign(AssignOp::Add, ident("b"), num(1.0))
+        )
+    );
+    assert_eq!(
+        parse_expression("obj.x -= 1").unwrap(),
+        assign(AssignOp::Sub, field(ident("obj"), "x"), num(1.0))
+    );
+}
+
+#[test]
+fn missing_colon_after_then_branch_is_an_error() {
+    let error = parse_expression("a ? b").unwrap_err();
+    assert_eq!(error.message, "ожидался ':'");
+    assert_eq!((error.line, error.column), (1, 6));
 }
