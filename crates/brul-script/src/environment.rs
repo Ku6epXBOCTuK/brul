@@ -1,25 +1,5 @@
-use std::fmt;
-
+use crate::error::Error;
 use crate::value::Value;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    Undefined(String),
-    Redeclared(String),
-    Constant(String),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Undefined(name) => write!(f, "variable '{name}' is not defined"),
-            Error::Redeclared(name) => write!(f, "variable '{name}' is already declared"),
-            Error::Constant(name) => write!(f, "cannot assign to constant '{name}'"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 #[derive(Debug, Clone, PartialEq)]
 struct Binding {

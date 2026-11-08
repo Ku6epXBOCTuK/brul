@@ -1,5 +1,4 @@
-use brul_script::environment::Error;
-use brul_script::{Environment, Value};
+use brul_script::{Environment, Error, Value};
 
 #[test]
 fn value_reports_its_kind() {
