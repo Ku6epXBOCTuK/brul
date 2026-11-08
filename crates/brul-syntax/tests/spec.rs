@@ -1,4 +1,5 @@
 use brul_syntax::markup::Rule as ParserRule;
+use brul_syntax::script::Rule as ScriptRule;
 use brul_syntax::style::Rule as StyleRule;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -284,6 +285,26 @@ fn style_rules_match_the_spec() {
         assert!(
             spec.contains(name),
             "parser rule {name} is missing from style.ebnf"
+        );
+    }
+}
+
+#[test]
+fn script_rules_match_the_spec() {
+    let tables = tables();
+    let spec: BTreeSet<&str> = tables["Script"]
+        .keys()
+        .map(String::as_str)
+        .filter(|name| name.chars().next().is_some_and(char::is_uppercase))
+        .collect();
+    let parser: BTreeSet<&str> = ScriptRule::ALL.iter().map(|rule| rule.name()).collect();
+    for name in &spec {
+        assert!(parser.contains(name), "no parser rule for {name}");
+    }
+    for name in &parser {
+        assert!(
+            spec.contains(name),
+            "parser rule {name} is missing from script.ebnf"
         );
     }
 }
