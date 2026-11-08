@@ -122,5 +122,8 @@ fn unsupported_expressions_report_their_kind() {
         evaluate("browsers"),
         Err(Error::Undefined("browsers".to_owned()))
     );
-    assert_eq!(evaluate("f(1)"), Err(Error::Unsupported("call")));
+    assert_eq!(
+        evaluate("f(1)"),
+        Err(Error::UnknownFunction("f".to_owned()))
+    );
 }

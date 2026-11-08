@@ -22,6 +22,17 @@ pub enum Error {
         length: usize,
     },
     MissingField(String),
+    UnknownFunction(String),
+    Arity {
+        name: String,
+        expected: &'static str,
+    },
+    Argument {
+        name: &'static str,
+        expected: &'static str,
+        found: &'static str,
+    },
+    InvalidNumber(String),
     Unsupported(&'static str),
 }
 
@@ -50,6 +61,18 @@ impl fmt::Display for Error {
                 write!(f, "index {index} is out of bounds for length {length}")
             }
             Error::MissingField(name) => write!(f, "object has no field '{name}'"),
+            Error::UnknownFunction(name) => write!(f, "function '{name}' is not defined"),
+            Error::Arity { name, expected } => {
+                write!(f, "function '{name}' expects {expected} argument")
+            }
+            Error::Argument {
+                name,
+                expected,
+                found,
+            } => write!(f, "function '{name}' expects {expected}, got {found}"),
+            Error::InvalidNumber(text) => {
+                write!(f, "string '{text}' cannot be converted to Number")
+            }
             Error::Unsupported(what) => write!(f, "{what} is not supported yet"),
         }
     }

@@ -32,6 +32,7 @@ pub fn eval(component: &mut Component, expression: &Expr) -> Result<Value, Error
             Ok(Value::Object(values))
         }
         Expr::Template(parts) => eval_template(component, parts),
+        Expr::Call { target, args } => eval_call(component, target, args),
         Expr::Assign { target, op, value } => eval_assign(component, target, *op, value),
         Expr::Unary { op, operand } => eval_unary(component, *op, operand),
         Expr::Binary { op, left, right } => eval_binary(component, *op, left, right),
@@ -44,8 +45,93 @@ pub fn eval(component: &mut Component, expression: &Expr) -> Result<Value, Error
             Value::Bool(false) => eval(component, else_branch),
             other => Err(expected("?:", "Bool", &other)),
         },
-        other => Err(Error::Unsupported(expression_name(other))),
     }
+}
+
+fn eval_call(component: &mut Component, target: &Expr, arguments: &[Expr]) -> Result<Value, Error> {
+    let Expr::Ident(name) = target else {
+        return Err(Error::Unsupported("method call"));
+    };
+    if name == "every" {
+        return call_every(component, arguments);
+    }
+    let mut values = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        values.push(eval(component, argument)?);
+    }
+    match name.as_str() {
+        "String" => call_string(values),
+        "Number" => call_number(values),
+        "len" => call_len(values),
+        _ => component.call(name, &values),
+    }
+}
+
+fn call_every(component: &mut Component, arguments: &[Expr]) -> Result<Value, Error> {
+    let [interval, function] = arguments else {
+        return Err(Error::Arity {
+            name: "every".to_owned(),
+            expected: "two",
+        });
+    };
+    let interval = eval(component, interval)?;
+    let Value::Number(interval) = interval else {
+        return Err(argument_error("every", "Number", &interval));
+    };
+    let Expr::Ident(function) = function else {
+        return Err(Error::Argument {
+            name: "every",
+            expected: "function name",
+            found: expression_name(function),
+        });
+    };
+    component.every(interval, function)?;
+    Ok(Value::Null)
+}
+
+fn call_string(arguments: Vec<Value>) -> Result<Value, Error> {
+    let value = single_argument("String", arguments)?;
+    match value {
+        Value::String(text) => Ok(Value::String(text)),
+        Value::Number(number) => Ok(Value::String(number.to_string())),
+        Value::Bool(value) => Ok(Value::String(value.to_string())),
+        Value::Null => Ok(Value::String("null".to_owned())),
+        other => Err(argument_error(
+            "String",
+            "Number, String, Bool or Null",
+            &other,
+        )),
+    }
+}
+
+fn call_number(arguments: Vec<Value>) -> Result<Value, Error> {
+    let value = single_argument("Number", arguments)?;
+    match value {
+        Value::Number(number) => Ok(Value::Number(number)),
+        Value::String(text) => match text.parse() {
+            Ok(number) => Ok(Value::Number(number)),
+            Err(_) => Err(Error::InvalidNumber(text)),
+        },
+        other => Err(argument_error("Number", "String or Number", &other)),
+    }
+}
+
+fn call_len(arguments: Vec<Value>) -> Result<Value, Error> {
+    let value = single_argument("len", arguments)?;
+    match value {
+        Value::Array(items) => Ok(Value::Number(items.len() as f64)),
+        other => Err(argument_error("len", "Array", &other)),
+    }
+}
+
+fn single_argument(name: &'static str, mut arguments: Vec<Value>) -> Result<Value, Error> {
+    if arguments.len() != 1 {
+        return Err(Error::Arity {
+            name: name.to_owned(),
+            expected: "one",
+        });
+    }
+    Ok(arguments.remove(0))
 }
 
 fn eval_assign(
@@ -288,6 +374,14 @@ fn mismatch(op: BinaryOp, left: &Value, right: &Value) -> Error {
 fn expected(operation: &'static str, expected: &'static str, found: &Value) -> Error {
     Error::Expected {
         operation,
+        expected,
+        found: found.type_name(),
+    }
+}
+
+fn argument_error(name: &'static str, expected: &'static str, found: &Value) -> Error {
+    Error::Argument {
+        name,
         expected,
         found: found.type_name(),
     }
