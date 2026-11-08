@@ -43,6 +43,20 @@ fn evaluate_with(host: &FakeHost, source: &str) -> Result<Value, Error> {
     eval(&mut component, &parse_expression(source).unwrap())
 }
 
+fn failure(source: &str) -> Error {
+    match evaluate(source).unwrap_err() {
+        Error::At(_, error) => *error,
+        error => error,
+    }
+}
+
+fn failure_with(host: &FakeHost, source: &str) -> Error {
+    match evaluate_with(host, source).unwrap_err() {
+        Error::At(_, error) => *error,
+        error => error,
+    }
+}
+
 #[test]
 fn string_converts_scalars_to_text() {
     assert_eq!(evaluate("String(42)"), Ok(Value::String("42".to_owned())));
@@ -63,12 +77,12 @@ fn string_converts_scalars_to_text() {
 #[test]
 fn string_rejects_composites() {
     assert_eq!(
-        evaluate("String([1])"),
-        Err(Error::Argument {
+        failure("String([1])"),
+        Error::Argument {
             name: "String",
             expected: "Number, String, Bool or Null",
             found: "Array",
-        })
+        }
     );
 }
 
@@ -81,20 +95,20 @@ fn number_parses_strings() {
 #[test]
 fn number_rejects_unparsable_text() {
     assert_eq!(
-        evaluate("Number(\"abc\")"),
-        Err(Error::InvalidNumber("abc".to_owned()))
+        failure("Number(\"abc\")"),
+        Error::InvalidNumber("abc".to_owned())
     );
 }
 
 #[test]
 fn number_rejects_non_scalars() {
     assert_eq!(
-        evaluate("Number(true)"),
-        Err(Error::Argument {
+        failure("Number(true)"),
+        Error::Argument {
             name: "Number",
             expected: "String or Number",
             found: "Bool",
-        })
+        }
     );
 }
 
@@ -107,30 +121,30 @@ fn len_returns_array_length() {
 #[test]
 fn len_rejects_non_array() {
     assert_eq!(
-        evaluate("len(\"abc\")"),
-        Err(Error::Argument {
+        failure("len(\"abc\")"),
+        Error::Argument {
             name: "len",
             expected: "Array",
             found: "String",
-        })
+        }
     );
 }
 
 #[test]
 fn builtins_check_arity() {
     assert_eq!(
-        evaluate("String()"),
-        Err(Error::Arity {
+        failure("String()"),
+        Error::Arity {
             name: "String".to_owned(),
             expected: "one",
-        })
+        }
     );
     assert_eq!(
-        evaluate("len([1], [2])"),
-        Err(Error::Arity {
+        failure("len([1], [2])"),
+        Error::Arity {
             name: "len".to_owned(),
             expected: "one",
-        })
+        }
     );
 }
 
@@ -174,8 +188,8 @@ fn side_effect_builtins_go_to_the_host() {
 #[test]
 fn unknown_function_without_host_is_reported() {
     assert_eq!(
-        evaluate("currentTheme()"),
-        Err(Error::UnknownFunction("currentTheme".to_owned()))
+        failure("currentTheme()"),
+        Error::UnknownFunction("currentTheme".to_owned())
     );
 }
 
@@ -196,34 +210,31 @@ fn every_registers_function_name() {
 fn every_requires_number_and_function_name() {
     let host = FakeHost::default();
     assert_eq!(
-        evaluate_with(&host, "every(\"3000\", refresh)"),
-        Err(Error::Argument {
+        failure_with(&host, "every(\"3000\", refresh)"),
+        Error::Argument {
             name: "every",
             expected: "Number",
             found: "String",
-        })
+        }
     );
     assert_eq!(
-        evaluate_with(&host, "every(3000, 42)"),
-        Err(Error::Argument {
+        failure_with(&host, "every(3000, 42)"),
+        Error::Argument {
             name: "every",
             expected: "function name",
             found: "expression",
-        })
+        }
     );
     assert_eq!(
-        evaluate_with(&host, "every(3000)"),
-        Err(Error::Arity {
+        failure_with(&host, "every(3000)"),
+        Error::Arity {
             name: "every".to_owned(),
             expected: "two",
-        })
+        }
     );
 }
 
 #[test]
 fn method_call_is_not_supported() {
-    assert_eq!(
-        evaluate("theme.apply()"),
-        Err(Error::Unsupported("method call"))
-    );
+    assert_eq!(failure("theme.apply()"), Error::Unsupported("method call"));
 }

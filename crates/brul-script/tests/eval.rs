@@ -5,6 +5,13 @@ fn evaluate(source: &str) -> Result<Value, Error> {
     eval(&mut Component::new(), &parse_expression(source).unwrap())
 }
 
+fn failure(source: &str) -> Error {
+    match evaluate(source).unwrap_err() {
+        Error::At(_, error) => *error,
+        error => error,
+    }
+}
+
 #[test]
 fn literals_evaluate_to_their_values() {
     assert_eq!(evaluate("2.5"), Ok(Value::Number(2.5)));
@@ -33,19 +40,19 @@ fn addition_concatenates_strings() {
 #[test]
 fn addition_rejects_mixed_types() {
     assert_eq!(
-        evaluate("1 + \"a\""),
-        Err(Error::Mismatch {
+        failure("1 + \"a\""),
+        Error::Mismatch {
             operation: "+",
             left: "Number",
             right: "String",
-        })
+        }
     );
 }
 
 #[test]
 fn division_by_zero_is_an_error() {
-    assert_eq!(evaluate("1 / 0"), Err(Error::DivisionByZero));
-    assert_eq!(evaluate("1 % 0"), Err(Error::DivisionByZero));
+    assert_eq!(failure("1 / 0"), Error::DivisionByZero);
+    assert_eq!(failure("1 % 0"), Error::DivisionByZero);
     assert_eq!(Error::DivisionByZero.to_string(), "division by zero");
 }
 
@@ -62,12 +69,12 @@ fn ordering_compares_numbers() {
     assert_eq!(evaluate("2 < 3"), Ok(Value::Bool(true)));
     assert_eq!(evaluate("3 >= 3"), Ok(Value::Bool(true)));
     assert_eq!(
-        evaluate("\"a\" < \"b\""),
-        Err(Error::Mismatch {
+        failure("\"a\" < \"b\""),
+        Error::Mismatch {
             operation: "<",
             left: "String",
             right: "String",
-        })
+        }
     );
 }
 
@@ -75,12 +82,12 @@ fn ordering_compares_numbers() {
 fn negation_requires_a_bool() {
     assert_eq!(evaluate("!true"), Ok(Value::Bool(false)));
     assert_eq!(
-        evaluate("!\"a\""),
-        Err(Error::Expected {
+        failure("!\"a\""),
+        Error::Expected {
             operation: "!",
             expected: "Bool",
             found: "String",
-        })
+        }
     );
 }
 
@@ -89,12 +96,12 @@ fn logic_requires_bools() {
     assert_eq!(evaluate("true && false"), Ok(Value::Bool(false)));
     assert_eq!(evaluate("false || true"), Ok(Value::Bool(true)));
     assert_eq!(
-        evaluate("1 && true"),
-        Err(Error::Mismatch {
+        failure("1 && true"),
+        Error::Mismatch {
             operation: "&&",
             left: "Number",
             right: "Bool",
-        })
+        }
     );
 }
 
@@ -107,23 +114,17 @@ fn ternary_picks_a_branch_by_bool() {
         Ok(Value::String("a".to_owned()))
     );
     assert_eq!(
-        evaluate("1 ? 1 : 2"),
-        Err(Error::Expected {
+        failure("1 ? 1 : 2"),
+        Error::Expected {
             operation: "?:",
             expected: "Bool",
             found: "Number",
-        })
+        }
     );
 }
 
 #[test]
 fn unsupported_expressions_report_their_kind() {
-    assert_eq!(
-        evaluate("browsers"),
-        Err(Error::Undefined("browsers".to_owned()))
-    );
-    assert_eq!(
-        evaluate("f(1)"),
-        Err(Error::UnknownFunction("f".to_owned()))
-    );
+    assert_eq!(failure("browsers"), Error::Undefined("browsers".to_owned()));
+    assert_eq!(failure("f(1)"), Error::UnknownFunction("f".to_owned()));
 }

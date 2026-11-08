@@ -1,7 +1,10 @@
 use std::fmt;
 
+use brul_syntax::ast::Position;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
+    At(Position, Box<Error>),
     Undefined(String),
     Redeclared(String),
     Constant(String),
@@ -39,6 +42,11 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Error::At(position, error) => write!(
+                f,
+                "line {}, column {}: {error}",
+                position.line, position.column
+            ),
             Error::Undefined(name) => write!(f, "variable '{name}' is not defined"),
             Error::Redeclared(name) => write!(f, "variable '{name}' is already declared"),
             Error::Constant(name) => write!(f, "cannot assign to constant '{name}'"),
@@ -74,6 +82,22 @@ impl fmt::Display for Error {
                 write!(f, "string '{text}' cannot be converted to Number")
             }
             Error::Unsupported(what) => write!(f, "{what} is not supported yet"),
+        }
+    }
+}
+
+impl Error {
+    pub fn at(self, position: Position) -> Self {
+        match self {
+            Error::At(..) => self,
+            error => Error::At(position, Box::new(error)),
+        }
+    }
+
+    pub fn position(&self) -> Option<Position> {
+        match self {
+            Error::At(position, _) => Some(*position),
+            _ => None,
         }
     }
 }

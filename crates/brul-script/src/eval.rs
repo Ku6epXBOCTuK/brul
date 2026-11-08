@@ -5,6 +5,10 @@ use crate::error::Error;
 use crate::value::Value;
 
 pub fn eval(component: &mut Component, expression: &Expr) -> Result<Value, Error> {
+    evaluate(component, expression).map_err(|error| error.at(expression.position))
+}
+
+fn evaluate(component: &mut Component, expression: &Expr) -> Result<Value, Error> {
     match &expression.kind {
         ExprKind::Number(value) => Ok(Value::Number(*value)),
         ExprKind::String(value) => Ok(Value::String(value.clone())),

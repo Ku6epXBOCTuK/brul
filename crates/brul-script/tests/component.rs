@@ -9,6 +9,13 @@ fn evaluate(component: &mut Component, source: &str) -> Result<Value, Error> {
     eval(component, &parse_expression(source).unwrap())
 }
 
+fn failure(component: &mut Component, source: &str) -> Error {
+    match evaluate(component, source).unwrap_err() {
+        Error::At(_, error) => *error,
+        error => error,
+    }
+}
+
 #[test]
 fn property_reads_its_value() {
     let mut component = Component::new();
@@ -88,8 +95,8 @@ fn assignment_respects_constants() {
         .unwrap();
 
     assert_eq!(
-        evaluate(&mut component, "limit = 2"),
-        Err(Error::Constant("limit".to_owned()))
+        failure(&mut component, "limit = 2"),
+        Error::Constant("limit".to_owned())
     );
     assert_eq!(component.read("limit"), Ok(Value::Number(1.0)));
 }
@@ -103,8 +110,8 @@ fn unknown_names_are_undefined() {
         Err(Error::Undefined("missing".to_owned()))
     );
     assert_eq!(
-        evaluate(&mut component, "missing = 1"),
-        Err(Error::Undefined("missing".to_owned()))
+        failure(&mut component, "missing = 1"),
+        Error::Undefined("missing".to_owned())
     );
 }
 

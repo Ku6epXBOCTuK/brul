@@ -5,6 +5,13 @@ fn evaluate(source: &str) -> Result<Value, Error> {
     eval(&mut Component::new(), &parse_expression(source).unwrap())
 }
 
+fn failure(source: &str) -> Error {
+    match evaluate(source).unwrap_err() {
+        Error::At(_, error) => *error,
+        error => error,
+    }
+}
+
 fn object(fields: &[(&str, Value)]) -> Value {
     Value::Object(
         fields
@@ -72,41 +79,38 @@ fn object_reads_string_key() {
 
 #[test]
 fn missing_field_is_an_error() {
-    assert_eq!(
-        evaluate("{ a: 1 }.b"),
-        Err(Error::MissingField("b".to_owned()))
-    );
+    assert_eq!(failure("{ a: 1 }.b"), Error::MissingField("b".to_owned()));
 }
 
 #[test]
 fn array_index_is_checked() {
     assert_eq!(
-        evaluate("[1][3]"),
-        Err(Error::OutOfBounds {
+        failure("[1][3]"),
+        Error::OutOfBounds {
             index: 3,
             length: 1
-        })
+        }
     );
-    assert_eq!(evaluate("[1][0.5]"), Err(Error::IndexNotInteger));
+    assert_eq!(failure("[1][0.5]"), Error::IndexNotInteger);
 }
 
 #[test]
 fn field_and_index_require_the_right_target() {
     assert_eq!(
-        evaluate("\"x\".name"),
-        Err(Error::Expected {
+        failure("\"x\".name"),
+        Error::Expected {
             operation: ".",
             expected: "Object",
             found: "String",
-        })
+        }
     );
     assert_eq!(
-        evaluate("1[0]"),
-        Err(Error::Expected {
+        failure("1[0]"),
+        Error::Expected {
             operation: "[]",
             expected: "Array or Object",
             found: "Number",
-        })
+        }
     );
 }
 
@@ -125,12 +129,12 @@ fn template_substitutes_text_and_numbers() {
 #[test]
 fn template_rejects_other_types() {
     assert_eq!(
-        evaluate("`${true}`"),
-        Err(Error::Expected {
+        failure("`${true}`"),
+        Error::Expected {
             operation: "${}",
             expected: "String or Number",
             found: "Bool",
-        })
+        }
     );
 }
 
@@ -207,7 +211,10 @@ fn assignment_to_missing_field_is_an_error() {
         .unwrap();
 
     assert_eq!(
-        eval(&mut component, &parse_expression("settings.b = 2").unwrap()),
-        Err(Error::MissingField("b".to_owned()))
+        match eval(&mut component, &parse_expression("settings.b = 2").unwrap()).unwrap_err() {
+            Error::At(_, error) => *error,
+            error => error,
+        },
+        Error::MissingField("b".to_owned())
     );
 }
