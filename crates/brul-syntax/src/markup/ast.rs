@@ -78,4 +78,6 @@ pub enum PropType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Arg {
     Class(String),
+    Named { name: String, value: Expr },
+    Handler { event: String, handler: String },
 }

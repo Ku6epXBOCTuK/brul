@@ -1,4 +1,4 @@
-use brul_syntax::ast::Expr;
+use brul_syntax::ast::{Expr, UnaryOp};
 use brul_syntax::markup::{
     Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, Member, Prop,
     PropType, Window, parse_file,
@@ -17,19 +17,70 @@ fn component_with_empty_block_parses() {
 }
 
 #[test]
-fn window_parses_class_args() {
-    let file = parse_file("window Picker (root, draggable) { }").unwrap();
+fn args_parse_classes_names_and_handlers() {
+    let source = r#"window Picker (root, title: "Picker", width: 800) { }"#;
+    let file = parse_file(source).unwrap();
     assert_eq!(
         file.declarations,
         vec![Declaration::Window(Window {
             name: "Picker".to_owned(),
             args: vec![
                 Arg::Class("root".to_owned()),
-                Arg::Class("draggable".to_owned())
+                Arg::Named {
+                    name: "title".to_owned(),
+                    value: Expr::String("Picker".to_owned()),
+                },
+                Arg::Named {
+                    name: "width".to_owned(),
+                    value: Expr::Number(800.0),
+                },
             ],
             members: Vec::new(),
         })]
     );
+}
+
+#[test]
+fn element_args_parse_handlers_and_expressions() {
+    let source = r#"component CheckRow {
+        Button (check-row, disabled: !done, on click: toggle) { }
+    }"#;
+    let file = parse_file(source).unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    assert_eq!(
+        component.members,
+        vec![Member::Element(Element {
+            name: "Button".to_owned(),
+            args: vec![
+                Arg::Class("check-row".to_owned()),
+                Arg::Named {
+                    name: "disabled".to_owned(),
+                    value: Expr::Unary {
+                        op: UnaryOp::Not,
+                        operand: Box::new(Expr::Ident("done".to_owned())),
+                    },
+                },
+                Arg::Handler {
+                    event: "click".to_owned(),
+                    handler: "toggle".to_owned(),
+                },
+            ],
+            block: Block { items: Vec::new() },
+        })]
+    );
+}
+
+#[test]
+fn arg_errors_point_at_the_source() {
+    let error = parse_file("component A { Button (on: x) { } }").unwrap_err();
+    assert_eq!(error.message, "expected name");
+    assert_eq!((error.line, error.column), (1, 25));
+
+    let error = parse_file("component A { Button (root title) { } }").unwrap_err();
+    assert_eq!(error.message, "expected ',' or ')'");
+    assert_eq!((error.line, error.column), (1, 28));
 }
 
 #[test]

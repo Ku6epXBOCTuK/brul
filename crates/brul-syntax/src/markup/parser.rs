@@ -46,20 +46,7 @@ impl Parser<'_> {
 
     fn window(&mut self) -> Result<Declaration, Error> {
         let name = self.ident()?;
-        self.expect('(')?;
-        let mut args = Vec::new();
-        loop {
-            args.push(Arg::Class(self.ident()?));
-            self.skip_trivia();
-            match self.peek() {
-                Some(',') => self.bump(),
-                Some(')') => {
-                    self.bump();
-                    break;
-                }
-                _ => return Err(self.error("expected ',' or ')'")),
-            }
-        }
+        let args = self.arg_list()?;
         let members = self.members()?;
         Ok(Declaration::Window(Window {
             name,
@@ -95,12 +82,51 @@ impl Parser<'_> {
     }
 
     fn element(&mut self, name: String) -> Result<Element, Error> {
+        self.skip_trivia();
+        let args = if self.peek() == Some('(') {
+            self.arg_list()?
+        } else {
+            Vec::new()
+        };
         let block = self.block()?;
-        Ok(Element {
-            name,
-            args: Vec::new(),
-            block,
-        })
+        Ok(Element { name, args, block })
+    }
+
+    fn arg_list(&mut self) -> Result<Vec<Arg>, Error> {
+        self.expect('(')?;
+        let mut args = vec![self.arg()?];
+        loop {
+            self.skip_trivia();
+            match self.peek() {
+                Some(',') => {
+                    self.bump();
+                    args.push(self.arg()?);
+                }
+                Some(')') => {
+                    self.bump();
+                    return Ok(args);
+                }
+                _ => return Err(self.error("expected ',' or ')'")),
+            }
+        }
+    }
+
+    fn arg(&mut self) -> Result<Arg, Error> {
+        let name = self.ident()?;
+        if name == "on" {
+            let event = self.ident()?;
+            self.expect(':')?;
+            let handler = self.ident()?;
+            return Ok(Arg::Handler { event, handler });
+        }
+        self.skip_trivia();
+        if self.peek() == Some(':') {
+            self.bump();
+            let (value, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
+            self.pos = end;
+            return Ok(Arg::Named { name, value });
+        }
+        Ok(Arg::Class(name))
     }
 
     fn block(&mut self) -> Result<Block, Error> {
