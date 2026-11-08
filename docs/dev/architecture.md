@@ -13,11 +13,13 @@ brul-gui               winit+wgpu: окно, примитивы, текст, л�
 brul-reactive          сигналы/memo/effect — минимальное ядро
 brul-compiler          SFC-сплиттер, парсеры DSL, кодеген
 brul-macros            proc-macro компиляции (по необходимости)
-examples/picker        MVP-приложение
-examples/service-panel панель служб
+apps/bropicker         MVP: переключатель браузеров
+apps/service-panel     MVP: панель служб
 ```
 
-Правило: новый крейт появляется, когда коду тесно, а не по плану.
+Правило: если код перестаёт помещаться в слой, новый крейт предлагается
+отдельным ходом — имя, ответственность, что переезжает — и создаётся только
+после явного «да» на это имя. Новые внешние зависимости — только с разрешения.
 
 ## Пайплайн
 
@@ -136,6 +138,20 @@ GPU. Атлас MVP не растёт: когда места нет, `layout` в
 
 Отвергнуто: `softbuffer` — не умеет попиксельную прозрачность; Windows-only
 DirectComposition — теряет поддержку других платформ.
+
+### Конфиг пикера
+
+`bropicker::config` читает `%APPDATA%\bropicker\config.toml` (переменная
+`BP_CONFIG` — для тестов) в `Config`: тема `system|dark|light`, `[[browsers]]`
+(`name`, `path`, `flags` или `args`, `icon`, `emoji`, `default`), `[rules]` и
+`[remembered]` (домен → имя браузера), `[settings]` (`remember_choice`,
+`always_ask`). `resolve(url)` нормализует домен (схема, порт, userinfo, `www.`,
+регистр) и выбирает `remembered` → `rules` → `default`; `always_ask` оставляет
+браузер выбранным, но запрещает мгновенный запуск.
+
+Почему: схема совпадает с текущим bropicker, поэтому существующий конфиг не
+переписывается; ошибки TOML и неоднозначности (`default` у двух браузеров)
+возвращаются как `ConfigError`, а не теряются.
 
 ### Обновления без VDOM
 

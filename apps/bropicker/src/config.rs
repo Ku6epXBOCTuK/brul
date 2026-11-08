@@ -1,0 +1,281 @@
+//! Конфиг bropicker: браузеры, правила доменов, запомненный выбор.
+//!
+//! ```
+//! use bropicker::{Config, ResolveSource};
+//!
+//! let config = Config::parse(
+//!     r#"
+//! theme = "dark"
+//!
+//! [[browsers]]
+//! name = "Firefox"
+//! path = "firefox"
+//! default = true
+//!
+//! [[browsers]]
+//! name = "Chrome"
+//! path = "chrome"
+//!
+//! [rules]
+//! "example.com" = "Chrome"
+//!
+//! [settings]
+//! always_ask = false
+//! "#,
+//! )
+//! .expect("config");
+//!
+//! let resolved = config.resolve("https://example.com/page").expect("browser");
+//! assert_eq!(resolved.browser.name, "Chrome");
+//! assert_eq!(resolved.source, ResolveSource::Rule);
+//! assert!(resolved.auto_launch);
+//! ```
+use std::collections::{HashMap, HashSet};
+use std::fmt;
+use std::io;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    #[default]
+    System,
+    Dark,
+    Light,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct BrowserEntry {
+    pub name: String,
+    pub path: String,
+    #[serde(default, alias = "args")]
+    pub flags: String,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(default)]
+    pub emoji: String,
+    #[serde(default, rename = "default")]
+    pub is_default: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(default)]
+pub struct Settings {
+    pub remember_choice: bool,
+    pub always_ask: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            remember_choice: true,
+            always_ask: true,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[serde(default)]
+pub struct Config {
+    pub theme: Theme,
+    pub browsers: Vec<BrowserEntry>,
+    pub rules: HashMap<String, String>,
+    pub remembered: HashMap<String, String>,
+    pub settings: Settings,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ConfigError {
+    Read {
+        path: PathBuf,
+        message: String,
+    },
+    Parse {
+        path: Option<PathBuf>,
+        message: String,
+    },
+    Invalid(String),
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Read { path, message } => {
+                write!(
+                    formatter,
+                    "не удалось прочитать конфиг {}: {message}",
+                    path.display()
+                )
+            }
+            Self::Parse { path, message } => match path {
+                Some(path) => write!(
+                    formatter,
+                    "не удалось разобрать конфиг {}: {message}",
+                    path.display()
+                ),
+                None => write!(formatter, "не удалось разобрать конфиг: {message}"),
+            },
+            Self::Invalid(message) => write!(formatter, "некорректный конфиг: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResolveSource {
+    Remembered,
+    Rule,
+    Default,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Resolution<'a> {
+    pub domain: String,
+    pub browser: &'a BrowserEntry,
+    pub source: ResolveSource,
+    pub auto_launch: bool,
+}
+
+impl Config {
+    pub fn parse(source: &str) -> Result<Self, ConfigError> {
+        Self::parse_at(source, None)
+    }
+
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
+        let path = path.as_ref();
+        let source = std::fs::read_to_string(path).map_err(|error| ConfigError::Read {
+            path: path.to_path_buf(),
+            message: error.to_string(),
+        })?;
+
+        Self::parse_at(&source, Some(path))
+    }
+
+    pub fn load_default() -> Result<Self, ConfigError> {
+        let path = default_path();
+        match std::fs::read_to_string(&path) {
+            Ok(source) => Self::parse_at(&source, Some(&path)),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(error) => Err(ConfigError::Read {
+                path,
+                message: error.to_string(),
+            }),
+        }
+    }
+
+    pub fn browser(&self, name: &str) -> Option<&BrowserEntry> {
+        self.browsers.iter().find(|browser| browser.name == name)
+    }
+
+    pub fn default_browser(&self) -> Option<&BrowserEntry> {
+        self.browsers.iter().find(|browser| browser.is_default)
+    }
+
+    pub fn resolve<'a>(&'a self, url: &str) -> Option<Resolution<'a>> {
+        let domain = domain_of(url);
+        if domain.is_empty() {
+            return None;
+        }
+
+        let (browser, source) = if let Some(browser) = self.lookup(&self.remembered, &domain) {
+            (browser, ResolveSource::Remembered)
+        } else if let Some(browser) = self.lookup(&self.rules, &domain) {
+            (browser, ResolveSource::Rule)
+        } else {
+            let browser = self.default_browser()?;
+            (browser, ResolveSource::Default)
+        };
+
+        let auto_launch = matches!(source, ResolveSource::Remembered | ResolveSource::Rule)
+            && !self.settings.always_ask;
+
+        Some(Resolution {
+            domain,
+            browser,
+            source,
+            auto_launch,
+        })
+    }
+
+    fn lookup<'a>(
+        &'a self,
+        map: &'a HashMap<String, String>,
+        domain: &str,
+    ) -> Option<&'a BrowserEntry> {
+        map.iter()
+            .find(|(key, _)| domain_of(key) == domain)
+            .and_then(|(_, name)| self.browser(name))
+    }
+
+    fn parse_at(source: &str, path: Option<&Path>) -> Result<Self, ConfigError> {
+        let config: Self = toml::from_str(source).map_err(|error| ConfigError::Parse {
+            path: path.map(Path::to_path_buf),
+            message: error.to_string(),
+        })?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    fn validate(&self) -> Result<(), ConfigError> {
+        let mut names = HashSet::new();
+        let mut defaults = 0;
+
+        for browser in &self.browsers {
+            if browser.name.trim().is_empty() {
+                return Err(ConfigError::Invalid("у браузера пустое имя".to_string()));
+            }
+            if browser.path.trim().is_empty() {
+                return Err(ConfigError::Invalid(format!(
+                    "у браузера '{}' пустой path",
+                    browser.name
+                )));
+            }
+            if !names.insert(browser.name.as_str()) {
+                return Err(ConfigError::Invalid(format!(
+                    "браузер '{}' указан дважды",
+                    browser.name
+                )));
+            }
+            if browser.is_default {
+                defaults += 1;
+            }
+        }
+
+        if defaults > 1 {
+            return Err(ConfigError::Invalid(
+                "default = true может быть только у одного браузера".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+pub fn default_path() -> PathBuf {
+    if let Ok(path) = std::env::var("BP_CONFIG") {
+        return PathBuf::from(path);
+    }
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        return PathBuf::from(appdata).join("bropicker").join("config.toml");
+    }
+    PathBuf::from("config.toml")
+}
+
+pub fn domain_of(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    let host = if let Some(stripped) = host.strip_prefix('[') {
+        stripped.split_once(']').map_or(stripped, |(host, _)| host)
+    } else {
+        host.split(':').next().unwrap_or(host)
+    };
+    let host = host.trim_end_matches('.').to_lowercase();
+
+    host.strip_prefix("www.").unwrap_or(&host).to_string()
+}
