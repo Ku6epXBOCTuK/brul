@@ -67,6 +67,7 @@ fn eval_call(component: &mut Component, target: &Expr, arguments: &[Expr]) -> Re
         "String" => call_string(values),
         "Number" => call_number(values),
         "len" => call_len(values),
+        _ if component.has_function(name) => component.call_function(name, values),
         _ => component.call(name, &values),
     }
 }

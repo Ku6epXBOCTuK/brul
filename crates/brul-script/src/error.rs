@@ -7,6 +7,12 @@ pub enum Error {
     At(Position, Box<Error>),
     Undefined(String),
     Redeclared(String),
+    FunctionRedeclared(String),
+    FunctionArity {
+        name: String,
+        expected: usize,
+        found: usize,
+    },
     Constant(String),
     Mismatch {
         operation: &'static str,
@@ -49,6 +55,15 @@ impl fmt::Display for Error {
             ),
             Error::Undefined(name) => write!(f, "variable '{name}' is not defined"),
             Error::Redeclared(name) => write!(f, "variable '{name}' is already declared"),
+            Error::FunctionRedeclared(name) => write!(f, "function '{name}' is already declared"),
+            Error::FunctionArity {
+                name,
+                expected,
+                found,
+            } => write!(
+                f,
+                "function '{name}' expects {expected} arguments, got {found}"
+            ),
             Error::Constant(name) => write!(f, "cannot assign to constant '{name}'"),
             Error::Mismatch {
                 operation,

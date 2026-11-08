@@ -12,6 +12,6 @@ pub use component::Component;
 pub use environment::Environment;
 pub use error::Error;
 pub use eval::eval;
-pub use execute::execute;
+pub use execute::{execute, execute_program};
 pub use host::Host;
 pub use value::Value;

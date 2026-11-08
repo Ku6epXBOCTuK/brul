@@ -1,9 +1,16 @@
-use brul_syntax::script::Statement;
+use brul_syntax::script::{Program, Statement};
 
 use crate::component::Component;
 use crate::error::Error;
 use crate::eval::eval;
 use crate::value::Value;
+
+pub fn execute_program(component: &mut Component, program: &Program) -> Result<(), Error> {
+    for function in &program.functions {
+        component.define_function(function.clone())?;
+    }
+    execute(component, &program.statements)
+}
 
 pub fn execute(component: &mut Component, statements: &[Statement]) -> Result<(), Error> {
     for statement in statements {

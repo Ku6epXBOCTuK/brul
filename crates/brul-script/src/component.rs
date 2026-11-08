@@ -1,7 +1,9 @@
 use brul_reactive::Signal;
+use brul_syntax::script::Function;
 
 use crate::environment::Environment;
 use crate::error::Error;
+use crate::execute::execute;
 use crate::host::Host;
 use crate::value::Value;
 
@@ -14,6 +16,7 @@ struct Property {
 pub struct Component {
     environment: Environment,
     properties: Vec<Property>,
+    functions: Vec<Function>,
     host: Option<Box<dyn Host>>,
 }
 
@@ -38,6 +41,43 @@ impl Component {
             Some(host) => host.every(interval_ms, function),
             None => Err(Error::UnknownFunction("every".to_owned())),
         }
+    }
+
+    pub fn define_function(&mut self, function: Function) -> Result<(), Error> {
+        if self.has_function(&function.name) {
+            return Err(Error::FunctionRedeclared(function.name));
+        }
+        self.functions.push(function);
+        Ok(())
+    }
+
+    pub fn has_function(&self, name: &str) -> bool {
+        self.functions.iter().any(|function| function.name == name)
+    }
+
+    pub fn call_function(&mut self, name: &str, arguments: Vec<Value>) -> Result<Value, Error> {
+        let Some(function) = self
+            .functions
+            .iter()
+            .find(|function| function.name == name)
+            .cloned()
+        else {
+            return Err(Error::UnknownFunction(name.to_owned()));
+        };
+        if function.params.len() != arguments.len() {
+            return Err(Error::FunctionArity {
+                name: function.name,
+                expected: function.params.len(),
+                found: arguments.len(),
+            });
+        }
+        self.environment.push_frame();
+        for (param, argument) in function.params.iter().zip(arguments) {
+            self.environment.declare(param, argument, false)?;
+        }
+        let result = execute(self, &function.body);
+        self.environment.pop_frame();
+        result.map(|()| Value::Null)
     }
 
     pub fn declare(&mut self, name: &str, value: Value, constant: bool) -> Result<(), Error> {
