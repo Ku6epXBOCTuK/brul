@@ -1,7 +1,7 @@
 use brul_syntax::ast::Expr;
 use brul_syntax::markup::{
-    Arg, Component, Declaration, Event, EventParam, File, Member, Prop, PropType, Window,
-    parse_file,
+    Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, Member, Prop,
+    PropType, Window, parse_file,
 };
 
 #[test]
@@ -146,12 +146,60 @@ fn declaration_errors_point_at_the_source() {
     assert_eq!((error.line, error.column), (1, 12));
 
     let error = parse_file("component A { x }").unwrap_err();
-    assert_eq!(error.message, "expected 'prop' or 'event'");
-    assert_eq!((error.line, error.column), (1, 15));
+    assert_eq!(error.message, "expected '{'");
+    assert_eq!((error.line, error.column), (1, 17));
 
     let error = parse_file("window Picker () { }").unwrap_err();
     assert_eq!(error.message, "expected name");
     assert_eq!((error.line, error.column), (1, 16));
+}
+
+#[test]
+fn nested_elements_parse() {
+    let source = "component CheckRow { Row { Text { } View { View { } } } }";
+    let file = parse_file(source).unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    let view = || Element {
+        name: "View".to_owned(),
+        args: Vec::new(),
+        block: Block { items: Vec::new() },
+    };
+    assert_eq!(
+        component.members,
+        vec![Member::Element(Element {
+            name: "Row".to_owned(),
+            args: Vec::new(),
+            block: Block {
+                items: vec![
+                    BlockItem::Element(Element {
+                        name: "Text".to_owned(),
+                        args: Vec::new(),
+                        block: Block { items: Vec::new() },
+                    }),
+                    BlockItem::Element(Element {
+                        name: "View".to_owned(),
+                        args: Vec::new(),
+                        block: Block {
+                            items: vec![BlockItem::Element(view())],
+                        },
+                    }),
+                ],
+            },
+        })]
+    );
+}
+
+#[test]
+fn element_errors_point_at_the_source() {
+    let error = parse_file("component A { View }").unwrap_err();
+    assert_eq!(error.message, "expected '{'");
+    assert_eq!((error.line, error.column), (1, 20));
+
+    let error = parse_file("component A { View {").unwrap_err();
+    assert_eq!(error.message, "expected '}'");
+    assert_eq!((error.line, error.column), (1, 21));
 }
 
 #[test]

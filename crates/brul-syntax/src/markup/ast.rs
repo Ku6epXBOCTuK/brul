@@ -28,6 +28,24 @@ pub struct Window {
 pub enum Member {
     Prop(Prop),
     Event(Event),
+    Element(Element),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Element {
+    pub name: String,
+    pub args: Vec<Arg>,
+    pub block: Block,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub items: Vec<BlockItem>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BlockItem {
+    Element(Element),
 }
 
 #[derive(Debug, Clone, PartialEq)]

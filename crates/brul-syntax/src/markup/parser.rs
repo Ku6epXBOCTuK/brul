@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::markup::ast::{
-    Arg, Component, Declaration, Event, EventParam, File, Member, Prop, PropType, Window,
+    Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, Member, Prop,
+    PropType, Window,
 };
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
@@ -85,13 +86,42 @@ impl Parser<'_> {
 
     fn member(&mut self) -> Result<Member, Error> {
         self.skip_trivia();
-        let start = self.pos;
-        let keyword = self.ident()?;
-        match keyword.as_str() {
+        let name = self.ident()?;
+        match name.as_str() {
             "prop" => self.prop(),
             "event" => self.event(),
-            _ => Err(Error::at(self.source, start, "expected 'prop' or 'event'")),
+            _ => self.element(name).map(Member::Element),
         }
+    }
+
+    fn element(&mut self, name: String) -> Result<Element, Error> {
+        let block = self.block()?;
+        Ok(Element {
+            name,
+            args: Vec::new(),
+            block,
+        })
+    }
+
+    fn block(&mut self) -> Result<Block, Error> {
+        self.expect('{')?;
+        let mut items = Vec::new();
+        loop {
+            self.skip_trivia();
+            match self.peek() {
+                Some('}') => {
+                    self.bump();
+                    return Ok(Block { items });
+                }
+                None => return Err(self.error("expected '}'")),
+                _ => items.push(self.block_item()?),
+            }
+        }
+    }
+
+    fn block_item(&mut self) -> Result<BlockItem, Error> {
+        let name = self.ident()?;
+        Ok(BlockItem::Element(self.element(name)?))
     }
 
     fn prop(&mut self) -> Result<Member, Error> {
