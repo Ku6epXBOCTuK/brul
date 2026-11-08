@@ -13,8 +13,8 @@
 
 - [dev/architecture.md](dev/architecture.md) — устройство, крейты, пайплайн.
 - [dev/product.md](dev/product.md) — зачем проект и что считается MVP.
-- [dev/plan.md](dev/plan.md) — маршрут срезами; закрытые удаляются.
-- [dev/workflow.md](dev/workflow.md) — срез, бюджет, отчёт, план и трекер.
+- [dev/plan.md](dev/plan.md) — маршрут задачами; закрытые удаляются.
+- [dev/workflow.md](dev/workflow.md) — задача, бюджет, отчёт, план и трекер.
 - [dev/benchmarks.md](dev/benchmarks.md) — снимки замеров и как их сравнивать.
 
 ## Правила
