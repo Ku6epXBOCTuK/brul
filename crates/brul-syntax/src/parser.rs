@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::ast::Expr;
+use crate::ast::{BinaryOp, Expr, UnaryOp};
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,7 +49,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_expression(&mut self) -> Result<Expr, Error> {
-        self.postfix()
+        self.logic_or()
     }
 
     pub fn expect_end(&mut self) -> Result<(), Error> {
@@ -85,6 +85,93 @@ impl<'a> Parser<'a> {
             }
             _ => Err(self.error(span, "ожидалось выражение")),
         }
+    }
+
+    fn logic_or(&mut self) -> Result<Expr, Error> {
+        self.binary(Self::logic_and, &[(Punct::Or, BinaryOp::Or)])
+    }
+
+    fn logic_and(&mut self) -> Result<Expr, Error> {
+        self.binary(Self::equality, &[(Punct::And, BinaryOp::And)])
+    }
+
+    fn equality(&mut self) -> Result<Expr, Error> {
+        self.binary(
+            Self::comparison,
+            &[(Punct::Eq, BinaryOp::Eq), (Punct::NotEq, BinaryOp::NotEq)],
+        )
+    }
+
+    fn comparison(&mut self) -> Result<Expr, Error> {
+        self.binary(
+            Self::term,
+            &[
+                (Punct::Lt, BinaryOp::Lt),
+                (Punct::Gt, BinaryOp::Gt),
+                (Punct::Le, BinaryOp::Le),
+                (Punct::Ge, BinaryOp::Ge),
+            ],
+        )
+    }
+
+    fn term(&mut self) -> Result<Expr, Error> {
+        self.binary(
+            Self::factor,
+            &[(Punct::Plus, BinaryOp::Add), (Punct::Minus, BinaryOp::Sub)],
+        )
+    }
+
+    fn factor(&mut self) -> Result<Expr, Error> {
+        self.binary(
+            Self::unary,
+            &[
+                (Punct::Star, BinaryOp::Mul),
+                (Punct::Slash, BinaryOp::Div),
+                (Punct::Percent, BinaryOp::Rem),
+            ],
+        )
+    }
+
+    fn binary(
+        &mut self,
+        next: fn(&mut Self) -> Result<Expr, Error>,
+        ops: &[(Punct, BinaryOp)],
+    ) -> Result<Expr, Error> {
+        let mut left = next(self)?;
+        'operators: while let TokenKind::Punct(punct) = &self.tokens[self.at].kind {
+            let punct = *punct;
+            for &(token, op) in ops {
+                if punct == token {
+                    self.at += 1;
+                    let right = next(self)?;
+                    left = Expr::Binary {
+                        op,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
+                    continue 'operators;
+                }
+            }
+            break;
+        }
+        Ok(left)
+    }
+
+    fn unary(&mut self) -> Result<Expr, Error> {
+        let op = match &self.tokens[self.at].kind {
+            TokenKind::Punct(Punct::Bang) => Some(UnaryOp::Not),
+            TokenKind::Punct(Punct::Minus) => Some(UnaryOp::Neg),
+            _ => None,
+        };
+        let Some(op) = op else {
+            return self.postfix();
+        };
+        self.at += 1;
+        let operand = self.postfix()?;
+        Ok(Expr::Unary {
+            op,
+            operand: Box::new(operand),
+        })
     }
 
     fn postfix(&mut self) -> Result<Expr, Error> {

@@ -1,3 +1,26 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Not,
+    Neg,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Eq,
+    NotEq,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    And,
+    Or,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Number(f64),
@@ -5,7 +28,25 @@ pub enum Expr {
     Bool(bool),
     Null,
     Ident(String),
-    Field { target: Box<Expr>, name: String },
-    Index { target: Box<Expr>, index: Box<Expr> },
-    Call { target: Box<Expr>, args: Vec<Expr> },
+    Field {
+        target: Box<Expr>,
+        name: String,
+    },
+    Index {
+        target: Box<Expr>,
+        index: Box<Expr>,
+    },
+    Call {
+        target: Box<Expr>,
+        args: Vec<Expr>,
+    },
+    Unary {
+        op: UnaryOp,
+        operand: Box<Expr>,
+    },
+    Binary {
+        op: BinaryOp,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
 }

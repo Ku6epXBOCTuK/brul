@@ -1,4 +1,4 @@
-use brul_syntax::ast::Expr;
+use brul_syntax::ast::{BinaryOp, Expr, UnaryOp};
 use brul_syntax::parser::parse_expression;
 
 fn ident(name: &str) -> Expr {
@@ -23,6 +23,25 @@ fn call(target: Expr, args: Vec<Expr>) -> Expr {
     Expr::Call {
         target: Box::new(target),
         args,
+    }
+}
+
+fn num(value: f64) -> Expr {
+    Expr::Number(value)
+}
+
+fn bin(op: BinaryOp, left: Expr, right: Expr) -> Expr {
+    Expr::Binary {
+        op,
+        left: Box::new(left),
+        right: Box::new(right),
+    }
+}
+
+fn unary(op: UnaryOp, operand: Expr) -> Expr {
+    Expr::Unary {
+        op,
+        operand: Box::new(operand),
     }
 }
 
@@ -111,6 +130,53 @@ fn postfix_errors_point_at_the_offending_token() {
 
     let error = parse_expression("f(1").unwrap_err();
     assert_eq!(error.message, "ожидался ')'");
+    assert_eq!((error.line, error.column), (1, 4));
+}
+
+#[test]
+fn precedence_and_associativity() {
+    assert_eq!(
+        parse_expression("1 + 2 * 3").unwrap(),
+        bin(
+            BinaryOp::Add,
+            num(1.0),
+            bin(BinaryOp::Mul, num(2.0), num(3.0))
+        )
+    );
+    assert_eq!(
+        parse_expression("1 - 2 - 3").unwrap(),
+        bin(
+            BinaryOp::Sub,
+            bin(BinaryOp::Sub, num(1.0), num(2.0)),
+            num(3.0)
+        )
+    );
+    assert_eq!(
+        parse_expression("a || b && c").unwrap(),
+        bin(
+            BinaryOp::Or,
+            ident("a"),
+            bin(BinaryOp::And, ident("b"), ident("c"))
+        )
+    );
+    assert_eq!(
+        parse_expression("!a.b").unwrap(),
+        unary(UnaryOp::Not, field(ident("a"), "b"))
+    );
+    assert_eq!(
+        parse_expression("a < b == c").unwrap(),
+        bin(
+            BinaryOp::Eq,
+            bin(BinaryOp::Lt, ident("a"), ident("b")),
+            ident("c")
+        )
+    );
+}
+
+#[test]
+fn dangling_operator_is_an_error() {
+    let error = parse_expression("1 +").unwrap_err();
+    assert_eq!(error.message, "ожидалось выражение");
     assert_eq!((error.line, error.column), (1, 4));
 }
 
