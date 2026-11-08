@@ -11,7 +11,8 @@ brul                   фасад: App/AppBuilder/AppHandle, состояние,
 brul-core              типы, ошибки, конфиг, цвета, math
 brul-gui               winit+wgpu: окно, примитивы, текст, лейаут
 brul-reactive          сигналы/memo/effect — минимальное ядро
-brul-compiler          SFC-сплиттер, парсеры DSL, кодеген
+brul-syntax            SFC-сплиттер, лексер и парсеры DSL в AST
+brul-compiler          проверка DSL, снапшоты стилей, кодеген
 brul-macros            proc-macro компиляции (по необходимости)
 apps/bropicker         MVP: переключатель браузеров
 apps/service-panel     MVP: панель служб

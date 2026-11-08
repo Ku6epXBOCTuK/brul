@@ -33,8 +33,10 @@ View (item-panel, selected: selected, on click: panelClicked) {
 - Классы: `kebab-case`. Свойства/события: `camelCase`. Ключи тем: `kebab-case`.
 - Пробелы и переводы строк незначимы (кроме тел строк-литералов).
 - Ключевые слова: `component`, `window`, `prop`, `event`, `on`, `if`, `else`,
-  `each`, `in`, `import`, `from`, `empty`; типы пропов — `Bool`, `Number`,
-  `String`, `Image`.
+  `each`, `in`, `import`, `from`; типы пропов — `Bool`, `Number`, `String`,
+  `Image`.
+- Ключевые слова не бывают идентификаторами: `on` в скобках начинает обработчик,
+  классом или параметром с этим именем быть нельзя.
 
 ## Грамматика (EBNF)
 
@@ -57,7 +59,7 @@ ArgList      = Arg { "," Arg } ;
 Arg          = Ident                    (* класс стилей *)
              | Ident ":" Expr           (* параметр/привязка *)
              | HandlerRef ;             (* обработчик *)
-HandlerRef   = "on" EventName ":" Ident ;
+HandlerRef   = "on" EventName ":" Ident ;  (* справа имя функции, не выражение *)
 Block        = "{" { BlockItem } "}" ;
 BlockItem    = Element | IfBlock | EachBlock ;
 IfBlock      = "if" "(" Expr ")" Block [ "else" Block ] ;
@@ -157,7 +159,7 @@ event clicked(i: Number)        // событие с типизированны�
 ```
 
 - Значение по умолчанию обязательно для `Bool`/`Number`/`String`; `Image` — по
-  умолчанию пустой (`= empty`).
+  умолчанию пустой (`= null`).
 - Присваивание свойству из обработчика — запись в сигнал.
 - Вызов события: `clicked(index)` — как вызов функции.
 
@@ -278,7 +280,7 @@ function itemClicked() {
 ```brul
 component BrowserItem {
     prop index: Number = 0
-    prop icon: Image = empty
+    prop icon: Image = null
     prop emoji: String = ""
     prop name: String = ""
     prop isDefault: Bool = false
