@@ -7,4 +7,5 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+brul-reactive = { workspace = true }
 brul-syntax = { workspace = true }

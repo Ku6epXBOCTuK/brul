@@ -1,31 +1,53 @@
-use brul_syntax::ast::{BinaryOp, Expr, UnaryOp};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr, UnaryOp};
 
+use crate::component::Component;
 use crate::error::Error;
 use crate::value::Value;
 
-pub fn eval(expression: &Expr) -> Result<Value, Error> {
+pub fn eval(component: &mut Component, expression: &Expr) -> Result<Value, Error> {
     match expression {
         Expr::Number(value) => Ok(Value::Number(*value)),
         Expr::String(value) => Ok(Value::String(value.clone())),
         Expr::Bool(value) => Ok(Value::Bool(*value)),
         Expr::Null => Ok(Value::Null),
-        Expr::Unary { op, operand } => eval_unary(*op, operand),
-        Expr::Binary { op, left, right } => eval_binary(*op, left, right),
+        Expr::Ident(name) => component.read(name),
+        Expr::Assign { target, op, value } => eval_assign(component, target, *op, value),
+        Expr::Unary { op, operand } => eval_unary(component, *op, operand),
+        Expr::Binary { op, left, right } => eval_binary(component, *op, left, right),
         Expr::Ternary {
             condition,
             then_branch,
             else_branch,
-        } => match eval(condition)? {
-            Value::Bool(true) => eval(then_branch),
-            Value::Bool(false) => eval(else_branch),
+        } => match eval(component, condition)? {
+            Value::Bool(true) => eval(component, then_branch),
+            Value::Bool(false) => eval(component, else_branch),
             other => Err(expected("?:", "Bool", &other)),
         },
         other => Err(Error::Unsupported(expression_name(other))),
     }
 }
 
-fn eval_unary(op: UnaryOp, operand: &Expr) -> Result<Value, Error> {
-    let value = eval(operand)?;
+fn eval_assign(
+    component: &mut Component,
+    target: &Expr,
+    op: AssignOp,
+    value: &Expr,
+) -> Result<Value, Error> {
+    let Expr::Ident(name) = target else {
+        return Err(Error::Unsupported(expression_name(target)));
+    };
+    let value = eval(component, value)?;
+    let value = match op {
+        AssignOp::Set => value,
+        AssignOp::Add => apply_binary(BinaryOp::Add, component.read(name)?, value)?,
+        AssignOp::Sub => apply_binary(BinaryOp::Sub, component.read(name)?, value)?,
+    };
+    component.assign(name, value.clone())?;
+    Ok(value)
+}
+
+fn eval_unary(component: &mut Component, op: UnaryOp, operand: &Expr) -> Result<Value, Error> {
+    let value = eval(component, operand)?;
     match (op, value) {
         (UnaryOp::Not, Value::Bool(value)) => Ok(Value::Bool(!value)),
         (UnaryOp::Neg, Value::Number(value)) => Ok(Value::Number(-value)),
@@ -34,9 +56,18 @@ fn eval_unary(op: UnaryOp, operand: &Expr) -> Result<Value, Error> {
     }
 }
 
-fn eval_binary(op: BinaryOp, left: &Expr, right: &Expr) -> Result<Value, Error> {
-    let left = eval(left)?;
-    let right = eval(right)?;
+fn eval_binary(
+    component: &mut Component,
+    op: BinaryOp,
+    left: &Expr,
+    right: &Expr,
+) -> Result<Value, Error> {
+    let left = eval(component, left)?;
+    let right = eval(component, right)?;
+    apply_binary(op, left, right)
+}
+
+fn apply_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Error> {
     match op {
         BinaryOp::Add => match (left, right) {
             (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),

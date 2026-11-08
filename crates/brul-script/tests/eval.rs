@@ -1,9 +1,9 @@
-use brul_script::{Error, Value, eval};
+use brul_script::{Component, Error, Value, eval};
 use brul_syntax::ast::Expr;
 use brul_syntax::parser::parse_expression;
 
 fn evaluate(source: &str) -> Result<Value, Error> {
-    eval(&parse_expression(source).unwrap())
+    eval(&mut Component::new(), &parse_expression(source).unwrap())
 }
 
 #[test]
@@ -118,10 +118,13 @@ fn ternary_picks_a_branch_by_bool() {
 }
 
 #[test]
-fn expressions_still_out_of_scope_are_unsupported() {
-    assert_eq!(evaluate("browsers"), Err(Error::Unsupported("identifier")));
+fn unsupported_expressions_report_their_kind() {
     assert_eq!(
-        eval(&Expr::Array(Vec::new())),
+        evaluate("browsers"),
+        Err(Error::Undefined("browsers".to_owned()))
+    );
+    assert_eq!(
+        eval(&mut Component::new(), &Expr::Array(Vec::new())),
         Err(Error::Unsupported("array literal"))
     );
 }

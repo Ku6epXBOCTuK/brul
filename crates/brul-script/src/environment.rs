@@ -30,6 +30,10 @@ impl Environment {
         Ok(())
     }
 
+    pub fn contains(&self, name: &str) -> bool {
+        self.bindings.iter().any(|binding| binding.name == name)
+    }
+
     pub fn get(&self, name: &str) -> Result<&Value, Error> {
         self.bindings
             .iter()
