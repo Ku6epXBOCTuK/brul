@@ -1,4 +1,5 @@
-use std::collections::BTreeMap;
+use brul_syntax::markup::Rule as ParserRule;
+use std::collections::{BTreeMap, BTreeSet};
 
 const MARKUP: &str = include_str!("../../../docs/lang/markup.ebnf");
 const STYLE: &str = include_str!("../../../docs/lang/style.ebnf");
@@ -244,6 +245,26 @@ fn tables() -> BTreeMap<&'static str, BTreeMap<String, Rule>> {
 fn spec_grammar_is_well_formed() {
     let tables = tables();
     assert_eq!(tables.len(), 3);
+}
+
+#[test]
+fn markup_rules_match_the_spec() {
+    let tables = tables();
+    let spec: BTreeSet<&str> = tables["Markup"]
+        .keys()
+        .map(String::as_str)
+        .filter(|name| name.chars().next().is_some_and(char::is_uppercase))
+        .collect();
+    let parser: BTreeSet<&str> = ParserRule::ALL.iter().map(|rule| rule.name()).collect();
+    for name in &spec {
+        assert!(parser.contains(name), "no parser rule for {name}");
+    }
+    for name in &parser {
+        assert!(
+            spec.contains(name),
+            "parser rule {name} is missing from markup.ebnf"
+        );
+    }
 }
 
 #[test]
