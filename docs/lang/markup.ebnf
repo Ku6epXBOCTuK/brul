@@ -1,0 +1,26 @@
+File          = { ComponentDecl | WindowDecl } ;
+ComponentDecl = "component" Ident "{" { Member } "}" ;
+WindowDecl    = "window" Ident "(" ArgList ")" "{" { Member } "}" ;
+
+Member        = PropDecl | EventDecl | Element ;
+PropDecl      = "prop" Ident ":" PropType [ "=" Script.Expr ] ;
+PropType      = "Bool" | "Number" | "String" | "Image" ;
+EventDecl     = "event" Ident [ "(" [ EventParamList ] ")" ] ;
+EventParamList= EventParam { "," EventParam } ;
+EventParam    = Ident ":" PropType ;
+
+Element       = Ident [ "(" ArgList ")" ] Block ;
+ArgList       = Arg { "," Arg } ;
+Arg           = Ident                       (* класс стилей *)
+              | Ident ":" Script.Expr       (* параметр/привязка *)
+              | HandlerRef ;                (* обработчик *)
+HandlerRef    = "on" EventName ":" Ident ;  (* справа имя функции, не выражение *)
+Block         = "{" { BlockItem } "}" ;
+BlockItem     = Element | IfBlock | EachBlock ;
+IfBlock       = "if" "(" Script.Expr ")" Block [ "else" Block ] ;
+EachBlock     = "each" Ident [ "," Ident ] "in" Script.Expr Block ;
+EventName     = "click" | "key" | "drag" | Ident ;
+
+Ident         = letter { letter | digit | "-" | "_" } ;
+letter        = ? ASCII letter ? ;
+digit         = ? ASCII digit ? ;

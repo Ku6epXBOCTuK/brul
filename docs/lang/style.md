@@ -44,18 +44,7 @@
 ## Грамматика (EBNF)
 
 ```ebnf
-Stylesheet  = { ThemeBlock | ClassRule } ;
-ThemeBlock  = "theme" Ident "{" { ThemeProp } "}" ;
-ThemeProp   = Ident ":" Value ";" ;
-ClassRule   = "." Ident [ ":" State ] "{" { Prop } "}" ;
-State       = "hover" | "pressed" | "checked" | "selected" | "disabled" ;
-Prop        = Ident ":" Value ";" ;
-Value       = Number | Number "px" | Number "%" | Color | String
-            | ThemeRef | Gradient | Keyword | BorderValue ;
-BorderValue = Number "px" Color ;   (* шорткат border: <width> <color> *)
-Keyword     = Ident ;
-Gradient    = "linear-gradient" "(" Number [ "deg" ] "," Color "," Color ")" ;
-ThemeRef    = "theme" "." Ident ;
+{{#include style.ebnf}}
 ```
 
 ## Свойства MVP

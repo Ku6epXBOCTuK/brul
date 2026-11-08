@@ -1,0 +1,34 @@
+Expr        = Assignment ;
+Assignment  = Ternary [ ("=" | "+=" | "-=") Assignment ] ;
+Ternary     = LogicOr [ "?" Expr ":" Ternary ] ;
+LogicOr     = LogicAnd { "||" LogicAnd } ;
+LogicAnd    = Equality { "&&" Equality } ;
+Equality    = Comparison { ("==" | "!=") Comparison } ;
+Comparison  = Term { ("<" | ">" | "<=" | ">=") Term } ;
+Term        = Factor { ("+" | "-") Factor } ;
+Factor      = Unary { ("*" | "/" | "%") Unary } ;
+Unary       = [ "!" | "-" ] Postfix ;
+Postfix     = Primary { "." Ident | "(" [ ArgList ] ")" | "[" Expr "]" } ;
+Primary     = Number | String | Template | "true" | "false" | "null" | Ident
+            | Array | Object | "(" Expr ")" ;
+ArgList     = Expr { "," Expr } ;
+Array       = "[" [ Expr { "," Expr } ] "]" ;
+Object      = "{" [ Ident ":" Expr { "," Ident ":" Expr } ] "}" ;
+Template    = "`" { TemplateChar | "${" Expr "}" } "`" ;
+
+Program      = { ImportStmt | FunctionDecl | Statement } ;
+ImportStmt   = "import" Ident "from" String ";" ;   (* только в начале блока *)
+FunctionDecl = "function" Ident "(" [ ParamList ] ")" Block ;
+ParamList    = Ident { "," Ident } ;              (* без типов — MVP *)
+Statement    = LetStmt | IfStmt | ExprStmt | Block ;
+LetStmt      = ( "let" | "const" ) Ident [ "=" Expr ] ";" ;
+IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
+ExprStmt     = Expr ";" ;
+Block        = "{" { Statement } "}" ;
+
+Ident        = letter { letter | digit | "_" } ;
+Number       = digit { digit } [ "." digit { digit } ] ;
+String       = '"' { ? any character except '"' and newline ? } '"' ;
+TemplateChar = ? any character except "`" and "$" ? ;
+letter       = ? ASCII letter ? ;
+digit        = ? ASCII digit ? ;

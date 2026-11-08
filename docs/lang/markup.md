@@ -40,31 +40,10 @@ View (item-panel, selected: selected, on click: panelClicked) {
 
 ## Грамматика (EBNF)
 
-Выражения `Expr` — общие со скриптом, см. [script.md](script.md) §«Выражения».
+Выражения `Expr` — общие со скриптом, см. [script.md](script.md) §«Грамматика».
 
 ```ebnf
-File         = { ComponentDecl | WindowDecl } ;
-ComponentDecl= "component" Ident "{" { Member } "}" ;
-WindowDecl   = "window" Ident "(" ArgList ")" "{" { Member } "}" ;
-
-Member       = PropDecl | EventDecl | Element ;
-PropDecl     = "prop" Ident ":" PropType [ "=" Expr ] ;
-PropType     = "Bool" | "Number" | "String" | "Image" ;
-EventDecl    = "event" Ident [ "(" [ EventParamList ] ")" ] ;
-EventParamList = EventParam { "," EventParam } ;
-EventParam   = Ident ":" PropType ;
-
-Element      = Ident [ "(" ArgList ")" ] Block ;
-ArgList      = Arg { "," Arg } ;
-Arg          = Ident                    (* класс стилей *)
-             | Ident ":" Expr           (* параметр/привязка *)
-             | HandlerRef ;             (* обработчик *)
-HandlerRef   = "on" EventName ":" Ident ;  (* справа имя функции, не выражение *)
-Block        = "{" { BlockItem } "}" ;
-BlockItem    = Element | IfBlock | EachBlock ;
-IfBlock      = "if" "(" Expr ")" Block [ "else" Block ] ;
-EachBlock    = "each" Ident [ "," Ident ] "in" Expr Block ;
-EventName    = "click" | "key" | "drag" | Ident ;
+{{#include markup.ebnf}}
 ```
 
 Исключение — **листовые виджеты** (`Text` в MVP): их блок — одно выражение

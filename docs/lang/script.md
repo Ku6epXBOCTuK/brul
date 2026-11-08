@@ -45,49 +45,17 @@ UI-потоке. Скрипт оперирует **свойствами комп
 
 ## Грамматика (EBNF)
 
-### Выражения (единые для markup и script)
-
-Приоритет — от слабого к сильному:
+Выражения общие с разметкой; точка входа из разметки — `Expr`. Приоритет — от
+слабого к сильному.
 
 ```ebnf
-Expr       = Assignment ;
-Assignment = Ternary [ ("=" | "+=" | "-=") Assignment ] ;
-Ternary    = LogicOr [ "?" Expr ":" Ternary ] ;
-LogicOr    = LogicAnd { "||" LogicAnd } ;
-LogicAnd   = Equality { "&&" Equality } ;
-Equality   = Comparison { ("==" | "!=") Comparison } ;
-Comparison = Term { ("<" | ">" | "<=" | ">=") Term } ;
-Term       = Factor { ("+" | "-") Factor } ;
-Factor     = Unary { ("*" | "/" | "%") Unary } ;
-Unary      = [ "!" | "-" ] Postfix ;
-Postfix    = Primary { "." Ident | "(" ArgList? ")" | "[" Expr "]" } ;
-Primary    = Number | String | Template | "true" | "false" | "null" | Ident
-           | Array | Object | "(" Expr ")" ;
-ArgList    = Expr { "," Expr } ;
-Array      = "[" [ Expr { "," Expr } ] "]" ;
-Object     = "{" [ Ident ":" Expr { "," Ident ":" Expr } ] "}" ;
-Template   = "`" { Char | "${" Expr "}" } "`" ;
+{{#include script.ebnf}}
 ```
 
 - `+` — сложение чисел; для строк — конкатенация; смешанные типы — **ошибка**
   (явные преобразования через встроенные функции, никакого JS-автокастинга).
 - Присваивание валидно только на: свойство компонента (`checked = ...`),
   переменную (`let`/`const`), элемент массива/объекта.
-
-### Инструкции
-
-```ebnf
-Program      = { ImportStmt | FunctionDecl | Statement } ;
-ImportStmt   = "import" Ident "from" String ";" ;   (* только в начале блока *)
-FunctionDecl = "function" Ident "(" [ ParamList ] ")" Block ;
-ParamList    = Ident { "," Ident } ;                (* без типов — MVP *)
-Statement    = LetStmt | IfStmt | ExprStmt | Block ;
-LetStmt      = ( "let" | "const" ) Ident [ "=" Expr ] ";" ;
-IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
-ExprStmt     = Expr ";" ;
-Block        = "{" { Statement } "}" ;
-```
-
 - Импорты допустимы только в начале скрипт-блока.
   `import BrowserItem from "./browser_item";` — имя становится доступно разметке
   как компонент.
