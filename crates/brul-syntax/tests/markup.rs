@@ -1,4 +1,4 @@
-use brul_syntax::ast::{Expr, UnaryOp};
+use brul_syntax::ast::{BinaryOp, Expr, TemplatePart, UnaryOp};
 use brul_syntax::markup::{
     Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
     IfBlock, Member, Prop, PropType, Window, parse_file,
@@ -207,7 +207,7 @@ fn declaration_errors_point_at_the_source() {
 
 #[test]
 fn nested_elements_parse() {
-    let source = "component CheckRow { Row { Text { } View { View { } } } }";
+    let source = "component CheckRow { Row { Text { \"hi\" } View { View { } } } }";
     let file = parse_file(source).unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
         panic!("expected a component");
@@ -227,7 +227,9 @@ fn nested_elements_parse() {
                     BlockItem::Element(Element {
                         name: "Text".to_owned(),
                         args: Vec::new(),
-                        block: Block { items: Vec::new() },
+                        block: Block {
+                            items: vec![BlockItem::Expr(Expr::String("hi".to_owned()))],
+                        },
                     }),
                     BlockItem::Element(Element {
                         name: "View".to_owned(),
@@ -277,7 +279,7 @@ fn if_else_blocks_parse() {
     let source = r#"component CheckRow {
         Row {
             if (done) { Span { } } else { View { } }
-            if (failed) { Text { } }
+            if (failed) { Text { "no" } }
         }
     }"#;
     let file = parse_file(source).unwrap();
@@ -308,7 +310,13 @@ fn if_else_blocks_parse() {
                     BlockItem::If(IfBlock {
                         condition: Expr::Ident("failed".to_owned()),
                         then_block: Block {
-                            items: vec![BlockItem::Element(element("Text"))],
+                            items: vec![BlockItem::Element(Element {
+                                name: "Text".to_owned(),
+                                args: Vec::new(),
+                                block: Block {
+                                    items: vec![BlockItem::Expr(Expr::String("no".to_owned()))],
+                                },
+                            })],
                         },
                         else_block: None,
                     }),
@@ -330,6 +338,112 @@ fn if_errors_point_at_the_source() {
 
     let error = parse_file("component A { Row { if (x) { } else View { } } }").unwrap_err();
     assert_eq!(error.message, "expected '{'");
+}
+
+#[test]
+fn nested_errors_point_at_the_source() {
+    let error = parse_file("component A { Row { View } }").unwrap_err();
+    assert_eq!(error.message, "expected '{'");
+    assert_eq!((error.line, error.column), (1, 26));
+
+    let error = parse_file("component A { Row { View { } }").unwrap_err();
+    assert_eq!(error.message, "expected '}'");
+    assert_eq!((error.line, error.column), (1, 31));
+
+    let error = parse_file("component A { Row { Text { } } }").unwrap_err();
+    assert_eq!(error.message, "expected expression");
+    assert_eq!((error.line, error.column), (1, 28));
+
+    let error = parse_file("component A { Row { Button (on: x) { } } }").unwrap_err();
+    assert_eq!(error.message, "expected name");
+    assert_eq!((error.line, error.column), (1, 31));
+}
+
+#[test]
+fn leaf_blocks_hold_one_expression() {
+    let source = r#"component Item {
+        Row {
+            Text (text-main) { "Hello " + name }
+            Image (item-image) { icon }
+            Text { `Hi ${name}` }
+        }
+    }"#;
+    let file = parse_file(source).unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    let text = |block: Block| {
+        BlockItem::Element(Element {
+            name: "Text".to_owned(),
+            args: Vec::new(),
+            block,
+        })
+    };
+    assert_eq!(
+        component.members,
+        vec![Member::Element(Element {
+            name: "Row".to_owned(),
+            args: Vec::new(),
+            block: Block {
+                items: vec![
+                    BlockItem::Element(Element {
+                        name: "Text".to_owned(),
+                        args: vec![Arg::Class("text-main".to_owned())],
+                        block: Block {
+                            items: vec![BlockItem::Expr(Expr::Binary {
+                                op: BinaryOp::Add,
+                                left: Box::new(Expr::String("Hello ".to_owned())),
+                                right: Box::new(Expr::Ident("name".to_owned())),
+                            })],
+                        },
+                    }),
+                    BlockItem::Element(Element {
+                        name: "Image".to_owned(),
+                        args: vec![Arg::Class("item-image".to_owned())],
+                        block: Block {
+                            items: vec![BlockItem::Expr(Expr::Ident("icon".to_owned()))],
+                        },
+                    }),
+                    text(Block {
+                        items: vec![BlockItem::Expr(Expr::Template(vec![
+                            TemplatePart::Text("Hi ".to_owned()),
+                            TemplatePart::Expr(Box::new(Expr::Ident("name".to_owned()))),
+                        ]))],
+                    }),
+                ],
+            },
+        })]
+    );
+}
+
+#[test]
+fn leaf_block_errors_point_at_the_source() {
+    let error = parse_file("component A { Text { } }").unwrap_err();
+    assert_eq!(error.message, "expected expression");
+
+    let error = parse_file("component A { Text { \"a\" \"b\" } }").unwrap_err();
+    assert_eq!(error.message, "expected '}'");
+
+    let error = parse_file("component A { Text { View { } } }").unwrap_err();
+    assert_eq!(
+        error.message,
+        "Text is a leaf widget: nested elements are not allowed"
+    );
+    assert_eq!((error.line, error.column), (1, 27));
+
+    let error = parse_file("component A { Image { Row (item-image) { } } }").unwrap_err();
+    assert_eq!(
+        error.message,
+        "Image is a leaf widget: nested elements are not allowed"
+    );
+    assert_eq!((error.line, error.column), (1, 40));
+
+    let error = parse_file("component A { Row { Text { Button { } } } }").unwrap_err();
+    assert_eq!(
+        error.message,
+        "Text is a leaf widget: nested elements are not allowed"
+    );
+    assert_eq!((error.line, error.column), (1, 35));
 }
 
 #[test]

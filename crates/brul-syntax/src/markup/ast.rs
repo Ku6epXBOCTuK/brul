@@ -48,6 +48,7 @@ pub enum BlockItem {
     Element(Element),
     If(IfBlock),
     Each(EachBlock),
+    Expr(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -88,8 +88,28 @@ impl Parser<'_> {
         } else {
             Vec::new()
         };
-        let block = self.block()?;
+        let block = if name == "Text" || name == "Image" {
+            self.leaf_block(&name)?
+        } else {
+            self.block()?
+        };
         Ok(Element { name, args, block })
+    }
+
+    fn leaf_block(&mut self, name: &str) -> Result<Block, Error> {
+        self.expect('{')?;
+        let (expr, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
+        self.pos = end;
+        self.skip_trivia();
+        if self.peek() == Some('{') {
+            return Err(self.error(format!(
+                "{name} is a leaf widget: nested elements are not allowed"
+            )));
+        }
+        self.expect('}')?;
+        Ok(Block {
+            items: vec![BlockItem::Expr(expr)],
+        })
     }
 
     fn arg_list(&mut self) -> Result<Vec<Arg>, Error> {
