@@ -198,10 +198,6 @@ version = "0.1.0"
 [[package]]
 name = "brul-compiler"
 version = "0.1.0"
-dependencies = [
- "pest",
- "pest_derive",
-]
 
 [[package]]
 name = "brul-gui"
@@ -219,6 +215,14 @@ name = "brul-reactive"
 version = "0.1.0"
 dependencies = [
  "criterion",
+]
+
+[[package]]
+name = "brul-syntax"
+version = "0.1.0"
+dependencies = [
+ "pest",
+ "pest_derive",
 ]
 
 [[package]]

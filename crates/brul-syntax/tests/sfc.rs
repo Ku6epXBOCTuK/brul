@@ -1,4 +1,4 @@
-use brul_compiler::sfc::{Error, parse};
+use brul_syntax::sfc::{Error, parse};
 
 const PICKER: &str = include_str!("fixtures/picker.brul");
 

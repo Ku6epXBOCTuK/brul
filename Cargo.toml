@@ -8,3 +8,16 @@ repository = "https://github.com/Ku6epXBOCTuK/brul"
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*"]
+
+[workspace.dependencies]
+brul-gui = { path = 'crates\brul-gui' }
+brul-reactive = { path = 'crates\brul-reactive' }
+cosmic-text = "0.19.0"
+criterion = { version = "0.8.2", default-features = false }
+image = { version = "0.25.10", default-features = false }
+pest = "2.9.5"
+pest_derive = "2.9.5"
+serde = "1.0.228"
+toml = "1.1.4"
+wgpu = "30.0.1"
+winit = "=0.31.0-beta.4"
