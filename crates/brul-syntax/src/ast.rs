@@ -66,4 +66,6 @@ pub enum Expr {
         op: AssignOp,
         value: Box<Expr>,
     },
+    Array(Vec<Expr>),
+    Object(Vec<(String, Expr)>),
 }

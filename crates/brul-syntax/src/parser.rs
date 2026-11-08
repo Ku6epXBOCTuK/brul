@@ -83,8 +83,54 @@ impl<'a> Parser<'a> {
                     _ => Expr::Ident(name),
                 })
             }
+            TokenKind::Punct(Punct::LBracket) => self.array(),
+            TokenKind::Punct(Punct::LBrace) => self.object(),
+            TokenKind::Punct(Punct::LParen) => {
+                self.at += 1;
+                let expr = self.parse_expression()?;
+                self.expect_punct(Punct::RParen, "ожидался ')'")?;
+                Ok(expr)
+            }
             _ => Err(self.error(span, "ожидалось выражение")),
         }
+    }
+
+    fn array(&mut self) -> Result<Expr, Error> {
+        self.at += 1;
+        let mut items = Vec::new();
+        if self.tokens[self.at].kind == TokenKind::Punct(Punct::RBracket) {
+            self.at += 1;
+            return Ok(Expr::Array(items));
+        }
+        loop {
+            items.push(self.parse_expression()?);
+            if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
+                break;
+            }
+            self.at += 1;
+        }
+        self.expect_punct(Punct::RBracket, "ожидался ']'")?;
+        Ok(Expr::Array(items))
+    }
+
+    fn object(&mut self) -> Result<Expr, Error> {
+        self.at += 1;
+        let mut fields = Vec::new();
+        if self.tokens[self.at].kind == TokenKind::Punct(Punct::RBrace) {
+            self.at += 1;
+            return Ok(Expr::Object(fields));
+        }
+        loop {
+            let name = self.expect_ident()?;
+            self.expect_punct(Punct::Colon, "ожидался ':'")?;
+            fields.push((name, self.parse_expression()?));
+            if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
+                break;
+            }
+            self.at += 1;
+        }
+        self.expect_punct(Punct::RBrace, "ожидался '}'")?;
+        Ok(Expr::Object(fields))
     }
 
     fn assignment(&mut self) -> Result<Expr, Error> {

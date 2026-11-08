@@ -61,6 +61,19 @@ fn assign(op: AssignOp, target: Expr, value: Expr) -> Expr {
     }
 }
 
+fn array(items: Vec<Expr>) -> Expr {
+    Expr::Array(items)
+}
+
+fn object(fields: Vec<(&str, Expr)>) -> Expr {
+    Expr::Object(
+        fields
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), value))
+            .collect(),
+    )
+}
+
 #[test]
 fn literals_and_identifiers_parse() {
     assert_eq!(parse_expression("42").unwrap(), Expr::Number(42.0));
@@ -252,4 +265,58 @@ fn missing_colon_after_then_branch_is_an_error() {
     let error = parse_expression("a ? b").unwrap_err();
     assert_eq!(error.message, "ожидался ':'");
     assert_eq!((error.line, error.column), (1, 6));
+}
+
+#[test]
+fn arrays_and_objects_parse() {
+    assert_eq!(parse_expression("[]").unwrap(), array(vec![]));
+    assert_eq!(
+        parse_expression("[1, x]").unwrap(),
+        array(vec![num(1.0), ident("x")])
+    );
+    assert_eq!(parse_expression("{}").unwrap(), object(vec![]));
+    assert_eq!(
+        parse_expression("{a: 1, b: \"x\"}").unwrap(),
+        object(vec![("a", num(1.0)), ("b", Expr::String("x".to_owned()))])
+    );
+    assert_eq!(
+        parse_expression("[{a: [1]}]").unwrap(),
+        array(vec![object(vec![("a", array(vec![num(1.0)]))])])
+    );
+}
+
+#[test]
+fn parentheses_group_expressions() {
+    assert_eq!(
+        parse_expression("(1 + 2) * 3").unwrap(),
+        bin(
+            BinaryOp::Mul,
+            bin(BinaryOp::Add, num(1.0), num(2.0)),
+            num(3.0)
+        )
+    );
+    assert_eq!(parse_expression("(a)").unwrap(), ident("a"));
+}
+
+#[test]
+fn container_errors_point_at_the_offending_token() {
+    let error = parse_expression("[1").unwrap_err();
+    assert_eq!(error.message, "ожидался ']'");
+    assert_eq!((error.line, error.column), (1, 3));
+
+    let error = parse_expression("{1: 2}").unwrap_err();
+    assert_eq!(error.message, "ожидалось имя поля");
+    assert_eq!((error.line, error.column), (1, 2));
+
+    let error = parse_expression("{a 1}").unwrap_err();
+    assert_eq!(error.message, "ожидался ':'");
+    assert_eq!((error.line, error.column), (1, 4));
+
+    let error = parse_expression("{a: 1").unwrap_err();
+    assert_eq!(error.message, "ожидался '}'");
+    assert_eq!((error.line, error.column), (1, 6));
+
+    let error = parse_expression("[1,").unwrap_err();
+    assert_eq!(error.message, "ожидалось выражение");
+    assert_eq!((error.line, error.column), (1, 4));
 }
