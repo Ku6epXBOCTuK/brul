@@ -1,8 +1,24 @@
-use brul_syntax::ast::{BinaryOp, Expr, TemplatePart, UnaryOp};
+use brul_syntax::ast::{BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::markup::{
     Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
     IfBlock, Member, Prop, PropType, Window, parse_file,
 };
+
+fn expr(kind: ExprKind) -> Expr {
+    Expr::new(kind, Position::default())
+}
+
+fn ident(name: &str) -> Expr {
+    expr(ExprKind::Ident(name.to_owned()))
+}
+
+fn string(value: &str) -> Expr {
+    expr(ExprKind::String(value.to_owned()))
+}
+
+fn number(value: f64) -> Expr {
+    expr(ExprKind::Number(value))
+}
 
 #[test]
 fn component_with_empty_block_parses() {
@@ -28,11 +44,11 @@ fn args_parse_classes_names_and_handlers() {
                 Arg::Class("root".to_owned()),
                 Arg::Named {
                     name: "title".to_owned(),
-                    value: Expr::String("Picker".to_owned()),
+                    value: string("Picker"),
                 },
                 Arg::Named {
                     name: "width".to_owned(),
-                    value: Expr::Number(800.0),
+                    value: number(800.0),
                 },
             ],
             members: Vec::new(),
@@ -57,10 +73,10 @@ fn element_args_parse_handlers_and_expressions() {
                 Arg::Class("check-row".to_owned()),
                 Arg::Named {
                     name: "disabled".to_owned(),
-                    value: Expr::Unary {
+                    value: expr(ExprKind::Unary {
                         op: UnaryOp::Not,
-                        operand: Box::new(Expr::Ident("done".to_owned())),
-                    },
+                        operand: Box::new(ident("done")),
+                    }),
                 },
                 Arg::Handler {
                     event: "click".to_owned(),
@@ -102,22 +118,22 @@ fn props_with_types_and_defaults_parse() {
             Member::Prop(Prop {
                 name: "label".to_owned(),
                 ty: PropType::String,
-                default: Some(Expr::String(String::new())),
+                default: Some(expr(ExprKind::String(String::new()))),
             }),
             Member::Prop(Prop {
                 name: "checked".to_owned(),
                 ty: PropType::Bool,
-                default: Some(Expr::Bool(false)),
+                default: Some(expr(ExprKind::Bool(false))),
             }),
             Member::Prop(Prop {
                 name: "count".to_owned(),
                 ty: PropType::Number,
-                default: Some(Expr::Number(0.0)),
+                default: Some(number(0.0)),
             }),
             Member::Prop(Prop {
                 name: "icon".to_owned(),
                 ty: PropType::Image,
-                default: Some(Expr::Null),
+                default: Some(expr(ExprKind::Null)),
             }),
             Member::Prop(Prop {
                 name: "plain".to_owned(),
@@ -228,7 +244,7 @@ fn nested_elements_parse() {
                         name: "Text".to_owned(),
                         args: Vec::new(),
                         block: Block {
-                            items: vec![BlockItem::Expr(Expr::String("hi".to_owned()))],
+                            items: vec![BlockItem::Expr(string("hi"))],
                         },
                     }),
                     BlockItem::Element(Element {
@@ -299,7 +315,7 @@ fn if_else_blocks_parse() {
             block: Block {
                 items: vec![
                     BlockItem::If(IfBlock {
-                        condition: Expr::Ident("done".to_owned()),
+                        condition: ident("done"),
                         then_block: Block {
                             items: vec![BlockItem::Element(element("Span"))],
                         },
@@ -308,13 +324,13 @@ fn if_else_blocks_parse() {
                         }),
                     }),
                     BlockItem::If(IfBlock {
-                        condition: Expr::Ident("failed".to_owned()),
+                        condition: ident("failed"),
                         then_block: Block {
                             items: vec![BlockItem::Element(Element {
                                 name: "Text".to_owned(),
                                 args: Vec::new(),
                                 block: Block {
-                                    items: vec![BlockItem::Expr(Expr::String("no".to_owned()))],
+                                    items: vec![BlockItem::Expr(string("no"))],
                                 },
                             })],
                         },
@@ -390,25 +406,25 @@ fn leaf_blocks_hold_one_expression() {
                         name: "Text".to_owned(),
                         args: vec![Arg::Class("text-main".to_owned())],
                         block: Block {
-                            items: vec![BlockItem::Expr(Expr::Binary {
+                            items: vec![BlockItem::Expr(expr(ExprKind::Binary {
                                 op: BinaryOp::Add,
-                                left: Box::new(Expr::String("Hello ".to_owned())),
-                                right: Box::new(Expr::Ident("name".to_owned())),
-                            })],
+                                left: Box::new(string("Hello ")),
+                                right: Box::new(ident("name")),
+                            }))],
                         },
                     }),
                     BlockItem::Element(Element {
                         name: "Image".to_owned(),
                         args: vec![Arg::Class("item-image".to_owned())],
                         block: Block {
-                            items: vec![BlockItem::Expr(Expr::Ident("icon".to_owned()))],
+                            items: vec![BlockItem::Expr(ident("icon"))],
                         },
                     }),
                     text(Block {
-                        items: vec![BlockItem::Expr(Expr::Template(vec![
+                        items: vec![BlockItem::Expr(expr(ExprKind::Template(vec![
                             TemplatePart::Text("Hi ".to_owned()),
-                            TemplatePart::Expr(Box::new(Expr::Ident("name".to_owned()))),
-                        ]))],
+                            TemplatePart::Expr(Box::new(ident("name"))),
+                        ])))],
                     }),
                 ],
             },
@@ -467,10 +483,10 @@ fn each_blocks_parse() {
     };
     let row = || BlockItem::Element(element("Row"));
     let key = || {
-        Some(Expr::Field {
-            target: Box::new(Expr::Ident("item".to_owned())),
+        Some(expr(ExprKind::Field {
+            target: Box::new(ident("item")),
             name: "id".to_owned(),
-        })
+        }))
     };
     assert_eq!(
         component.members,
@@ -480,14 +496,14 @@ fn each_blocks_parse() {
             block: Block {
                 items: vec![
                     BlockItem::Each(EachBlock {
-                        collection: Expr::Ident("items".to_owned()),
+                        collection: ident("items"),
                         item: "item".to_owned(),
                         index: None,
                         key: None,
                         block: Block { items: vec![row()] },
                     }),
                     BlockItem::Each(EachBlock {
-                        collection: Expr::Ident("items".to_owned()),
+                        collection: ident("items"),
                         item: "item".to_owned(),
                         index: Some("idx".to_owned()),
                         key: None,
@@ -496,24 +512,24 @@ fn each_blocks_parse() {
                                 name: "Row".to_owned(),
                                 args: vec![Arg::Named {
                                     name: "number".to_owned(),
-                                    value: Expr::Ident("idx".to_owned()),
+                                    value: ident("idx"),
                                 }],
                                 block: Block { items: Vec::new() },
                             })],
                         },
                     }),
                     BlockItem::Each(EachBlock {
-                        collection: Expr::Ident("items".to_owned()),
+                        collection: ident("items"),
                         item: "item".to_owned(),
                         index: None,
                         key: key(),
                         block: Block { items: vec![row()] },
                     }),
                     BlockItem::Each(EachBlock {
-                        collection: Expr::Index {
-                            target: Box::new(Expr::Ident("groups".to_owned())),
-                            index: Box::new(Expr::Number(0.0)),
-                        },
+                        collection: expr(ExprKind::Index {
+                            target: Box::new(ident("groups")),
+                            index: Box::new(number(0.0)),
+                        }),
                         item: "item".to_owned(),
                         index: Some("idx".to_owned()),
                         key: key(),

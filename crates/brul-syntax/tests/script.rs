@@ -1,5 +1,39 @@
-use brul_syntax::ast::{AssignOp, BinaryOp, Expr};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position};
 use brul_syntax::script::{Function, Import, Program, Statement, parse};
+
+fn expr(kind: ExprKind) -> Expr {
+    Expr::new(kind, Position::default())
+}
+
+fn ident(name: &str) -> Expr {
+    expr(ExprKind::Ident(name.to_owned()))
+}
+
+fn num(value: f64) -> Expr {
+    expr(ExprKind::Number(value))
+}
+
+fn bin(op: BinaryOp, left: Expr, right: Expr) -> Expr {
+    expr(ExprKind::Binary {
+        op,
+        left: Box::new(left),
+        right: Box::new(right),
+    })
+}
+
+fn call(target: Expr, args: Vec<Expr>) -> Expr {
+    expr(ExprKind::Call {
+        target: Box::new(target),
+        args,
+    })
+}
+
+fn index(target: Expr, index: Expr) -> Expr {
+    expr(ExprKind::Index {
+        target: Box::new(target),
+        index: Box::new(index),
+    })
+}
 
 #[test]
 fn empty_script_is_an_empty_program() {
@@ -80,7 +114,7 @@ fn let_parses_name_and_value() {
         vec![Statement::Let {
             constant: false,
             name: "browsers".to_owned(),
-            value: Some(Expr::Array(vec![])),
+            value: Some(expr(ExprKind::Array(vec![]))),
         }]
     );
 }
@@ -106,7 +140,7 @@ fn const_parses_name_and_value() {
         vec![Statement::Let {
             constant: true,
             name: "limit".to_owned(),
-            value: Some(Expr::Number(10.0)),
+            value: Some(num(10.0)),
         }]
     );
 }
@@ -123,16 +157,21 @@ fn assignment_is_an_expression_statement() {
     let program = parse("count = count + 1;").unwrap();
     assert_eq!(
         program.statements,
-        vec![Statement::Expr(Expr::Assign {
-            target: Box::new(Expr::Ident("count".to_owned())),
+        vec![Statement::Expr(expr(ExprKind::Assign {
+            target: Box::new(ident("count")),
             op: AssignOp::Set,
-            value: Box::new(Expr::Binary {
-                op: BinaryOp::Add,
-                left: Box::new(Expr::Ident("count".to_owned())),
-                right: Box::new(Expr::Number(1.0)),
-            }),
-        })]
+            value: Box::new(bin(BinaryOp::Add, ident("count"), num(1.0))),
+        }))]
     );
+}
+
+#[test]
+fn expression_statements_keep_their_position() {
+    let program = parse("\n  count = count + 1;").unwrap();
+    let [Statement::Expr(expression)] = program.statements.as_slice() else {
+        panic!("expected an expression statement");
+    };
+    assert_eq!(expression.position, Position { line: 2, column: 3 });
 }
 
 #[test]
@@ -144,9 +183,9 @@ fn block_holds_parenthesised_statement_list() {
             Statement::Let {
                 constant: false,
                 name: "a".to_owned(),
-                value: Some(Expr::Number(1.0)),
+                value: Some(num(1.0)),
             },
-            Statement::Expr(Expr::Ident("a".to_owned())),
+            Statement::Expr(ident("a")),
         ])]
     );
 }
@@ -191,11 +230,8 @@ fn if_parses_condition_and_then_branch() {
     assert_eq!(
         program.statements,
         vec![Statement::If {
-            condition: Expr::Ident("ready".to_owned()),
-            then_branch: vec![Statement::Expr(Expr::Call {
-                target: Box::new(Expr::Ident("launch".to_owned())),
-                args: vec![],
-            })],
+            condition: ident("ready"),
+            then_branch: vec![Statement::Expr(call(ident("launch"), vec![]))],
             else_branch: None,
         }]
     );
@@ -207,8 +243,11 @@ fn if_condition_is_an_expression() {
     assert!(matches!(
         program.statements.as_slice(),
         [Statement::If {
-            condition: Expr::Binary {
-                op: BinaryOp::Gt,
+            condition: Expr {
+                kind: ExprKind::Binary {
+                    op: BinaryOp::Gt,
+                    ..
+                },
                 ..
             },
             ..
@@ -222,17 +261,12 @@ fn if_with_else_parses_both_branches() {
     assert_eq!(
         program.statements,
         vec![Statement::If {
-            condition: Expr::Ident("ready".to_owned()),
-            then_branch: vec![Statement::Expr(Expr::Call {
-                target: Box::new(Expr::Ident("launch".to_owned())),
-                args: vec![],
-            })],
-            else_branch: Some(Box::new(Statement::Block(vec![Statement::Expr(
-                Expr::Call {
-                    target: Box::new(Expr::Ident("wait".to_owned())),
-                    args: vec![],
-                }
-            )]))),
+            condition: ident("ready"),
+            then_branch: vec![Statement::Expr(call(ident("launch"), vec![]))],
+            else_branch: Some(Box::new(Statement::Block(vec![Statement::Expr(call(
+                ident("wait"),
+                vec![]
+            ))]))),
         }]
     );
 }
@@ -274,10 +308,7 @@ fn function_parses_params_and_body() {
             body: vec![Statement::Let {
                 constant: false,
                 name: "browser".to_owned(),
-                value: Some(Expr::Index {
-                    target: Box::new(Expr::Ident("browsers".to_owned())),
-                    index: Box::new(Expr::Ident("i".to_owned())),
-                }),
+                value: Some(index(ident("browsers"), ident("i"))),
             }],
         }]
     );
@@ -291,10 +322,7 @@ fn function_without_params_parses_empty_list() {
         vec![Function {
             name: "exit".to_owned(),
             params: vec![],
-            body: vec![Statement::Expr(Expr::Call {
-                target: Box::new(Expr::Ident("quit".to_owned())),
-                args: vec![],
-            })],
+            body: vec![Statement::Expr(call(ident("quit"), vec![]))],
         }]
     );
 }

@@ -1,4 +1,4 @@
-use crate::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
+use crate::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 pub use crate::error::Error;
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
 
@@ -47,20 +47,21 @@ impl<'a> Parser<'a> {
         match kind {
             TokenKind::Number(value) => {
                 self.at += 1;
-                Ok(Expr::Number(value))
+                Ok(self.located(ExprKind::Number(value), span))
             }
             TokenKind::String(value) => {
                 self.at += 1;
-                Ok(Expr::String(value))
+                Ok(self.located(ExprKind::String(value), span))
             }
             TokenKind::Ident(name) => {
                 self.at += 1;
-                Ok(match name.as_str() {
-                    "true" => Expr::Bool(true),
-                    "false" => Expr::Bool(false),
-                    "null" => Expr::Null,
-                    _ => Expr::Ident(name),
-                })
+                let kind = match name.as_str() {
+                    "true" => ExprKind::Bool(true),
+                    "false" => ExprKind::Bool(false),
+                    "null" => ExprKind::Null,
+                    _ => ExprKind::Ident(name),
+                };
+                Ok(self.located(kind, span))
             }
             TokenKind::Punct(Punct::LBracket) => self.array(),
             TokenKind::TemplateStart => self.template(),
@@ -76,11 +77,12 @@ impl<'a> Parser<'a> {
     }
 
     fn array(&mut self) -> Result<Expr, Error> {
+        let span = self.tokens[self.at].span;
         self.at += 1;
         let mut items = Vec::new();
         if self.tokens[self.at].kind == TokenKind::Punct(Punct::RBracket) {
             self.at += 1;
-            return Ok(Expr::Array(items));
+            return Ok(self.located(ExprKind::Array(items), span));
         }
         loop {
             items.push(self.parse_expression()?);
@@ -90,15 +92,16 @@ impl<'a> Parser<'a> {
             self.at += 1;
         }
         self.expect_punct(Punct::RBracket, "expected ']'")?;
-        Ok(Expr::Array(items))
+        Ok(self.located(ExprKind::Array(items), span))
     }
 
     fn object(&mut self) -> Result<Expr, Error> {
+        let span = self.tokens[self.at].span;
         self.at += 1;
         let mut fields = Vec::new();
         if self.tokens[self.at].kind == TokenKind::Punct(Punct::RBrace) {
             self.at += 1;
-            return Ok(Expr::Object(fields));
+            return Ok(self.located(ExprKind::Object(fields), span));
         }
         loop {
             let name = self.expect_ident()?;
@@ -110,10 +113,11 @@ impl<'a> Parser<'a> {
             self.at += 1;
         }
         self.expect_punct(Punct::RBrace, "expected '}'")?;
-        Ok(Expr::Object(fields))
+        Ok(self.located(ExprKind::Object(fields), span))
     }
 
     fn template(&mut self) -> Result<Expr, Error> {
+        let span = self.tokens[self.at].span;
         self.at += 1;
         let mut parts = Vec::new();
         loop {
@@ -142,7 +146,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(Expr::Template(parts))
+        Ok(self.located(ExprKind::Template(parts), span))
     }
 
     fn assignment(&mut self) -> Result<Expr, Error> {
@@ -155,11 +159,15 @@ impl<'a> Parser<'a> {
         };
         self.at += 1;
         let value = self.assignment()?;
-        Ok(Expr::Assign {
-            target: Box::new(target),
-            op,
-            value: Box::new(value),
-        })
+        let position = target.position;
+        Ok(Expr::new(
+            ExprKind::Assign {
+                target: Box::new(target),
+                op,
+                value: Box::new(value),
+            },
+            position,
+        ))
     }
 
     fn ternary(&mut self) -> Result<Expr, Error> {
@@ -171,11 +179,15 @@ impl<'a> Parser<'a> {
         let then_branch = self.parse_expression()?;
         self.expect_punct(Punct::Colon, "expected ':'")?;
         let else_branch = self.ternary()?;
-        Ok(Expr::Ternary {
-            condition: Box::new(condition),
-            then_branch: Box::new(then_branch),
-            else_branch: Box::new(else_branch),
-        })
+        let position = condition.position;
+        Ok(Expr::new(
+            ExprKind::Ternary {
+                condition: Box::new(condition),
+                then_branch: Box::new(then_branch),
+                else_branch: Box::new(else_branch),
+            },
+            position,
+        ))
     }
 
     fn logic_or(&mut self) -> Result<Expr, Error> {
@@ -235,11 +247,15 @@ impl<'a> Parser<'a> {
                 if punct == token {
                     self.at += 1;
                     let right = next(self)?;
-                    left = Expr::Binary {
-                        op,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    let position = left.position;
+                    left = Expr::new(
+                        ExprKind::Binary {
+                            op,
+                            left: Box::new(left),
+                            right: Box::new(right),
+                        },
+                        position,
+                    );
                     continue 'operators;
                 }
             }
@@ -249,6 +265,7 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Result<Expr, Error> {
+        let span = self.tokens[self.at].span;
         let op = match &self.tokens[self.at].kind {
             TokenKind::Punct(Punct::Bang) => Some(UnaryOp::Not),
             TokenKind::Punct(Punct::Minus) => Some(UnaryOp::Neg),
@@ -259,10 +276,13 @@ impl<'a> Parser<'a> {
         };
         self.at += 1;
         let operand = self.postfix()?;
-        Ok(Expr::Unary {
-            op,
-            operand: Box::new(operand),
-        })
+        Ok(self.located(
+            ExprKind::Unary {
+                op,
+                operand: Box::new(operand),
+            },
+            span,
+        ))
     }
 
     fn postfix(&mut self) -> Result<Expr, Error> {
@@ -273,28 +293,40 @@ impl<'a> Parser<'a> {
                 Punct::Dot => {
                     self.at += 1;
                     let name = self.expect_ident()?;
-                    expr = Expr::Field {
-                        target: Box::new(expr),
-                        name,
-                    };
+                    let position = expr.position;
+                    expr = Expr::new(
+                        ExprKind::Field {
+                            target: Box::new(expr),
+                            name,
+                        },
+                        position,
+                    );
                 }
                 Punct::LBracket => {
                     self.at += 1;
                     let index = self.parse_expression()?;
                     self.expect_punct(Punct::RBracket, "expected ']'")?;
-                    expr = Expr::Index {
-                        target: Box::new(expr),
-                        index: Box::new(index),
-                    };
+                    let position = expr.position;
+                    expr = Expr::new(
+                        ExprKind::Index {
+                            target: Box::new(expr),
+                            index: Box::new(index),
+                        },
+                        position,
+                    );
                 }
                 Punct::LParen => {
                     self.at += 1;
                     let args = self.arg_list()?;
                     self.expect_punct(Punct::RParen, "expected ')'")?;
-                    expr = Expr::Call {
-                        target: Box::new(expr),
-                        args,
-                    };
+                    let position = expr.position;
+                    expr = Expr::new(
+                        ExprKind::Call {
+                            target: Box::new(expr),
+                            args,
+                        },
+                        position,
+                    );
                 }
                 _ => break,
             }
@@ -337,6 +369,11 @@ impl<'a> Parser<'a> {
         } else {
             Err(self.error(token.span, message))
         }
+    }
+
+    fn located(&self, kind: ExprKind, span: Span) -> Expr {
+        let (line, column) = span.line_col(self.source);
+        Expr::new(kind, Position { line, column })
     }
 
     fn error(&self, span: Span, message: &str) -> Error {

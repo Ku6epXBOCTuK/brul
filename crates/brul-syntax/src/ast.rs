@@ -34,8 +34,32 @@ pub enum TemplatePart {
     Expr(Box<Expr>),
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Position {
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct Expr {
+    pub kind: ExprKind,
+    pub position: Position,
+}
+
+impl Expr {
+    pub fn new(kind: ExprKind, position: Position) -> Self {
+        Self { kind, position }
+    }
+}
+
+impl PartialEq for Expr {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr {
+pub enum ExprKind {
     Number(f64),
     String(String),
     Bool(bool),

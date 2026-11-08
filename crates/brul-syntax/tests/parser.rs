@@ -1,101 +1,122 @@
-﻿use brul_syntax::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::parser::parse_expression;
 
+fn expr(kind: ExprKind) -> Expr {
+    Expr::new(kind, Position::default())
+}
+
 fn ident(name: &str) -> Expr {
-    Expr::Ident(name.to_owned())
+    expr(ExprKind::Ident(name.to_owned()))
 }
 
 fn field(target: Expr, name: &str) -> Expr {
-    Expr::Field {
+    expr(ExprKind::Field {
         target: Box::new(target),
         name: name.to_owned(),
-    }
+    })
 }
 
 fn index(target: Expr, index: Expr) -> Expr {
-    Expr::Index {
+    expr(ExprKind::Index {
         target: Box::new(target),
         index: Box::new(index),
-    }
+    })
 }
 
 fn call(target: Expr, args: Vec<Expr>) -> Expr {
-    Expr::Call {
+    expr(ExprKind::Call {
         target: Box::new(target),
         args,
-    }
+    })
 }
 
 fn num(value: f64) -> Expr {
-    Expr::Number(value)
+    expr(ExprKind::Number(value))
 }
 
 fn bin(op: BinaryOp, left: Expr, right: Expr) -> Expr {
-    Expr::Binary {
+    expr(ExprKind::Binary {
         op,
         left: Box::new(left),
         right: Box::new(right),
-    }
+    })
 }
 
 fn unary(op: UnaryOp, operand: Expr) -> Expr {
-    Expr::Unary {
+    expr(ExprKind::Unary {
         op,
         operand: Box::new(operand),
-    }
+    })
 }
 
 fn ternary(condition: Expr, then_branch: Expr, else_branch: Expr) -> Expr {
-    Expr::Ternary {
+    expr(ExprKind::Ternary {
         condition: Box::new(condition),
         then_branch: Box::new(then_branch),
         else_branch: Box::new(else_branch),
-    }
+    })
 }
 
 fn assign(op: AssignOp, target: Expr, value: Expr) -> Expr {
-    Expr::Assign {
+    expr(ExprKind::Assign {
         target: Box::new(target),
         op,
         value: Box::new(value),
-    }
+    })
 }
 
 fn array(items: Vec<Expr>) -> Expr {
-    Expr::Array(items)
+    expr(ExprKind::Array(items))
 }
 
 fn object(fields: Vec<(&str, Expr)>) -> Expr {
-    Expr::Object(
+    expr(ExprKind::Object(
         fields
             .into_iter()
             .map(|(name, value)| (name.to_owned(), value))
             .collect(),
-    )
+    ))
+}
+
+#[test]
+fn expressions_carry_their_source_position() {
+    let expression = parse_expression("1 + 2 * 3").unwrap();
+    assert_eq!(expression.position, Position { line: 1, column: 1 });
+    let ExprKind::Binary { right, .. } = &expression.kind else {
+        panic!("expected a sum");
+    };
+    assert_eq!(right.position, Position { line: 1, column: 5 });
+    let ExprKind::Binary { right, .. } = &right.kind else {
+        panic!("expected a product");
+    };
+    assert_eq!(right.position, Position { line: 1, column: 9 });
 }
 
 #[test]
 fn literals_and_identifiers_parse() {
-    assert_eq!(parse_expression("42").unwrap(), Expr::Number(42.0));
-    assert_eq!(parse_expression("2.5").unwrap(), Expr::Number(2.5));
+    assert_eq!(parse_expression("42").unwrap(), num(42.0));
+    assert_eq!(parse_expression("2.5").unwrap(), num(2.5));
     assert_eq!(
         parse_expression("\"hi\"").unwrap(),
-        Expr::String("hi".to_owned())
+        expr(ExprKind::String("hi".to_owned()))
     );
-    assert_eq!(parse_expression("true").unwrap(), Expr::Bool(true));
-    assert_eq!(parse_expression("false").unwrap(), Expr::Bool(false));
-    assert_eq!(parse_expression("null").unwrap(), Expr::Null);
     assert_eq!(
-        parse_expression("camelCase").unwrap(),
-        Expr::Ident("camelCase".to_owned())
+        parse_expression("true").unwrap(),
+        expr(ExprKind::Bool(true))
     );
+    assert_eq!(
+        parse_expression("false").unwrap(),
+        expr(ExprKind::Bool(false))
+    );
+    assert_eq!(parse_expression("null").unwrap(), expr(ExprKind::Null));
+    assert_eq!(parse_expression("camelCase").unwrap(), ident("camelCase"));
 }
 
 #[test]
 fn entry_skips_whitespace_and_comments() {
     assert_eq!(
         parse_expression("  // note\n true ").unwrap(),
-        Expr::Bool(true)
+        expr(ExprKind::Bool(true))
     );
 }
 
@@ -114,7 +135,7 @@ fn empty_input_is_an_error() {
 }
 
 fn template(parts: Vec<TemplatePart>) -> Expr {
-    Expr::Template(parts)
+    expr(ExprKind::Template(parts))
 }
 
 fn text(value: &str) -> TemplatePart {
@@ -171,20 +192,17 @@ fn postfix_chains_fields_indexes_and_calls() {
     );
     assert_eq!(
         parse_expression("items[1]").unwrap(),
-        index(ident("items"), Expr::Number(1.0))
+        index(ident("items"), num(1.0))
     );
     assert_eq!(parse_expression("f()").unwrap(), call(ident("f"), vec![]));
     assert_eq!(
         parse_expression("f(1, x)").unwrap(),
-        call(ident("f"), vec![Expr::Number(1.0), ident("x")])
+        call(ident("f"), vec![num(1.0), ident("x")])
     );
     assert_eq!(
         parse_expression("a.b[0](c).d").unwrap(),
         field(
-            call(
-                index(field(ident("a"), "b"), Expr::Number(0.0)),
-                vec![ident("c")]
-            ),
+            call(index(field(ident("a"), "b"), num(0.0)), vec![ident("c")]),
             "d"
         )
     );
@@ -320,7 +338,10 @@ fn arrays_and_objects_parse() {
     assert_eq!(parse_expression("{}").unwrap(), object(vec![]));
     assert_eq!(
         parse_expression("{a: 1, b: \"x\"}").unwrap(),
-        object(vec![("a", num(1.0)), ("b", Expr::String("x".to_owned()))])
+        object(vec![
+            ("a", num(1.0)),
+            ("b", expr(ExprKind::String("x".to_owned())))
+        ])
     );
     assert_eq!(
         parse_expression("[{a: [1]}]").unwrap(),

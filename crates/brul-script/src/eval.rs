@@ -1,42 +1,42 @@
-use brul_syntax::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, TemplatePart, UnaryOp};
 
 use crate::component::Component;
 use crate::error::Error;
 use crate::value::Value;
 
 pub fn eval(component: &mut Component, expression: &Expr) -> Result<Value, Error> {
-    match expression {
-        Expr::Number(value) => Ok(Value::Number(*value)),
-        Expr::String(value) => Ok(Value::String(value.clone())),
-        Expr::Bool(value) => Ok(Value::Bool(*value)),
-        Expr::Null => Ok(Value::Null),
-        Expr::Ident(name) => component.read(name),
-        Expr::Field { target, name } => read_field(&eval(component, target)?, name),
-        Expr::Index { target, index } => {
+    match &expression.kind {
+        ExprKind::Number(value) => Ok(Value::Number(*value)),
+        ExprKind::String(value) => Ok(Value::String(value.clone())),
+        ExprKind::Bool(value) => Ok(Value::Bool(*value)),
+        ExprKind::Null => Ok(Value::Null),
+        ExprKind::Ident(name) => component.read(name),
+        ExprKind::Field { target, name } => read_field(&eval(component, target)?, name),
+        ExprKind::Index { target, index } => {
             let target = eval(component, target)?;
             let index = eval(component, index)?;
             read_index(&target, &index)
         }
-        Expr::Array(items) => {
+        ExprKind::Array(items) => {
             let mut values = Vec::with_capacity(items.len());
             for item in items {
                 values.push(eval(component, item)?);
             }
             Ok(Value::Array(values))
         }
-        Expr::Object(fields) => {
+        ExprKind::Object(fields) => {
             let mut values = Vec::with_capacity(fields.len());
             for (name, value) in fields {
                 values.push((name.clone(), eval(component, value)?));
             }
             Ok(Value::Object(values))
         }
-        Expr::Template(parts) => eval_template(component, parts),
-        Expr::Call { target, args } => eval_call(component, target, args),
-        Expr::Assign { target, op, value } => eval_assign(component, target, *op, value),
-        Expr::Unary { op, operand } => eval_unary(component, *op, operand),
-        Expr::Binary { op, left, right } => eval_binary(component, *op, left, right),
-        Expr::Ternary {
+        ExprKind::Template(parts) => eval_template(component, parts),
+        ExprKind::Call { target, args } => eval_call(component, target, args),
+        ExprKind::Assign { target, op, value } => eval_assign(component, target, *op, value),
+        ExprKind::Unary { op, operand } => eval_unary(component, *op, operand),
+        ExprKind::Binary { op, left, right } => eval_binary(component, *op, left, right),
+        ExprKind::Ternary {
             condition,
             then_branch,
             else_branch,
@@ -49,7 +49,7 @@ pub fn eval(component: &mut Component, expression: &Expr) -> Result<Value, Error
 }
 
 fn eval_call(component: &mut Component, target: &Expr, arguments: &[Expr]) -> Result<Value, Error> {
-    let Expr::Ident(name) = target else {
+    let ExprKind::Ident(name) = &target.kind else {
         return Err(Error::Unsupported("method call"));
     };
     if name == "every" {
@@ -78,7 +78,7 @@ fn call_every(component: &mut Component, arguments: &[Expr]) -> Result<Value, Er
     let Value::Number(interval) = interval else {
         return Err(argument_error("every", "Number", &interval));
     };
-    let Expr::Ident(function) = function else {
+    let ExprKind::Ident(function) = &function.kind else {
         return Err(Error::Argument {
             name: "every",
             expected: "function name",
@@ -157,13 +157,22 @@ fn eval_assign(
 
 fn assign_to(component: &mut Component, target: &Expr, value: Value) -> Result<(), Error> {
     match target {
-        Expr::Ident(name) => component.assign(name, value),
-        Expr::Field { target, name } => {
+        Expr {
+            kind: ExprKind::Ident(name),
+            ..
+        } => component.assign(name, value),
+        Expr {
+            kind: ExprKind::Field { target, name },
+            ..
+        } => {
             let mut container = eval(component, target)?;
             assign_field(&mut container, name, value)?;
             assign_to(component, target, container)
         }
-        Expr::Index { target, index } => {
+        Expr {
+            kind: ExprKind::Index { target, index },
+            ..
+        } => {
             let index = eval(component, index)?;
             let mut container = eval(component, target)?;
             assign_index(&mut container, &index, value)?;
@@ -406,21 +415,21 @@ fn op_name(op: BinaryOp) -> &'static str {
 }
 
 fn expression_name(expression: &Expr) -> &'static str {
-    match expression {
-        Expr::Ident(_) => "identifier",
-        Expr::Field { .. } => "field access",
-        Expr::Index { .. } => "index access",
-        Expr::Call { .. } => "call",
-        Expr::Assign { .. } => "assignment",
-        Expr::Array(_) => "array literal",
-        Expr::Object(_) => "object literal",
-        Expr::Template(_) => "template string",
-        Expr::Number(_)
-        | Expr::String(_)
-        | Expr::Bool(_)
-        | Expr::Null
-        | Expr::Unary { .. }
-        | Expr::Binary { .. }
-        | Expr::Ternary { .. } => "expression",
+    match &expression.kind {
+        ExprKind::Ident(_) => "identifier",
+        ExprKind::Field { .. } => "field access",
+        ExprKind::Index { .. } => "index access",
+        ExprKind::Call { .. } => "call",
+        ExprKind::Assign { .. } => "assignment",
+        ExprKind::Array(_) => "array literal",
+        ExprKind::Object(_) => "object literal",
+        ExprKind::Template(_) => "template string",
+        ExprKind::Number(_)
+        | ExprKind::String(_)
+        | ExprKind::Bool(_)
+        | ExprKind::Null
+        | ExprKind::Unary { .. }
+        | ExprKind::Binary { .. }
+        | ExprKind::Ternary { .. } => "expression",
     }
 }
