@@ -6,3 +6,4 @@ pub mod lexer;
 pub mod markup;
 pub mod parser;
 pub mod sfc;
+pub mod style;
