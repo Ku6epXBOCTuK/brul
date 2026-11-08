@@ -177,13 +177,14 @@ if (isDefault) {
     Text (hint) { "—" }
 }
 
-each item, i in browsers {
-    BrowserItem (index: i, name: item.name, emoji: item.emoji) { }
+each (browsers as item, idx (item.index)) {
+    BrowserItem (index: idx, name: item.name, emoji: item.emoji) { }
 }
 ```
 
 - `if`/`else` — условное включение поддерева.
-- `each` — повторение по массиву; вторая переменная — индекс.
+- `each` — повторение по массиву; заголовок в скобках: коллекция, `as` и имя
+  элемента, необязательные имя индекса и выражение ключа.
 - Пересоздание или переиспользование элементов при изменении модели — деталь
   компилятора (keyed-reuse отложено; MVP — перестроение диапазона).
 
@@ -328,10 +329,10 @@ window Picker (title: "bropicker", width: 488, height: 800,
                frameless: true, transparent: true, on key: handleKey) {
     Column (root) {
         Header (url: currentUrl) { }
-        each item, i in browsers {
-            BrowserItem (index: i, name: item.name, icon: item.icon,
+        each (browsers as item, idx (item.index)) {
+            BrowserItem (index: idx, name: item.name, icon: item.icon,
                          emoji: item.emoji, isDefault: item.isDefault,
-                         selected: i == selectedIndex,
+                         selected: idx == selectedIndex,
                          on clicked: launch) { }
         }
         Footer (remember: rememberChoice, always: alwaysAsk) { }

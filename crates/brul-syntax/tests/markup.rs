@@ -1,7 +1,7 @@
 use brul_syntax::ast::{Expr, UnaryOp};
 use brul_syntax::markup::{
-    Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, IfBlock,
-    Member, Prop, PropType, Window, parse_file,
+    Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
+    IfBlock, Member, Prop, PropType, Window, parse_file,
 };
 
 #[test]
@@ -329,5 +329,103 @@ fn if_errors_point_at_the_source() {
     assert_eq!((error.line, error.column), (1, 28));
 
     let error = parse_file("component A { Row { if (x) { } else View { } } }").unwrap_err();
+    assert_eq!(error.message, "expected '{'");
+}
+
+#[test]
+fn each_blocks_parse() {
+    let source = r#"component List {
+        Column {
+            each (items as item) { Row { } }
+            each (items as item, idx) { Row (number: idx) { } }
+            each (items as item (item.id)) { Row { } }
+            each (groups[0] as item, idx (item.id)) { Row { } }
+        }
+    }"#;
+    let file = parse_file(source).unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    let element = |name: &str| Element {
+        name: name.to_owned(),
+        args: Vec::new(),
+        block: Block { items: Vec::new() },
+    };
+    let row = || BlockItem::Element(element("Row"));
+    let key = || {
+        Some(Expr::Field {
+            target: Box::new(Expr::Ident("item".to_owned())),
+            name: "id".to_owned(),
+        })
+    };
+    assert_eq!(
+        component.members,
+        vec![Member::Element(Element {
+            name: "Column".to_owned(),
+            args: Vec::new(),
+            block: Block {
+                items: vec![
+                    BlockItem::Each(EachBlock {
+                        collection: Expr::Ident("items".to_owned()),
+                        item: "item".to_owned(),
+                        index: None,
+                        key: None,
+                        block: Block { items: vec![row()] },
+                    }),
+                    BlockItem::Each(EachBlock {
+                        collection: Expr::Ident("items".to_owned()),
+                        item: "item".to_owned(),
+                        index: Some("idx".to_owned()),
+                        key: None,
+                        block: Block {
+                            items: vec![BlockItem::Element(Element {
+                                name: "Row".to_owned(),
+                                args: vec![Arg::Named {
+                                    name: "number".to_owned(),
+                                    value: Expr::Ident("idx".to_owned()),
+                                }],
+                                block: Block { items: Vec::new() },
+                            })],
+                        },
+                    }),
+                    BlockItem::Each(EachBlock {
+                        collection: Expr::Ident("items".to_owned()),
+                        item: "item".to_owned(),
+                        index: None,
+                        key: key(),
+                        block: Block { items: vec![row()] },
+                    }),
+                    BlockItem::Each(EachBlock {
+                        collection: Expr::Index {
+                            target: Box::new(Expr::Ident("groups".to_owned())),
+                            index: Box::new(Expr::Number(0.0)),
+                        },
+                        item: "item".to_owned(),
+                        index: Some("idx".to_owned()),
+                        key: key(),
+                        block: Block { items: vec![row()] },
+                    }),
+                ],
+            },
+        })]
+    );
+}
+
+#[test]
+fn each_errors_point_at_the_source() {
+    let error = parse_file("component A { Row { each items as item { } } }").unwrap_err();
+    assert_eq!(error.message, "expected '('");
+    assert_eq!((error.line, error.column), (1, 26));
+
+    let error = parse_file("component A { Row { each (items item) { } } }").unwrap_err();
+    assert_eq!(error.message, "expected 'as'");
+
+    let error = parse_file("component A { Row { each (items as item, ) { } } }").unwrap_err();
+    assert_eq!(error.message, "expected name");
+
+    let error = parse_file("component A { Row { each (items as item (item.id { } } }").unwrap_err();
+    assert_eq!(error.message, "expected ')'");
+
+    let error = parse_file("component A { Row { each (items as item) } }").unwrap_err();
     assert_eq!(error.message, "expected '{'");
 }

@@ -47,6 +47,7 @@ pub struct Block {
 pub enum BlockItem {
     Element(Element),
     If(IfBlock),
+    Each(EachBlock),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,6 +55,15 @@ pub struct IfBlock {
     pub condition: Expr,
     pub then_block: Block,
     pub else_block: Option<Block>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EachBlock {
+    pub collection: Expr,
+    pub item: String,
+    pub index: Option<String>,
+    pub key: Option<Expr>,
+    pub block: Block,
 }
 
 #[derive(Debug, Clone, PartialEq)]

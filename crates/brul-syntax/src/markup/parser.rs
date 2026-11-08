@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::markup::ast::{
-    Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, IfBlock,
-    Member, Prop, PropType, Window,
+    Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
+    IfBlock, Member, Prop, PropType, Window,
 };
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
@@ -149,8 +149,47 @@ impl Parser<'_> {
         let name = self.ident()?;
         match name.as_str() {
             "if" => self.if_block().map(BlockItem::If),
+            "each" => self.each_block().map(BlockItem::Each),
             _ => self.element(name).map(BlockItem::Element),
         }
+    }
+
+    fn each_block(&mut self) -> Result<EachBlock, Error> {
+        self.expect('(')?;
+        let (collection, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
+        self.pos = end;
+        self.skip_trivia();
+        let start = self.pos;
+        if self.ident()? != "as" {
+            return Err(Error::at(self.source, start, "expected 'as'"));
+        }
+        let item = self.ident()?;
+        self.skip_trivia();
+        let index = if self.peek() == Some(',') {
+            self.bump();
+            Some(self.ident()?)
+        } else {
+            None
+        };
+        self.skip_trivia();
+        let key = if self.peek() == Some('(') {
+            self.bump();
+            let (key, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
+            self.pos = end;
+            self.expect(')')?;
+            Some(key)
+        } else {
+            None
+        };
+        self.expect(')')?;
+        let block = self.block()?;
+        Ok(EachBlock {
+            collection,
+            item,
+            index,
+            key,
+            block,
+        })
     }
 
     fn if_block(&mut self) -> Result<IfBlock, Error> {
