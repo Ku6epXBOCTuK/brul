@@ -1,6 +1,31 @@
 use brul_syntax::ast::Expr;
 use brul_syntax::parser::parse_expression;
 
+fn ident(name: &str) -> Expr {
+    Expr::Ident(name.to_owned())
+}
+
+fn field(target: Expr, name: &str) -> Expr {
+    Expr::Field {
+        target: Box::new(target),
+        name: name.to_owned(),
+    }
+}
+
+fn index(target: Expr, index: Expr) -> Expr {
+    Expr::Index {
+        target: Box::new(target),
+        index: Box::new(index),
+    }
+}
+
+fn call(target: Expr, args: Vec<Expr>) -> Expr {
+    Expr::Call {
+        target: Box::new(target),
+        args,
+    }
+}
+
 #[test]
 fn literals_and_identifiers_parse() {
     assert_eq!(parse_expression("42").unwrap(), Expr::Number(42.0));
@@ -45,6 +70,48 @@ fn templates_are_not_literals_yet() {
     let error = parse_expression("`x`").unwrap_err();
     assert_eq!(error.message, "ожидалось выражение");
     assert_eq!((error.line, error.column), (1, 1));
+}
+
+#[test]
+fn postfix_chains_fields_indexes_and_calls() {
+    assert_eq!(
+        parse_expression("user.name").unwrap(),
+        field(ident("user"), "name")
+    );
+    assert_eq!(
+        parse_expression("items[1]").unwrap(),
+        index(ident("items"), Expr::Number(1.0))
+    );
+    assert_eq!(parse_expression("f()").unwrap(), call(ident("f"), vec![]));
+    assert_eq!(
+        parse_expression("f(1, x)").unwrap(),
+        call(ident("f"), vec![Expr::Number(1.0), ident("x")])
+    );
+    assert_eq!(
+        parse_expression("a.b[0](c).d").unwrap(),
+        field(
+            call(
+                index(field(ident("a"), "b"), Expr::Number(0.0)),
+                vec![ident("c")]
+            ),
+            "d"
+        )
+    );
+}
+
+#[test]
+fn postfix_errors_point_at_the_offending_token() {
+    let error = parse_expression("user.").unwrap_err();
+    assert_eq!(error.message, "ожидалось имя поля");
+    assert_eq!((error.line, error.column), (1, 6));
+
+    let error = parse_expression("items[0").unwrap_err();
+    assert_eq!(error.message, "ожидался ']'");
+    assert_eq!((error.line, error.column), (1, 8));
+
+    let error = parse_expression("f(1").unwrap_err();
+    assert_eq!(error.message, "ожидался ')'");
+    assert_eq!((error.line, error.column), (1, 4));
 }
 
 #[test]

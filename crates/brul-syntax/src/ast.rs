@@ -5,4 +5,7 @@ pub enum Expr {
     Bool(bool),
     Null,
     Ident(String),
+    Field { target: Box<Expr>, name: String },
+    Index { target: Box<Expr>, index: Box<Expr> },
+    Call { target: Box<Expr>, args: Vec<Expr> },
 }
