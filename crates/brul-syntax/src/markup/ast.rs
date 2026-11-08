@@ -46,6 +46,14 @@ pub struct Block {
 #[derive(Debug, Clone, PartialEq)]
 pub enum BlockItem {
     Element(Element),
+    If(IfBlock),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfBlock {
+    pub condition: Expr,
+    pub then_block: Block,
+    pub else_block: Option<Block>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

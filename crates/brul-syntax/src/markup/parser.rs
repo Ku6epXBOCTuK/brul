@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::markup::ast::{
-    Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, Member, Prop,
-    PropType, Window,
+    Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, IfBlock,
+    Member, Prop, PropType, Window,
 };
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
@@ -147,7 +147,29 @@ impl Parser<'_> {
 
     fn block_item(&mut self) -> Result<BlockItem, Error> {
         let name = self.ident()?;
-        Ok(BlockItem::Element(self.element(name)?))
+        match name.as_str() {
+            "if" => self.if_block().map(BlockItem::If),
+            _ => self.element(name).map(BlockItem::Element),
+        }
+    }
+
+    fn if_block(&mut self) -> Result<IfBlock, Error> {
+        self.expect('(')?;
+        let (condition, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
+        self.pos = end;
+        self.expect(')')?;
+        let then_block = self.block()?;
+        let else_block = if self.keyword("else") {
+            self.pos += "else".len();
+            Some(self.block()?)
+        } else {
+            None
+        };
+        Ok(IfBlock {
+            condition,
+            then_block,
+            else_block,
+        })
     }
 
     fn prop(&mut self) -> Result<Member, Error> {
@@ -233,6 +255,18 @@ impl Parser<'_> {
             self.bump();
         }
         Ok(self.source[start..self.pos].to_owned())
+    }
+
+    fn keyword(&mut self, word: &str) -> bool {
+        self.skip_trivia();
+        let rest = &self.source[self.pos..];
+        if !rest.starts_with(word) {
+            return false;
+        }
+        rest[word.len()..]
+            .chars()
+            .next()
+            .is_none_or(|ch| !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'))
     }
 
     fn skip_trivia(&mut self) {

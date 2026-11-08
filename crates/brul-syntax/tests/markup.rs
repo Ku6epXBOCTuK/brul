@@ -1,7 +1,7 @@
 use brul_syntax::ast::{Expr, UnaryOp};
 use brul_syntax::markup::{
-    Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, Member, Prop,
-    PropType, Window, parse_file,
+    Arg, Block, BlockItem, Component, Declaration, Element, Event, EventParam, File, IfBlock,
+    Member, Prop, PropType, Window, parse_file,
 };
 
 #[test]
@@ -270,4 +270,64 @@ fn member_errors_point_at_the_source() {
     let error = parse_file("component A { prop x: Bool = }").unwrap_err();
     assert_eq!(error.message, "expected expression");
     assert_eq!((error.line, error.column), (1, 30));
+}
+
+#[test]
+fn if_else_blocks_parse() {
+    let source = r#"component CheckRow {
+        Row {
+            if (done) { Span { } } else { View { } }
+            if (failed) { Text { } }
+        }
+    }"#;
+    let file = parse_file(source).unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    let element = |name: &str| Element {
+        name: name.to_owned(),
+        args: Vec::new(),
+        block: Block { items: Vec::new() },
+    };
+    assert_eq!(
+        component.members,
+        vec![Member::Element(Element {
+            name: "Row".to_owned(),
+            args: Vec::new(),
+            block: Block {
+                items: vec![
+                    BlockItem::If(IfBlock {
+                        condition: Expr::Ident("done".to_owned()),
+                        then_block: Block {
+                            items: vec![BlockItem::Element(element("Span"))],
+                        },
+                        else_block: Some(Block {
+                            items: vec![BlockItem::Element(element("View"))],
+                        }),
+                    }),
+                    BlockItem::If(IfBlock {
+                        condition: Expr::Ident("failed".to_owned()),
+                        then_block: Block {
+                            items: vec![BlockItem::Element(element("Text"))],
+                        },
+                        else_block: None,
+                    }),
+                ],
+            },
+        })]
+    );
+}
+
+#[test]
+fn if_errors_point_at_the_source() {
+    let error = parse_file("component A { Row { if x { } } }").unwrap_err();
+    assert_eq!(error.message, "expected '('");
+    assert_eq!((error.line, error.column), (1, 24));
+
+    let error = parse_file("component A { Row { if (x) } } }").unwrap_err();
+    assert_eq!(error.message, "expected '{'");
+    assert_eq!((error.line, error.column), (1, 28));
+
+    let error = parse_file("component A { Row { if (x) { } else View { } } }").unwrap_err();
+    assert_eq!(error.message, "expected '{'");
 }
