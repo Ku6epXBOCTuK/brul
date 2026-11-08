@@ -7,6 +7,11 @@ pub struct PropertyAt {
     pub at: usize,
 }
 
+pub struct RuleAt {
+    pub class_at: usize,
+    pub properties: Vec<PropertyAt>,
+}
+
 pub struct ThemeAt {
     pub name_at: usize,
     pub properties: Vec<PropertyAt>,
@@ -83,13 +88,13 @@ pub fn refs(
     source: &str,
     themes: &[Theme],
     rules: &[ClassRule],
-    positions: &[Vec<PropertyAt>],
+    positions: &[RuleAt],
 ) -> Result<(), Error> {
     let Some(declared) = themes.first() else {
         return Ok(());
     };
-    for (rule, positions) in rules.iter().zip(positions) {
-        for (property, at) in rule.properties.iter().zip(positions) {
+    for (rule, position) in rules.iter().zip(positions) {
+        for (property, at) in rule.properties.iter().zip(&position.properties) {
             let Some(spec) = properties::get(&property.name) else {
                 continue;
             };
@@ -119,16 +124,27 @@ pub fn refs(
     Ok(())
 }
 
-pub fn states(
-    source: &str,
-    rules: &[ClassRule],
-    positions: &[Vec<PropertyAt>],
-) -> Result<(), Error> {
-    for (rule, properties) in rules.iter().zip(positions) {
-        if rule.state.is_none() {
+pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result<(), Error> {
+    for (rule, position) in rules.iter().zip(positions) {
+        let Some(state) = rule.state else {
             continue;
+        };
+        let base = rules
+            .iter()
+            .any(|other| other.state.is_none() && other.class == rule.class);
+        if !base {
+            return Err(Error::at(
+                source,
+                position.class_at,
+                format!(
+                    "state '.{}:{}' needs a base '.{}'",
+                    rule.class,
+                    state.name(),
+                    rule.class
+                ),
+            ));
         }
-        for property in properties {
+        for property in &position.properties {
             let spec = properties::get(&property.name).expect("parsed property is in the table");
             match spec.in_state {
                 StatePolicy::Forbidden => {

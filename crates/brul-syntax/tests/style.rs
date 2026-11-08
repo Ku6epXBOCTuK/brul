@@ -285,19 +285,29 @@ fn border_shortcut_parses() {
 #[test]
 fn class_states_parse() {
     let source = "\
+.a { }
 .a:hover { }
+.b { }
 .b:pressed { }
+.c { }
 .c:checked { }
+.d { }
 .d:selected { }
+.e { }
 .e:disabled { }
 ";
     assert_eq!(
         parse_file(source).unwrap(),
         sheet(vec![
+            rule("a", Vec::new()),
             state_rule("a", State::Hover),
+            rule("b", Vec::new()),
             state_rule("b", State::Pressed),
+            rule("c", Vec::new()),
             state_rule("c", State::Checked),
+            rule("d", Vec::new()),
             state_rule("d", State::Selected),
+            rule("e", Vec::new()),
             state_rule("e", State::Disabled),
         ])
     );
@@ -402,9 +412,9 @@ fn errors_point_at_the_source() {
         ),
         (
             ".a:hover { font-weight: 700; }",
-            "font-weight in a state needs width and height in the base class",
+            "state '.a:hover' needs a base '.a'",
             1,
-            12,
+            2,
         ),
         (
             ".a { width: 8px; } .a:hover { font-weight: 700; }",

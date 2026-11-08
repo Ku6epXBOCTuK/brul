@@ -26,6 +26,18 @@ pub enum State {
     Disabled,
 }
 
+impl State {
+    pub fn name(self) -> &'static str {
+        match self {
+            State::Hover => "hover",
+            State::Pressed => "pressed",
+            State::Checked => "checked",
+            State::Selected => "selected",
+            State::Disabled => "disabled",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Property {
     pub name: String,

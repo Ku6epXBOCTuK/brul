@@ -2,7 +2,7 @@ use crate::error::Error;
 use crate::style::ast::{ClassRule, Property, State, Stylesheet, Theme, Value};
 use crate::style::cursor::Cursor;
 use crate::style::properties;
-use crate::style::validate::{self, PropertyAt, ThemeAt};
+use crate::style::validate::{self, PropertyAt, RuleAt, ThemeAt};
 use crate::style::value::Type;
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
@@ -43,8 +43,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn class_rule(&mut self) -> Result<(ClassRule, Vec<PropertyAt>), Error> {
+    fn class_rule(&mut self) -> Result<(ClassRule, RuleAt), Error> {
         self.cursor.expect('.')?;
+        let class_at = self.cursor.value_start();
         let class = self.cursor.ident()?;
         let state = self.state()?;
         self.cursor.expect('{')?;
@@ -61,7 +62,10 @@ impl<'a> Parser<'a> {
                             state,
                             properties,
                         },
-                        positions,
+                        RuleAt {
+                            class_at,
+                            properties: positions,
+                        },
                     ));
                 }
                 None => return Err(self.cursor.error("expected '}'")),
