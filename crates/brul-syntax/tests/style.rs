@@ -183,63 +183,70 @@ theme dark {
 
 #[test]
 fn gradients_parse() {
-    let source = r#".app-icon {
+    let source = r#"
+    .app-icon {
         background: linear-gradient(135deg, #3b82f6, #06b6d4);
-        border-color: linear-gradient(90, white, transparent);
+    }
+    .panel {
+        background: linear-gradient(90, white, transparent);
     }"#;
     assert_eq!(
         parse_file(source).unwrap(),
-        sheet(vec![rule(
-            "app-icon",
-            vec![
-                property(
+        sheet(vec![
+            rule(
+                "app-icon",
+                vec![property(
                     "background",
                     Value::Gradient(Gradient {
                         angle: 135.0,
                         from: Color::rgb(0x3b, 0x82, 0xf6),
                         to: Color::rgb(0x06, 0xb6, 0xd4),
                     }),
-                ),
-                property(
-                    "border-color",
+                )],
+            ),
+            rule(
+                "panel",
+                vec![property(
+                    "background",
                     Value::Gradient(Gradient {
                         angle: 90.0,
                         from: Color::WHITE,
                         to: Color::TRANSPARENT,
                     }),
-                ),
-            ],
-        )])
+                )],
+            ),
+        ])
     );
 }
 
 #[test]
 fn border_shortcut_parses() {
-    let source = r#".box {
-        border: 2px #3b82f6;
-        border-bottom: 1.5px white;
-    }"#;
+    let source = r#".box { border: 2px #3b82f6; }
+.small { border: 1.5px white; }"#;
     assert_eq!(
         parse_file(source).unwrap(),
-        sheet(vec![rule(
-            "box",
-            vec![
-                property(
+        sheet(vec![
+            rule(
+                "box",
+                vec![property(
                     "border",
                     Value::Border(Border {
                         width: 2.0,
                         color: Color::rgb(0x3b, 0x82, 0xf6),
                     }),
-                ),
-                property(
-                    "border-bottom",
+                )],
+            ),
+            rule(
+                "small",
+                vec![property(
+                    "border",
                     Value::Border(Border {
                         width: 1.5,
                         color: Color::WHITE,
                     }),
-                ),
-            ],
-        )])
+                )],
+            ),
+        ])
     );
 }
 
@@ -262,6 +269,19 @@ fn class_states_parse() {
             state_rule("e", State::Disabled),
         ])
     );
+}
+
+#[test]
+fn mvp_properties_accept_their_types() {
+    let source = r#".a {
+        stretch: 2;
+        align-items: stretch;
+        font-weight: 700;
+        opacity: 1;
+        background: theme.accent;
+        text-align: center;
+    }"#;
+    assert!(parse_file(source).is_ok());
 }
 
 #[test]
@@ -324,6 +344,21 @@ fn errors_point_at_the_source() {
             "expected number",
             1,
             25,
+        ),
+        (".a { widht: 4px; }", "unknown property 'widht'", 1, 6),
+        (".a { width: red; }", "unexpected value for 'width'", 1, 6),
+        (".a { opacity: 2; }", "unexpected value for 'opacity'", 1, 6),
+        (
+            ".a { font-weight: 650; }",
+            "unexpected value for 'font-weight'",
+            1,
+            6,
+        ),
+        (
+            ".a { justify-content: middle; }",
+            "unexpected value for 'justify-content'",
+            1,
+            6,
         ),
         (".a:hovered { }", "unknown state", 1, 4),
         (".a: { }", "expected name", 1, 5),

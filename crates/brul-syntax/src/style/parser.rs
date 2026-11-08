@@ -46,7 +46,11 @@ impl Parser<'_> {
                     });
                 }
                 None => return Err(self.error("expected '}'")),
-                _ => properties.push(self.property()?),
+                _ => {
+                    let (property, start) = self.property_with_start()?;
+                    validate(self.source, start, &property)?;
+                    properties.push(property);
+                }
             }
         }
     }
@@ -89,11 +93,17 @@ impl Parser<'_> {
     }
 
     fn property(&mut self) -> Result<Property, Error> {
+        Ok(self.property_with_start()?.0)
+    }
+
+    fn property_with_start(&mut self) -> Result<(Property, usize), Error> {
+        self.skip_trivia();
+        let start = self.pos;
         let name = self.ident()?;
         self.expect(':')?;
         let value = self.value()?;
         self.expect(';')?;
-        Ok(Property { name, value })
+        Ok((Property { name, value }, start))
     }
 
     fn value(&mut self) -> Result<Value, Error> {
@@ -343,4 +353,57 @@ impl Parser<'_> {
 
 fn hex(ch: char) -> u8 {
     ch.to_digit(16).expect("parser accepts only hex digits") as u8
+}
+
+fn validate(source: &str, at: usize, property: &Property) -> Result<(), Error> {
+    let value = &property.value;
+    let ok = match property.name.as_str() {
+        "width" | "height" => {
+            matches!(value, Value::Px(_) | Value::Percent(_) | Value::ThemeRef(_))
+        }
+        "stretch" => matches!(value, Value::Number(_) | Value::ThemeRef(_)),
+        "padding" | "padding-left" | "padding-right" | "padding-top" | "padding-bottom"
+        | "spacing" | "border-width" | "radius" | "font-size" => {
+            matches!(value, Value::Px(_) | Value::ThemeRef(_))
+        }
+        "justify-content" => keyword_in(value, &["start", "center", "end", "space-between"]),
+        "align-items" => keyword_in(value, &["start", "center", "end", "stretch"]),
+        "background" => {
+            matches!(
+                value,
+                Value::Color(_) | Value::Gradient(_) | Value::ThemeRef(_)
+            )
+        }
+        "border" => matches!(value, Value::Border(_)),
+        "border-color" | "color" | "tint" => {
+            matches!(value, Value::Color(_) | Value::ThemeRef(_))
+        }
+        "font-family" => matches!(value, Value::String(_)),
+        "text-align" => keyword_in(value, &["left", "center", "right"]),
+        "vertical-align" => keyword_in(value, &["top", "center", "bottom"]),
+        "font-weight" => {
+            matches!(value, Value::Number(weight) if matches!(weight, 400.0 | 500.0 | 600.0 | 700.0))
+        }
+        "opacity" => matches!(value, Value::Number(opacity) if (0.0..=1.0).contains(opacity)),
+        _ => {
+            return Err(Error::at(
+                source,
+                at,
+                format!("unknown property '{}'", property.name),
+            ));
+        }
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(Error::at(
+            source,
+            at,
+            format!("unexpected value for '{}'", property.name),
+        ))
+    }
+}
+
+fn keyword_in(value: &Value, names: &[&str]) -> bool {
+    matches!(value, Value::Keyword(keyword) if names.contains(&keyword.as_str()))
 }
