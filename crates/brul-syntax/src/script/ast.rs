@@ -21,4 +21,9 @@ pub enum Statement {
     },
     Expr(Expr),
     Block(Vec<Statement>),
+    If {
+        condition: Expr,
+        then_branch: Vec<Statement>,
+        else_branch: Option<Box<Statement>>,
+    },
 }

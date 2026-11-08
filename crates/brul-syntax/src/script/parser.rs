@@ -47,6 +47,9 @@ impl Parser<'_> {
         if self.at_keyword("const") {
             return self.let_statement(true);
         }
+        if self.at_keyword("if") {
+            return self.if_statement();
+        }
         if self.tokens[self.at].kind == TokenKind::Punct(Punct::LBrace) {
             return self.block();
         }
@@ -74,8 +77,35 @@ impl Parser<'_> {
         })
     }
 
+    fn if_statement(&mut self) -> Result<Statement, Error> {
+        self.expect_keyword("if")?;
+        self.expect_punct(Punct::LParen, "expected '('")?;
+        let condition = self.expression()?;
+        self.expect_punct(Punct::RParen, "expected ')'")?;
+        let then_branch = self.block_statements()?;
+        let else_branch = if self.at_keyword("else") {
+            self.at += 1;
+            if self.at_keyword("if") {
+                Some(Box::new(self.if_statement()?))
+            } else {
+                Some(Box::new(self.block()?))
+            }
+        } else {
+            None
+        };
+        Ok(Statement::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
+    }
+
     fn block(&mut self) -> Result<Statement, Error> {
-        self.at += 1;
+        Ok(Statement::Block(self.block_statements()?))
+    }
+
+    fn block_statements(&mut self) -> Result<Vec<Statement>, Error> {
+        self.expect_punct(Punct::LBrace, "expected '{'")?;
         let mut statements = Vec::new();
         loop {
             let token = &self.tokens[self.at];
@@ -88,7 +118,7 @@ impl Parser<'_> {
                 _ => statements.push(self.statement()?),
             }
         }
-        Ok(Statement::Block(statements))
+        Ok(statements)
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {

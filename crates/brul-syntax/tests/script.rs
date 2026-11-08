@@ -185,6 +185,84 @@ fn unterminated_block_points_at_the_end() {
 }
 
 #[test]
+fn if_parses_condition_and_then_branch() {
+    let program = parse("if (ready) { launch(); }").unwrap();
+    assert_eq!(
+        program.statements,
+        vec![Statement::If {
+            condition: Expr::Ident("ready".to_owned()),
+            then_branch: vec![Statement::Expr(Expr::Call {
+                target: Box::new(Expr::Ident("launch".to_owned())),
+                args: vec![],
+            })],
+            else_branch: None,
+        }]
+    );
+}
+
+#[test]
+fn if_condition_is_an_expression() {
+    let program = parse("if (count > 0) { count = 0; }").unwrap();
+    assert!(matches!(
+        program.statements.as_slice(),
+        [Statement::If {
+            condition: Expr::Binary {
+                op: BinaryOp::Gt,
+                ..
+            },
+            ..
+        }]
+    ));
+}
+
+#[test]
+fn if_with_else_parses_both_branches() {
+    let program = parse("if (ready) { launch(); } else { wait(); }").unwrap();
+    assert_eq!(
+        program.statements,
+        vec![Statement::If {
+            condition: Expr::Ident("ready".to_owned()),
+            then_branch: vec![Statement::Expr(Expr::Call {
+                target: Box::new(Expr::Ident("launch".to_owned())),
+                args: vec![],
+            })],
+            else_branch: Some(Box::new(Statement::Block(vec![Statement::Expr(
+                Expr::Call {
+                    target: Box::new(Expr::Ident("wait".to_owned())),
+                    args: vec![],
+                }
+            )]))),
+        }]
+    );
+}
+
+#[test]
+fn else_if_becomes_a_nested_if() {
+    let program = parse("if (a) { } else if (b) { } else { }").unwrap();
+    let [Statement::If { else_branch, .. }] = program.statements.as_slice() else {
+        panic!("expected an if statement");
+    };
+    let Some(Statement::If { else_branch, .. }) = else_branch.as_deref() else {
+        panic!("expected a nested if statement");
+    };
+    assert_eq!(else_branch.as_deref(), Some(&Statement::Block(vec![])));
+}
+
+#[test]
+fn if_without_parentheses_is_rejected() {
+    let error = parse("if ready { }").unwrap_err();
+    assert_eq!(error.message, "expected '('");
+    assert_eq!((error.line, error.column), (1, 4));
+}
+
+#[test]
+fn if_without_block_is_rejected() {
+    let error = parse("if (ready) launch();").unwrap_err();
+    assert_eq!(error.message, "expected '{'");
+    assert_eq!((error.line, error.column), (1, 12));
+}
+
+#[test]
 fn statements_follow_imports() {
     let program = parse("import A from \"./a\";\nlet a = 1;").unwrap();
     assert_eq!(program.imports.len(), 1);
