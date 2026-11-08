@@ -6,6 +6,7 @@
 
 pub mod config;
 pub mod launcher;
+pub mod ui;
 
 pub use config::{
     BrowserEntry, Config, ConfigError, Resolution, ResolveSource, Settings, Theme, default_path,
