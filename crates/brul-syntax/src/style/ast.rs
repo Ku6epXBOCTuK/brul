@@ -31,6 +31,14 @@ pub enum Value {
     Keyword(String),
     Color(Color),
     ThemeRef(String),
+    Gradient(Gradient),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Gradient {
+    pub angle: f64,
+    pub from: Color,
+    pub to: Color,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

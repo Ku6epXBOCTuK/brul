@@ -1,4 +1,6 @@
-use brul_syntax::style::{ClassRule, Color, Property, Stylesheet, Theme, Value, parse_file};
+use brul_syntax::style::{
+    ClassRule, Color, Gradient, Property, Stylesheet, Theme, Value, parse_file,
+};
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
     Stylesheet {
@@ -171,6 +173,38 @@ theme dark {
 }
 
 #[test]
+fn gradients_parse() {
+    let source = r#".app-icon {
+        background: linear-gradient(135deg, #3b82f6, #06b6d4);
+        border-color: linear-gradient(90, white, transparent);
+    }"#;
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "app-icon",
+            vec![
+                property(
+                    "background",
+                    Value::Gradient(Gradient {
+                        angle: 135.0,
+                        from: Color::rgb(0x3b, 0x82, 0xf6),
+                        to: Color::rgb(0x06, 0xb6, 0xd4),
+                    }),
+                ),
+                property(
+                    "border-color",
+                    Value::Gradient(Gradient {
+                        angle: 90.0,
+                        from: Color::WHITE,
+                        to: Color::TRANSPARENT,
+                    }),
+                ),
+            ],
+        )])
+    );
+}
+
+#[test]
 fn errors_point_at_the_source() {
     let sources = [
         ("a { }", "expected '.'", 1, 1),
@@ -207,6 +241,30 @@ fn errors_point_at_the_source() {
         ("theme light { accent: #fff }", "expected ';'", 1, 28),
         (".a { color: theme; }", "expected '.'", 1, 18),
         (".a { color: theme.accent }", "expected ';'", 1, 26),
+        (
+            ".a { b: linear-gradient(1deg #fff, #000); }",
+            "expected ','",
+            1,
+            30,
+        ),
+        (
+            ".a { b: linear-gradient(1deg, #fff); }",
+            "expected ','",
+            1,
+            35,
+        ),
+        (
+            ".a { b: linear-gradient(1deg, theme.x, #000); }",
+            "expected color",
+            1,
+            31,
+        ),
+        (
+            ".a { b: linear-gradient(deg, #fff, #000); }",
+            "expected number",
+            1,
+            25,
+        ),
     ];
     for (source, message, line, column) in sources {
         let error = parse_file(source).unwrap_err();

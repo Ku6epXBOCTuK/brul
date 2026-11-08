@@ -47,7 +47,7 @@
   слова.
 - [x] 3.3.3 — цвета: `#rgb`, `#rrggbb`, `#rrggbbaa`, `transparent`, `white`.
 - [x] 3.3.4 — ссылки `theme.ключ` и блоки `theme Ident { … }`.
-- [ ] 3.3.5 — `linear-gradient(...)`.
+- [x] 3.3.5 — `linear-gradient(...)`.
 - [ ] 3.3.6 — шорткат `border: <px> <color>`.
 - [ ] 3.3.7 — состояния `.class:state`.
 - [ ] 3.3.8 — валидация свойств и значений по таблице MVP.

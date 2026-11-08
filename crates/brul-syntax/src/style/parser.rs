@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::style::ast::{ClassRule, Color, Property, Stylesheet, Theme, Value};
+use crate::style::ast::{ClassRule, Color, Gradient, Property, Stylesheet, Theme, Value};
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser { source, pos: 0 };
@@ -74,7 +74,7 @@ impl Parser<'_> {
         match self.peek() {
             Some(ch) if ch.is_ascii_digit() => self.number(),
             Some('"') => self.string(),
-            Some('#') => self.color(),
+            Some('#') => Ok(Value::Color(self.color()?)),
             Some(ch) if ch.is_ascii_alphabetic() => {
                 let name = self.ident()?;
                 match name.as_str() {
@@ -82,6 +82,7 @@ impl Parser<'_> {
                         self.expect('.')?;
                         Ok(Value::ThemeRef(self.ident()?))
                     }
+                    "linear-gradient" => self.gradient(),
                     "transparent" => Ok(Value::Color(Color::TRANSPARENT)),
                     "white" => Ok(Value::Color(Color::WHITE)),
                     _ => Ok(Value::Keyword(name)),
@@ -91,7 +92,39 @@ impl Parser<'_> {
         }
     }
 
-    fn color(&mut self) -> Result<Value, Error> {
+    fn gradient(&mut self) -> Result<Value, Error> {
+        self.expect('(')?;
+        let angle = self.number_literal()?;
+        self.skip_trivia();
+        if self.keyword("deg") {
+            self.pos += "deg".len();
+        }
+        self.expect(',')?;
+        let from = self.color()?;
+        self.expect(',')?;
+        let to = self.color()?;
+        self.expect(')')?;
+        Ok(Value::Gradient(Gradient { angle, from, to }))
+    }
+
+    fn color(&mut self) -> Result<Color, Error> {
+        self.skip_trivia();
+        let start = self.pos;
+        match self.peek() {
+            Some('#') => self.hex_color(),
+            Some(ch) if ch.is_ascii_alphabetic() => {
+                let name = self.ident()?;
+                match name.as_str() {
+                    "transparent" => Ok(Color::TRANSPARENT),
+                    "white" => Ok(Color::WHITE),
+                    _ => Err(Error::at(self.source, start, "expected color")),
+                }
+            }
+            _ => Err(Error::at(self.source, start, "expected color")),
+        }
+    }
+
+    fn hex_color(&mut self) -> Result<Color, Error> {
         let start = self.pos;
         self.bump();
         let digits_start = self.pos;
@@ -100,13 +133,13 @@ impl Parser<'_> {
         }
         let digits = &self.source[digits_start..self.pos];
         let mut channels = [0u8; 4];
-        let color = match digits.len() {
+        match digits.len() {
             3 => {
                 for (index, ch) in digits.chars().enumerate() {
                     let value = hex(ch);
                     channels[index] = value * 17;
                 }
-                Color::rgb(channels[0], channels[1], channels[2])
+                Ok(Color::rgb(channels[0], channels[1], channels[2]))
             }
             6 | 8 => {
                 for (index, pair) in digits.as_bytes().chunks(2).enumerate() {
@@ -114,24 +147,44 @@ impl Parser<'_> {
                     channels[index] = value;
                 }
                 if digits.len() == 6 {
-                    Color::rgb(channels[0], channels[1], channels[2])
+                    Ok(Color::rgb(channels[0], channels[1], channels[2]))
                 } else {
-                    Color::rgba(channels[0], channels[1], channels[2], channels[3])
+                    Ok(Color::rgba(
+                        channels[0],
+                        channels[1],
+                        channels[2],
+                        channels[3],
+                    ))
                 }
             }
-            _ => {
-                return Err(Error::at(
-                    self.source,
-                    start,
-                    "expected 3, 6 or 8 hex digits",
-                ));
-            }
-        };
-        Ok(Value::Color(color))
+            _ => Err(Error::at(
+                self.source,
+                start,
+                "expected 3, 6 or 8 hex digits",
+            )),
+        }
     }
 
     fn number(&mut self) -> Result<Value, Error> {
+        let value = self.number_literal()?;
+        self.skip_trivia();
+        if self.source[self.pos..].starts_with("px") && !self.is_ident_char(2) {
+            self.pos += 2;
+            return Ok(Value::Px(value));
+        }
+        if self.peek() == Some('%') {
+            self.bump();
+            return Ok(Value::Percent(value));
+        }
+        Ok(Value::Number(value))
+    }
+
+    fn number_literal(&mut self) -> Result<f64, Error> {
+        self.skip_trivia();
         let start = self.pos;
+        if !self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+            return Err(self.error("expected number"));
+        }
         while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
             self.bump();
         }
@@ -146,19 +199,9 @@ impl Parser<'_> {
                 self.bump();
             }
         }
-        let value: f64 = self.source[start..self.pos]
+        Ok(self.source[start..self.pos]
             .parse()
-            .expect("parser accepts only numbers");
-        self.skip_trivia();
-        if self.source[self.pos..].starts_with("px") && !self.is_ident_char(2) {
-            self.pos += 2;
-            return Ok(Value::Px(value));
-        }
-        if self.peek() == Some('%') {
-            self.bump();
-            return Ok(Value::Percent(value));
-        }
-        Ok(Value::Number(value))
+            .expect("parser accepts only numbers"))
     }
 
     fn string(&mut self) -> Result<Value, Error> {
