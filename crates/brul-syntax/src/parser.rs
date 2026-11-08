@@ -1,36 +1,6 @@
-use std::fmt;
-
 use crate::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
+pub use crate::error::Error;
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Error {
-    pub message: String,
-    pub line: usize,
-    pub column: usize,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "line {}, column {}: {}",
-            self.line, self.column, self.message
-        )
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<lexer::Error> for Error {
-    fn from(error: lexer::Error) -> Self {
-        Self {
-            message: error.message,
-            line: error.line,
-            column: error.column,
-        }
-    }
-}
 
 pub struct Parser<'a> {
     source: &'a str,
