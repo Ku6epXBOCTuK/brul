@@ -1,4 +1,11 @@
-use brul_syntax::style::{ClassRule, Color, Property, Stylesheet, Value, parse_file};
+use brul_syntax::style::{ClassRule, Color, Property, Stylesheet, Theme, Value, parse_file};
+
+fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
+    Stylesheet {
+        themes: Vec::new(),
+        rules,
+    }
+}
 
 fn rule(class: &str, properties: Vec<Property>) -> ClassRule {
     ClassRule {
@@ -16,10 +23,10 @@ fn property(name: &str, value: Value) -> Property {
 
 #[test]
 fn empty_stylesheet_parses() {
-    assert_eq!(parse_file("").unwrap(), Stylesheet { rules: Vec::new() });
+    assert_eq!(parse_file("").unwrap(), sheet(Vec::new()));
     assert_eq!(
         parse_file("\n  // only a comment\n\t").unwrap(),
-        Stylesheet { rules: Vec::new() }
+        sheet(Vec::new())
     );
 }
 
@@ -32,13 +39,11 @@ fn empty_class_rules_parse_in_order() {
 ";
     assert_eq!(
         parse_file(source).unwrap(),
-        Stylesheet {
-            rules: vec![
-                rule("check-row", Vec::new()),
-                rule("checkbox", Vec::new()),
-                rule("text-main1", Vec::new()),
-            ],
-        }
+        sheet(vec![
+            rule("check-row", Vec::new()),
+            rule("checkbox", Vec::new()),
+            rule("text-main1", Vec::new()),
+        ])
     );
 }
 
@@ -47,9 +52,7 @@ fn comments_between_rules_are_ignored() {
     let source = "// base\n.a { } // trailing\n// between\n.b { }\n";
     assert_eq!(
         parse_file(source).unwrap(),
-        Stylesheet {
-            rules: vec![rule("a", Vec::new()), rule("b", Vec::new())],
-        }
+        sheet(vec![rule("a", Vec::new()), rule("b", Vec::new())])
     );
 }
 
@@ -66,23 +69,21 @@ fn properties_parse_with_values_and_order() {
     }"#;
     assert_eq!(
         parse_file(source).unwrap(),
-        Stylesheet {
-            rules: vec![rule(
-                "item",
-                vec![
-                    property("width", Value::Percent(100.0)),
-                    property("padding", Value::Px(4.0)),
-                    property("opacity", Value::Number(0.5)),
-                    property("font-family", Value::String("Segoe UI".to_owned())),
-                    property(
-                        "justify-content",
-                        Value::Keyword("space-between".to_owned())
-                    ),
-                    property("border-width", Value::Px(2.0)),
-                    property("background", Value::Color(Color::TRANSPARENT)),
-                ],
-            )],
-        }
+        sheet(vec![rule(
+            "item",
+            vec![
+                property("width", Value::Percent(100.0)),
+                property("padding", Value::Px(4.0)),
+                property("opacity", Value::Number(0.5)),
+                property("font-family", Value::String("Segoe UI".to_owned())),
+                property(
+                    "justify-content",
+                    Value::Keyword("space-between".to_owned())
+                ),
+                property("border-width", Value::Px(2.0)),
+                property("background", Value::Color(Color::TRANSPARENT)),
+            ],
+        )])
     );
 }
 
@@ -91,15 +92,13 @@ fn comments_and_blank_lines_inside_a_rule_are_ignored() {
     let source = ".a {\n    // geometry\n    width: 12px;\n\n    height: 8px;\n}\n";
     assert_eq!(
         parse_file(source).unwrap(),
-        Stylesheet {
-            rules: vec![rule(
-                "a",
-                vec![
-                    property("width", Value::Px(12.0)),
-                    property("height", Value::Px(8.0)),
-                ],
-            )],
-        }
+        sheet(vec![rule(
+            "a",
+            vec![
+                property("width", Value::Px(12.0)),
+                property("height", Value::Px(8.0)),
+            ],
+        )])
     );
 }
 
@@ -114,15 +113,57 @@ fn colors_parse_hex_and_keywords() {
     }"#;
     assert_eq!(
         parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "a",
+            vec![
+                property("background", Value::Color(Color::rgb(0x3b, 0x82, 0xf6))),
+                property("border-color", Value::Color(Color::rgb(0xff, 0xff, 0xff))),
+                property("color", Value::Color(Color::rgba(0x1e, 0x29, 0x3b, 0x4d))),
+                property("tint", Value::Color(Color::WHITE)),
+                property("background", Value::Color(Color::TRANSPARENT)),
+            ],
+        )])
+    );
+}
+
+#[test]
+fn themes_and_refs_parse() {
+    let source = r#"
+theme light {
+    accent: #3b82f6;
+    radius: 12px;
+}
+theme dark {
+    accent: #3b82f6;
+    radius: 12px;
+}
+.a { background: theme.accent; color: theme.text-main; }
+"#;
+    let accent = Value::Color(Color::rgb(0x3b, 0x82, 0xf6));
+    assert_eq!(
+        parse_file(source).unwrap(),
         Stylesheet {
+            themes: vec![
+                Theme {
+                    name: "light".to_owned(),
+                    properties: vec![
+                        property("accent", accent.clone()),
+                        property("radius", Value::Px(12.0)),
+                    ],
+                },
+                Theme {
+                    name: "dark".to_owned(),
+                    properties: vec![
+                        property("accent", accent),
+                        property("radius", Value::Px(12.0)),
+                    ],
+                },
+            ],
             rules: vec![rule(
                 "a",
                 vec![
-                    property("background", Value::Color(Color::rgb(0x3b, 0x82, 0xf6))),
-                    property("border-color", Value::Color(Color::rgb(0xff, 0xff, 0xff))),
-                    property("color", Value::Color(Color::rgba(0x1e, 0x29, 0x3b, 0x4d))),
-                    property("tint", Value::Color(Color::WHITE)),
-                    property("background", Value::Color(Color::TRANSPARENT)),
+                    property("background", Value::ThemeRef("accent".to_owned())),
+                    property("color", Value::ThemeRef("text-main".to_owned())),
                 ],
             )],
         }
@@ -161,6 +202,11 @@ fn errors_point_at_the_source() {
             1,
             13,
         ),
+        ("theme { }", "expected name", 1, 7),
+        ("theme light { accent #fff; }", "expected ':'", 1, 22),
+        ("theme light { accent: #fff }", "expected ';'", 1, 28),
+        (".a { color: theme; }", "expected '.'", 1, 18),
+        (".a { color: theme.accent }", "expected ';'", 1, 26),
     ];
     for (source, message, line, column) in sources {
         let error = parse_file(source).unwrap_err();

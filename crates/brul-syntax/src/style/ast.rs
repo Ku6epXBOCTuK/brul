@@ -1,6 +1,13 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stylesheet {
+    pub themes: Vec<Theme>,
     pub rules: Vec<ClassRule>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Theme {
+    pub name: String,
+    pub properties: Vec<Property>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +30,7 @@ pub enum Value {
     String(String),
     Keyword(String),
     Color(Color),
+    ThemeRef(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

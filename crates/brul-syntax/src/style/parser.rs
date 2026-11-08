@@ -1,17 +1,23 @@
 use crate::error::Error;
-use crate::style::ast::{ClassRule, Color, Property, Stylesheet, Value};
+use crate::style::ast::{ClassRule, Color, Property, Stylesheet, Theme, Value};
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser { source, pos: 0 };
+    let mut themes = Vec::new();
     let mut rules = Vec::new();
     loop {
         parser.skip_trivia();
         if parser.peek().is_none() {
             break;
         }
-        rules.push(parser.class_rule()?);
+        if parser.keyword("theme") {
+            parser.pos += "theme".len();
+            themes.push(parser.theme()?);
+        } else {
+            rules.push(parser.class_rule()?);
+        }
     }
-    Ok(Stylesheet { rules })
+    Ok(Stylesheet { themes, rules })
 }
 
 struct Parser<'a> {
@@ -38,6 +44,23 @@ impl Parser<'_> {
         }
     }
 
+    fn theme(&mut self) -> Result<Theme, Error> {
+        let name = self.ident()?;
+        self.expect('{')?;
+        let mut properties = Vec::new();
+        loop {
+            self.skip_trivia();
+            match self.peek() {
+                Some('}') => {
+                    self.bump();
+                    return Ok(Theme { name, properties });
+                }
+                None => return Err(self.error("expected '}'")),
+                _ => properties.push(self.property()?),
+            }
+        }
+    }
+
     fn property(&mut self) -> Result<Property, Error> {
         let name = self.ident()?;
         self.expect(':')?;
@@ -55,6 +78,10 @@ impl Parser<'_> {
             Some(ch) if ch.is_ascii_alphabetic() => {
                 let name = self.ident()?;
                 match name.as_str() {
+                    "theme" => {
+                        self.expect('.')?;
+                        Ok(Value::ThemeRef(self.ident()?))
+                    }
                     "transparent" => Ok(Value::Color(Color::TRANSPARENT)),
                     "white" => Ok(Value::Color(Color::WHITE)),
                     _ => Ok(Value::Keyword(name)),
@@ -184,6 +211,18 @@ impl Parser<'_> {
             .chars()
             .next()
             .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+    }
+
+    fn keyword(&mut self, word: &str) -> bool {
+        self.skip_trivia();
+        let rest = &self.source[self.pos..];
+        if !rest.starts_with(word) {
+            return false;
+        }
+        rest[word.len()..]
+            .chars()
+            .next()
+            .is_none_or(|ch| !(ch.is_ascii_alphanumeric() || ch == '-'))
     }
 
     fn skip_trivia(&mut self) {
