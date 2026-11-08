@@ -93,6 +93,12 @@ impl WindowConfig {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ColorScheme {
+    Light,
+    Dark,
+}
+
 #[derive(Debug)]
 pub enum WindowError {
     EmptySize,
@@ -149,14 +155,24 @@ pub fn run_tree(
     tree: Rc<RefCell<WidgetTree>>,
     handler: impl FnMut(&[WidgetEvent]) + 'static,
 ) -> Result<(), WindowError> {
+    run_tree_themed(config, move |_| Rc::clone(&tree), handler)
+}
+
+pub fn run_tree_themed(
+    config: WindowConfig,
+    mut build: impl FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>> + 'static,
+    handler: impl FnMut(&[WidgetEvent]) + 'static,
+) -> Result<(), WindowError> {
     config.validate()?;
     let event_loop = EventLoop::new().map_err(|error| WindowError::EventLoop(error.to_string()))?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let error = Rc::new(RefCell::new(None));
+    let tree = build(ColorScheme::Dark);
     let app = TreeApp {
         config,
         tree,
+        build: Box::new(build),
         handler: Box::new(handler),
         window: None,
         gpu: None,
@@ -276,10 +292,12 @@ impl ApplicationHandler for App {
 }
 
 type EventHandler = Box<dyn FnMut(&[WidgetEvent])>;
+type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
 
 struct TreeApp {
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
+    build: TreeBuilder,
     handler: EventHandler,
     window: Option<Arc<dyn Window>>,
     gpu: Option<Gpu>,
@@ -302,6 +320,11 @@ impl ApplicationHandler for TreeApp {
             Ok(gpu) => gpu,
             Err(error) => return self.fail(event_loop, error),
         };
+        let scheme = match event_loop.system_theme() {
+            Some(winit::window::Theme::Light) => ColorScheme::Light,
+            _ => ColorScheme::Dark,
+        };
+        self.tree = (self.build)(scheme);
         let mut engine = TextEngine::new();
         let size = window.surface_size();
         let viewport = Size {
@@ -385,6 +408,15 @@ impl ApplicationHandler for TreeApp {
                     self.tree.borrow_mut().pointer_up(x, y)
                 };
                 self.dispatch(event_loop, &window, events);
+            }
+            WindowEvent::ThemeChanged(theme) => {
+                let scheme = match theme {
+                    winit::window::Theme::Light => ColorScheme::Light,
+                    _ => ColorScheme::Dark,
+                };
+                self.tree = (self.build)(scheme);
+                let size = window.surface_size();
+                self.resize(event_loop, &window, size.width, size.height);
             }
             WindowEvent::SurfaceResized(size) => {
                 self.resize(event_loop, &window, size.width, size.height);

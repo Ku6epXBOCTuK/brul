@@ -106,14 +106,11 @@ pub fn build_view(
     browsers: &[BrowserEntry],
     url: &str,
     theme: Theme,
+    selected: usize,
     remember_choice: bool,
     always_ask: bool,
 ) -> PickerView {
     let colors = palette(theme);
-    let selected = browsers
-        .iter()
-        .position(|browser| browser.is_default)
-        .unwrap_or(0);
 
     let mut rows = Vec::with_capacity(browsers.len());
     let mut items = Vec::with_capacity(browsers.len());

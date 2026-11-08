@@ -8,10 +8,12 @@ fn build(
     remember_choice: bool,
     always_ask: bool,
 ) -> (WidgetTree, PickerIds) {
+    let selected = browsers.iter().position(|b| b.is_default).unwrap_or(0);
     let PickerView { root, ids } = build_view(
         browsers,
         "https://example.com/page",
         theme,
+        selected,
         remember_choice,
         always_ask,
     );
@@ -109,6 +111,34 @@ fn default_badge_is_only_on_the_default_browser() {
         .count();
 
     assert_eq!(default_texts, plain_texts + 1);
+}
+
+#[test]
+fn explicit_selection_is_kept() {
+    let browsers = demo_browsers();
+    let selected = 2;
+    let PickerView { root, ids } = build_view(
+        &browsers,
+        "https://example.com/page",
+        Theme::Dark,
+        selected,
+        true,
+        true,
+    );
+    let mut engine = TextEngine::new();
+    let mut tree = WidgetTree::new(root);
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 488,
+            height: 800,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    assert!(tree.state(ids.rows[selected]).expect("row").selected);
+    assert!(!tree.state(ids.rows[0]).expect("row").selected);
 }
 
 #[test]
