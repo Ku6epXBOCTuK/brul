@@ -269,6 +269,7 @@ pub struct WidgetSnapshotNode {
     pub y: i32,
     pub width: u32,
     pub height: u32,
+    pub border_width: u32,
     pub content_x: i32,
     pub content_y: i32,
     pub content_width: u32,
@@ -286,6 +287,25 @@ pub enum WidgetEvent {
     Press(WidgetId),
     Release(WidgetId),
     Click(WidgetId),
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Dirty {
+    pub full: bool,
+    pub ids: Vec<WidgetId>,
+}
+
+impl Dirty {
+    pub fn all() -> Self {
+        Self {
+            full: true,
+            ids: Vec::new(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        !self.full && self.ids.is_empty()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -328,6 +348,8 @@ pub struct WidgetTree {
     snapshot: Option<WidgetSnapshot>,
     hovered: Vec<WidgetId>,
     pressed: Vec<WidgetId>,
+    dirty: Vec<WidgetId>,
+    full_dirty: bool,
 }
 
 struct Geometry {
@@ -348,6 +370,8 @@ impl WidgetTree {
             snapshot: None,
             hovered: Vec::new(),
             pressed: Vec::new(),
+            dirty: Vec::new(),
+            full_dirty: true,
         }
     }
 
@@ -376,6 +400,8 @@ impl WidgetTree {
             texts,
         });
         self.snapshot = None;
+        self.full_dirty = true;
+        self.dirty.clear();
         if changed {
             self.clear_interaction();
         }
@@ -389,6 +415,22 @@ impl WidgetTree {
             self.snapshot = Some(snapshot);
         }
         Ok(self.snapshot.as_ref().expect("snapshot built"))
+    }
+
+    pub fn snapshot_dirty(&self) -> bool {
+        self.snapshot.is_none()
+    }
+
+    pub fn take_dirty(&mut self) -> Dirty {
+        let full = std::mem::take(&mut self.full_dirty);
+        Dirty {
+            full,
+            ids: if full {
+                Vec::new()
+            } else {
+                std::mem::take(&mut self.dirty)
+            },
+        }
     }
 
     pub fn state(&self, id: WidgetId) -> Option<WidgetState> {
@@ -408,7 +450,12 @@ impl WidgetTree {
     }
 
     pub fn set_visible(&mut self, id: WidgetId, visible: bool) -> bool {
-        self.update_state(id, |state| state.visible = visible)
+        if !self.update_state(id, |state| state.visible = visible) {
+            return false;
+        }
+        self.full_dirty = true;
+        self.dirty.clear();
+        true
     }
 
     pub fn toggle_checked(&mut self, id: WidgetId) -> Option<bool> {
@@ -418,6 +465,7 @@ impl WidgetTree {
             state.checked
         };
         self.snapshot = None;
+        self.mark_dirty(id);
         Some(checked)
     }
 
@@ -433,16 +481,19 @@ impl WidgetTree {
         }
 
         let mut events = Vec::new();
-        for &id in self.hovered[common..].iter().rev() {
+        let leaving: Vec<WidgetId> = self.hovered[common..].iter().rev().copied().collect();
+        for id in leaving {
             if let Some(state) = self.states.get_mut(&id) {
                 state.hovered = false;
             }
+            self.mark_dirty(id);
             events.push(WidgetEvent::PointerLeave(id));
         }
         for &id in &path[common..] {
             if let Some(state) = self.states.get_mut(&id) {
                 state.hovered = true;
             }
+            self.mark_dirty(id);
             events.push(WidgetEvent::PointerEnter(id));
         }
         self.hovered = path;
@@ -459,6 +510,7 @@ impl WidgetTree {
             if let Some(state) = self.states.get_mut(&id) {
                 state.pressed = true;
             }
+            self.mark_dirty(id);
             events.push(WidgetEvent::Press(id));
         }
         if !path.is_empty() {
@@ -477,6 +529,7 @@ impl WidgetTree {
             if let Some(state) = self.states.get_mut(&id) {
                 state.pressed = false;
             }
+            self.mark_dirty(id);
             events.push(WidgetEvent::Release(id));
         }
         if !pressed.is_empty() && pressed.last() == path.last() {
@@ -499,12 +552,14 @@ impl WidgetTree {
             if let Some(state) = self.states.get_mut(&id) {
                 state.hovered = false;
             }
+            self.mark_dirty(id);
             events.push(WidgetEvent::PointerLeave(id));
         }
         for &id in pressed.iter().rev() {
             if let Some(state) = self.states.get_mut(&id) {
                 state.pressed = false;
             }
+            self.mark_dirty(id);
             events.push(WidgetEvent::Release(id));
         }
         if !hovered.is_empty() || !pressed.is_empty() {
@@ -514,12 +569,26 @@ impl WidgetTree {
     }
 
     fn update_state(&mut self, id: WidgetId, update: impl FnOnce(&mut WidgetState)) -> bool {
-        let Some(state) = self.states.get_mut(&id) else {
-            return false;
+        let changed = {
+            let Some(state) = self.states.get_mut(&id) else {
+                return false;
+            };
+            let before = *state;
+            update(state);
+            *state != before
         };
-        update(state);
+        if !changed {
+            return false;
+        }
         self.snapshot = None;
+        self.mark_dirty(id);
         true
+    }
+
+    fn mark_dirty(&mut self, id: WidgetId) {
+        if !self.full_dirty && !self.dirty.contains(&id) {
+            self.dirty.push(id);
+        }
     }
 
     fn clear_interaction(&mut self) {
@@ -539,12 +608,13 @@ impl WidgetTree {
 
     fn set_pressed(&mut self, pressed: bool) {
         let had_pressed = !self.pressed.is_empty();
-        for &id in &self.pressed {
-            if let Some(state) = self.states.get_mut(&id) {
+        let ids = std::mem::take(&mut self.pressed);
+        for id in &ids {
+            if let Some(state) = self.states.get_mut(id) {
                 state.pressed = pressed;
             }
+            self.mark_dirty(*id);
         }
-        self.pressed.clear();
         if had_pressed {
             self.snapshot = None;
         }
@@ -684,6 +754,7 @@ fn snapshot_widget(
         y: layout_box.y,
         width: layout_box.width,
         height: layout_box.height,
+        border_width: widget.layout.border_width,
         content_x,
         content_y,
         content_width,

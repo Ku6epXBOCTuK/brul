@@ -52,8 +52,10 @@
 //! ```
 //!
 //! Окно — [`window::run`] с [`window::WindowConfig`]: без рамки, прозрачное,
-//! фиксированного размера. Сейчас оно рисует только фон через wgpu; текст,
-//! прямоугольники и картинки на GPU попадут в следующих срезах. Конфиг задан в
+//! фиксированного размера. [`window::run_tree`] принимает [`WidgetTree`] и
+//! колбэк событий: раскладывает дерево, собирает [`WidgetSnapshot`], рисует его в
+//! [`Frame`] на CPU и отдаёт кадр на wgpu-поверхность одной текстурой. Меняются
+//! только dirty-регионы; размер и DPI перерисовывают весь кадр. Конфиг задан в
 //! логических пикселях, поверхность — в физических; масштаб берётся у окна.
 //! Высота хедера задаёт зону перетаскивания, Esc и закрытие окна завершают цикл.
 //! winit 0.31-beta прибит точной версией и спрятан в модуле `window`.
@@ -109,10 +111,10 @@
 //!
 //! # Пределы MVP
 //!
-//! Окно умеет только показать прозрачный фон: GPU-рендера виджетов ещё нет, окно
-//! снапшот пока не рисует. Стили задаются вручную через [`StyleSet`]; CSS-парсер
-//! и снапшоты классов появятся позже. Наружу отдаются геометрия прямоугольников,
-//! декодированные текстуры, атлас и список глифов. Декодируется только PNG. Атлас
+//! Окно рисует снапшот через CPU-кадр и один GPU-blit: отдельного GPU-рендера
+//! примитивов нет, картинки масштабируются nearest-neighbor, клип только по
+//! границам кадра, а не по родителю. Стили задаются вручную через [`StyleSet`];
+//! CSS-парсер и снапшоты классов появятся позже. Декодируется только PNG. Атлас
 //! не растёт и не чистится; когда места нет, [`TextEngine::layout`] возвращает
 //! [`TextError::AtlasFull`]. Субпиксельное сглаживание сведено к маске, цвет
 //! обычных глифов задаёт отрисовщик, а не движок текста. Режим прозрачности
@@ -122,6 +124,7 @@
 mod atlas;
 mod color;
 mod layout;
+mod paint;
 mod rect;
 mod text;
 mod texture;
@@ -134,10 +137,11 @@ pub use layout::{
     Align, Dimension, Direction, Justify, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset,
     Padding, Size, layout,
 };
+pub use paint::Frame;
 pub use rect::{Rect, RectSample};
 pub use text::{PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize, TextStyle};
 pub use texture::{Texture, TextureError};
 pub use widget::{
-    StyleSet, StyleState, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot,
-    WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetTree,
+    Dirty, StyleSet, StyleState, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind,
+    WidgetSnapshot, WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetTree,
 };

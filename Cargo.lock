@@ -198,6 +198,7 @@ dependencies = [
 name = "brul-gui"
 version = "0.1.0"
 dependencies = [
+ "brul-reactive",
  "cosmic-text",
  "image",
  "wgpu",
