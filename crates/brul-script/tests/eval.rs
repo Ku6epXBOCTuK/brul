@@ -1,5 +1,4 @@
 use brul_script::{Component, Error, Value, eval};
-use brul_syntax::ast::Expr;
 use brul_syntax::parser::parse_expression;
 
 fn evaluate(source: &str) -> Result<Value, Error> {
@@ -123,8 +122,5 @@ fn unsupported_expressions_report_their_kind() {
         evaluate("browsers"),
         Err(Error::Undefined("browsers".to_owned()))
     );
-    assert_eq!(
-        eval(&mut Component::new(), &Expr::Array(Vec::new())),
-        Err(Error::Unsupported("array literal"))
-    );
+    assert_eq!(evaluate("f(1)"), Err(Error::Unsupported("call")));
 }

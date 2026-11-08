@@ -1,4 +1,4 @@
-use brul_syntax::ast::{AssignOp, BinaryOp, Expr, UnaryOp};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
 
 use crate::component::Component;
 use crate::error::Error;
@@ -11,6 +11,27 @@ pub fn eval(component: &mut Component, expression: &Expr) -> Result<Value, Error
         Expr::Bool(value) => Ok(Value::Bool(*value)),
         Expr::Null => Ok(Value::Null),
         Expr::Ident(name) => component.read(name),
+        Expr::Field { target, name } => read_field(&eval(component, target)?, name),
+        Expr::Index { target, index } => {
+            let target = eval(component, target)?;
+            let index = eval(component, index)?;
+            read_index(&target, &index)
+        }
+        Expr::Array(items) => {
+            let mut values = Vec::with_capacity(items.len());
+            for item in items {
+                values.push(eval(component, item)?);
+            }
+            Ok(Value::Array(values))
+        }
+        Expr::Object(fields) => {
+            let mut values = Vec::with_capacity(fields.len());
+            for (name, value) in fields {
+                values.push((name.clone(), eval(component, value)?));
+            }
+            Ok(Value::Object(values))
+        }
+        Expr::Template(parts) => eval_template(component, parts),
         Expr::Assign { target, op, value } => eval_assign(component, target, *op, value),
         Expr::Unary { op, operand } => eval_unary(component, *op, operand),
         Expr::Binary { op, left, right } => eval_binary(component, *op, left, right),
@@ -33,17 +54,139 @@ fn eval_assign(
     op: AssignOp,
     value: &Expr,
 ) -> Result<Value, Error> {
-    let Expr::Ident(name) = target else {
-        return Err(Error::Unsupported(expression_name(target)));
-    };
-    let value = eval(component, value)?;
     let value = match op {
-        AssignOp::Set => value,
-        AssignOp::Add => apply_binary(BinaryOp::Add, component.read(name)?, value)?,
-        AssignOp::Sub => apply_binary(BinaryOp::Sub, component.read(name)?, value)?,
+        AssignOp::Set => eval(component, value)?,
+        AssignOp::Add => {
+            let left = eval(component, target)?;
+            apply_binary(BinaryOp::Add, left, eval(component, value)?)?
+        }
+        AssignOp::Sub => {
+            let left = eval(component, target)?;
+            apply_binary(BinaryOp::Sub, left, eval(component, value)?)?
+        }
     };
-    component.assign(name, value.clone())?;
+    assign_to(component, target, value.clone())?;
     Ok(value)
+}
+
+fn assign_to(component: &mut Component, target: &Expr, value: Value) -> Result<(), Error> {
+    match target {
+        Expr::Ident(name) => component.assign(name, value),
+        Expr::Field { target, name } => {
+            let mut container = eval(component, target)?;
+            assign_field(&mut container, name, value)?;
+            assign_to(component, target, container)
+        }
+        Expr::Index { target, index } => {
+            let index = eval(component, index)?;
+            let mut container = eval(component, target)?;
+            assign_index(&mut container, &index, value)?;
+            assign_to(component, target, container)
+        }
+        other => Err(Error::Unsupported(expression_name(other))),
+    }
+}
+
+fn read_field(target: &Value, name: &str) -> Result<Value, Error> {
+    match target {
+        Value::Object(fields) => fields
+            .iter()
+            .find(|(field, _)| field == name)
+            .map(|(_, value)| value.clone())
+            .ok_or_else(|| Error::MissingField(name.to_owned())),
+        other => Err(expected(".", "Object", other)),
+    }
+}
+
+fn assign_field(target: &mut Value, name: &str, value: Value) -> Result<(), Error> {
+    match target {
+        Value::Object(fields) => match fields.iter_mut().find(|(field, _)| field == name) {
+            Some((_, field)) => {
+                *field = value;
+                Ok(())
+            }
+            None => Err(Error::MissingField(name.to_owned())),
+        },
+        other => Err(expected(".", "Object", other)),
+    }
+}
+
+fn read_index(target: &Value, index: &Value) -> Result<Value, Error> {
+    match target {
+        Value::Array(items) => {
+            let Value::Number(_) = index else {
+                return Err(expected("[]", "Number", index));
+            };
+            let index = array_index(items.len(), index)?;
+            Ok(items[index].clone())
+        }
+        Value::Object(fields) => {
+            let Value::String(key) = index else {
+                return Err(expected("[]", "String", index));
+            };
+            fields
+                .iter()
+                .find(|(field, _)| field == key)
+                .map(|(_, value)| value.clone())
+                .ok_or_else(|| Error::MissingField(key.clone()))
+        }
+        other => Err(expected("[]", "Array or Object", other)),
+    }
+}
+
+fn assign_index(target: &mut Value, index: &Value, value: Value) -> Result<(), Error> {
+    match target {
+        Value::Array(items) => {
+            let Value::Number(_) = index else {
+                return Err(expected("[]", "Number", index));
+            };
+            let index = array_index(items.len(), index)?;
+            items[index] = value;
+            Ok(())
+        }
+        Value::Object(fields) => {
+            let Value::String(key) = index else {
+                return Err(expected("[]", "String", index));
+            };
+            match fields.iter_mut().find(|(field, _)| field == key) {
+                Some((_, field)) => {
+                    *field = value;
+                    Ok(())
+                }
+                None => Err(Error::MissingField(key.clone())),
+            }
+        }
+        other => Err(expected("[]", "Array or Object", other)),
+    }
+}
+
+fn array_index(length: usize, index: &Value) -> Result<usize, Error> {
+    let Value::Number(index) = index else {
+        return Err(Error::IndexNotInteger);
+    };
+    if !index.is_finite() || *index < 0.0 || index.fract() != 0.0 {
+        return Err(Error::IndexNotInteger);
+    }
+    let index = *index as usize;
+    if index >= length {
+        return Err(Error::OutOfBounds { index, length });
+    }
+    Ok(index)
+}
+
+fn eval_template(component: &mut Component, parts: &[TemplatePart]) -> Result<Value, Error> {
+    let mut text = String::new();
+    for part in parts {
+        match part {
+            TemplatePart::Text(chunk) => text.push_str(chunk),
+            TemplatePart::Expr(expression) => match eval(component, expression)? {
+                Value::String(chunk) => text.push_str(&chunk),
+                Value::Number(number) => text.push_str(&number.to_string()),
+                other => return Err(expected("${}", "String or Number", &other)),
+            },
+        }
+    }
+    Ok(Value::String(text))
 }
 
 fn eval_unary(component: &mut Component, op: UnaryOp, operand: &Expr) -> Result<Value, Error> {

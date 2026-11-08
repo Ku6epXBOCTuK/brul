@@ -4,6 +4,8 @@ pub enum Value {
     String(String),
     Bool(bool),
     Null,
+    Array(Vec<Value>),
+    Object(Vec<(String, Value)>),
 }
 
 impl Value {
@@ -13,6 +15,8 @@ impl Value {
             Value::String(_) => "String",
             Value::Bool(_) => "Bool",
             Value::Null => "Null",
+            Value::Array(_) => "Array",
+            Value::Object(_) => "Object",
         }
     }
 }

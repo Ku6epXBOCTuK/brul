@@ -16,6 +16,12 @@ pub enum Error {
         found: &'static str,
     },
     DivisionByZero,
+    IndexNotInteger,
+    OutOfBounds {
+        index: usize,
+        length: usize,
+    },
+    MissingField(String),
     Unsupported(&'static str),
 }
 
@@ -39,6 +45,11 @@ impl fmt::Display for Error {
                 found,
             } => write!(f, "operator '{operation}' expects {expected}, got {found}"),
             Error::DivisionByZero => write!(f, "division by zero"),
+            Error::IndexNotInteger => write!(f, "index must be a non-negative integer"),
+            Error::OutOfBounds { index, length } => {
+                write!(f, "index {index} is out of bounds for length {length}")
+            }
+            Error::MissingField(name) => write!(f, "object has no field '{name}'"),
             Error::Unsupported(what) => write!(f, "{what} is not supported yet"),
         }
     }
