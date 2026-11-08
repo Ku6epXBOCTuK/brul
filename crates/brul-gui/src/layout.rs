@@ -527,7 +527,7 @@ fn cross_size_mut(size: &mut Size, direction: Direction) -> &mut u32 {
     }
 }
 
-fn inset_x(style: &LayoutStyle) -> u32 {
+pub(crate) fn inset_x(style: &LayoutStyle) -> u32 {
     style
         .border_width
         .saturating_mul(2)
@@ -535,7 +535,7 @@ fn inset_x(style: &LayoutStyle) -> u32 {
         .saturating_add(style.padding.right)
 }
 
-fn inset_y(style: &LayoutStyle) -> u32 {
+pub(crate) fn inset_y(style: &LayoutStyle) -> u32 {
     style
         .border_width
         .saturating_mul(2)
@@ -550,7 +550,7 @@ fn content_size(style: &LayoutStyle, size: Size) -> Size {
     }
 }
 
-fn resolve(dimension: Dimension, base: Option<u32>) -> Result<Option<u32>, LayoutError> {
+pub(crate) fn resolve(dimension: Dimension, base: Option<u32>) -> Result<Option<u32>, LayoutError> {
     match dimension {
         Dimension::Auto => Ok(None),
         Dimension::Px(value) => Ok(Some(value)),

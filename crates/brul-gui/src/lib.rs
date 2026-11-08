@@ -1,4 +1,4 @@
-//! Слой отрисовки BRUL: примитивы, текст, окно и лейаут.
+//! Слой отрисовки BRUL: примитивы, текст, окно, лейаут и виджеты.
 //!
 //! # Модель
 //!
@@ -87,17 +87,37 @@
 //! assert_eq!(placed.children[1].y, 35);
 //! ```
 //!
+//! Виджеты — [`Widget`]: View/Row/Column, Text и Image. [`WidgetTree`] хранит
+//! состояния `hover`/`pressed`/`checked`/`selected`/`disabled`/`visible`,
+//! раскладывает дерево (Text меряется через [`TextEngine`]) и отдаёт
+//! [`WidgetSnapshot`] — плоский список узлов с геометрией, выбранным стилем,
+//! глифами и текстурой. [`StyleSet`] переключает снимок стиля по состоянию;
+//! события указателя возвращаются списком [`WidgetEvent`] и всплывают от листа
+//! к корню.
+//!
+//! ```
+//! use brul_gui::{Direction, Size, TextEngine, Widget, WidgetTree};
+//!
+//! let root = Widget::view(Direction::Column, vec![Widget::text("Привет")]);
+//! let mut tree = WidgetTree::new(root);
+//! let mut engine = TextEngine::new();
+//! tree.layout(&mut engine, Size { width: 160, height: 80 }, 1.0)
+//!     .expect("layout");
+//! let snapshot = tree.snapshot().expect("snapshot");
+//! assert_eq!(snapshot.nodes.len(), 2);
+//! ```
+//!
 //! # Пределы MVP
 //!
-//! Окно умеет только показать прозрачный фон: GPU-рендера виджетов ещё нет.
-//! Наружу отдаются геометрия прямоугольников, декодированные текстуры, атлас и
-//! список глифов. Декодируется только PNG. Атлас не растёт и не чистится; когда
-//! места нет, [`TextEngine::layout`] возвращает [`TextError::AtlasFull`].
-//! Субпиксельное сглаживание сведено к маске, цвет обычных глифов задаёт
-//! отрисовщик, а не движок текста. Режим прозрачности выбирается из возможностей
-//! поверхности; если остаётся `Opaque`, окно будет непрозрачным. Лейаут получает
-//! готовый размер листа: измерение текста и перенос строк подключаются вместе с
-//! виджетами.
+//! Окно умеет только показать прозрачный фон: GPU-рендера виджетов ещё нет, окно
+//! снапшот пока не рисует. Стили задаются вручную через [`StyleSet`]; CSS-парсер
+//! и снапшоты классов появятся позже. Наружу отдаются геометрия прямоугольников,
+//! декодированные текстуры, атлас и список глифов. Декодируется только PNG. Атлас
+//! не растёт и не чистится; когда места нет, [`TextEngine::layout`] возвращает
+//! [`TextError::AtlasFull`]. Субпиксельное сглаживание сведено к маске, цвет
+//! обычных глифов задаёт отрисовщик, а не движок текста. Режим прозрачности
+//! выбирается из возможностей поверхности; если остаётся `Opaque`, окно будет
+//! непрозрачным.
 
 mod atlas;
 mod color;
@@ -105,6 +125,7 @@ mod layout;
 mod rect;
 mod text;
 mod texture;
+mod widget;
 pub mod window;
 
 pub use atlas::{Atlas, AtlasFormat, AtlasSlot};
@@ -116,3 +137,7 @@ pub use layout::{
 pub use rect::{Rect, RectSample};
 pub use text::{PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize, TextStyle};
 pub use texture::{Texture, TextureError};
+pub use widget::{
+    StyleSet, StyleState, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot,
+    WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetTree,
+};
