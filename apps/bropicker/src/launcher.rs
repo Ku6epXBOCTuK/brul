@@ -25,9 +25,9 @@ pub enum LaunchError {
 impl fmt::Display for LaunchError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::EmptyPath => formatter.write_str("у браузера пустой путь"),
-            Self::EmptyUrl => formatter.write_str("пустой URL"),
-            Self::Spawn(message) => write!(formatter, "не удалось запустить браузер: {message}"),
+            Self::EmptyPath => formatter.write_str("browser path is empty"),
+            Self::EmptyUrl => formatter.write_str("empty URL"),
+            Self::Spawn(message) => write!(formatter, "failed to launch browser: {message}"),
         }
     }
 }

@@ -1,4 +1,4 @@
-use brul_syntax::lexer::{Punct, Span, TokenKind, tokenize};
+﻿use brul_syntax::lexer::{Punct, Span, TokenKind, tokenize};
 
 fn kinds(source: &str) -> Vec<TokenKind> {
     tokenize(source)
@@ -42,7 +42,7 @@ fn whitespace_and_comments_are_skipped() {
             TokenKind::Eof,
         ]
     );
-    assert_eq!(kinds("// только комментарий"), vec![TokenKind::Eof]);
+    assert_eq!(kinds("// note"), vec![TokenKind::Eof]);
     assert_eq!(kinds(""), vec![TokenKind::Eof]);
 }
 
@@ -186,28 +186,28 @@ fn line_col_points_at_token_start() {
 fn unterminated_literals_are_errors() {
     let error = tokenize("\"abc").unwrap_err();
     assert_eq!((error.line, error.column), (1, 1));
-    assert_eq!(error.message, "незакрытая строка");
+    assert_eq!(error.message, "unterminated string");
 
     let error = tokenize("let\n  \"abc\ndef\"").unwrap_err();
     assert_eq!((error.line, error.column), (2, 3));
-    assert_eq!(error.message, "незакрытая строка");
+    assert_eq!(error.message, "unterminated string");
 
     let error = tokenize("`abc").unwrap_err();
     assert_eq!((error.line, error.column), (1, 1));
-    assert_eq!(error.message, "незакрытый шаблон");
+    assert_eq!(error.message, "unterminated template");
 
     let error = tokenize("`a${b").unwrap_err();
     assert_eq!((error.line, error.column), (1, 1));
-    assert_eq!(error.message, "незакрытый шаблон");
+    assert_eq!(error.message, "unterminated template");
 
     let error = tokenize("`a$b`").unwrap_err();
     assert_eq!((error.line, error.column), (1, 3));
-    assert_eq!(error.message, "ожидалось '{' после '$'");
+    assert_eq!(error.message, "expected '{' after '$'");
 }
 
 #[test]
 fn unknown_characters_are_errors() {
     let error = tokenize("a $ b").unwrap_err();
     assert_eq!((error.line, error.column), (1, 3));
-    assert_eq!(error.message, "неизвестный символ '$'");
+    assert_eq!(error.message, "unknown character '$'");
 }

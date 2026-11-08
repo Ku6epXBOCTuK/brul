@@ -43,14 +43,11 @@ impl fmt::Display for Error {
                 message,
                 line,
                 column,
-            } => write!(f, "строка {line}, колонка {column}: {message}"),
+            } => write!(f, "line {line}, column {column}: {message}"),
             Self::Duplicate { name, line, column } => {
-                write!(
-                    f,
-                    "строка {line}, колонка {column}: повторный блок <{name}>"
-                )
+                write!(f, "line {line}, column {column}: duplicate <{name}> block")
             }
-            Self::MissingMarkup => write!(f, "нет блока <markup>"),
+            Self::MissingMarkup => write!(f, "missing <markup> block"),
         }
     }
 }

@@ -3,6 +3,9 @@ name = "brul-gui"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 brul-reactive = { workspace = true }
 cosmic-text = { workspace = true }

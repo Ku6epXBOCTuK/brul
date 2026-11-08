@@ -319,10 +319,10 @@ pub enum WidgetError {
 impl fmt::Display for WidgetError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NoLayout => formatter.write_str("дерево виджетов ещё не разложено"),
-            Self::InvalidScale => formatter.write_str("некорректный масштаб DPI"),
-            Self::Layout(error) => write!(formatter, "лейаут: {error}"),
-            Self::Text(error) => write!(formatter, "текст: {error}"),
+            Self::NoLayout => formatter.write_str("widget tree is not laid out yet"),
+            Self::InvalidScale => formatter.write_str("invalid DPI scale"),
+            Self::Layout(error) => write!(formatter, "layout: {error}"),
+            Self::Text(error) => write!(formatter, "text: {error}"),
         }
     }
 }

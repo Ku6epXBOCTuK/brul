@@ -105,19 +105,19 @@ impl fmt::Display for ConfigError {
             Self::Read { path, message } => {
                 write!(
                     formatter,
-                    "не удалось прочитать конфиг {}: {message}",
+                    "failed to read config {}: {message}",
                     path.display()
                 )
             }
             Self::Parse { path, message } => match path {
                 Some(path) => write!(
                     formatter,
-                    "не удалось разобрать конфиг {}: {message}",
+                    "failed to parse config {}: {message}",
                     path.display()
                 ),
-                None => write!(formatter, "не удалось разобрать конфиг: {message}"),
+                None => write!(formatter, "failed to parse config: {message}"),
             },
-            Self::Invalid(message) => write!(formatter, "некорректный конфиг: {message}"),
+            Self::Invalid(message) => write!(formatter, "invalid config: {message}"),
         }
     }
 }
@@ -225,17 +225,17 @@ impl Config {
 
         for browser in &self.browsers {
             if browser.name.trim().is_empty() {
-                return Err(ConfigError::Invalid("у браузера пустое имя".to_string()));
+                return Err(ConfigError::Invalid("browser name is empty".to_string()));
             }
             if browser.path.trim().is_empty() {
                 return Err(ConfigError::Invalid(format!(
-                    "у браузера '{}' пустой path",
+                    "browser '{}' has an empty path",
                     browser.name
                 )));
             }
             if !names.insert(browser.name.as_str()) {
                 return Err(ConfigError::Invalid(format!(
-                    "браузер '{}' указан дважды",
+                    "browser '{}' is listed twice",
                     browser.name
                 )));
             }
@@ -246,7 +246,7 @@ impl Config {
 
         if defaults > 1 {
             return Err(ConfigError::Invalid(
-                "default = true может быть только у одного браузера".to_string(),
+                "default = true is allowed on one browser only".to_string(),
             ));
         }
 

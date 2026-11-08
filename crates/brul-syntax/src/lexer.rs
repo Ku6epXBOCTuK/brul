@@ -84,7 +84,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "строка {}, колонка {}: {}",
+            "line {}, column {}: {}",
             self.line, self.column, self.message
         )
     }
@@ -215,7 +215,7 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
                             });
                             pos = value_end + 1;
                         }
-                        _ => return Err(error(source, start, "незакрытая строка")),
+                        _ => return Err(error(source, start, "unterminated string")),
                     }
                     continue;
                 }
@@ -283,7 +283,7 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
                     });
                     continue;
                 }
-                return Err(error(source, start, &format!("неизвестный символ {ch:?}")));
+                return Err(error(source, start, &format!("unknown character {ch:?}")));
             }
         }
     }
@@ -291,7 +291,7 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
         Frame::Template { start } => Some(*start),
         Frame::Code { .. } => None,
     }) {
-        return Err(error(source, start, "незакрытый шаблон"));
+        return Err(error(source, start, "unterminated template"));
     }
     tokens.push(Token {
         kind: TokenKind::Eof,
@@ -332,14 +332,14 @@ fn template_step(source: &str, pos: usize, start: usize) -> Result<TemplateStep,
         }
         None => {
             check_chunk(source, pos, rest)?;
-            Err(error(source, start, "незакрытый шаблон"))
+            Err(error(source, start, "unterminated template"))
         }
     }
 }
 
 fn check_chunk(source: &str, start: usize, chunk: &str) -> Result<(), Error> {
     match chunk.find('$') {
-        Some(offset) => Err(error(source, start + offset, "ожидалось '{' после '$'")),
+        Some(offset) => Err(error(source, start + offset, "expected '{' after '$'")),
         None => Ok(()),
     }
 }

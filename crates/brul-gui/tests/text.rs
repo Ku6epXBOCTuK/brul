@@ -18,6 +18,7 @@ fn slot_has_ink(atlas: &Atlas, slot: AtlasSlot) -> bool {
 }
 
 #[test]
+#[allow(clippy::non_ascii_literal)]
 fn cyrillic_text_is_shaped_and_rasterized() {
     let mut engine = TextEngine::new();
     let layout = engine
@@ -37,6 +38,7 @@ fn cyrillic_text_is_shaped_and_rasterized() {
 }
 
 #[test]
+#[allow(clippy::non_ascii_literal)]
 fn emoji_is_rasterized() {
     let mut engine = TextEngine::new();
     let layout = engine
@@ -57,10 +59,10 @@ fn emoji_is_rasterized() {
 fn dpi_scale_changes_physical_size_and_positions() {
     let mut engine = TextEngine::new();
     let low = engine
-        .layout("Привет", &style(), None, 1.0)
+        .layout("Hello", &style(), None, 1.0)
         .expect("layout at scale 1");
     let high = engine
-        .layout("Привет", &style(), None, 2.0)
+        .layout("Hello", &style(), None, 2.0)
         .expect("layout at scale 2");
 
     assert!(

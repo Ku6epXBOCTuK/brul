@@ -14,7 +14,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "строка {}, колонка {}: {}",
+            "line {}, column {}: {}",
             self.line, self.column, self.message
         )
     }
@@ -57,7 +57,7 @@ impl<'a> Parser<'a> {
         if token.kind == TokenKind::Eof {
             Ok(())
         } else {
-            Err(self.error(token.span, "ожидался конец выражения"))
+            Err(self.error(token.span, "expected end of expression"))
         }
     }
 
@@ -89,10 +89,10 @@ impl<'a> Parser<'a> {
             TokenKind::Punct(Punct::LParen) => {
                 self.at += 1;
                 let expr = self.parse_expression()?;
-                self.expect_punct(Punct::RParen, "ожидался ')'")?;
+                self.expect_punct(Punct::RParen, "expected ')'")?;
                 Ok(expr)
             }
-            _ => Err(self.error(span, "ожидалось выражение")),
+            _ => Err(self.error(span, "expected expression")),
         }
     }
 
@@ -110,7 +110,7 @@ impl<'a> Parser<'a> {
             }
             self.at += 1;
         }
-        self.expect_punct(Punct::RBracket, "ожидался ']'")?;
+        self.expect_punct(Punct::RBracket, "expected ']'")?;
         Ok(Expr::Array(items))
     }
 
@@ -123,14 +123,14 @@ impl<'a> Parser<'a> {
         }
         loop {
             let name = self.expect_ident()?;
-            self.expect_punct(Punct::Colon, "ожидался ':'")?;
+            self.expect_punct(Punct::Colon, "expected ':'")?;
             fields.push((name, self.parse_expression()?));
             if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
                 break;
             }
             self.at += 1;
         }
-        self.expect_punct(Punct::RBrace, "ожидался '}'")?;
+        self.expect_punct(Punct::RBrace, "expected '}'")?;
         Ok(Expr::Object(fields))
     }
 
@@ -148,7 +148,7 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_expression()?;
                     if self.tokens[self.at].kind != TokenKind::TemplateInterpEnd {
                         let span = self.tokens[self.at].span;
-                        return Err(self.error(span, "ожидался '}'"));
+                        return Err(self.error(span, "expected '}'"));
                     }
                     self.at += 1;
                     parts.push(TemplatePart::Expr(Box::new(expr)));
@@ -159,7 +159,7 @@ impl<'a> Parser<'a> {
                 }
                 _ => {
                     let span = self.tokens[self.at].span;
-                    return Err(self.error(span, "ожидался конец шаблона"));
+                    return Err(self.error(span, "expected end of template"));
                 }
             }
         }
@@ -190,7 +190,7 @@ impl<'a> Parser<'a> {
         }
         self.at += 1;
         let then_branch = self.parse_expression()?;
-        self.expect_punct(Punct::Colon, "ожидался ':'")?;
+        self.expect_punct(Punct::Colon, "expected ':'")?;
         let else_branch = self.ternary()?;
         Ok(Expr::Ternary {
             condition: Box::new(condition),
@@ -302,7 +302,7 @@ impl<'a> Parser<'a> {
                 Punct::LBracket => {
                     self.at += 1;
                     let index = self.parse_expression()?;
-                    self.expect_punct(Punct::RBracket, "ожидался ']'")?;
+                    self.expect_punct(Punct::RBracket, "expected ']'")?;
                     expr = Expr::Index {
                         target: Box::new(expr),
                         index: Box::new(index),
@@ -311,7 +311,7 @@ impl<'a> Parser<'a> {
                 Punct::LParen => {
                     self.at += 1;
                     let args = self.arg_list()?;
-                    self.expect_punct(Punct::RParen, "ожидался ')'")?;
+                    self.expect_punct(Punct::RParen, "expected ')'")?;
                     expr = Expr::Call {
                         target: Box::new(expr),
                         args,
@@ -346,7 +346,7 @@ impl<'a> Parser<'a> {
                 self.at += 1;
                 Ok(name)
             }
-            _ => Err(self.error(token.span, "ожидалось имя поля")),
+            _ => Err(self.error(token.span, "expected field name")),
         }
     }
 

@@ -115,15 +115,15 @@ pub enum WindowError {
 impl std::fmt::Display for WindowError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::EmptySize => formatter.write_str("размер окна должен быть больше нуля"),
-            Self::HeaderTooTall => formatter.write_str("высота хедера больше высоты окна"),
-            Self::EventLoop(message) => write!(formatter, "цикл событий: {message}"),
-            Self::CreateWindow(message) => write!(formatter, "создание окна: {message}"),
-            Self::Surface(message) => write!(formatter, "поверхность: {message}"),
-            Self::Adapter(message) => write!(formatter, "адаптер: {message}"),
-            Self::Device(message) => write!(formatter, "устройство: {message}"),
-            Self::NoSurfaceConfig => formatter.write_str("нет подходящей конфигурации поверхности"),
-            Self::Widget(message) => write!(formatter, "виджеты: {message}"),
+            Self::EmptySize => formatter.write_str("window size must be greater than zero"),
+            Self::HeaderTooTall => formatter.write_str("header is taller than the window"),
+            Self::EventLoop(message) => write!(formatter, "event loop: {message}"),
+            Self::CreateWindow(message) => write!(formatter, "window creation: {message}"),
+            Self::Surface(message) => write!(formatter, "surface: {message}"),
+            Self::Adapter(message) => write!(formatter, "adapter: {message}"),
+            Self::Device(message) => write!(formatter, "device: {message}"),
+            Self::NoSurfaceConfig => formatter.write_str("no suitable surface configuration"),
+            Self::Widget(message) => write!(formatter, "widgets: {message}"),
         }
     }
 }

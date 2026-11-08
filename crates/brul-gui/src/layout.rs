@@ -170,12 +170,8 @@ pub enum LayoutError {
 impl fmt::Display for LayoutError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
-            Self::InvalidDimension => {
-                "некорректный размер: процент должен быть конечным и неотрицательным"
-            }
-            Self::InvalidStretch => {
-                "некорректный stretch: множитель должен быть конечным и неотрицательным"
-            }
+            Self::InvalidDimension => "invalid size: percent must be finite and non-negative",
+            Self::InvalidStretch => "invalid stretch: factor must be finite and non-negative",
         };
         formatter.write_str(message)
     }

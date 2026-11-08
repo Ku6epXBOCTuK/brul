@@ -16,7 +16,7 @@ default = true
 name = "Chrome"
 path = "chrome"
 args = '--profile-directory="Work"'
-emoji = "💼"
+emoji = "work"
 
 [rules]
 "docs.example.com" = "Chrome"
@@ -46,7 +46,7 @@ fn parses_browsers_rules_and_settings() {
     assert_eq!(config.browsers[0].name, "Firefox");
     assert!(config.browsers[0].is_default);
     assert_eq!(config.browsers[1].flags, "--profile-directory=\"Work\"");
-    assert_eq!(config.browsers[1].emoji, "💼");
+    assert_eq!(config.browsers[1].emoji, "work");
     assert_eq!(
         config.rules.get("docs.example.com").map(String::as_str),
         Some("Chrome")

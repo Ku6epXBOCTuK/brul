@@ -79,10 +79,10 @@ pub enum TextError {
 impl fmt::Display for TextError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
-            Self::InvalidMetrics => "некорректные метрики шрифта",
-            Self::InvalidScale => "некорректный масштаб DPI",
-            Self::InvalidWidth => "некорректная максимальная ширина",
-            Self::AtlasFull => "атлас глифов заполнен",
+            Self::InvalidMetrics => "invalid font metrics",
+            Self::InvalidScale => "invalid DPI scale",
+            Self::InvalidWidth => "invalid max width",
+            Self::AtlasFull => "glyph atlas is full",
         };
         formatter.write_str(message)
     }

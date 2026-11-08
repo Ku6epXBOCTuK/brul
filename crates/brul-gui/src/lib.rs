@@ -46,9 +46,9 @@
 //!
 //! let mut engine = TextEngine::new();
 //! let layout = engine
-//!     .layout("Привет", &TextStyle::new(16.0), None, 1.0)
+//!     .layout("Hello", &TextStyle::new(16.0), None, 1.0)
 //!     .expect("layout");
-//! assert_eq!(layout.glyphs.len(), 6);
+//! assert_eq!(layout.glyphs.len(), 5);
 //! ```
 //!
 //! Окно — [`window::run`] с [`window::WindowConfig`]: без рамки, прозрачное,
@@ -100,7 +100,7 @@
 //! ```
 //! use brul_gui::{Direction, Size, TextEngine, Widget, WidgetTree};
 //!
-//! let root = Widget::view(Direction::Column, vec![Widget::text("Привет")]);
+//! let root = Widget::view(Direction::Column, vec![Widget::text("Hello")]);
 //! let mut tree = WidgetTree::new(root);
 //! let mut engine = TextEngine::new();
 //! tree.layout(&mut engine, Size { width: 160, height: 80 }, 1.0)

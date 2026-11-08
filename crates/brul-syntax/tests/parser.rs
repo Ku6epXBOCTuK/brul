@@ -1,4 +1,4 @@
-use brul_syntax::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
+﻿use brul_syntax::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
 use brul_syntax::parser::parse_expression;
 
 fn ident(name: &str) -> Expr {
@@ -102,14 +102,14 @@ fn entry_skips_whitespace_and_comments() {
 #[test]
 fn trailing_tokens_are_errors() {
     let error = parse_expression("1 2").unwrap_err();
-    assert_eq!(error.message, "ожидался конец выражения");
+    assert_eq!(error.message, "expected end of expression");
     assert_eq!((error.line, error.column), (1, 3));
 }
 
 #[test]
 fn empty_input_is_an_error() {
     let error = parse_expression("").unwrap_err();
-    assert_eq!(error.message, "ожидалось выражение");
+    assert_eq!(error.message, "expected expression");
     assert_eq!((error.line, error.column), (1, 1));
 }
 
@@ -155,11 +155,11 @@ fn templates_parse_text_and_interpolation() {
 #[test]
 fn template_errors_point_into_the_expression() {
     let error = parse_expression("`a${1 +}`").unwrap_err();
-    assert_eq!(error.message, "ожидалось выражение");
+    assert_eq!(error.message, "expected expression");
     assert_eq!((error.line, error.column), (1, 8));
 
     let error = parse_expression("`a${1 + 2").unwrap_err();
-    assert_eq!(error.message, "незакрытый шаблон");
+    assert_eq!(error.message, "unterminated template");
     assert_eq!((error.line, error.column), (1, 1));
 }
 
@@ -193,15 +193,15 @@ fn postfix_chains_fields_indexes_and_calls() {
 #[test]
 fn postfix_errors_point_at_the_offending_token() {
     let error = parse_expression("user.").unwrap_err();
-    assert_eq!(error.message, "ожидалось имя поля");
+    assert_eq!(error.message, "expected field name");
     assert_eq!((error.line, error.column), (1, 6));
 
     let error = parse_expression("items[0").unwrap_err();
-    assert_eq!(error.message, "ожидался ']'");
+    assert_eq!(error.message, "expected ']'");
     assert_eq!((error.line, error.column), (1, 8));
 
     let error = parse_expression("f(1").unwrap_err();
-    assert_eq!(error.message, "ожидался ')'");
+    assert_eq!(error.message, "expected ')'");
     assert_eq!((error.line, error.column), (1, 4));
 }
 
@@ -248,14 +248,14 @@ fn precedence_and_associativity() {
 #[test]
 fn dangling_operator_is_an_error() {
     let error = parse_expression("1 +").unwrap_err();
-    assert_eq!(error.message, "ожидалось выражение");
+    assert_eq!(error.message, "expected expression");
     assert_eq!((error.line, error.column), (1, 4));
 }
 
 #[test]
 fn lexer_errors_reach_the_entry() {
     let error = parse_expression("\"abc").unwrap_err();
-    assert_eq!(error.message, "незакрытая строка");
+    assert_eq!(error.message, "unterminated string");
     assert_eq!((error.line, error.column), (1, 1));
 }
 
@@ -306,7 +306,7 @@ fn assignment_binds_looser_than_ternary_and_right() {
 #[test]
 fn missing_colon_after_then_branch_is_an_error() {
     let error = parse_expression("a ? b").unwrap_err();
-    assert_eq!(error.message, "ожидался ':'");
+    assert_eq!(error.message, "expected ':'");
     assert_eq!((error.line, error.column), (1, 6));
 }
 
@@ -344,22 +344,22 @@ fn parentheses_group_expressions() {
 #[test]
 fn container_errors_point_at_the_offending_token() {
     let error = parse_expression("[1").unwrap_err();
-    assert_eq!(error.message, "ожидался ']'");
+    assert_eq!(error.message, "expected ']'");
     assert_eq!((error.line, error.column), (1, 3));
 
     let error = parse_expression("{1: 2}").unwrap_err();
-    assert_eq!(error.message, "ожидалось имя поля");
+    assert_eq!(error.message, "expected field name");
     assert_eq!((error.line, error.column), (1, 2));
 
     let error = parse_expression("{a 1}").unwrap_err();
-    assert_eq!(error.message, "ожидался ':'");
+    assert_eq!(error.message, "expected ':'");
     assert_eq!((error.line, error.column), (1, 4));
 
     let error = parse_expression("{a: 1").unwrap_err();
-    assert_eq!(error.message, "ожидался '}'");
+    assert_eq!(error.message, "expected '}'");
     assert_eq!((error.line, error.column), (1, 6));
 
     let error = parse_expression("[1,").unwrap_err();
-    assert_eq!(error.message, "ожидалось выражение");
+    assert_eq!(error.message, "expected expression");
     assert_eq!((error.line, error.column), (1, 4));
 }

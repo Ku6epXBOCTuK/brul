@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         background: Color::rgb(34, 197, 94),
         ..base
     };
-    let checkbox = Widget::column(vec![Widget::text("Кликни меня")])
+    let checkbox = Widget::column(vec![Widget::text("Click me")])
         .with_layout(LayoutStyle {
             width: Dimension::Px(372),
             height: Dimension::Px(80),

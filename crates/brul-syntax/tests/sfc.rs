@@ -1,4 +1,4 @@
-use brul_syntax::sfc::{Error, parse};
+﻿use brul_syntax::sfc::{Error, parse};
 
 const PICKER: &str = include_str!("fixtures/picker.brul");
 
@@ -67,6 +67,6 @@ fn unclosed_block_is_syntax_error() {
 
 #[test]
 fn text_outside_blocks_is_syntax_error() {
-    let error = parse("<markup></markup>\nмусор\n").unwrap_err();
+    let error = parse("<markup></markup>\nstray\n").unwrap_err();
     assert!(matches!(error, Error::Syntax { line: 2, .. }), "{error:?}");
 }

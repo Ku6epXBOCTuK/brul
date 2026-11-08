@@ -54,7 +54,7 @@ pub fn demo_browsers() -> Vec<BrowserEntry> {
             path: "firefox".to_string(),
             flags: String::new(),
             icon: String::new(),
-            emoji: "🦊".to_string(),
+            emoji: String::new(),
             is_default: true,
         },
         BrowserEntry {
@@ -62,7 +62,7 @@ pub fn demo_browsers() -> Vec<BrowserEntry> {
             path: "chrome".to_string(),
             flags: String::new(),
             icon: String::new(),
-            emoji: "🌐".to_string(),
+            emoji: String::new(),
             is_default: false,
         },
         BrowserEntry {
@@ -70,7 +70,7 @@ pub fn demo_browsers() -> Vec<BrowserEntry> {
             path: "brave".to_string(),
             flags: String::new(),
             icon: String::new(),
-            emoji: "🦁".to_string(),
+            emoji: String::new(),
             is_default: false,
         },
         BrowserEntry {
@@ -78,7 +78,7 @@ pub fn demo_browsers() -> Vec<BrowserEntry> {
             path: "msedge".to_string(),
             flags: String::new(),
             icon: String::new(),
-            emoji: "🌊".to_string(),
+            emoji: String::new(),
             is_default: false,
         },
     ]
