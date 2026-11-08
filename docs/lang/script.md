@@ -136,7 +136,7 @@ UI-потоке. Скрипт оперирует **свойствами комп
 
 ### 1. Скрипт компонента пикера
 
-```js
+```script
 import BrowserItem from "./browser_item";
 import Footer from "./footer";
 
@@ -158,7 +158,7 @@ function launch(i) {
 
 ### 2. Обработчики (только именованные функции, инлайнов нет)
 
-```js
+```script
 function handleKey(ev) {
   if (ev.code == "Escape") {
     exit();
@@ -171,7 +171,7 @@ function handleKey(ev) {
 
 ### 3. Выражения разметки (те же выражения, другой потребитель)
 
-```js
+```script,ignore
 Text (url-text) { currentUrl }
 Text (count) { `Выбрано: ${selectedIndex + 1} из ${len(browsers)}` }
 Image (check-icon, visible: selected) { checkSvg }
@@ -180,7 +180,7 @@ View (item-panel, selected: i == selectedIndex) { }
 
 ### 4. Таймер обновления статусов
 
-```js
+```script
 function refresh() {
   reloadServices();
 }
