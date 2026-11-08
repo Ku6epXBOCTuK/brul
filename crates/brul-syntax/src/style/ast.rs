@@ -48,7 +48,13 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Border {
     pub width: f64,
-    pub color: Color,
+    pub color: BorderColor,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BorderColor {
+    Color(Color),
+    ThemeRef(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,0 +1,130 @@
+use std::fmt;
+
+use crate::style::ast::{Border, BorderColor, Property, State, Stylesheet, Theme, Value};
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Snapshot {
+    properties: Vec<Property>,
+}
+
+impl Snapshot {
+    pub fn get(&self, name: &str) -> Option<&Value> {
+        self.properties
+            .iter()
+            .find(|property| property.name == name)
+            .map(|property| &property.value)
+    }
+
+    pub fn properties(&self) -> &[Property] {
+        &self.properties
+    }
+
+    fn merge(
+        &mut self,
+        properties: &[Property],
+        theme: Option<&Theme>,
+    ) -> Result<(), SnapshotError> {
+        for property in properties {
+            let value = resolve(&property.value, theme)?;
+            match self
+                .properties
+                .iter_mut()
+                .find(|existing| existing.name == property.name)
+            {
+                Some(existing) => existing.value = value,
+                None => self.properties.push(Property {
+                    name: property.name.clone(),
+                    value,
+                }),
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotError {
+    UnknownTheme(String),
+    UnknownThemeKey(String),
+    NotAColor(String),
+}
+
+impl fmt::Display for SnapshotError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SnapshotError::UnknownTheme(name) => write!(f, "unknown theme '{name}'"),
+            SnapshotError::UnknownThemeKey(name) => write!(f, "unknown theme key '{name}'"),
+            SnapshotError::NotAColor(name) => write!(f, "theme key '{name}' is not a color"),
+        }
+    }
+}
+
+impl std::error::Error for SnapshotError {}
+
+impl Stylesheet {
+    pub fn snapshot(
+        &self,
+        classes: &[&str],
+        state: Option<State>,
+        theme: Option<&str>,
+    ) -> Result<Snapshot, SnapshotError> {
+        let theme = match theme {
+            Some(name) => Some(
+                self.themes
+                    .iter()
+                    .find(|theme| theme.name == name)
+                    .ok_or_else(|| SnapshotError::UnknownTheme(name.to_string()))?,
+            ),
+            None => self.themes.first(),
+        };
+        let mut snapshot = Snapshot::default();
+        for class in classes {
+            for rule in self.rules.iter().filter(|rule| rule.class == *class) {
+                if rule.state.is_none() {
+                    snapshot.merge(&rule.properties, theme)?;
+                }
+            }
+        }
+        if let Some(state) = state {
+            for class in classes {
+                for rule in self
+                    .rules
+                    .iter()
+                    .filter(|rule| rule.class == *class && rule.state == Some(state))
+                {
+                    snapshot.merge(&rule.properties, theme)?;
+                }
+            }
+        }
+        Ok(snapshot)
+    }
+}
+
+fn theme_value<'a>(theme: Option<&'a Theme>, key: &str) -> Result<&'a Value, SnapshotError> {
+    theme
+        .and_then(|theme| {
+            theme
+                .properties
+                .iter()
+                .find(|property| property.name == key)
+        })
+        .map(|property| &property.value)
+        .ok_or_else(|| SnapshotError::UnknownThemeKey(key.to_string()))
+}
+
+fn resolve(value: &Value, theme: Option<&Theme>) -> Result<Value, SnapshotError> {
+    match value {
+        Value::ThemeRef(key) => Ok(theme_value(theme, key)?.clone()),
+        Value::Border(border) => match &border.color {
+            BorderColor::ThemeRef(key) => match theme_value(theme, key)? {
+                Value::Color(color) => Ok(Value::Border(Border {
+                    width: border.width,
+                    color: BorderColor::Color(*color),
+                })),
+                _ => Err(SnapshotError::NotAColor(key.clone())),
+            },
+            BorderColor::Color(_) => Ok(value.clone()),
+        },
+        value => Ok(value.clone()),
+    }
+}

@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::style::ast::{
-    Border, ClassRule, Color, Gradient, Property, State, Stylesheet, Theme, Value,
+    Border, BorderColor, ClassRule, Color, Gradient, Property, State, Stylesheet, Theme, Value,
 };
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
@@ -182,6 +182,27 @@ impl Parser<'_> {
         }
     }
 
+    fn border_color(&mut self) -> Result<BorderColor, Error> {
+        self.skip_trivia();
+        let start = self.pos;
+        match self.peek() {
+            Some('#') => Ok(BorderColor::Color(self.hex_color()?)),
+            Some(ch) if ch.is_ascii_alphabetic() => {
+                let name = self.ident()?;
+                match name.as_str() {
+                    "theme" => {
+                        self.expect('.')?;
+                        Ok(BorderColor::ThemeRef(self.ident()?))
+                    }
+                    "transparent" => Ok(BorderColor::Color(Color::TRANSPARENT)),
+                    "white" => Ok(BorderColor::Color(Color::WHITE)),
+                    _ => Err(Error::at(self.source, start, "expected color")),
+                }
+            }
+            _ => Err(Error::at(self.source, start, "expected color")),
+        }
+    }
+
     fn hex_color(&mut self) -> Result<Color, Error> {
         let start = self.pos;
         self.bump();
@@ -230,7 +251,7 @@ impl Parser<'_> {
                 if self.peek() == Some('#')
                     || self.peek().is_some_and(|ch| ch.is_ascii_alphabetic())
                 {
-                    let color = self.color()?;
+                    let color = self.border_color()?;
                     return Ok(Value::Border(Border { width, color }));
                 }
                 Ok(Value::Px(width))

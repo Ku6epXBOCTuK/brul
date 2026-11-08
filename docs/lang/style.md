@@ -58,7 +58,7 @@
 | `justify-content`                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
 | `align-items`                          | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
 | `background`                           | Color \| Gradient                 | transparent             | ✅                              |
-| `border` (шорткат: ширина+цвет)        | px + Color                        | 0, transparent          | ✅ (цвет)                       |
+| `border` (шорткат: ширина+цвет)        | px + (Color \| theme.*)           | 0, transparent          | ✅ (цвет)                       |
 | `border-width`                         | px                                | 0                       | ❌ геометрия                    |
 | `border-color`                         | Color                             | transparent             | ✅                              |
 | `radius`                               | px                                | 0                       | ❌ геометрия                    |

@@ -1,5 +1,6 @@
 use brul_syntax::style::{
-    Border, ClassRule, Color, Gradient, Property, State, Stylesheet, Theme, Value, parse_file,
+    Border, BorderColor, ClassRule, Color, Gradient, Property, State, Stylesheet, Theme, Value,
+    parse_file,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -238,7 +239,8 @@ fn gradients_parse() {
 #[test]
 fn border_shortcut_parses() {
     let source = r#".box { border: 2px #3b82f6; }
-.small { border: 1.5px white; }"#;
+.small { border: 1.5px white; }
+.themed { border: 2px theme.border-main; }"#;
     assert_eq!(
         parse_file(source).unwrap(),
         sheet(vec![
@@ -248,7 +250,7 @@ fn border_shortcut_parses() {
                     "border",
                     Value::Border(Border {
                         width: 2.0,
-                        color: Color::rgb(0x3b, 0x82, 0xf6),
+                        color: BorderColor::Color(Color::rgb(0x3b, 0x82, 0xf6)),
                     }),
                 )],
             ),
@@ -258,7 +260,17 @@ fn border_shortcut_parses() {
                     "border",
                     Value::Border(Border {
                         width: 1.5,
-                        color: Color::WHITE,
+                        color: BorderColor::Color(Color::WHITE),
+                    }),
+                )],
+            ),
+            rule(
+                "themed",
+                vec![property(
+                    "border",
+                    Value::Border(Border {
+                        width: 2.0,
+                        color: BorderColor::ThemeRef("border-main".to_owned()),
                     }),
                 )],
             ),
@@ -413,7 +425,8 @@ fn errors_point_at_the_source() {
         ),
         (".a:hovered { }", "unknown state", 1, 4),
         (".a: { }", "expected name", 1, 5),
-        (".a { b: 4px theme.x; }", "expected color", 1, 13),
+        (".a { border: 4px red; }", "expected color", 1, 18),
+        (".a { border: 4px theme; }", "expected '.'", 1, 23),
         (".a { b: 4px 5px; }", "expected ';'", 1, 13),
         (
             "theme light { accent: #fff; }\ntheme dark { accent: #000; radius: 4px; }",
