@@ -29,6 +29,12 @@ pub enum AssignOp {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TemplatePart {
+    Text(String),
+    Expr(Box<Expr>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Number(f64),
     String(String),
@@ -68,4 +74,5 @@ pub enum Expr {
     },
     Array(Vec<Expr>),
     Object(Vec<(String, Expr)>),
+    Template(Vec<TemplatePart>),
 }

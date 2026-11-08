@@ -1,4 +1,4 @@
-use brul_syntax::ast::{AssignOp, BinaryOp, Expr, UnaryOp};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
 use brul_syntax::parser::parse_expression;
 
 fn ident(name: &str) -> Expr {
@@ -113,10 +113,53 @@ fn empty_input_is_an_error() {
     assert_eq!((error.line, error.column), (1, 1));
 }
 
+fn template(parts: Vec<TemplatePart>) -> Expr {
+    Expr::Template(parts)
+}
+
+fn text(value: &str) -> TemplatePart {
+    TemplatePart::Text(value.to_owned())
+}
+
+fn part(expr: Expr) -> TemplatePart {
+    TemplatePart::Expr(Box::new(expr))
+}
+
 #[test]
-fn templates_are_not_literals_yet() {
-    let error = parse_expression("`x`").unwrap_err();
+fn templates_parse_text_and_interpolation() {
+    assert_eq!(parse_expression("``").unwrap(), template(vec![]));
+    assert_eq!(
+        parse_expression("`hi`").unwrap(),
+        template(vec![text("hi")])
+    );
+    assert_eq!(
+        parse_expression("`a${b}c`").unwrap(),
+        template(vec![text("a"), part(ident("b")), text("c")])
+    );
+    assert_eq!(
+        parse_expression("`x${`y${z}`}`").unwrap(),
+        template(vec![
+            text("x"),
+            part(template(vec![text("y"), part(ident("z"))])),
+        ])
+    );
+    assert_eq!(
+        parse_expression("`sum ${1 + 2}`").unwrap(),
+        template(vec![
+            text("sum "),
+            part(bin(BinaryOp::Add, num(1.0), num(2.0))),
+        ])
+    );
+}
+
+#[test]
+fn template_errors_point_into_the_expression() {
+    let error = parse_expression("`a${1 +}`").unwrap_err();
     assert_eq!(error.message, "ожидалось выражение");
+    assert_eq!((error.line, error.column), (1, 8));
+
+    let error = parse_expression("`a${1 + 2").unwrap_err();
+    assert_eq!(error.message, "незакрытый шаблон");
     assert_eq!((error.line, error.column), (1, 1));
 }
 

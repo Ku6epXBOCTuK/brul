@@ -86,12 +86,55 @@ fn punctuators_cover_grammar() {
 #[test]
 fn strings_and_templates_keep_their_text() {
     assert_eq!(
-        kinds("\"hello\" `a${name}c` \"\" `line\nnext`"),
+        kinds("\"hello\" `a${name}c` \"\""),
         vec![
             TokenKind::String("hello".to_owned()),
-            TokenKind::Template("a${name}c".to_owned()),
+            TokenKind::TemplateStart,
+            TokenKind::TemplateChunk("a".to_owned()),
+            TokenKind::TemplateInterpStart,
+            TokenKind::Ident("name".to_owned()),
+            TokenKind::TemplateInterpEnd,
+            TokenKind::TemplateChunk("c".to_owned()),
+            TokenKind::TemplateEnd,
             TokenKind::String(String::new()),
-            TokenKind::Template("line\nnext".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+    assert_eq!(
+        kinds("`line\nnext`"),
+        vec![
+            TokenKind::TemplateStart,
+            TokenKind::TemplateChunk("line\nnext".to_owned()),
+            TokenKind::TemplateEnd,
+            TokenKind::Eof,
+        ]
+    );
+    assert_eq!(
+        kinds("``"),
+        vec![
+            TokenKind::TemplateStart,
+            TokenKind::TemplateEnd,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn nested_templates_tokenize_by_depth() {
+    assert_eq!(
+        kinds("`a${`b${c}`}`"),
+        vec![
+            TokenKind::TemplateStart,
+            TokenKind::TemplateChunk("a".to_owned()),
+            TokenKind::TemplateInterpStart,
+            TokenKind::TemplateStart,
+            TokenKind::TemplateChunk("b".to_owned()),
+            TokenKind::TemplateInterpStart,
+            TokenKind::Ident("c".to_owned()),
+            TokenKind::TemplateInterpEnd,
+            TokenKind::TemplateEnd,
+            TokenKind::TemplateInterpEnd,
+            TokenKind::TemplateEnd,
             TokenKind::Eof,
         ]
     );
@@ -125,8 +168,10 @@ fn literal_spans_include_delimiters() {
     let source = "\"hi\" `x`";
     let tokens = tokenize(source).unwrap();
     assert_eq!(tokens[0].span, Span { start: 0, end: 4 });
-    assert_eq!(tokens[1].span, Span { start: 5, end: 8 });
-    assert_eq!(tokens[2].span, Span { start: 8, end: 8 });
+    assert_eq!(tokens[1].span, Span { start: 5, end: 6 });
+    assert_eq!(tokens[2].span, Span { start: 6, end: 7 });
+    assert_eq!(tokens[3].span, Span { start: 7, end: 8 });
+    assert_eq!(tokens[4].span, Span { start: 8, end: 8 });
 }
 
 #[test]
@@ -150,6 +195,14 @@ fn unterminated_literals_are_errors() {
     let error = tokenize("`abc").unwrap_err();
     assert_eq!((error.line, error.column), (1, 1));
     assert_eq!(error.message, "незакрытый шаблон");
+
+    let error = tokenize("`a${b").unwrap_err();
+    assert_eq!((error.line, error.column), (1, 1));
+    assert_eq!(error.message, "незакрытый шаблон");
+
+    let error = tokenize("`a$b`").unwrap_err();
+    assert_eq!((error.line, error.column), (1, 3));
+    assert_eq!(error.message, "ожидалось '{' после '$'");
 }
 
 #[test]

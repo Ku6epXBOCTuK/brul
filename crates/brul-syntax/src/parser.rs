@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::ast::{AssignOp, BinaryOp, Expr, UnaryOp};
+use crate::ast::{AssignOp, BinaryOp, Expr, TemplatePart, UnaryOp};
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,6 +84,7 @@ impl<'a> Parser<'a> {
                 })
             }
             TokenKind::Punct(Punct::LBracket) => self.array(),
+            TokenKind::TemplateStart => self.template(),
             TokenKind::Punct(Punct::LBrace) => self.object(),
             TokenKind::Punct(Punct::LParen) => {
                 self.at += 1;
@@ -131,6 +132,38 @@ impl<'a> Parser<'a> {
         }
         self.expect_punct(Punct::RBrace, "ожидался '}'")?;
         Ok(Expr::Object(fields))
+    }
+
+    fn template(&mut self) -> Result<Expr, Error> {
+        self.at += 1;
+        let mut parts = Vec::new();
+        loop {
+            match self.tokens[self.at].kind.clone() {
+                TokenKind::TemplateChunk(text) => {
+                    self.at += 1;
+                    parts.push(TemplatePart::Text(text));
+                }
+                TokenKind::TemplateInterpStart => {
+                    self.at += 1;
+                    let expr = self.parse_expression()?;
+                    if self.tokens[self.at].kind != TokenKind::TemplateInterpEnd {
+                        let span = self.tokens[self.at].span;
+                        return Err(self.error(span, "ожидался '}'"));
+                    }
+                    self.at += 1;
+                    parts.push(TemplatePart::Expr(Box::new(expr)));
+                }
+                TokenKind::TemplateEnd => {
+                    self.at += 1;
+                    break;
+                }
+                _ => {
+                    let span = self.tokens[self.at].span;
+                    return Err(self.error(span, "ожидался конец шаблона"));
+                }
+            }
+        }
+        Ok(Expr::Template(parts))
     }
 
     fn assignment(&mut self) -> Result<Expr, Error> {
