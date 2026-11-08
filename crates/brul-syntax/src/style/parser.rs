@@ -1,5 +1,7 @@
 use crate::error::Error;
-use crate::style::ast::{Border, ClassRule, Color, Gradient, Property, Stylesheet, Theme, Value};
+use crate::style::ast::{
+    Border, ClassRule, Color, Gradient, Property, State, Stylesheet, Theme, Value,
+};
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser { source, pos: 0 };
@@ -29,6 +31,7 @@ impl Parser<'_> {
     fn class_rule(&mut self) -> Result<ClassRule, Error> {
         self.expect('.')?;
         let class = self.ident()?;
+        let state = self.state()?;
         self.expect('{')?;
         let mut properties = Vec::new();
         loop {
@@ -36,12 +39,36 @@ impl Parser<'_> {
             match self.peek() {
                 Some('}') => {
                     self.bump();
-                    return Ok(ClassRule { class, properties });
+                    return Ok(ClassRule {
+                        class,
+                        state,
+                        properties,
+                    });
                 }
                 None => return Err(self.error("expected '}'")),
                 _ => properties.push(self.property()?),
             }
         }
+    }
+
+    fn state(&mut self) -> Result<Option<State>, Error> {
+        self.skip_trivia();
+        if self.peek() != Some(':') {
+            return Ok(None);
+        }
+        self.bump();
+        self.skip_trivia();
+        let start = self.pos;
+        let name = self.ident()?;
+        let state = match name.as_str() {
+            "hover" => State::Hover,
+            "pressed" => State::Pressed,
+            "checked" => State::Checked,
+            "selected" => State::Selected,
+            "disabled" => State::Disabled,
+            _ => return Err(Error::at(self.source, start, "unknown state")),
+        };
+        Ok(Some(state))
     }
 
     fn theme(&mut self) -> Result<Theme, Error> {

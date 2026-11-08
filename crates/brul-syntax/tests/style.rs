@@ -1,5 +1,5 @@
 use brul_syntax::style::{
-    Border, ClassRule, Color, Gradient, Property, Stylesheet, Theme, Value, parse_file,
+    Border, ClassRule, Color, Gradient, Property, State, Stylesheet, Theme, Value, parse_file,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -12,7 +12,16 @@ fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
 fn rule(class: &str, properties: Vec<Property>) -> ClassRule {
     ClassRule {
         class: class.to_owned(),
+        state: None,
         properties,
+    }
+}
+
+fn state_rule(class: &str, state: State) -> ClassRule {
+    ClassRule {
+        class: class.to_owned(),
+        state: Some(state),
+        properties: Vec::new(),
     }
 }
 
@@ -235,6 +244,27 @@ fn border_shortcut_parses() {
 }
 
 #[test]
+fn class_states_parse() {
+    let source = "\
+.a:hover { }
+.b:pressed { }
+.c:checked { }
+.d:selected { }
+.e:disabled { }
+";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![
+            state_rule("a", State::Hover),
+            state_rule("b", State::Pressed),
+            state_rule("c", State::Checked),
+            state_rule("d", State::Selected),
+            state_rule("e", State::Disabled),
+        ])
+    );
+}
+
+#[test]
 fn errors_point_at_the_source() {
     let sources = [
         ("a { }", "expected '.'", 1, 1),
@@ -295,6 +325,8 @@ fn errors_point_at_the_source() {
             1,
             25,
         ),
+        (".a:hovered { }", "unknown state", 1, 4),
+        (".a: { }", "expected name", 1, 5),
         (".a { b: 4px theme.x; }", "expected color", 1, 13),
         (".a { b: 4px 5px; }", "expected ';'", 1, 13),
     ];

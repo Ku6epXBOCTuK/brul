@@ -13,7 +13,17 @@ pub struct Theme {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassRule {
     pub class: String,
+    pub state: Option<State>,
     pub properties: Vec<Property>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    Hover,
+    Pressed,
+    Checked,
+    Selected,
+    Disabled,
 }
 
 #[derive(Debug, Clone, PartialEq)]
