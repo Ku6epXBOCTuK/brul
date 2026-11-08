@@ -27,6 +27,7 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
         }
     }
     validate::themes(source, &themes, &theme_positions)?;
+    validate::refs(source, &themes, &rules, &positions)?;
     validate::states(source, &rules, &positions)?;
     Ok(Stylesheet { themes, rules })
 }
@@ -130,7 +131,7 @@ impl<'a> Parser<'a> {
             )
         })?;
         self.cursor.expect(':')?;
-        let value = if spec.themeable && self.cursor.eat_keyword("theme") {
+        let value = if spec.theme_type().is_some() && self.cursor.eat_keyword("theme") {
             self.cursor.expect('.')?;
             Value::ThemeRef(self.cursor.ident()?)
         } else {
@@ -150,7 +151,7 @@ impl<'a> Parser<'a> {
         let at = self.cursor.value_start();
         let name = self.cursor.ident()?;
         self.cursor.expect(':')?;
-        let value = Type::Any.parse(&mut self.cursor, "")?;
+        let value = Type::ThemeKey.parse(&mut self.cursor, &name)?;
         self.cursor.expect(';')?;
         Ok((
             Property {

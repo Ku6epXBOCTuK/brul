@@ -144,10 +144,12 @@ fn themes_and_refs_parse() {
 theme light {
     accent: #3b82f6;
     radius: 12px;
+    text-main: #0f172a;
 }
 theme dark {
     accent: #3b82f6;
     radius: 12px;
+    text-main: #0f172a;
 }
 .a { background: theme.accent; color: theme.text-main; }
 "#;
@@ -161,6 +163,7 @@ theme dark {
                     properties: vec![
                         property("accent", accent.clone()),
                         property("radius", Value::Px(12.0)),
+                        property("text-main", Value::Color(Color::rgb(0x0f, 0x17, 0x2a))),
                     ],
                 },
                 Theme {
@@ -168,6 +171,7 @@ theme dark {
                     properties: vec![
                         property("accent", accent),
                         property("radius", Value::Px(12.0)),
+                        property("text-main", Value::Color(Color::rgb(0x0f, 0x17, 0x2a))),
                     ],
                 },
             ],
@@ -461,6 +465,42 @@ fn errors_point_at_the_source() {
             "duplicate theme 'light'",
             2,
             7,
+        ),
+        (
+            "theme light { accent: 4; }",
+            "expected color or px for theme key 'accent'",
+            1,
+            23,
+        ),
+        (
+            "theme light { accent: #fff; accent: #000; }",
+            "duplicate theme key 'accent'",
+            1,
+            29,
+        ),
+        (
+            "theme light { accent: #fff; }\n.a { width: theme.accent; }",
+            "theme key 'accent' is a color, but 'width' expects a px length",
+            2,
+            6,
+        ),
+        (
+            "theme light { radius: 4px; }\n.a { background: theme.radius; }",
+            "theme key 'radius' is a px length, but 'background' expects a color",
+            2,
+            6,
+        ),
+        (
+            "theme light { accent: #fff; }\n.a { color: theme.muted; }",
+            "unknown theme key 'muted'",
+            2,
+            6,
+        ),
+        (
+            ".a { stretch: theme.x; }",
+            "expected number for 'stretch'",
+            1,
+            15,
         ),
     ];
     for (source, message, line, column) in sources {

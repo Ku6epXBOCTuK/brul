@@ -4,7 +4,7 @@ use crate::style::cursor::Cursor;
 
 #[derive(Clone, Copy)]
 pub enum Type {
-    Any,
+    ThemeKey,
     Number,
     Px,
     Length,
@@ -20,7 +20,7 @@ pub enum Type {
 impl Type {
     pub fn parse(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
         match self {
-            Type::Any => any(cursor),
+            Type::ThemeKey => theme_key(cursor, name),
             Type::Number => number(cursor, &expected(name, "number")).map(Value::Number),
             Type::Px => px(cursor, name).map(Value::Px),
             Type::Length => length(cursor, name),
@@ -58,11 +58,7 @@ impl Type {
 }
 
 fn expected(name: &str, what: &str) -> String {
-    if name.is_empty() {
-        format!("expected {what}")
-    } else {
-        format!("expected {what} for '{name}'")
-    }
+    format!("expected {what} for '{name}'")
 }
 
 fn number(cursor: &mut Cursor, message: &str) -> Result<f64, Error> {
@@ -253,54 +249,33 @@ fn list(values: &[f64]) -> String {
         .join(", ")
 }
 
-fn any(cursor: &mut Cursor) -> Result<Value, Error> {
-    let at = cursor.value_start();
+fn theme_key(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+    cursor.skip_trivia();
+    let at = cursor.pos();
+    let message = || format!("expected color or px for theme key '{name}'");
     match cursor.peek() {
-        Some(ch) if ch.is_ascii_digit() => number_or_border(cursor),
-        Some('"') => string(cursor, "").map(Value::String),
         Some('#') => hex_color(cursor).map(Value::Color),
         Some(ch) if ch.is_ascii_alphabetic() => {
-            let name = cursor.ident()?;
-            match name.as_str() {
-                "theme" => {
-                    cursor.expect('.')?;
-                    Ok(Value::ThemeRef(cursor.ident()?))
-                }
-                "linear-gradient" => gradient(cursor, "").map(Value::Gradient),
-                "transparent" => Ok(Value::Color(Color::TRANSPARENT)),
-                "white" => Ok(Value::Color(Color::WHITE)),
-                _ => Ok(Value::Keyword(name)),
+            if cursor.eat_keyword("transparent") {
+                return Ok(Value::Color(Color::TRANSPARENT));
+            }
+            if cursor.eat_keyword("white") {
+                return Ok(Value::Color(Color::WHITE));
+            }
+            Err(Error::at(cursor.source(), at, message()))
+        }
+        Some(ch) if ch.is_ascii_digit() => {
+            let value = cursor
+                .number_literal()
+                .map_err(|_| Error::at(cursor.source(), at, message()))?;
+            if cursor.eat_unit("px") {
+                Ok(Value::Px(value))
+            } else {
+                Err(Error::at(cursor.source(), at, message()))
             }
         }
-        _ => Err(Error::at(cursor.source(), at, "expected value")),
+        _ => Err(Error::at(cursor.source(), at, message())),
     }
-}
-
-fn number_or_border(cursor: &mut Cursor) -> Result<Value, Error> {
-    match number_value(cursor)? {
-        Value::Px(width) => {
-            cursor.skip_trivia();
-            if cursor.peek() == Some('#')
-                || cursor.peek().is_some_and(|ch| ch.is_ascii_alphabetic())
-            {
-                let color = color_or_theme(cursor, "")?;
-                return Ok(Value::Border(Border { width, color }));
-            }
-            Ok(Value::Px(width))
-        }
-        other => Ok(other),
-    }
-}
-
-fn number_value(cursor: &mut Cursor) -> Result<Value, Error> {
-    let value = cursor.number_literal()?;
-    if cursor.eat_unit("px") {
-        return Ok(Value::Px(value));
-    }
-    if cursor.eat('%') {
-        return Ok(Value::Percent(value));
-    }
-    Ok(Value::Number(value))
 }
 
 fn hex(ch: char) -> u8 {
