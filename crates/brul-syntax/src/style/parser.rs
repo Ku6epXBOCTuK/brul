@@ -7,6 +7,7 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser { source, pos: 0 };
     let mut themes = Vec::new();
     let mut rules = Vec::new();
+    let mut positions = Vec::new();
     loop {
         parser.skip_trivia();
         if parser.peek().is_none() {
@@ -16,9 +17,13 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
             parser.pos += "theme".len();
             themes.push(parser.theme()?);
         } else {
-            rules.push(parser.class_rule()?);
+            let index = rules.len();
+            let (rule, property_positions) = parser.class_rule()?;
+            rules.push(rule);
+            positions.push((index, property_positions));
         }
     }
+    validate_states(source, &rules, &positions)?;
     Ok(Stylesheet { themes, rules })
 }
 
@@ -28,27 +33,32 @@ struct Parser<'a> {
 }
 
 impl Parser<'_> {
-    fn class_rule(&mut self) -> Result<ClassRule, Error> {
+    fn class_rule(&mut self) -> Result<(ClassRule, Vec<(String, usize)>), Error> {
         self.expect('.')?;
         let class = self.ident()?;
         let state = self.state()?;
         self.expect('{')?;
         let mut properties = Vec::new();
+        let mut positions = Vec::new();
         loop {
             self.skip_trivia();
             match self.peek() {
                 Some('}') => {
                     self.bump();
-                    return Ok(ClassRule {
-                        class,
-                        state,
-                        properties,
-                    });
+                    return Ok((
+                        ClassRule {
+                            class,
+                            state,
+                            properties,
+                        },
+                        positions,
+                    ));
                 }
                 None => return Err(self.error("expected '}'")),
                 _ => {
                     let (property, start) = self.property_with_start()?;
                     validate(self.source, start, &property)?;
+                    positions.push((property.name.clone(), start));
                     properties.push(property);
                 }
             }
@@ -406,4 +416,54 @@ fn validate(source: &str, at: usize, property: &Property) -> Result<(), Error> {
 
 fn keyword_in(value: &Value, names: &[&str]) -> bool {
     matches!(value, Value::Keyword(keyword) if names.contains(&keyword.as_str()))
+}
+
+const VISUAL: &[&str] = &[
+    "background",
+    "border",
+    "border-color",
+    "color",
+    "text-align",
+    "vertical-align",
+    "tint",
+    "opacity",
+];
+
+fn validate_states(
+    source: &str,
+    rules: &[ClassRule],
+    positions: &[(usize, Vec<(String, usize)>)],
+) -> Result<(), Error> {
+    for (index, properties) in positions {
+        let rule = &rules[*index];
+        if rule.state.is_none() {
+            continue;
+        }
+        for (name, at) in properties {
+            if name == "font-weight" {
+                let fixed = rules.iter().any(|base| {
+                    base.state.is_none()
+                        && base.class == rule.class
+                        && base.properties.iter().any(|item| item.name == "width")
+                        && base.properties.iter().any(|item| item.name == "height")
+                });
+                if !fixed {
+                    return Err(Error::at(
+                        source,
+                        *at,
+                        "font-weight in a state needs width and height in the base class",
+                    ));
+                }
+                continue;
+            }
+            if !VISUAL.contains(&name.as_str()) {
+                return Err(Error::at(
+                    source,
+                    *at,
+                    format!("property '{name}' cannot change in a state"),
+                ));
+            }
+        }
+    }
+    Ok(())
 }

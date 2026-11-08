@@ -285,6 +285,17 @@ fn mvp_properties_accept_their_types() {
 }
 
 #[test]
+fn states_allow_only_visual_properties() {
+    let source = "\
+.badge { background: #fff; }
+.badge:hover { background: #000; border-color: theme.accent; opacity: 0.5; }
+.text { width: 40px; height: 20px; }
+.text:hover { font-weight: 700; }
+";
+    assert!(parse_file(source).is_ok());
+}
+
+#[test]
 fn errors_point_at_the_source() {
     let sources = [
         ("a { }", "expected '.'", 1, 1),
@@ -344,6 +355,30 @@ fn errors_point_at_the_source() {
             "expected number",
             1,
             25,
+        ),
+        (
+            ".a { width: 4px; } .a:hover { width: 8px; }",
+            "property 'width' cannot change in a state",
+            1,
+            31,
+        ),
+        (
+            ".a { width: 4px; } .a:hover { font-size: 12px; }",
+            "property 'font-size' cannot change in a state",
+            1,
+            31,
+        ),
+        (
+            ".a:hover { font-weight: 700; }",
+            "font-weight in a state needs width and height in the base class",
+            1,
+            12,
+        ),
+        (
+            ".a { width: 8px; } .a:hover { font-weight: 700; }",
+            "font-weight in a state needs width and height in the base class",
+            1,
+            31,
         ),
         (".a { widht: 4px; }", "unknown property 'widht'", 1, 6),
         (".a { width: red; }", "unexpected value for 'width'", 1, 6),
