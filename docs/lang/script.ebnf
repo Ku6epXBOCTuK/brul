@@ -21,7 +21,7 @@ ImportStmt   = "import" Ident "from" String ";" ;   (* только в нача�
 FunctionDecl = "function" Ident "(" [ ParamList ] ")" Block ;
 ParamList    = Ident { "," Ident } ;              (* без типов — MVP *)
 Statement    = LetStmt | IfStmt | ExprStmt | Block ;
-LetStmt      = ( "let" | "const" ) Ident [ "=" Expr ] ";" ;
+LetStmt      = "let" Ident [ "=" Expr ] ";" | "const" Ident "=" Expr ";" ;
 IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
 ExprStmt     = Expr ";" ;
 Block        = "{" { Statement } "}" ;

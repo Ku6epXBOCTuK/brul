@@ -1,8 +1,15 @@
-use brul_syntax::script::{Import, Program, parse};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr};
+use brul_syntax::script::{Import, Program, Statement, parse};
 
 #[test]
 fn empty_script_is_an_empty_program() {
-    assert_eq!(parse("").unwrap(), Program { imports: vec![] });
+    assert_eq!(
+        parse("").unwrap(),
+        Program {
+            imports: vec![],
+            statements: vec![],
+        }
+    );
 }
 
 #[test]
@@ -37,13 +44,6 @@ fn imports_parse_in_order_and_skip_comments() {
 }
 
 #[test]
-fn statement_instead_of_import_is_rejected() {
-    let error = parse("let browsers = [];").unwrap_err();
-    assert_eq!(error.message, "expected 'import'");
-    assert_eq!((error.line, error.column), (1, 1));
-}
-
-#[test]
 fn import_without_name_points_at_the_path() {
     let error = parse(r#"import "./a";"#).unwrap_err();
     assert_eq!(error.message, "expected import name");
@@ -69,4 +69,124 @@ fn import_without_semicolon_points_at_the_end() {
     let error = parse(r#"import A from "./a""#).unwrap_err();
     assert_eq!(error.message, "expected ';'");
     assert_eq!((error.line, error.column), (1, 20));
+}
+
+#[test]
+fn let_parses_name_and_value() {
+    let program = parse("let browsers = [];").unwrap();
+    assert_eq!(
+        program.statements,
+        vec![Statement::Let {
+            constant: false,
+            name: "browsers".to_owned(),
+            value: Some(Expr::Array(vec![])),
+        }]
+    );
+}
+
+#[test]
+fn let_parses_without_value() {
+    let program = parse("let limit;").unwrap();
+    assert_eq!(
+        program.statements,
+        vec![Statement::Let {
+            constant: false,
+            name: "limit".to_owned(),
+            value: None,
+        }]
+    );
+}
+
+#[test]
+fn const_parses_name_and_value() {
+    let program = parse("const limit = 10;").unwrap();
+    assert_eq!(
+        program.statements,
+        vec![Statement::Let {
+            constant: true,
+            name: "limit".to_owned(),
+            value: Some(Expr::Number(10.0)),
+        }]
+    );
+}
+
+#[test]
+fn const_without_value_is_rejected() {
+    let error = parse("const limit;").unwrap_err();
+    assert_eq!(error.message, "const requires an initializer");
+    assert_eq!((error.line, error.column), (1, 12));
+}
+
+#[test]
+fn assignment_is_an_expression_statement() {
+    let program = parse("count = count + 1;").unwrap();
+    assert_eq!(
+        program.statements,
+        vec![Statement::Expr(Expr::Assign {
+            target: Box::new(Expr::Ident("count".to_owned())),
+            op: AssignOp::Set,
+            value: Box::new(Expr::Binary {
+                op: BinaryOp::Add,
+                left: Box::new(Expr::Ident("count".to_owned())),
+                right: Box::new(Expr::Number(1.0)),
+            }),
+        })]
+    );
+}
+
+#[test]
+fn block_holds_parenthesised_statement_list() {
+    let program = parse("{ let a = 1; a; }").unwrap();
+    assert_eq!(
+        program.statements,
+        vec![Statement::Block(vec![
+            Statement::Let {
+                constant: false,
+                name: "a".to_owned(),
+                value: Some(Expr::Number(1.0)),
+            },
+            Statement::Expr(Expr::Ident("a".to_owned())),
+        ])]
+    );
+}
+
+#[test]
+fn empty_braces_at_statement_position_are_a_block() {
+    let program = parse("{}").unwrap();
+    assert_eq!(program.statements, vec![Statement::Block(vec![])]);
+}
+
+#[test]
+fn object_literal_at_statement_position_is_rejected() {
+    let error = parse(r#"{ "a": 1 };"#).unwrap_err();
+    assert_eq!(error.message, "expected ';'");
+    assert_eq!((error.line, error.column), (1, 6));
+}
+
+#[test]
+fn let_without_semicolon_points_at_the_end() {
+    let error = parse("let a = 1").unwrap_err();
+    assert_eq!(error.message, "expected ';'");
+    assert_eq!((error.line, error.column), (1, 10));
+}
+
+#[test]
+fn let_without_name_is_rejected() {
+    let error = parse("let = 1;").unwrap_err();
+    assert_eq!(error.message, "expected variable name");
+    assert_eq!((error.line, error.column), (1, 5));
+}
+
+#[test]
+fn unterminated_block_points_at_the_end() {
+    let error = parse("{ let a = 1;").unwrap_err();
+    assert_eq!(error.message, "expected '}'");
+    assert_eq!((error.line, error.column), (1, 13));
+}
+
+#[test]
+fn statements_follow_imports() {
+    let program = parse("import A from \"./a\";\nlet a = 1;").unwrap();
+    assert_eq!(program.imports.len(), 1);
+    assert_eq!(program.statements.len(), 1);
 }
