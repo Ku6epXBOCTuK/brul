@@ -218,6 +218,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "brul-script"
+version = "0.1.0"
+dependencies = [
+ "brul-syntax",
+]
+
+[[package]]
 name = "brul-syntax"
 version = "0.1.0"
 dependencies = [

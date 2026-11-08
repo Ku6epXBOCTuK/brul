@@ -18,6 +18,7 @@ non_ascii_literal = "deny"
 [workspace.dependencies]
 brul-gui = { path = 'crates\brul-gui' }
 brul-reactive = { path = 'crates\brul-reactive' }
+brul-syntax = { path = 'crates\brul-syntax' }
 cosmic-text = "0.19.0"
 criterion = { version = "0.8.2", default-features = false }
 image = { version = "0.25.10", default-features = false }
