@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::style::ast::{ClassRule, Property, Stylesheet, Value};
+use crate::style::ast::{ClassRule, Color, Property, Stylesheet, Value};
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser { source, pos: 0 };
@@ -51,9 +51,56 @@ impl Parser<'_> {
         match self.peek() {
             Some(ch) if ch.is_ascii_digit() => self.number(),
             Some('"') => self.string(),
-            Some(ch) if ch.is_ascii_alphabetic() => Ok(Value::Keyword(self.ident()?)),
+            Some('#') => self.color(),
+            Some(ch) if ch.is_ascii_alphabetic() => {
+                let name = self.ident()?;
+                match name.as_str() {
+                    "transparent" => Ok(Value::Color(Color::TRANSPARENT)),
+                    "white" => Ok(Value::Color(Color::WHITE)),
+                    _ => Ok(Value::Keyword(name)),
+                }
+            }
             _ => Err(self.error("expected value")),
         }
+    }
+
+    fn color(&mut self) -> Result<Value, Error> {
+        let start = self.pos;
+        self.bump();
+        let digits_start = self.pos;
+        while self.peek().is_some_and(|ch| ch.is_ascii_hexdigit()) {
+            self.bump();
+        }
+        let digits = &self.source[digits_start..self.pos];
+        let mut channels = [0u8; 4];
+        let color = match digits.len() {
+            3 => {
+                for (index, ch) in digits.chars().enumerate() {
+                    let value = hex(ch);
+                    channels[index] = value * 17;
+                }
+                Color::rgb(channels[0], channels[1], channels[2])
+            }
+            6 | 8 => {
+                for (index, pair) in digits.as_bytes().chunks(2).enumerate() {
+                    let value = hex(pair[0] as char) * 16 + hex(pair[1] as char);
+                    channels[index] = value;
+                }
+                if digits.len() == 6 {
+                    Color::rgb(channels[0], channels[1], channels[2])
+                } else {
+                    Color::rgba(channels[0], channels[1], channels[2], channels[3])
+                }
+            }
+            _ => {
+                return Err(Error::at(
+                    self.source,
+                    start,
+                    "expected 3, 6 or 8 hex digits",
+                ));
+            }
+        };
+        Ok(Value::Color(color))
     }
 
     fn number(&mut self) -> Result<Value, Error> {
@@ -167,4 +214,8 @@ impl Parser<'_> {
     fn error(&self, message: impl Into<String>) -> Error {
         Error::at(self.source, self.pos, message)
     }
+}
+
+fn hex(ch: char) -> u8 {
+    ch.to_digit(16).expect("parser accepts only hex digits") as u8
 }

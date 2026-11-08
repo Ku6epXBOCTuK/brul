@@ -1,4 +1,4 @@
-use brul_syntax::style::{ClassRule, Property, Stylesheet, Value, parse_file};
+use brul_syntax::style::{ClassRule, Color, Property, Stylesheet, Value, parse_file};
 
 fn rule(class: &str, properties: Vec<Property>) -> ClassRule {
     ClassRule {
@@ -79,7 +79,7 @@ fn properties_parse_with_values_and_order() {
                         Value::Keyword("space-between".to_owned())
                     ),
                     property("border-width", Value::Px(2.0)),
-                    property("background", Value::Keyword("transparent".to_owned())),
+                    property("background", Value::Color(Color::TRANSPARENT)),
                 ],
             )],
         }
@@ -104,6 +104,32 @@ fn comments_and_blank_lines_inside_a_rule_are_ignored() {
 }
 
 #[test]
+fn colors_parse_hex_and_keywords() {
+    let source = r#".a {
+        background: #3b82f6;
+        border-color: #fff;
+        color: #1e293b4d;
+        tint: white;
+        background: transparent;
+    }"#;
+    assert_eq!(
+        parse_file(source).unwrap(),
+        Stylesheet {
+            rules: vec![rule(
+                "a",
+                vec![
+                    property("background", Value::Color(Color::rgb(0x3b, 0x82, 0xf6))),
+                    property("border-color", Value::Color(Color::rgb(0xff, 0xff, 0xff))),
+                    property("color", Value::Color(Color::rgba(0x1e, 0x29, 0x3b, 0x4d))),
+                    property("tint", Value::Color(Color::WHITE)),
+                    property("background", Value::Color(Color::TRANSPARENT)),
+                ],
+            )],
+        }
+    );
+}
+
+#[test]
 fn errors_point_at_the_source() {
     let sources = [
         ("a { }", "expected '.'", 1, 1),
@@ -116,6 +142,25 @@ fn errors_point_at_the_source() {
         (".a { width: ; }", "expected value", 1, 13),
         (".a { width: 4em; }", "expected ';'", 1, 14),
         (".a { width: \"x; }", "unterminated string", 1, 13),
+        (".a { color: #12; }", "expected 3, 6 or 8 hex digits", 1, 13),
+        (
+            ".a { color: #12345; }",
+            "expected 3, 6 or 8 hex digits",
+            1,
+            13,
+        ),
+        (
+            ".a { color: #1234567; }",
+            "expected 3, 6 or 8 hex digits",
+            1,
+            13,
+        ),
+        (
+            ".a { color: #ggg; }",
+            "expected 3, 6 or 8 hex digits",
+            1,
+            13,
+        ),
     ];
     for (source, message, line, column) in sources {
         let error = parse_file(source).unwrap_err();
