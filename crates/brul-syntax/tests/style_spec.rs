@@ -110,10 +110,13 @@ fn opt_out_and_invalid_markers_are_honored() {
 fn malformed_examples_are_rejected() {
     let sources = [
         (".a { width 4px; }", "expected ':'"),
-        (".a { width: 4em; }", "expected ';'"),
+        (".a { width: 4em; }", "expected px or % for 'width'"),
         (".a:hovered { }", "unknown state"),
         (".a { widht: 4px; }", "unknown property 'widht'"),
-        (".a { opacity: 2; }", "unexpected value for 'opacity'"),
+        (
+            ".a { opacity: 2; }",
+            "expected number from 0 to 1 for 'opacity'",
+        ),
     ];
     for (source, message) in sources {
         let error = parse_file(source).unwrap_err();
