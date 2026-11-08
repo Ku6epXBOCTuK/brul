@@ -182,6 +182,22 @@ theme dark {
 }
 
 #[test]
+fn the_first_theme_is_the_default() {
+    let source =
+        "theme dark { accent: #000; }\ntheme light { accent: #fff; }\n.a { color: theme.accent; }";
+    let sheet = parse_file(source).unwrap();
+    assert_eq!(sheet.themes[0].name, "dark");
+    assert_eq!(sheet.themes[1].name, "light");
+}
+
+#[test]
+fn theme_keys_may_come_in_any_order() {
+    let source =
+        "theme light { accent: #fff; radius: 4px; }\ntheme dark { radius: 8px; accent: #000; }";
+    assert!(parse_file(source).is_ok());
+}
+
+#[test]
 fn gradients_parse() {
     let source = r#"
     .app-icon {
@@ -399,6 +415,30 @@ fn errors_point_at_the_source() {
         (".a: { }", "expected name", 1, 5),
         (".a { b: 4px theme.x; }", "expected color", 1, 13),
         (".a { b: 4px 5px; }", "expected ';'", 1, 13),
+        (
+            "theme light { accent: #fff; }\ntheme dark { accent: #000; radius: 4px; }",
+            "theme 'dark' has unknown key 'radius'",
+            2,
+            28,
+        ),
+        (
+            "theme light { accent: #fff; radius: 4px; }\ntheme dark { accent: #000; }",
+            "theme 'dark' is missing key 'radius'",
+            2,
+            7,
+        ),
+        (
+            "theme light { accent: #fff; }\ntheme dark { accent: 12px; }",
+            "theme 'dark' has a different type for 'accent'",
+            2,
+            14,
+        ),
+        (
+            "theme light { accent: #fff; }\ntheme light { accent: #fff; }",
+            "duplicate theme 'light'",
+            2,
+            7,
+        ),
     ];
     for (source, message, line, column) in sources {
         let error = parse_file(source).unwrap_err();

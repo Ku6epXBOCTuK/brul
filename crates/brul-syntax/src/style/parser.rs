@@ -6,6 +6,7 @@ use crate::style::ast::{
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser { source, pos: 0 };
     let mut themes = Vec::new();
+    let mut theme_positions = Vec::new();
     let mut rules = Vec::new();
     let mut positions = Vec::new();
     loop {
@@ -15,7 +16,10 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
         }
         if parser.keyword("theme") {
             parser.pos += "theme".len();
-            themes.push(parser.theme()?);
+            let index = themes.len();
+            let (theme, name_at, property_positions) = parser.theme()?;
+            themes.push(theme);
+            theme_positions.push((index, name_at, property_positions));
         } else {
             let index = rules.len();
             let (rule, property_positions) = parser.class_rule()?;
@@ -23,9 +27,13 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
             positions.push((index, property_positions));
         }
     }
+    validate_themes(source, &themes, &theme_positions)?;
     validate_states(source, &rules, &positions)?;
     Ok(Stylesheet { themes, rules })
 }
+
+type PropertyPositions = Vec<(String, usize)>;
+type ThemeInfo = (usize, usize, PropertyPositions);
 
 struct Parser<'a> {
     source: &'a str,
@@ -85,25 +93,28 @@ impl Parser<'_> {
         Ok(Some(state))
     }
 
-    fn theme(&mut self) -> Result<Theme, Error> {
+    fn theme(&mut self) -> Result<(Theme, usize, PropertyPositions), Error> {
+        self.skip_trivia();
+        let name_at = self.pos;
         let name = self.ident()?;
         self.expect('{')?;
         let mut properties = Vec::new();
+        let mut positions = Vec::new();
         loop {
             self.skip_trivia();
             match self.peek() {
                 Some('}') => {
                     self.bump();
-                    return Ok(Theme { name, properties });
+                    return Ok((Theme { name, properties }, name_at, positions));
                 }
                 None => return Err(self.error("expected '}'")),
-                _ => properties.push(self.property()?),
+                _ => {
+                    let (property, start) = self.property_with_start()?;
+                    positions.push((property.name.clone(), start));
+                    properties.push(property);
+                }
             }
         }
-    }
-
-    fn property(&mut self) -> Result<Property, Error> {
-        Ok(self.property_with_start()?.0)
     }
 
     fn property_with_start(&mut self) -> Result<(Property, usize), Error> {
@@ -416,6 +427,70 @@ fn validate(source: &str, at: usize, property: &Property) -> Result<(), Error> {
 
 fn keyword_in(value: &Value, names: &[&str]) -> bool {
     matches!(value, Value::Keyword(keyword) if names.contains(&keyword.as_str()))
+}
+
+fn same_type(left: &Value, right: &Value) -> bool {
+    matches!(
+        (left, right),
+        (Value::Number(_), Value::Number(_))
+            | (Value::Px(_), Value::Px(_))
+            | (Value::Percent(_), Value::Percent(_))
+            | (Value::String(_), Value::String(_))
+            | (Value::Keyword(_), Value::Keyword(_))
+            | (Value::Color(_), Value::Color(_))
+            | (Value::ThemeRef(_), Value::ThemeRef(_))
+            | (Value::Gradient(_), Value::Gradient(_))
+            | (Value::Border(_), Value::Border(_))
+    )
+}
+
+fn validate_themes(source: &str, themes: &[Theme], positions: &[ThemeInfo]) -> Result<(), Error> {
+    let Some((first_index, _, _)) = positions.first() else {
+        return Ok(());
+    };
+    let first = &themes[*first_index];
+    for (index, name_at, properties) in positions.iter().skip(1) {
+        let theme = &themes[*index];
+        if themes[..*index]
+            .iter()
+            .any(|other| other.name == theme.name)
+        {
+            return Err(Error::at(
+                source,
+                *name_at,
+                format!("duplicate theme '{}'", theme.name),
+            ));
+        }
+        for ((name, at), property) in properties.iter().zip(&theme.properties) {
+            match first.properties.iter().find(|item| item.name == *name) {
+                None => {
+                    return Err(Error::at(
+                        source,
+                        *at,
+                        format!("theme '{}' has unknown key '{}'", theme.name, name),
+                    ));
+                }
+                Some(base) if !same_type(&base.value, &property.value) => {
+                    return Err(Error::at(
+                        source,
+                        *at,
+                        format!("theme '{}' has a different type for '{}'", theme.name, name),
+                    ));
+                }
+                Some(_) => {}
+            }
+        }
+        for base in &first.properties {
+            if !properties.iter().any(|(name, _)| *name == base.name) {
+                return Err(Error::at(
+                    source,
+                    *name_at,
+                    format!("theme '{}' is missing key '{}'", theme.name, base.name),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 const VISUAL: &[&str] = &[
