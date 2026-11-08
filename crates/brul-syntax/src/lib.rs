@@ -5,5 +5,6 @@ pub mod error;
 pub mod lexer;
 pub mod markup;
 pub mod parser;
+pub mod script;
 pub mod sfc;
 pub mod style;
