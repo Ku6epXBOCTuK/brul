@@ -797,4 +797,272 @@ mod tests {
         let ids: Vec<WidgetId> = children.iter().map(Widget::id).collect();
         assert_eq!(ids, vec![second_id, first_id]);
     }
+
+    fn declared(name: &str, value: Value) -> ComponentHandle {
+        let mut component = Component::new();
+        component.declare(name, value, false).expect("declared");
+        Rc::new(RefCell::new(component))
+    }
+
+    #[test]
+    fn handler_target_names_the_widget_of_a_pointer_event() {
+        let id = Widget::text("x").id();
+        let cases = [
+            (WidgetEvent::Click(id), HandlerEvent::Click),
+            (WidgetEvent::Press(id), HandlerEvent::Press),
+            (WidgetEvent::Release(id), HandlerEvent::Release),
+            (WidgetEvent::PointerEnter(id), HandlerEvent::Enter),
+            (WidgetEvent::PointerLeave(id), HandlerEvent::Leave),
+        ];
+        for (event, expected) in cases {
+            assert_eq!(handler_target(&event), Some((Some(id), expected)));
+        }
+    }
+
+    #[test]
+    fn handler_target_leaves_out_the_widget_for_keys_and_ignores_drag_and_timer() {
+        assert_eq!(
+            handler_target(&WidgetEvent::Key("Escape".to_owned())),
+            Some((None, HandlerEvent::Key))
+        );
+        let id = Widget::text("x").id();
+        assert_eq!(handler_target(&WidgetEvent::Drag(id)), None);
+        assert_eq!(handler_target(&WidgetEvent::Timer("tick".to_owned())), None);
+    }
+
+    fn prop(
+        component: &ComponentHandle,
+        target: &ComponentHandle,
+        name: &str,
+        ty: PropType,
+        expression: Expr,
+    ) -> PropBinding {
+        PropBinding {
+            widget: Widget::text("").id(),
+            target: Rc::clone(target),
+            name: name.to_owned(),
+            ty,
+            expression,
+            scopes: Vec::new(),
+            component: Rc::clone(component),
+        }
+    }
+
+    fn child_with_property(name: &str, value: Value) -> ComponentHandle {
+        let mut component = Component::new();
+        component
+            .declare_property(name, value)
+            .expect("declared property");
+        Rc::new(RefCell::new(component))
+    }
+
+    #[test]
+    fn a_prop_binding_writes_the_property_of_the_child() {
+        let source = declared("colour", Value::String("red".to_owned()));
+        let target = child_with_property("accent", Value::String("blue".to_owned()));
+        apply_prop(&prop(
+            &source,
+            &target,
+            "accent",
+            PropType::String,
+            ident("colour"),
+        ));
+        assert_eq!(
+            target.borrow().read("accent").expect("read back"),
+            Value::String("red".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_prop_binding_skips_a_value_of_the_wrong_type() {
+        let source = declared("colour", Value::String("red".to_owned()));
+        let target = child_with_property("accent", Value::String("blue".to_owned()));
+        apply_prop(&prop(
+            &source,
+            &target,
+            "accent",
+            PropType::Bool,
+            ident("colour"),
+        ));
+        assert_eq!(
+            target.borrow().read("accent").expect("read back"),
+            Value::String("blue".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_prop_binding_survives_an_unknown_property() {
+        let source = declared("colour", Value::String("red".to_owned()));
+        let target = child_with_property("accent", Value::String("blue".to_owned()));
+        apply_prop(&prop(
+            &source,
+            &target,
+            "missing",
+            PropType::String,
+            ident("colour"),
+        ));
+        assert!(target.borrow().read("missing").is_err());
+    }
+
+    #[test]
+    fn an_absent_offset_is_zero() {
+        let component = Component::new();
+        assert_eq!(offset(&Rc::new(RefCell::new(component)), None), Some(0));
+    }
+
+    #[test]
+    fn an_offset_needs_a_whole_number_in_range() {
+        let mut component = Component::new();
+        for (name, value) in [
+            ("whole", Value::Number(4.0)),
+            ("fraction", Value::Number(2.5)),
+            ("nan", Value::Number(f64::NAN)),
+            ("huge", Value::Number(3_000_000_000.0)),
+            ("text", Value::String("4".to_owned())),
+        ] {
+            component.declare(name, value, false).expect("declared");
+        }
+        let component = Rc::new(RefCell::new(component));
+        assert_eq!(offset(&component, Some(&ident("whole"))), Some(4));
+        assert_eq!(offset(&component, Some(&ident("fraction"))), None);
+        assert_eq!(offset(&component, Some(&ident("nan"))), None);
+        assert_eq!(offset(&component, Some(&ident("huge"))), None);
+        assert_eq!(offset(&component, Some(&ident("text"))), None);
+        assert_eq!(offset(&component, Some(&ident("missing"))), None);
+    }
+
+    fn command_host(
+        app: Option<Box<dyn Host>>,
+    ) -> (CommandHost, Rc<RefCell<Vec<window::WindowCommand>>>) {
+        let commands = Rc::new(RefCell::new(Vec::new()));
+        (
+            CommandHost {
+                commands: Rc::clone(&commands),
+                app,
+            },
+            commands,
+        )
+    }
+
+    struct Recorder {
+        calls: Rc<RefCell<Vec<String>>>,
+    }
+
+    impl Host for Recorder {
+        fn call(&mut self, name: &str, _arguments: &[Value]) -> Result<Value, Error> {
+            self.calls.borrow_mut().push(name.to_owned());
+            Ok(Value::Null)
+        }
+
+        fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
+            self.calls
+                .borrow_mut()
+                .push(format!("{function}@{interval_ms}"));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn set_theme_takes_exactly_one_string() {
+        let (mut host, commands) = command_host(None);
+        assert_eq!(
+            host.call("set_theme", &[]),
+            Err(Error::Arity {
+                name: "set_theme".to_owned(),
+                expected: "one",
+            })
+        );
+        assert_eq!(
+            host.call("set_theme", &[Value::Number(1.0)]),
+            Err(Error::Argument {
+                name: "set_theme",
+                expected: "String",
+                found: "Number",
+            })
+        );
+        assert_eq!(
+            host.call("set_theme", &[Value::String("dark".to_owned())]),
+            Ok(Value::Null)
+        );
+        assert_eq!(
+            *commands.borrow(),
+            vec![window::WindowCommand::SetTheme("dark".to_owned())]
+        );
+    }
+
+    #[test]
+    fn the_builtin_commands_take_no_arguments() {
+        let (mut host, commands) = command_host(None);
+        assert_eq!(host.call("exit", &[]), Ok(Value::Null));
+        assert_eq!(host.call("dragWindow", &[]), Ok(Value::Null));
+        assert_eq!(
+            host.call("exit", &[Value::Number(1.0)]),
+            Err(Error::Arity {
+                name: "exit".to_owned(),
+                expected: "no",
+            })
+        );
+        assert_eq!(
+            *commands.borrow(),
+            vec![window::WindowCommand::Exit, window::WindowCommand::Drag]
+        );
+    }
+
+    #[test]
+    fn an_unknown_command_without_a_host_is_an_error() {
+        let (mut host, _commands) = command_host(None);
+        assert_eq!(
+            host.call("theme", &[]),
+            Err(Error::UnknownFunction("theme".to_owned()))
+        );
+        assert_eq!(host.every(16.0, "tick"), Err(Error::Unsupported("every")));
+    }
+
+    #[test]
+    fn commands_and_timers_reach_the_application_host() {
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        let recorder = Recorder {
+            calls: Rc::clone(&calls),
+        };
+        let (mut host, _commands) = command_host(Some(Box::new(recorder)));
+        assert_eq!(host.call("theme", &[]), Ok(Value::Null));
+        assert_eq!(host.every(16.0, "tick"), Ok(()));
+        assert_eq!(
+            *calls.borrow(),
+            vec!["theme".to_owned(), "tick@16".to_owned()]
+        );
+    }
+
+    fn themed_view(theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, String> {
+        Ok(Built {
+            widget: Widget::text(theme.unwrap_or("none")),
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            structures: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn a_theme_change_rebuilds_the_view() {
+        let (component, built) = generated_built(themed_view, None, &[], None).expect("launch");
+        let mut ui = Ui::assemble(component, built, themed_view, None, None);
+        ui.set_theme("dark").expect("theme changes");
+        assert_eq!(ui.theme.as_deref(), Some("dark"));
+    }
+
+    #[test]
+    fn a_failed_theme_change_keeps_the_previous_theme() {
+        let (component, built) = generated_built(generated_view, None, &[], None).expect("launch");
+        let mut ui = Ui::assemble(
+            component,
+            built,
+            generated_view,
+            Some("light".to_owned()),
+            None,
+        );
+        ui.set_theme("light").expect("same theme is a no-op");
+        assert!(ui.set_theme("dark").is_err());
+        assert_eq!(ui.theme.as_deref(), Some("light"));
+    }
 }
