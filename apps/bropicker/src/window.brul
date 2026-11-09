@@ -2,6 +2,11 @@
     import Badge from "./badge.brul";
 </use>
 
+<script>
+    function handleBump() {
+    }
+</script>
+
 <markup>
     window Bropicker (
         title: "bropicker",
@@ -19,7 +24,7 @@
             each (browsers as browser) {
                 Text { browser }
             }
-            Badge (label: "badge") { }
+            Badge (label: "badge", on bumped: handleBump) { }
         }
     }
 </markup>

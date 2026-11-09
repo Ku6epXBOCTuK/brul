@@ -546,6 +546,62 @@ fn rejects_component_properties() {
 }
 
 #[test]
+fn emits_component_events() {
+    let dir = scratch(
+        "events",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    event clicked(i: Number)\n    Text { \"badge\" }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<script>\n    function launch() {\n    }\n</script>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge (on clicked: launch) { }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(module.contains(
+        "brul::ComponentEvent { name: \"clicked\", function: \"launch\", params: &[brul::PropType::Number], component: std::rc::Rc::clone(component) },"
+    ));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn rejects_component_events() {
+    let cases = [
+        (
+            "Badge (on nope: launch) { }",
+            "component 'Badge' has no event 'nope'",
+        ),
+        (
+            "Badge (on clicked: missing) { }",
+            "function 'missing' is not defined",
+        ),
+    ];
+    for (markup, expected) in cases {
+        let dir = scratch(
+            "events-error",
+            &[
+                (
+                    "badge.brul",
+                    "<markup>\ncomponent Badge {\n    event clicked(i: Number)\n    Text { \"badge\" }\n}\n</markup>\n",
+                ),
+                (
+                    "window.brul",
+                    &format!(
+                        "<script>\n    function launch() {{\n    }}\n</script>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {{\n    Column {{\n        {markup}\n    }}\n}}\n</markup>\n"
+                    ),
+                ),
+            ],
+        );
+        let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+        assert_eq!(error.message, expected);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
+
+#[test]
 fn rejects_component_children() {
     let dir = scratch(
         "children",

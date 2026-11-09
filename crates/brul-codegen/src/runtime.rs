@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use brul_gui::{Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Value, Variable, eval, execute_program};
+use brul_script::{Component, Error as ScriptError, Host, Value, Variable, eval, execute_program};
 use brul_syntax::ast::Expr;
 use brul_syntax::markup::PropType;
 use brul_syntax::script::Program;
@@ -165,10 +165,64 @@ pub struct Instance<'a> {
     pub name: &'static str,
     pub props: &'a [PropArgument],
     pub defaults: &'a [PropArgument],
+    pub events: &'a [ComponentEvent],
+}
+
+pub struct ComponentEvent {
+    pub name: &'static str,
+    pub function: &'static str,
+    pub params: &'static [PropType],
+    pub component: ComponentHandle,
+}
+
+struct EventHost {
+    events: Vec<ComponentEvent>,
+}
+
+impl Host for EventHost {
+    fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, ScriptError> {
+        let Some(event) = self.events.iter().find(|event| event.name == name) else {
+            return Err(ScriptError::UnknownFunction(name.to_owned()));
+        };
+        if event.params.len() != arguments.len() {
+            return Err(ScriptError::FunctionArity {
+                name: event.name.to_owned(),
+                expected: event.params.len(),
+                found: arguments.len(),
+            });
+        }
+        for (ty, value) in event.params.iter().zip(arguments) {
+            if !accepts_prop(value, *ty) {
+                return Err(ScriptError::EventArgument {
+                    name: event.name.to_owned(),
+                    expected: prop_name(*ty),
+                    found: value.type_name(),
+                });
+            }
+        }
+        let component = Rc::clone(&event.component);
+        component
+            .borrow_mut()
+            .call_function(event.function, arguments.to_vec())
+    }
 }
 
 pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Built, String> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    if !instance.events.is_empty() {
+        component.borrow_mut().set_host(EventHost {
+            events: instance
+                .events
+                .iter()
+                .map(|event| ComponentEvent {
+                    name: event.name,
+                    function: event.function,
+                    params: event.params,
+                    component: Rc::clone(&event.component),
+                })
+                .collect(),
+        });
+    }
     if let Some(program) = instance.script {
         execute_program(&mut component.borrow_mut(), program).map_err(|error| error.reason())?;
     }

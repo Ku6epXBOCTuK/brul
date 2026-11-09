@@ -4,15 +4,15 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
-use brul_compiler::{Handler, accepts_prop};
+use brul_compiler::accepts_prop;
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, eval, execute_program};
 use brul_syntax::ast::Expr;
 
 pub use brul_compiler::{
-    Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, Instance, PropArgument,
-    PropBinding, Rebuilt, RowInfo, Structure, View, instance,
+    Binding, BindingTarget, Built, ComponentEvent, ComponentHandle, Handler, HandlerEvent,
+    Instance, PropArgument, PropBinding, Rebuilt, RowInfo, Structure, View, instance,
 };
 pub use brul_gui::window::WindowConfig;
 pub use brul_script::{Error, Host, Value, Variable};

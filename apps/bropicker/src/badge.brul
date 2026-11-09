@@ -1,6 +1,14 @@
+<script>
+    function bump() {
+        bumped();
+    }
+</script>
+
 <markup>
     component Badge {
         prop label: String = "badge"
-        Text { label }
+        event bumped()
+
+        Text (on click: bump) { label }
     }
 </markup>

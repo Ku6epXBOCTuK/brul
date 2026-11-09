@@ -7,7 +7,7 @@ use brul_syntax::markup::{Arg, Element, Member, PropType};
 use crate::error_at;
 
 use super::Emit;
-use super::expression;
+use super::{events, expression};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn component(
@@ -35,13 +35,40 @@ pub(super) fn component(
     }
     let mut given: Vec<&str> = Vec::new();
     let mut props: Vec<(&str, PropType, &Expr)> = Vec::new();
+    let mut events: Vec<(&str, &str, Vec<PropType>)> = Vec::new();
     for arg in &element.args {
         match arg {
             Arg::Class(_) => {}
-            Arg::Handler { .. } => {
-                return Err(error_at(
-                    element.position,
-                    "component events are not generated yet",
+            Arg::Handler { event, handler } => {
+                if events
+                    .iter()
+                    .any(|item: &(&str, &str, Vec<PropType>)| item.0 == event.as_str())
+                {
+                    return Err(error_at(
+                        element.position,
+                        format!("event '{event}' is handled twice"),
+                    ));
+                }
+                let Some(declaration) =
+                    definition
+                        .component
+                        .members
+                        .iter()
+                        .find_map(|member| match member {
+                            Member::Event(item) if item.name == *event => Some(item),
+                            _ => None,
+                        })
+                else {
+                    return Err(error_at(
+                        element.position,
+                        format!("component '{name}' has no event '{event}'"),
+                    ));
+                };
+                events::define(handler, emit.program, element.position)?;
+                events.push((
+                    event.as_str(),
+                    handler.as_str(),
+                    declaration.params.iter().map(|param| param.ty).collect(),
                 ));
             }
             Arg::Named {
@@ -115,6 +142,19 @@ pub(super) fn component(
     let _ = writeln!(out, "{inner}    name: {name:?},");
     arguments(out, "props", &props, &inner);
     arguments(out, "defaults", &defaults, &inner);
+    let _ = writeln!(out, "{inner}    events: &[");
+    for (event, handler, params) in &events {
+        let params = params
+            .iter()
+            .map(|ty| format!("brul::PropType::{ty:?}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(
+            out,
+            "{inner}        brul::ComponentEvent {{ name: {event:?}, function: {handler:?}, params: &[{params}], component: std::rc::Rc::clone(component) }},"
+        );
+    }
+    let _ = writeln!(out, "{inner}    ],");
     let _ = writeln!(out, "{inner}}})?;");
     for field in ["bindings", "handlers", "structures", "props"] {
         let _ = writeln!(out, "{inner}{field}.extend(built.{field});");

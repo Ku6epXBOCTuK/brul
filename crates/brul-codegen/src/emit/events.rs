@@ -89,7 +89,11 @@ pub(super) fn window(
     Ok(handlers)
 }
 
-fn define(name: &str, program: Option<&Program>, position: Position) -> Result<(), Error> {
+pub(super) fn define(
+    name: &str,
+    program: Option<&Program>,
+    position: Position,
+) -> Result<(), Error> {
     let declared = program.is_some_and(|program| {
         program
             .functions

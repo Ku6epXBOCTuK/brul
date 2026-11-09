@@ -4,8 +4,8 @@ pub mod tree;
 pub mod window;
 
 pub use brul_codegen::runtime::{
-    Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, Instance,
-    PropArgument, PropBinding, Rebuilt, RowInfo, Structure, View, accepts_prop, instance,
+    Binding, BindingTarget, Built, ComponentEvent, ComponentHandle, Context, Handler, HandlerEvent,
+    Instance, PropArgument, PropBinding, Rebuilt, RowInfo, Structure, View, accepts_prop, instance,
 };
 pub use brul_codegen::styles;
 pub use brul_codegen::{Definition, Import, Registry};
