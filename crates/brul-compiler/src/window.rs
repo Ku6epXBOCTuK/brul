@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use brul_gui::Widget;
 use brul_gui::window::WindowConfig;
 use brul_script::{Component, execute_program};
@@ -10,7 +13,7 @@ use brul_syntax::style::{self, Stylesheet};
 use brul_syntax::uses::{self, Use};
 
 use crate::build_bound_tree;
-use crate::tree::{Binding, Handler, HandlerEvent, Structure, script_error};
+use crate::tree::{Binding, ComponentHandle, Handler, HandlerEvent, Structure, script_error};
 
 pub struct Loaded {
     pub config: WindowConfig,
@@ -18,7 +21,7 @@ pub struct Loaded {
     pub structures: Vec<Structure>,
     pub bindings: Vec<Binding>,
     pub handlers: Vec<Handler>,
-    pub component: Component,
+    pub component: ComponentHandle,
     pub uses: Vec<Use>,
     pub program: Option<Program>,
     pub root: Element,
@@ -59,14 +62,14 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
         None => None,
     };
 
-    let mut component = Component::new();
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
     if let Some(program) = &program {
-        execute_program(&mut component, program).map_err(script_error)?;
+        execute_program(&mut component.borrow_mut(), program).map_err(script_error)?;
     }
 
     let root = root(&window)?.to_owned();
     let (config, window_handlers) = config(&window, &component)?;
-    let mut built = build_bound_tree(&root, &stylesheet, theme, &mut component)?;
+    let mut built = build_bound_tree(&root, &stylesheet, theme, &component)?;
     built.handlers.extend(window_handlers);
 
     Ok(Loaded {
@@ -84,7 +87,10 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
     })
 }
 
-fn config(window: &Window, component: &Component) -> Result<(WindowConfig, Vec<Handler>), Error> {
+fn config(
+    window: &Window,
+    component: &ComponentHandle,
+) -> Result<(WindowConfig, Vec<Handler>), Error> {
     let mut config = WindowConfig::default();
     let mut handlers = Vec::new();
     for arg in &window.args {
@@ -121,7 +127,7 @@ fn config(window: &Window, component: &Component) -> Result<(WindowConfig, Vec<H
                         format!("event '{}' is handled twice", parsed.name()),
                     ));
                 }
-                if !component.has_function(handler) {
+                if !component.borrow().has_function(handler) {
                     return Err(error_at(
                         window.position,
                         format!("function '{handler}' is not defined"),
@@ -131,6 +137,7 @@ fn config(window: &Window, component: &Component) -> Result<(WindowConfig, Vec<H
                     widget: None,
                     event: parsed,
                     function: handler.clone(),
+                    component: Rc::clone(component),
                 });
             }
             Arg::Class(_) => {

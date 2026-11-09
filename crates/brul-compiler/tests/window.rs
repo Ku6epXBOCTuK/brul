@@ -79,7 +79,10 @@ fn script_block_is_parsed_into_a_program() {
 fn script_runs_once_at_load() {
     let loaded = load(PICKER, None).expect("app loads");
 
-    assert_eq!(loaded.component.read("count"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        loaded.component.borrow().read("count"),
+        Ok(Value::Number(0.0))
+    );
 }
 
 #[test]

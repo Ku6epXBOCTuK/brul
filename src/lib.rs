@@ -5,8 +5,8 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use brul_compiler::{
-    Binding, BindingTarget, Built, Handler, HandlerEvent, Loaded, RowInfo, Structure,
-    StructureKind, build_bound_tree, rebuild_structure,
+    Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, Loaded, RowInfo,
+    Structure, StructureKind, build_bound_tree, rebuild_structure,
 };
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
@@ -16,7 +16,7 @@ use brul_syntax::markup::Element;
 use brul_syntax::style::Stylesheet;
 
 pub struct Ui {
-    pub component: Rc<RefCell<Component>>,
+    pub component: ComponentHandle,
     pub tree: Rc<RefCell<WidgetTree>>,
     handlers: Vec<Handler>,
     window_handlers: Vec<Handler>,
@@ -83,9 +83,8 @@ impl Ui {
             theme,
             ..
         } = loaded;
-        let mut component = component;
         let commands = Rc::new(RefCell::new(Vec::new()));
-        for (interval_ms, function) in component.take_every() {
+        for (interval_ms, function) in component.borrow_mut().take_every() {
             if interval_ms.is_finite() && interval_ms > 0.0 {
                 commands.borrow_mut().push(window::WindowCommand::Every {
                     interval: Duration::from_secs_f64(interval_ms / 1000.0),
@@ -95,10 +94,9 @@ impl Ui {
                 eprintln!("every interval must be a positive number");
             }
         }
-        component.set_host(CommandHost {
+        component.borrow_mut().set_host(CommandHost {
             commands: Rc::clone(&commands),
         });
-        let component = Rc::new(RefCell::new(component));
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         let window_handlers = handlers
             .iter()
@@ -125,24 +123,20 @@ impl Ui {
     fn bind(&self, bindings: &[Binding]) {
         for binding in bindings {
             let binding = binding.clone();
-            let component = Rc::clone(&self.component);
             let tree = Rc::clone(&self.tree);
             self.scope.run(|| {
-                Effect::new(move || apply(&binding, &component, &tree));
+                Effect::new(move || apply(&binding, &binding.component, &tree));
             });
         }
     }
 
     fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
-        let built = {
-            let mut component = self.component.borrow_mut();
-            build_bound_tree(
-                &self.root,
-                &self.stylesheet,
-                self.theme.as_deref(),
-                &mut component,
-            )?
-        };
+        let built = build_bound_tree(
+            &self.root,
+            &self.stylesheet,
+            self.theme.as_deref(),
+            &self.component,
+        )?;
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
@@ -175,13 +169,13 @@ impl Ui {
             }
             let differs = match &structure.kind {
                 StructureKind::If { block, last } => {
-                    match evaluate(&self.component, &block.condition) {
+                    match evaluate(&structure.component, &block.condition) {
                         Some(Value::Bool(value)) => value != *last,
                         _ => false,
                     }
                 }
                 StructureKind::Each { block, last, .. } => {
-                    match evaluate(&self.component, &block.collection) {
+                    match evaluate(&structure.component, &block.collection) {
                         Some(Value::Array(items)) => items != *last,
                         _ => false,
                     }
@@ -191,15 +185,12 @@ impl Ui {
                 kept.push(structure);
                 continue;
             }
-            let built = {
-                let mut component = self.component.borrow_mut();
-                rebuild_structure(
-                    &structure,
-                    &self.stylesheet,
-                    self.theme.as_deref(),
-                    &mut component,
-                )
-            };
+            let built = rebuild_structure(
+                &structure,
+                &self.stylesheet,
+                self.theme.as_deref(),
+                &structure.component,
+            );
             match built {
                 Ok((built, last, new_rows)) => {
                     let Built {
@@ -276,6 +267,7 @@ impl Ui {
                 continue;
             };
             let function = handler.function.clone();
+            let component = Rc::clone(&handler.component);
             let arguments = match event {
                 WidgetEvent::Key(code) => vec![Value::Object(vec![(
                     "code".to_owned(),
@@ -283,11 +275,7 @@ impl Ui {
                 )])],
                 _ => Vec::new(),
             };
-            if let Err(error) = self
-                .component
-                .borrow_mut()
-                .call_function(&function, arguments)
-            {
+            if let Err(error) = component.borrow_mut().call_function(&function, arguments) {
                 eprintln!("{error}");
             }
         }

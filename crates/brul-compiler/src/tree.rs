@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use brul_gui::{Direction, LayoutStyle, Widget, WidgetId};
 use brul_script::{Component, Value, Variable, eval};
 use brul_syntax::ast::{Expr, Position};
@@ -7,11 +10,14 @@ use brul_syntax::style::Stylesheet;
 
 use crate::styles::{self, Resolved};
 
-#[derive(Debug, Clone)]
+pub type ComponentHandle = Rc<RefCell<Component>>;
+
+#[derive(Clone)]
 pub struct Binding {
     pub widget: WidgetId,
     pub target: BindingTarget,
     pub scopes: Vec<Vec<Variable>>,
+    pub component: ComponentHandle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,11 +58,12 @@ impl HandlerEvent {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Handler {
     pub widget: Option<WidgetId>,
     pub event: HandlerEvent,
     pub function: String,
+    pub component: ComponentHandle,
 }
 
 #[derive(Debug, Clone)]
@@ -69,12 +76,13 @@ pub enum BindingTarget {
     Offset { x: Option<Expr>, y: Option<Expr> },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Structure {
     pub parent: WidgetId,
     pub direction: Direction,
     pub spacing: u32,
     pub kind: StructureKind,
+    pub component: ComponentHandle,
 }
 
 #[derive(Debug, Clone)]
@@ -114,14 +122,20 @@ pub fn build_tree(
     theme: Option<&str>,
     component: &mut Component,
 ) -> Result<Widget, Error> {
-    Ok(build_bound_tree(element, stylesheet, theme, component)?.widget)
+    let cell: ComponentHandle = Rc::new(RefCell::new(std::mem::take(component)));
+    let built = build_bound_tree(element, stylesheet, theme, &cell);
+    let widget = built.map(|built| built.widget);
+    *component = Rc::try_unwrap(cell)
+        .map(RefCell::into_inner)
+        .unwrap_or_default();
+    widget
 }
 
 pub fn build_bound_tree(
     element: &Element,
     stylesheet: &Stylesheet,
     theme: Option<&str>,
-    component: &mut Component,
+    component: &ComponentHandle,
 ) -> Result<Built, Error> {
     let resolved = resolve(element, stylesheet, theme)?;
 
@@ -139,7 +153,8 @@ pub fn build_bound_tree(
             let binding = Binding {
                 widget: widget.id(),
                 target: BindingTarget::Text(expression),
-                scopes: component.build_scopes(),
+                scopes: component.borrow().build_scopes(),
+                component: Rc::clone(component),
             };
             (widget, vec![binding], Vec::new(), Vec::new())
         }
@@ -183,7 +198,7 @@ fn resolve(
 
 fn parameters(
     element: &Element,
-    component: &mut Component,
+    component: &ComponentHandle,
     widget: Widget,
 ) -> Result<Built, Error> {
     let mut widget = widget;
@@ -203,7 +218,8 @@ fn parameters(
                     bindings.push(Binding {
                         widget: id,
                         target: BindingTarget::Checked(value.clone()),
-                        scopes: component.build_scopes(),
+                        scopes: component.borrow().build_scopes(),
+                        component: Rc::clone(component),
                     });
                 }
                 "selected" => {
@@ -211,7 +227,8 @@ fn parameters(
                     bindings.push(Binding {
                         widget: id,
                         target: BindingTarget::Selected(value.clone()),
-                        scopes: component.build_scopes(),
+                        scopes: component.borrow().build_scopes(),
+                        component: Rc::clone(component),
                     });
                 }
                 "disabled" => {
@@ -219,7 +236,8 @@ fn parameters(
                     bindings.push(Binding {
                         widget: id,
                         target: BindingTarget::Disabled(value.clone()),
-                        scopes: component.build_scopes(),
+                        scopes: component.borrow().build_scopes(),
+                        component: Rc::clone(component),
                     });
                 }
                 "visible" => {
@@ -227,7 +245,8 @@ fn parameters(
                     bindings.push(Binding {
                         widget: id,
                         target: BindingTarget::Visible(value.clone()),
-                        scopes: component.build_scopes(),
+                        scopes: component.borrow().build_scopes(),
+                        component: Rc::clone(component),
                     });
                 }
                 "x" => {
@@ -274,7 +293,7 @@ fn parameters(
                         format!("event '{}' is handled twice", event.name()),
                     ));
                 }
-                if !component.has_function(handler) {
+                if !component.borrow().has_function(handler) {
                     return Err(error_at(
                         element.position,
                         format!("function '{handler}' is not defined"),
@@ -284,6 +303,7 @@ fn parameters(
                     widget: Some(id),
                     event,
                     function: handler.clone(),
+                    component: Rc::clone(component),
                 });
             }
         }
@@ -293,7 +313,8 @@ fn parameters(
         bindings.push(Binding {
             widget: id,
             target: BindingTarget::Offset { x, y },
-            scopes: component.build_scopes(),
+            scopes: component.borrow().build_scopes(),
+            component: Rc::clone(component),
         });
     }
     Ok(Built {
@@ -309,7 +330,7 @@ fn container(
     element: &Element,
     stylesheet: &Stylesheet,
     theme: Option<&str>,
-    component: &mut Component,
+    component: &ComponentHandle,
     resolved: Resolved,
 ) -> Result<Parts, Error> {
     let built = build_items(
@@ -341,7 +362,7 @@ fn build_items(
     items: &[BlockItem],
     stylesheet: &Stylesheet,
     theme: Option<&str>,
-    component: &mut Component,
+    component: &ComponentHandle,
     position: Position,
     direction: Direction,
     spacing: u32,
@@ -364,6 +385,7 @@ fn build_items(
                         block: block.clone(),
                         last,
                     },
+                    component: Rc::clone(component),
                 });
                 built.push(node);
             }
@@ -380,6 +402,7 @@ fn build_items(
                         last,
                         rows,
                     },
+                    component: Rc::clone(component),
                 });
                 built.push(node);
             }
@@ -398,7 +421,7 @@ fn build_if(
     block: &IfBlock,
     stylesheet: &Stylesheet,
     theme: Option<&str>,
-    component: &mut Component,
+    component: &ComponentHandle,
     position: Position,
     direction: Direction,
     spacing: u32,
@@ -463,7 +486,7 @@ fn build_each(
     block: &EachBlock,
     stylesheet: &Stylesheet,
     theme: Option<&str>,
-    component: &mut Component,
+    component: &ComponentHandle,
     position: Position,
     direction: Direction,
     spacing: u32,
@@ -491,7 +514,7 @@ fn build_each(
                 value: Value::Number(index as f64),
             });
         }
-        component.push_build_scope(&variables);
+        component.borrow_mut().push_build_scope(&variables);
         let outcome = (|| -> Result<(Option<Value>, Vec<Built>), Error> {
             let key = match &block.key {
                 Some(expression) => Some(evaluate(component, expression)?),
@@ -508,7 +531,7 @@ fn build_each(
             )?;
             Ok((key, built))
         })();
-        component.pop_build_scope();
+        component.borrow_mut().pop_build_scope();
         let (key, row) = outcome?;
         let start = all.len();
         all.extend(row);
@@ -541,7 +564,7 @@ pub fn rebuild_structure(
     structure: &Structure,
     stylesheet: &Stylesheet,
     theme: Option<&str>,
-    component: &mut Component,
+    component: &ComponentHandle,
 ) -> Result<(Built, Value, Vec<RowInfo>), Error> {
     match &structure.kind {
         StructureKind::If { block, .. } => {
@@ -573,7 +596,7 @@ pub fn rebuild_structure(
 
 fn text(
     element: &Element,
-    component: &mut Component,
+    component: &ComponentHandle,
     resolved: Resolved,
 ) -> Result<(Widget, Expr), Error> {
     match element.block.items.as_slice() {
@@ -596,7 +619,7 @@ fn text(
     }
 }
 
-fn boolean(component: &mut Component, expression: &Expr, name: &str) -> Result<bool, Error> {
+fn boolean(component: &ComponentHandle, expression: &Expr, name: &str) -> Result<bool, Error> {
     match evaluate(component, expression)? {
         Value::Bool(value) => Ok(value),
         other => Err(error_at(
@@ -606,7 +629,7 @@ fn boolean(component: &mut Component, expression: &Expr, name: &str) -> Result<b
     }
 }
 
-fn integer(component: &mut Component, expression: &Expr, name: &str) -> Result<i32, Error> {
+fn integer(component: &ComponentHandle, expression: &Expr, name: &str) -> Result<i32, Error> {
     match evaluate(component, expression)? {
         Value::Number(value)
             if value.is_finite()
@@ -623,8 +646,8 @@ fn integer(component: &mut Component, expression: &Expr, name: &str) -> Result<i
     }
 }
 
-fn evaluate(component: &mut Component, expression: &Expr) -> Result<Value, Error> {
-    eval(component, expression).map_err(script_error)
+fn evaluate(component: &ComponentHandle, expression: &Expr) -> Result<Value, Error> {
+    eval(&mut component.borrow_mut(), expression).map_err(script_error)
 }
 
 pub(crate) fn script_error(error: brul_script::Error) -> Error {

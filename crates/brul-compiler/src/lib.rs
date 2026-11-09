@@ -5,7 +5,7 @@ pub mod tree;
 pub mod window;
 
 pub use tree::{
-    Binding, BindingTarget, Built, Handler, HandlerEvent, RowInfo, Structure, StructureKind,
-    build_bound_tree, build_tree, rebuild_structure,
+    Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, RowInfo, Structure,
+    StructureKind, build_bound_tree, build_tree, rebuild_structure,
 };
 pub use window::{Loaded, load};
