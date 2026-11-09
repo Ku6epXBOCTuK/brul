@@ -12,6 +12,9 @@
             } else {
                 Text { "bropicker" }
             }
+            each (browsers as browser) {
+                Text { browser }
+            }
         }
     }
 </markup>

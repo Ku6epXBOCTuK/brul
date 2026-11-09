@@ -15,7 +15,7 @@ pub use brul_compiler::{
     Structure,
 };
 pub use brul_gui::window::WindowConfig;
-pub use brul_script::{Error, Host, Value};
+pub use brul_script::{Error, Host, Value, Variable};
 pub use brul_syntax::ast;
 pub use brul_syntax::script;
 

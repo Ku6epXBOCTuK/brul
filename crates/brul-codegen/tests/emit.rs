@@ -258,19 +258,32 @@ window Demo (title: "demo") {
 }
 
 #[test]
-fn rejects_unfinished_block_items() {
-    let each = r#"<markup>
+fn emits_each_structure() {
+    let source = r#"<markup>
 window Demo (title: "demo") {
     Column {
-        each (items as item) { Text { "a" } }
+        each (items as item, position (item.name)) { Text { item.name } }
     }
 }
 </markup>
 "#;
-    assert_eq!(
-        emit::module(each).expect_err("error").message,
-        "each is not generated yet"
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        "fn structure0_value(component: &brul::ComponentHandle) -> Option<brul::Value> {"
+    ));
+    assert!(
+        module.contains(
+            "fn structure0_rebuild_0(component: &brul::ComponentHandle) -> brul::Rebuilt {"
+        )
     );
+    assert!(module.contains("component.borrow_mut().push_build_scope(&["));
+    assert!(module.contains(r#"brul::Variable { name: "item".to_owned(), value: item.clone() },"#));
+    assert!(module.contains(
+        r#"brul::Variable { name: "position".to_owned(), value: brul::Value::Number(position as f64) },"#
+    ));
+    assert!(module.contains("let key = Some("));
+    assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count });"));
+    assert!(module.contains("each: true, value: structure0_value"));
 }
 
 #[test]

@@ -233,10 +233,17 @@ fn items(
                 out.push_str(",\n");
             }
             BlockItem::Each(structure) => {
-                return Err(error_at(
-                    structure.collection.position,
-                    "each is not generated yet",
-                ));
+                structure::structure_each(
+                    out,
+                    structure,
+                    emit,
+                    direction,
+                    spacing,
+                    &theme_expression,
+                    depth,
+                    counter,
+                )?;
+                out.push_str(",\n");
             }
             BlockItem::Expr(expression) => {
                 return Err(error_at(
