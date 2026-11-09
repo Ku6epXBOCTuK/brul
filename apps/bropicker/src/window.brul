@@ -1,3 +1,7 @@
+<use>
+    import Badge from "./badge.brul";
+</use>
+
 <markup>
     window Bropicker (
         title: "bropicker",
@@ -15,6 +19,7 @@
             each (browsers as browser) {
                 Text { browser }
             }
+            Badge { }
         }
     }
 </markup>

@@ -12,7 +12,7 @@ use brul_syntax::ast::Expr;
 
 pub use brul_compiler::{
     Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, PropBinding, Rebuilt, RowInfo,
-    Structure,
+    Structure, View, instance,
 };
 pub use brul_gui::window::WindowConfig;
 pub use brul_script::{Error, Host, Value, Variable};

@@ -12,8 +12,7 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let source = root.join("src").join("window.brul");
-    let text = fs::read_to_string(&source)?;
-    let module = brul_codegen::emit::module(&text)?;
+    let module = brul_codegen::emit::module_file(&source)?;
     let output = PathBuf::from(env::var("OUT_DIR")?).join("view.rs");
     fs::write(&output, module)?;
     for file in sources(&root.join("src"))? {

@@ -3,9 +3,10 @@ use std::rc::Rc;
 
 use brul_gui::{Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Value, Variable, eval};
+use brul_script::{Component, Value, Variable, eval, execute_program};
 use brul_syntax::ast::Expr;
 use brul_syntax::markup::PropType;
+use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
 
 use crate::{Import, Registry};
@@ -147,6 +148,20 @@ pub struct Built {
     pub handlers: Vec<Handler>,
     pub structures: Vec<Structure>,
     pub props: Vec<PropBinding>,
+}
+
+pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, String>;
+
+pub fn instance(
+    theme: Option<&str>,
+    view: View,
+    script: Option<&Program>,
+) -> Result<Built, String> {
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    if let Some(program) = script {
+        execute_program(&mut component.borrow_mut(), program).map_err(|error| error.reason())?;
+    }
+    view(theme, &component)
 }
 
 pub struct Bindings {

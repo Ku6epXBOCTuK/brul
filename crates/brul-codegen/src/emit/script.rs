@@ -4,9 +4,9 @@ use brul_syntax::script::{Function, Program, Statement};
 
 use super::expression;
 
-pub(super) fn program(program: Option<&Program>) -> String {
+pub(super) fn program(name: &str, program: Option<&Program>) -> String {
     let mut out = String::new();
-    out.push_str("\npub fn script() -> Option<brul::script::Program> {\n");
+    let _ = writeln!(out, "\npub fn {name}() -> Option<brul::script::Program> {{");
     match program {
         None => out.push_str("    None\n"),
         Some(program) => {

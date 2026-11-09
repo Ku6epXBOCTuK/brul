@@ -18,8 +18,8 @@ pub(super) fn structure_if(
     depth: usize,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let index = emit.next_structure;
-    emit.next_structure += 1;
+    let index = *emit.next_structure;
+    *emit.next_structure += 1;
     emit.functions.push(value_function(index, &block.condition));
     emit.functions.push(dispatcher(index, emit));
     let themes = themes(emit);
@@ -50,8 +50,8 @@ pub(super) fn structure_each(
     depth: usize,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let index = emit.next_structure;
-    emit.next_structure += 1;
+    let index = *emit.next_structure;
+    *emit.next_structure += 1;
     emit.functions
         .push(value_function(index, &block.collection));
     emit.functions.push(dispatcher(index, emit));

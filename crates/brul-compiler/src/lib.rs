@@ -5,7 +5,7 @@ pub mod window;
 
 pub use brul_codegen::runtime::{
     Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, PropBinding,
-    Rebuilt, RowInfo, Structure,
+    Rebuilt, RowInfo, Structure, View, instance,
 };
 pub use brul_codegen::styles;
 pub use brul_codegen::{Definition, Import, Registry};

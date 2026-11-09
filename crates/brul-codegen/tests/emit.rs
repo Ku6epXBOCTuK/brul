@@ -1,4 +1,4 @@
-use brul_codegen::emit;
+﻿use brul_codegen::emit;
 
 #[test]
 fn emits_static_tree() {
@@ -452,4 +452,59 @@ fn emits_every_expression_kind() {
             "'{source}' did not emit {kind}"
         );
     }
+}
+
+fn scratch(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("brul-emit-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for (file, text) in files {
+        std::fs::write(dir.join(file), text).unwrap();
+    }
+    dir
+}
+
+#[test]
+fn emits_imported_component() {
+    let dir = scratch(
+        "component",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    Text { \"badge\" }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge { }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(module.contains("pub fn component0_view(theme: Option<&str>"));
+    assert!(module.contains("pub fn component0_script() -> Option<brul::script::Program>"));
+    assert!(module.contains(
+        "let built = brul::instance(None, component0_view, component0_script().as_ref())?;"
+    ));
+    assert!(module.contains("bindings.extend(built.bindings);"));
+    assert!(module.contains("props.extend(built.props);"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn rejects_component_children() {
+    let dir = scratch(
+        "children",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    Text { \"badge\" }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge { Text { \"x\" } }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+    assert_eq!(error.message, "component 'Badge' does not accept children");
+    std::fs::remove_dir_all(&dir).unwrap();
 }

@@ -1,0 +1,5 @@
+<markup>
+    component Badge {
+        Text { "badge" }
+    }
+</markup>

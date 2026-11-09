@@ -1,14 +1,16 @@
 use std::fmt::Write;
+use std::fs;
+use std::path::Path;
 
 use brul_gui::TextStyle;
-use brul_syntax::ast::{Expr, ExprKind};
+use brul_syntax::ast::{Expr, ExprKind, Position};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Block, BlockItem, Element};
+use brul_syntax::markup::{Arg, Block, BlockItem, Element, Member};
 use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
 
-use crate::error_at;
-use crate::styles;
+use crate::runtime::HandlerEvent;
+use crate::{Definition, Import, Registry, error_at, styles};
 
 mod events;
 mod expression;
@@ -20,39 +22,145 @@ pub use expression::expression;
 use style::{layout, style_set, text_style};
 
 pub(super) struct Emit<'a> {
+    registry: &'a Registry,
+    imports: &'a [Import],
     stylesheet: &'a Stylesheet,
     program: Option<&'a Program>,
-    functions: Vec<String>,
-    next_structure: usize,
+    functions: &'a mut Vec<String>,
+    next_structure: &'a mut usize,
 }
 
 pub fn module(source: &str) -> Result<String, Error> {
+    module_at(source, None)
+}
+
+pub fn module_file(path: &Path) -> Result<String, Error> {
+    let position = Position { line: 1, column: 1 };
+    let source = fs::read_to_string(path).map_err(|error| {
+        error_at(
+            position,
+            format!("cannot read '{}': {error}", path.display()),
+        )
+    })?;
+    module_at(&source, path.parent())
+}
+
+fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
     let parsed = crate::parse_source(source)?;
+    let registry = crate::resolve(&parsed.uses, base)?;
     let (config, window_handlers) = crate::arguments(&parsed.window)?;
     let window_handlers = events::window(&window_handlers, parsed.program.as_ref())?;
     let root = crate::root(&parsed.window)?;
-    let mut emit = Emit {
-        stylesheet: &parsed.stylesheet,
-        program: parsed.program.as_ref(),
-        functions: Vec::new(),
-        next_structure: 0,
-    };
+    let mut functions = Vec::new();
+    let mut next_structure = 0;
     let mut out = String::new();
     out.push_str("#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n");
-    out.push_str("pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {\n");
+    view(
+        &mut out,
+        "view",
+        root,
+        &window_handlers,
+        &mut Emit {
+            registry: &registry,
+            imports: &registry.imports,
+            stylesheet: &parsed.stylesheet,
+            program: parsed.program.as_ref(),
+            functions: &mut functions,
+            next_structure: &mut next_structure,
+        },
+    )?;
+    for index in 0..registry.definitions.len() {
+        let definition = &registry.definitions[index];
+        let root = definition_root(definition)?;
+        out.push('\n');
+        out.push_str("#[allow(dead_code, unused_mut, unused_variables, clippy::let_and_return)]\n");
+        view(
+            &mut out,
+            &format!("component{index}_view"),
+            root,
+            &[],
+            &mut Emit {
+                registry: &registry,
+                imports: &definition.imports,
+                stylesheet: &definition.stylesheet,
+                program: definition.program.as_ref(),
+                functions: &mut functions,
+                next_structure: &mut next_structure,
+            },
+        )?;
+        out.push_str(&script::program(
+            &format!("component{index}_script"),
+            definition.program.as_ref(),
+        ));
+    }
+    for function in &functions {
+        out.push('\n');
+        out.push_str(function);
+    }
+    out.push('\n');
+    window_config(&mut out, &config);
+    out.push_str(&script::program("script", parsed.program.as_ref()));
+    Ok(out)
+}
+
+fn definition_root(definition: &Definition) -> Result<&Element, Error> {
+    let position = Position { line: 1, column: 1 };
+    let mut roots = definition
+        .component
+        .members
+        .iter()
+        .filter_map(|member| match member {
+            Member::Element(element) => Some(element),
+            Member::Prop(_) | Member::Event(_) => None,
+        });
+    let Some(root) = roots.next() else {
+        return Err(error_at(
+            position,
+            format!("component '{}' has no root element", definition.name),
+        ));
+    };
+    if roots.next().is_some() {
+        return Err(error_at(
+            position,
+            format!(
+                "component '{}' has more than one root element",
+                definition.name
+            ),
+        ));
+    }
+    Ok(root)
+}
+
+fn view(
+    out: &mut String,
+    name: &str,
+    root: &Element,
+    handlers: &[(HandlerEvent, String)],
+    emit: &mut Emit<'_>,
+) -> Result<(), Error> {
+    let _ = writeln!(
+        out,
+        "pub fn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {{"
+    );
     out.push_str("    let mut bindings = Vec::new();\n");
     out.push_str("    let mut handlers = Vec::new();\n");
     out.push_str("    let mut structures = Vec::new();\n");
     out.push_str("    let mut props = Vec::new();\n");
     out.push_str("    let widget = match theme {\n");
-    branch(&mut out, "None", root, &mut emit, None)?;
-    for theme in &parsed.stylesheet.themes {
-        let pattern = format!("Some({:?})", theme.name);
-        branch(&mut out, &pattern, root, &mut emit, Some(&theme.name))?;
+    branch(out, "None", root, emit, None)?;
+    let themes: Vec<String> = emit
+        .stylesheet
+        .themes
+        .iter()
+        .map(|theme| theme.name.clone())
+        .collect();
+    for theme in themes {
+        let pattern = format!("Some({theme:?})");
+        branch(out, &pattern, root, emit, Some(&theme))?;
     }
     out.push_str("        Some(theme) => return Err(format!(\"unknown theme '{theme}'\")),\n");
     out.push_str("    };\n");
-    for (event, handler) in &window_handlers {
+    for (event, handler) in handlers {
         let _ = writeln!(
             out,
             "    handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::{event:?}, {handler:?}));"
@@ -65,14 +173,7 @@ pub fn module(source: &str) -> Result<String, Error> {
     out.push_str("        structures,\n");
     out.push_str("        props,\n");
     out.push_str("    })\n}\n");
-    for function in &emit.functions {
-        out.push('\n');
-        out.push_str(function);
-    }
-    out.push('\n');
-    window_config(&mut out, &config);
-    out.push_str(&script::program(parsed.program.as_ref()));
-    Ok(out)
+    Ok(())
 }
 
 fn window_config(out: &mut String, config: &brul_gui::window::WindowConfig) {
@@ -113,6 +214,13 @@ fn widget(
     depth: usize,
     counter: &mut usize,
 ) -> Result<(), Error> {
+    if let Some(index) = emit
+        .imports
+        .iter()
+        .position(|import| import.name == element.name)
+    {
+        return component(out, element, index, emit, theme, depth, counter);
+    }
     let classes: Vec<&str> = element
         .args
         .iter()
@@ -194,6 +302,68 @@ fn widget(
         );
     }
     let _ = writeln!(out, "{inner}{name}");
+    let _ = write!(out, "{pad}}}");
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn component(
+    out: &mut String,
+    element: &Element,
+    index: usize,
+    emit: &mut Emit<'_>,
+    theme: Option<&str>,
+    depth: usize,
+    counter: &mut usize,
+) -> Result<(), Error> {
+    let name = &emit.registry.definitions[index].name;
+    if element.args.iter().any(|arg| matches!(arg, Arg::Class(_))) {
+        return Err(error_at(
+            element.position,
+            format!("component '{name}' does not accept classes yet"),
+        ));
+    }
+    if !element.block.items.is_empty() {
+        return Err(error_at(
+            element.position,
+            format!("component '{name}' does not accept children"),
+        ));
+    }
+    for arg in &element.args {
+        match arg {
+            Arg::Class(_) => {}
+            Arg::Named { value, .. } => {
+                return Err(error_at(
+                    value.position,
+                    "component properties are not generated yet",
+                ));
+            }
+            Arg::Handler { .. } => {
+                return Err(error_at(
+                    element.position,
+                    "component events are not generated yet",
+                ));
+            }
+        }
+    }
+    let widget = format!("widget{}", *counter);
+    *counter += 1;
+    let pad = "    ".repeat(depth);
+    let inner = "    ".repeat(depth + 1);
+    let theme = match theme {
+        Some(theme) => format!("Some({theme:?})"),
+        None => "None".to_owned(),
+    };
+    let _ = writeln!(out, "{pad}{{");
+    let _ = writeln!(
+        out,
+        "{inner}let built = brul::instance({theme}, component{index}_view, component{index}_script().as_ref())?;"
+    );
+    for field in ["bindings", "handlers", "structures", "props"] {
+        let _ = writeln!(out, "{inner}{field}.extend(built.{field});");
+    }
+    let _ = writeln!(out, "{inner}let {widget} = built.widget;");
+    let _ = writeln!(out, "{inner}{widget}");
     let _ = write!(out, "{pad}}}");
     Ok(())
 }
