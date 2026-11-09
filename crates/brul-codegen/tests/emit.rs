@@ -88,3 +88,59 @@ window Demo (title: "demo") {
         "generated Text supports only string literals yet"
     );
 }
+
+fn emitted(source: &str) -> String {
+    emit::expression(&brul_syntax::parser::parse_expression(source).expect("expression parses"))
+}
+
+#[test]
+fn emits_literal_and_ident_expressions() {
+    assert_eq!(
+        emitted("x"),
+        r#"brul::ast::Expr::new(brul::ast::ExprKind::Ident("x".to_owned()), brul::ast::Position { line: 1, column: 1 })"#
+    );
+    assert_eq!(
+        emitted("42"),
+        r#"brul::ast::Expr::new(brul::ast::ExprKind::Number(42.0), brul::ast::Position { line: 1, column: 1 })"#
+    );
+    assert_eq!(
+        emitted("\"hi\""),
+        r#"brul::ast::Expr::new(brul::ast::ExprKind::String("hi".to_owned()), brul::ast::Position { line: 1, column: 1 })"#
+    );
+    assert_eq!(
+        emitted("true"),
+        r#"brul::ast::Expr::new(brul::ast::ExprKind::Bool(true), brul::ast::Position { line: 1, column: 1 })"#
+    );
+    assert_eq!(
+        emitted("null"),
+        r#"brul::ast::Expr::new(brul::ast::ExprKind::Null, brul::ast::Position { line: 1, column: 1 })"#
+    );
+}
+
+#[test]
+fn emits_nested_expressions() {
+    assert_eq!(
+        emitted("a.b + 1"),
+        r#"brul::ast::Expr::new(brul::ast::ExprKind::Binary { op: brul::ast::BinaryOp::Add, left: Box::new(brul::ast::Expr::new(brul::ast::ExprKind::Field { target: Box::new(brul::ast::Expr::new(brul::ast::ExprKind::Ident("a".to_owned()), brul::ast::Position { line: 1, column: 1 })), name: "b".to_owned() }, brul::ast::Position { line: 1, column: 1 })), right: Box::new(brul::ast::Expr::new(brul::ast::ExprKind::Number(1.0), brul::ast::Position { line: 1, column: 7 })) }, brul::ast::Position { line: 1, column: 1 })"#
+    );
+}
+
+#[test]
+fn emits_every_expression_kind() {
+    let cases = [
+        ("a[0]", "brul::ast::ExprKind::Index"),
+        ("f(1, 2)", "brul::ast::ExprKind::Call"),
+        ("!x", "brul::ast::ExprKind::Unary"),
+        ("a ? b : c", "brul::ast::ExprKind::Ternary"),
+        ("a = b", "brul::ast::ExprKind::Assign"),
+        ("[1, 2]", "brul::ast::ExprKind::Array"),
+        ("{ a: 1 }", "brul::ast::ExprKind::Object"),
+        ("`v=${a}`", "brul::ast::ExprKind::Template"),
+    ];
+    for (source, kind) in cases {
+        assert!(
+            emitted(source).contains(kind),
+            "'{source}' did not emit {kind}"
+        );
+    }
+}

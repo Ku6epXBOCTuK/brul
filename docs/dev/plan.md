@@ -153,8 +153,10 @@
   значения.
 - [x] 3.5.10.2a.1 — общие типы рантайма: `Binding`, `BindingTarget`, `Built`,
   `Structure` в `brul-codegen`, `brul-compiler` ре-экспортирует.
-- [ ] 3.5.10.2b — эмиссия: выражения и параметры, `view` отдаёт дерево и
-  привязки.
+- [x] 3.5.10.2b.1 — эмиссия выражений: `brul::ast::Expr` в сгенерированном коде,
+  все виды AST.
+- [ ] 3.5.10.2b.2 — `view` отдаёт `Built`: `Text` и параметры
+  (`checked`/`selected`/`disabled`/`visible`/`x`/`y`) с привязками.
 - [ ] 3.5.10.3 — bootstrap: аргументы `window` → `WindowConfig`, seeds, запуск.
 - [ ] 3.5.11.1 — события: `click`/`press`/`release`/`enter`/`leave`, клавиши,
   drag.
