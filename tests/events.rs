@@ -33,6 +33,7 @@ fn build(source: &str) -> Ui {
         loaded.handlers,
         loaded.root,
         loaded.stylesheet,
+        loaded.theme,
     )
 }
 
@@ -363,6 +364,7 @@ window Demo (title: "Demo") {
         loaded.handlers,
         loaded.root,
         loaded.stylesheet,
+        loaded.theme,
     );
 
     let background = |ui: &Ui| {

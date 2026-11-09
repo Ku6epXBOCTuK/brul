@@ -4,7 +4,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use brul_compiler::{Binding, BindingTarget, Handler, HandlerEvent, Loaded, build_bound_tree};
+use brul_compiler::{
+    Binding, BindingTarget, Handler, HandlerEvent, Loaded, build_bound_tree, watches,
+};
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Error, Host, Value, eval};
@@ -20,6 +22,8 @@ pub struct Ui {
     commands: Rc<RefCell<Vec<window::WindowCommand>>>,
     root: Element,
     stylesheet: Stylesheet,
+    theme: Option<String>,
+    watchers: Vec<(Expr, Value)>,
     scope: EffectScope,
 }
 
@@ -72,6 +76,7 @@ impl Ui {
         handlers: Vec<Handler>,
         root: Element,
         stylesheet: Stylesheet,
+        theme: Option<String>,
     ) -> Self {
         let mut component = component;
         let commands = Rc::new(RefCell::new(Vec::new()));
@@ -95,7 +100,7 @@ impl Ui {
             .filter(|handler| handler.widget.is_none())
             .cloned()
             .collect();
-        let ui = Self {
+        let mut ui = Self {
             component,
             tree,
             handlers,
@@ -103,9 +108,12 @@ impl Ui {
             commands,
             root,
             stylesheet,
+            theme,
+            watchers: Vec::new(),
             scope: EffectScope::new(),
         };
         ui.bind(bindings);
+        ui.reset_watchers();
         ui
     }
 
@@ -119,10 +127,25 @@ impl Ui {
         }
     }
 
-    fn set_theme(&mut self, theme: &str) -> Result<(), brul_syntax::error::Error> {
+    fn reset_watchers(&mut self) {
+        self.watchers = watches(&self.root)
+            .into_iter()
+            .filter_map(|expression| {
+                let value = evaluate(&self.component, &expression)?;
+                Some((expression, value))
+            })
+            .collect();
+    }
+
+    fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
         let built = {
             let mut component = self.component.borrow_mut();
-            build_bound_tree(&self.root, &self.stylesheet, Some(theme), &mut component)?
+            build_bound_tree(
+                &self.root,
+                &self.stylesheet,
+                self.theme.as_deref(),
+                &mut component,
+            )?
         };
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
@@ -130,7 +153,32 @@ impl Ui {
         self.handlers = handlers;
         self.scope = EffectScope::new();
         self.bind(built.bindings);
+        self.reset_watchers();
         Ok(())
+    }
+
+    fn set_theme(&mut self, theme: &str) -> Result<(), brul_syntax::error::Error> {
+        let previous = self.theme.replace(theme.to_owned());
+        if let Err(error) = self.rebuild() {
+            self.theme = previous;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn poll(&mut self) {
+        let mut changed = false;
+        for (expression, last) in &mut self.watchers {
+            if let Some(value) = evaluate(&self.component, expression)
+                && value != *last
+            {
+                *last = value;
+                changed = true;
+            }
+        }
+        if changed && let Err(error) = self.rebuild() {
+            eprintln!("{error}");
+        }
     }
 
     pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<window::WindowCommand> {
@@ -183,6 +231,7 @@ impl Ui {
                 command => output.push(command),
             }
         }
+        self.poll();
         output
     }
 }
@@ -286,9 +335,10 @@ pub fn run(source: &str, theme: Option<&str>) -> Result<(), Box<dyn std::error::
         component,
         root,
         stylesheet,
+        theme,
         ..
     } = brul_compiler::load(source, theme)?;
-    let mut ui = Ui::new(component, tree, bindings, handlers, root, stylesheet);
+    let mut ui = Ui::new(component, tree, bindings, handlers, root, stylesheet, theme);
     let initial = ui.dispatch(&[]);
     let tree = Rc::clone(&ui.tree);
     window::run_tree(config, tree, initial, move |events| ui.dispatch(events))?;

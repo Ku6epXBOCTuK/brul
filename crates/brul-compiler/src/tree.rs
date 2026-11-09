@@ -355,6 +355,32 @@ fn build_if(
     }
 }
 
+pub fn watches(element: &Element) -> Vec<Expr> {
+    let mut found = Vec::new();
+    collect_watches(&element.block.items, &mut found);
+    found
+}
+
+fn collect_watches(items: &[BlockItem], found: &mut Vec<Expr>) {
+    for item in items {
+        match item {
+            BlockItem::Element(child) => collect_watches(&child.block.items, found),
+            BlockItem::If(block) => {
+                found.push(block.condition.clone());
+                collect_watches(&block.then_block.items, found);
+                if let Some(otherwise) = &block.else_block {
+                    collect_watches(&otherwise.items, found);
+                }
+            }
+            BlockItem::Each(block) => {
+                found.push(block.collection.clone());
+                collect_watches(&block.block.items, found);
+            }
+            BlockItem::Expr(_) => {}
+        }
+    }
+}
+
 fn build_each(
     block: &EachBlock,
     stylesheet: &Stylesheet,

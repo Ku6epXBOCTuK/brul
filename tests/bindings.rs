@@ -28,6 +28,7 @@ fn build() -> Ui {
         loaded.handlers,
         loaded.root,
         loaded.stylesheet,
+        loaded.theme,
     )
 }
 
@@ -117,6 +118,7 @@ window Demo (title: "Demo") {
         loaded.handlers,
         loaded.root,
         loaded.stylesheet,
+        loaded.theme,
     );
     layout(&ui);
 
@@ -137,4 +139,97 @@ window Demo (title: "Demo") {
         .map(|node| node.text.as_ref().expect("text").glyphs.len())
         .collect();
     assert_eq!(glyphs, vec![7, 7]);
+}
+
+fn node_count(ui: &Ui) -> usize {
+    layout(ui);
+    let mut tree = ui.tree.borrow_mut();
+    let snapshot = tree.snapshot().cloned().expect("snapshot");
+    snapshot.nodes.len()
+}
+
+#[test]
+fn if_condition_change_rebuilds_the_branch() {
+    let source = r#"
+<script>
+let show = true;
+</script>
+
+<markup>
+window Demo (title: "Demo") {
+    Column {
+        if (show) {
+            Text { "a" }
+            Text { "b" }
+        } else {
+            Text { "c" }
+        }
+    }
+}
+</markup>
+"#;
+    let loaded = load(source, None).expect("app loads");
+    let mut ui = Ui::new(
+        loaded.component,
+        loaded.tree,
+        loaded.bindings,
+        loaded.handlers,
+        loaded.root,
+        loaded.stylesheet,
+        loaded.theme,
+    );
+    assert_eq!(node_count(&ui), 3);
+
+    ui.component
+        .borrow_mut()
+        .assign("show", Value::Bool(false))
+        .expect("assign");
+    let _ = ui.dispatch(&[]);
+
+    assert_eq!(node_count(&ui), 2);
+}
+
+#[test]
+fn collection_change_rebuilds_the_rows() {
+    let source = r#"
+<script>
+let items = [1, 2];
+</script>
+
+<markup>
+window Demo (title: "Demo") {
+    Column {
+        each (items as item) {
+            Text { String(item) }
+        }
+    }
+}
+</markup>
+"#;
+    let loaded = load(source, None).expect("app loads");
+    let mut ui = Ui::new(
+        loaded.component,
+        loaded.tree,
+        loaded.bindings,
+        loaded.handlers,
+        loaded.root,
+        loaded.stylesheet,
+        loaded.theme,
+    );
+    assert_eq!(node_count(&ui), 3);
+
+    ui.component
+        .borrow_mut()
+        .assign(
+            "items",
+            Value::Array(vec![
+                Value::Number(1.0),
+                Value::Number(2.0),
+                Value::Number(3.0),
+            ]),
+        )
+        .expect("assign");
+    let _ = ui.dispatch(&[]);
+
+    assert_eq!(node_count(&ui), 4);
 }
