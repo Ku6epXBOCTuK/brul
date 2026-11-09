@@ -8,7 +8,7 @@ use std::time::Duration;
 use brul_compiler::{Context, Handler, Loaded, accepts_prop, build_bound_tree, rebuild_structure};
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, eval};
+use brul_script::{Component, eval, execute_program};
 use brul_syntax::ast::Expr;
 use brul_syntax::markup::Element;
 
@@ -30,10 +30,14 @@ pub struct Ui {
     bindings: Vec<Binding>,
     props: Vec<PropBinding>,
     structures: Vec<Structure>,
-    root: Element,
-    context: Context,
+    source: Source,
     theme: Option<String>,
     scope: EffectScope,
+}
+
+enum Source {
+    Elements(Element, Context),
+    Generated(fn(Option<&str>, &ComponentHandle) -> Result<Built, String>),
 }
 
 struct CommandHost {
@@ -102,7 +106,7 @@ impl Ui {
     pub fn with_host(loaded: Loaded, host: Option<Box<dyn Host>>) -> Self {
         let Loaded {
             component,
-            tree: widget,
+            tree,
             bindings,
             props,
             handlers,
@@ -112,6 +116,35 @@ impl Ui {
             theme,
             ..
         } = loaded;
+        Self::assemble(
+            component,
+            Built {
+                widget: tree,
+                bindings,
+                handlers,
+                structures,
+                props,
+            },
+            Source::Elements(root, context),
+            theme,
+            host,
+        )
+    }
+
+    fn assemble(
+        component: ComponentHandle,
+        built: Built,
+        source: Source,
+        theme: Option<String>,
+        host: Option<Box<dyn Host>>,
+    ) -> Self {
+        let Built {
+            widget,
+            bindings,
+            handlers,
+            props,
+            structures,
+        } = built;
         let commands = Rc::new(RefCell::new(Vec::new()));
         for (interval_ms, function) in component.borrow_mut().take_every() {
             if interval_ms.is_finite() && interval_ms > 0.0 {
@@ -142,8 +175,7 @@ impl Ui {
             bindings,
             props,
             structures,
-            root,
-            context,
+            source,
             theme,
             scope: EffectScope::new(),
         };
@@ -172,12 +204,20 @@ impl Ui {
     }
 
     fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
-        let built = build_bound_tree(
-            &self.root,
-            &self.component,
-            &self.context,
-            self.theme.as_deref(),
-        )?;
+        let built = match &self.source {
+            Source::Elements(root, context) => {
+                build_bound_tree(root, &self.component, context, self.theme.as_deref())?
+            }
+            Source::Generated(view) => {
+                view(self.theme.as_deref(), &self.component).map_err(|message| {
+                    brul_syntax::error::Error {
+                        message,
+                        line: 1,
+                        column: 1,
+                    }
+                })?
+            }
+        };
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
@@ -533,10 +573,56 @@ pub fn run_file_with(
     open(loaded, host)
 }
 
+/// Запускает окно по модулю, сгенерированному из `.brul`.
+pub fn run_generated(
+    config: WindowConfig,
+    script: Option<script::Program>,
+    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+    host: Option<Box<dyn Host>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (component, built) = generated_built(view, theme, seeds, script.as_ref())?;
+    let ui = Ui::assemble(
+        component,
+        built,
+        Source::Generated(view),
+        theme.map(str::to_owned),
+        host,
+    );
+    run_ui(config, theme.map(str::to_owned), ui)
+}
+
+fn generated_built(
+    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+    script: Option<&script::Program>,
+) -> Result<(ComponentHandle, Built), Box<dyn std::error::Error>> {
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    for (name, value) in seeds {
+        component.borrow_mut().declare(name, value.clone(), true)?;
+    }
+    if let Some(program) = script {
+        execute_program(&mut component.borrow_mut(), program)?;
+    }
+    let built = view(theme, &component).map_err(std::io::Error::other)?;
+    Ok((component, built))
+}
+
 fn open(loaded: Loaded, host: Option<Box<dyn Host>>) -> Result<(), Box<dyn std::error::Error>> {
     let config = loaded.config.clone();
-    let fixed = loaded.theme.clone();
-    let ui = Rc::new(RefCell::new(Ui::with_host(loaded, host)));
+    let theme = loaded.theme.clone();
+    let ui = Ui::with_host(loaded, host);
+    run_ui(config, theme, ui)
+}
+
+fn run_ui(
+    config: WindowConfig,
+    theme: Option<String>,
+    ui: Ui,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let ui = Rc::new(RefCell::new(ui));
     let initial = ui.borrow_mut().dispatch(&[]);
     let builder = Rc::clone(&ui);
     let handler = Rc::clone(&ui);
@@ -545,7 +631,7 @@ fn open(loaded: Loaded, host: Option<Box<dyn Host>>) -> Result<(), Box<dyn std::
         initial,
         move |scheme| {
             let mut ui = builder.borrow_mut();
-            if let Err(error) = ui.set_theme(scheme_theme(fixed.as_deref(), scheme))
+            if let Err(error) = ui.set_theme(scheme_theme(theme.as_deref(), scheme))
                 && !error.message.contains("unknown theme")
             {
                 eprintln!("{error}");
@@ -567,6 +653,75 @@ fn scheme_theme(fixed: Option<&str>, scheme: window::ColorScheme) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use brul_syntax::ast::{ExprKind, Position};
+
+    fn generated_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+        if theme.is_some() {
+            return Err("unknown theme".to_owned());
+        }
+        let widget = Widget::text("");
+        let id = widget.id();
+        Ok(Built {
+            widget,
+            bindings: vec![Binding::new(
+                component,
+                id,
+                BindingTarget::Text(Expr::new(
+                    ExprKind::Ident("name".to_owned()),
+                    Position::default(),
+                )),
+            )],
+            handlers: Vec::new(),
+            structures: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    fn assembled(
+        theme: Option<&str>,
+        seeds: &[(&str, Value)],
+        script: Option<&script::Program>,
+    ) -> (WidgetId, Ui) {
+        let (component, built) =
+            generated_built(generated_view, theme, seeds, script).expect("launch succeeds");
+        let id = built.widget.id();
+        (
+            id,
+            Ui::assemble(
+                component,
+                built,
+                Source::Generated(generated_view),
+                None,
+                None,
+            ),
+        )
+    }
+
+    #[test]
+    fn generated_launch_declares_seeds() {
+        let seeds = [("name", Value::String("from seed".to_owned()))];
+        let (id, ui) = assembled(None, &seeds, None);
+        brul_reactive::flush();
+        assert!(!ui.tree.borrow_mut().set_text(id, "from seed".to_owned()));
+    }
+
+    #[test]
+    fn generated_launch_runs_the_script() {
+        let program = script::Program {
+            functions: Vec::new(),
+            statements: vec![script::Statement::Let {
+                constant: false,
+                name: "name".to_owned(),
+                value: Some(Expr::new(
+                    ExprKind::String("from script".to_owned()),
+                    Position::default(),
+                )),
+            }],
+        };
+        let (id, ui) = assembled(None, &[], Some(&program));
+        brul_reactive::flush();
+        assert!(!ui.tree.borrow_mut().set_text(id, "from script".to_owned()));
+    }
 
     #[test]
     fn explicit_theme_ignores_the_color_scheme() {

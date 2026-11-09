@@ -162,8 +162,8 @@
   (`checked`/`selected`/`disabled`/`visible`/`x`/`y`) с привязками.
 - [x] 3.5.10.3a — данные запуска в сгенерированном файле: `window()` (аргументы
   `window` → `WindowConfig`) и `script()` (`brul::script::Program`).
-- [ ] 3.5.10.3b — bootstrap: seeds, `script()` на компоненте, старт окна через
-  фасад без интерпретатора.
+- [x] 3.5.10.3b — bootstrap: `run_generated`: seeds и `script()` исполняются на
+  компоненте, окно запускается через фасад без интерпретатора.
 - [ ] 3.5.11.1 — события: `click`/`press`/`release`/`enter`/`leave`, клавиши,
   drag.
 - [ ] 3.5.11.2 — `if`/`each`: ветки, строки и пересборка поддеревьев.
