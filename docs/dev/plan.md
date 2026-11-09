@@ -180,6 +180,8 @@ bropicker сломан с 3.5.11.2a до 3.6.2. PNG/tint и градиент о�
 - [x] 3.5.11.3a — компоненты в кодогене: `module_file` с `import`, сборка каждой
   дефиниции в `componentN_view`/`componentN_script`, вызов через
   `brul::instance`.
+- [x] 3.5.11.3a.1 — разбор `emit/mod.rs`: `module`, `view`, `element`,
+  `component` по файлам, в `mod.rs` только объявления, `pub use` и `Emit`.
 - [ ] 3.5.11.3b — пропсы компонентов: типы, дефолты, `declare_property`,
   `PropBinding` на выражение вызывающего.
 - [ ] 3.5.11.3c — события компонентов: host, пересылающий вызов в родителя.
