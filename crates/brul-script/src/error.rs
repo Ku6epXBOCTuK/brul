@@ -41,6 +41,11 @@ pub enum Error {
         expected: &'static str,
         found: &'static str,
     },
+    EventArgument {
+        name: String,
+        expected: &'static str,
+        found: &'static str,
+    },
     InvalidNumber(String),
     Unsupported(&'static str),
 }
@@ -93,6 +98,11 @@ impl fmt::Display for Error {
                 expected,
                 found,
             } => write!(f, "function '{name}' expects {expected}, got {found}"),
+            Error::EventArgument {
+                name,
+                expected,
+                found,
+            } => write!(f, "event '{name}' expects {expected}, got {found}"),
             Error::InvalidNumber(text) => {
                 write!(f, "string '{text}' cannot be converted to Number")
             }

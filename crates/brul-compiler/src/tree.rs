@@ -2,13 +2,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_gui::{Direction, LayoutStyle, Widget, WidgetId};
-use brul_script::{Component, Value, Variable, eval, execute_program};
+use brul_script::{Component, Error as ScriptError, Host, Value, Variable, eval, execute_program};
 use brul_syntax::ast::{Expr, Position};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, BlockItem, EachBlock, Element, IfBlock, Member, PropType};
 use brul_syntax::style::Stylesheet;
 
-use crate::loader::{Import, Registry};
+use crate::loader::{Definition, Import, Registry};
 use crate::styles::{self, Resolved};
 
 pub type ComponentHandle = Rc<RefCell<Component>>;
@@ -239,7 +239,13 @@ fn instance(
         ));
     }
 
+    let handlers = instance_handlers(element, parent, definition)?;
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    if !handlers.is_empty() {
+        component
+            .borrow_mut()
+            .set_host(EventHost { events: handlers });
+    }
     if let Some(program) = &definition.program {
         execute_program(&mut component.borrow_mut(), program).map_err(script_error)?;
     }
@@ -257,15 +263,7 @@ fn instance(
                     ),
                 ));
             }
-            Arg::Handler { .. } => {
-                return Err(error_at(
-                    element.position,
-                    format!(
-                        "component '{}' events are not supported yet",
-                        definition.name
-                    ),
-                ));
-            }
+            Arg::Handler { .. } => {}
             Arg::Named { name, value } => {
                 if given.contains(&name.as_str()) {
                     return Err(error_at(
@@ -380,6 +378,101 @@ fn instance(
         });
     }
     Ok(built)
+}
+
+struct Emitted {
+    event: String,
+    handler: String,
+    params: Vec<PropType>,
+    component: ComponentHandle,
+}
+
+fn instance_handlers(
+    element: &Element,
+    parent: &ComponentHandle,
+    definition: &Definition,
+) -> Result<Vec<Emitted>, Error> {
+    let mut emitted: Vec<Emitted> = Vec::new();
+    for arg in &element.args {
+        let Arg::Handler { event, handler } = arg else {
+            continue;
+        };
+        if emitted.iter().any(|item| item.event == *event) {
+            return Err(error_at(
+                element.position,
+                format!("event '{event}' is handled twice"),
+            ));
+        }
+        let Some(declaration) =
+            definition
+                .component
+                .members
+                .iter()
+                .find_map(|member| match member {
+                    Member::Event(item) if item.name == *event => Some(item),
+                    _ => None,
+                })
+        else {
+            return Err(error_at(
+                element.position,
+                format!("component '{}' has no event '{event}'", definition.name),
+            ));
+        };
+        if !parent.borrow().has_function(handler) {
+            return Err(error_at(
+                element.position,
+                format!("function '{handler}' is not defined"),
+            ));
+        }
+        emitted.push(Emitted {
+            event: event.clone(),
+            handler: handler.clone(),
+            params: declaration.params.iter().map(|param| param.ty).collect(),
+            component: Rc::clone(parent),
+        });
+    }
+    Ok(emitted)
+}
+
+struct EventHost {
+    events: Vec<Emitted>,
+}
+
+impl Host for EventHost {
+    fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, ScriptError> {
+        let Some(event) = self.events.iter().find(|event| event.event == name) else {
+            return Err(ScriptError::UnknownFunction(name.to_owned()));
+        };
+        if event.params.len() != arguments.len() {
+            return Err(ScriptError::FunctionArity {
+                name: event.event.clone(),
+                expected: event.params.len(),
+                found: arguments.len(),
+            });
+        }
+        for (ty, value) in event.params.iter().zip(arguments) {
+            if !accepts_prop(value, *ty) {
+                return Err(ScriptError::EventArgument {
+                    name: event.event.clone(),
+                    expected: prop_name(*ty),
+                    found: value.type_name(),
+                });
+            }
+        }
+        let component = Rc::clone(&event.component);
+        component
+            .borrow_mut()
+            .call_function(&event.handler, arguments.to_vec())
+    }
+}
+
+fn prop_name(ty: PropType) -> &'static str {
+    match ty {
+        PropType::Bool => "Bool",
+        PropType::Number => "Number",
+        PropType::String => "String",
+        PropType::Image => "Image",
+    }
 }
 
 pub fn accepts_prop(value: &Value, ty: PropType) -> bool {

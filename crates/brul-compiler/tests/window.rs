@@ -469,3 +469,103 @@ fn component_rejects_children() {
     );
     fs::remove_dir_all(dir).expect("cleanup");
 }
+
+#[test]
+fn component_event_calls_the_parent_handler() {
+    let dir = workspace(
+        "event",
+        &[
+            (
+                "app.brul",
+                "<script>\nlet received = 0;\nfunction launch(i) { received = i; }\n</script>\n\n<use>\nimport Item from \"./item\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Item (index: 7, on clicked: launch) { } }\n</markup>",
+            ),
+            (
+                "item.brul",
+                "<script>\nfunction itemClicked() { clicked(index); }\n</script>\n\n<markup>\ncomponent Item {\n    prop index: Number = 0\n    event clicked(i: Number)\n    View (cell, on click: itemClicked) { }\n}\n</markup>",
+            ),
+        ],
+    );
+
+    let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
+    let handler = loaded
+        .handlers
+        .iter()
+        .find(|handler| handler.function == "itemClicked")
+        .expect("click handler");
+    let child = Rc::clone(&handler.component);
+    child
+        .borrow_mut()
+        .call_function(&handler.function, Vec::new())
+        .expect("event call");
+    assert_eq!(
+        loaded.component.borrow().read("received"),
+        Ok(Value::Number(7.0))
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
+fn component_event_arguments_are_checked() {
+    let dir = workspace(
+        "event-type",
+        &[
+            (
+                "app.brul",
+                "<script>\nfunction launch(i) { }\n</script>\n\n<use>\nimport Item from \"./item\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Item (on clicked: launch) { } }\n</markup>",
+            ),
+            (
+                "item.brul",
+                "<script>\nfunction itemClicked() { clicked(\"no\"); }\n</script>\n\n<markup>\ncomponent Item {\n    event clicked(i: Number)\n    View (cell, on click: itemClicked) { }\n}\n</markup>",
+            ),
+        ],
+    );
+
+    let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
+    let handler = loaded
+        .handlers
+        .iter()
+        .find(|handler| handler.function == "itemClicked")
+        .expect("click handler");
+    let child = Rc::clone(&handler.component);
+    let error = child
+        .borrow_mut()
+        .call_function(&handler.function, Vec::new())
+        .expect_err("argument type");
+    assert!(
+        error
+            .reason()
+            .contains("event 'clicked' expects Number, got String"),
+        "{}",
+        error.reason()
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
+fn component_event_must_be_declared() {
+    let dir = workspace(
+        "event-unknown",
+        &[
+            (
+                "app.brul",
+                "<script>\nfunction launch(i) { }\n</script>\n\n<use>\nimport Item from \"./item\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Item (on clicked: launch) { } }\n</markup>",
+            ),
+            (
+                "item.brul",
+                "<markup>\ncomponent Item {\n    View (cell) { }\n}\n</markup>",
+            ),
+        ],
+    );
+
+    let error = load_file(dir.join("app.brul"), None)
+        .err()
+        .expect("undeclared event");
+    assert!(
+        error
+            .message
+            .contains("component 'Item' has no event 'clicked'"),
+        "{}",
+        error.message
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
+}
