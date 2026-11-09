@@ -122,8 +122,8 @@ pub enum BindingTarget {
 }
 
 pub type StructureValue = fn(&ComponentHandle) -> Option<Value>;
-pub type StructureRebuild =
-    fn(Option<&str>, &ComponentHandle) -> Result<(Built, Vec<RowInfo>), String>;
+pub type Rebuilt = Result<(Built, Vec<RowInfo>), String>;
+pub type StructureRebuild = fn(Option<&str>, &ComponentHandle) -> Rebuilt;
 
 #[derive(Clone)]
 pub struct Structure {

@@ -15,6 +15,8 @@ window Demo (title: "demo") {
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
+    let mut structures = Vec::new();
+    let mut props = Vec::new();
     let widget = match theme {
         None => {
             {
@@ -37,8 +39,8 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
         widget,
         bindings,
         handlers,
-        structures: Vec::new(),
-        props: Vec::new(),
+        structures,
+        props,
     })
 }
 
@@ -86,6 +88,8 @@ window Styled (title: "styled") {
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
+    let mut structures = Vec::new();
+    let mut props = Vec::new();
     let widget = match theme {
         None => {
             {
@@ -117,8 +121,8 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
         widget,
         bindings,
         handlers,
-        structures: Vec::new(),
-        props: Vec::new(),
+        structures,
+        props,
     })
 }
 
@@ -217,6 +221,56 @@ window Demo (title: "demo") {
     assert!(module.contains("brul_gui::Widget::column(vec!["));
     assert!(module.contains(".draggable(true);"));
     assert!(!module.contains("HandlerEvent::Drag"));
+}
+
+#[test]
+fn emits_if_structure() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    Column {
+        if (shown) {
+            Text { "a" }
+        } else {
+            Text { "b" }
+        }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        "fn structure0_value(component: &brul::ComponentHandle) -> Option<brul::Value> {"
+    ));
+    assert!(module.contains(
+        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {"
+    ));
+    assert!(
+        module.contains(
+            "fn structure0_rebuild_0(component: &brul::ComponentHandle) -> brul::Rebuilt {"
+        )
+    );
+    assert!(module.contains("Some(brul::Value::Bool(true)) => vec!["));
+    assert!(module.contains("Some(brul::Value::Bool(false)) => vec!["));
+    assert!(module.contains(
+        "structures.push(brul::Structure { parent: widget1.id(), each: false, value: structure0_value, rebuild: structure0_rebuild });"
+    ));
+    assert!(module.contains(r#""if condition expects Bool, got {}""#));
+}
+
+#[test]
+fn rejects_unfinished_block_items() {
+    let each = r#"<markup>
+window Demo (title: "demo") {
+    Column {
+        each (items as item) { Text { "a" } }
+    }
+}
+</markup>
+"#;
+    assert_eq!(
+        emit::module(each).expect_err("error").message,
+        "each is not generated yet"
+    );
 }
 
 #[test]

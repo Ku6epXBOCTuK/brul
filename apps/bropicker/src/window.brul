@@ -6,6 +6,12 @@
         frameless: true,
         transparent: true
     ) {
-        Column { }
+        Column {
+            if (url != "") {
+                Text { url }
+            } else {
+                Text { "bropicker" }
+            }
+        }
     }
 </markup>

@@ -11,7 +11,8 @@ use brul_script::{Component, eval, execute_program};
 use brul_syntax::ast::Expr;
 
 pub use brul_compiler::{
-    Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, PropBinding, RowInfo, Structure,
+    Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, PropBinding, Rebuilt, RowInfo,
+    Structure,
 };
 pub use brul_gui::window::WindowConfig;
 pub use brul_script::{Error, Host, Value};
@@ -432,7 +433,7 @@ fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent
     }
 }
 
-fn apply(binding: &Binding, component: &RefCell<Component>, tree: &RefCell<WidgetTree>) {
+fn apply(binding: &Binding, component: &ComponentHandle, tree: &RefCell<WidgetTree>) {
     component.borrow().track();
     let count = binding.scopes.len();
     component.borrow_mut().push_binding_scopes(&binding.scopes);
@@ -488,21 +489,21 @@ fn apply_prop(prop: &PropBinding) {
     prop.component.borrow_mut().pop_binding_scopes(count);
 }
 
-fn text(component: &RefCell<Component>, expression: &Expr) -> Option<String> {
+fn text(component: &ComponentHandle, expression: &Expr) -> Option<String> {
     match evaluate(component, expression)? {
         Value::String(content) => Some(content),
         _ => None,
     }
 }
 
-fn boolean(component: &RefCell<Component>, expression: &Expr) -> Option<bool> {
+fn boolean(component: &ComponentHandle, expression: &Expr) -> Option<bool> {
     match evaluate(component, expression)? {
         Value::Bool(value) => Some(value),
         _ => None,
     }
 }
 
-fn offset(component: &RefCell<Component>, expression: Option<&Expr>) -> Option<i32> {
+fn offset(component: &ComponentHandle, expression: Option<&Expr>) -> Option<i32> {
     let Some(expression) = expression else {
         return Some(0);
     };
@@ -519,7 +520,8 @@ fn offset(component: &RefCell<Component>, expression: Option<&Expr>) -> Option<i
     }
 }
 
-fn evaluate(component: &RefCell<Component>, expression: &Expr) -> Option<Value> {
+/// Оценивает выражение в контексте компонента.
+pub fn evaluate(component: &ComponentHandle, expression: &Expr) -> Option<Value> {
     eval(&mut component.borrow_mut(), expression).ok()
 }
 

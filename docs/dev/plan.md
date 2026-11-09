@@ -174,8 +174,9 @@ bropicker сломан с 3.5.11.2a до 3.6.2. PNG/tint и градиент о�
   `Structure { parent, each, value, rebuild }`, триггер `Effect`, `Ui::settle()`
   после `flush`; `poll` и AST-носители (`StructureKind`, `RowInfo`) уходят,
   `reconcile_each` остаётся.
-- [ ] 3.5.11.2c — эмиссия `if`/`each`: `fn value`/`fn rebuild` на структуру,
-  замена поддеревьев через `settle`.
+- [x] 3.5.11.2c1 — эмиссия `if`: `fn value`, `fn rebuild` + ветки на тему,
+  структура вызывает свой `rebuild` уже на сборке дерева.
+- [ ] 3.5.11.2c2 — эмиссия `each`: scope на элемент, ключи, `rows`.
 - [ ] 3.5.11.3 — компоненты: `<use>`, пропсы, дефолты, события, scope.
 
 Интеграция (3.6):
