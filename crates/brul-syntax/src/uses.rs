@@ -1,24 +1,12 @@
 use crate::error::Error;
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Rule {
-    File,
-    Use,
-    Ident,
-    String,
-}
-
-impl Rule {
-    pub const ALL: &[Rule] = &[Rule::File, Rule::Use, Rule::Ident, Rule::String];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Rule::File => "File",
-            Rule::Use => "Use",
-            Rule::Ident => "Ident",
-            Rule::String => "String",
-        }
+rule! {
+    pub enum Rule {
+        File,
+        Use,
+        Ident,
+        String,
     }
 }
 
