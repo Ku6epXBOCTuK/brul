@@ -10,7 +10,7 @@ use brul_syntax::style::{self, Stylesheet};
 use brul_syntax::uses::{self, Use};
 
 use crate::build_bound_tree;
-use crate::tree::{Binding, Handler, script_error};
+use crate::tree::{Binding, Handler, HandlerEvent, script_error};
 
 pub struct Loaded {
     pub config: WindowConfig,
@@ -61,8 +61,9 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
     }
 
     let root = root(&window)?;
-    let config = config(&window)?;
-    let built = build_bound_tree(root, &stylesheet, theme, &mut component)?;
+    let (config, window_handlers) = config(&window, &component)?;
+    let mut built = build_bound_tree(root, &stylesheet, theme, &mut component)?;
+    built.handlers.extend(window_handlers);
 
     Ok(Loaded {
         config,
@@ -75,8 +76,9 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
     })
 }
 
-fn config(window: &Window) -> Result<WindowConfig, Error> {
+fn config(window: &Window, component: &Component) -> Result<(WindowConfig, Vec<Handler>), Error> {
     let mut config = WindowConfig::default();
+    let mut handlers = Vec::new();
     for arg in &window.args {
         match arg {
             Arg::Named { name, value } => match name.as_str() {
@@ -92,18 +94,43 @@ fn config(window: &Window) -> Result<WindowConfig, Error> {
                     ));
                 }
             },
-            Arg::Handler { .. } => {
-                return Err(error_at(
-                    window.position,
-                    "window events are not supported yet",
-                ));
+            Arg::Handler { event, handler } => {
+                let Some(parsed) = HandlerEvent::parse(event) else {
+                    return Err(error_at(
+                        window.position,
+                        format!("event '{event}' is not supported yet"),
+                    ));
+                };
+                if parsed != HandlerEvent::Key {
+                    return Err(error_at(
+                        window.position,
+                        format!("window event '{}' is not supported yet", parsed.name()),
+                    ));
+                }
+                if handlers.iter().any(|item: &Handler| item.event == parsed) {
+                    return Err(error_at(
+                        window.position,
+                        format!("event '{}' is handled twice", parsed.name()),
+                    ));
+                }
+                if !component.has_function(handler) {
+                    return Err(error_at(
+                        window.position,
+                        format!("function '{handler}' is not defined"),
+                    ));
+                }
+                handlers.push(Handler {
+                    widget: None,
+                    event: parsed,
+                    function: handler.clone(),
+                });
             }
             Arg::Class(_) => {
                 return Err(error_at(window.position, "window arguments must be named"));
             }
         }
     }
-    Ok(config)
+    Ok((config, handlers))
 }
 
 fn root(window: &Window) -> Result<&Element, Error> {

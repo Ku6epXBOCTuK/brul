@@ -159,9 +159,10 @@ pub fn apply_events(
     let mut selected = None;
 
     for event in events {
-        let WidgetEvent::Click(id) = *event else {
+        let WidgetEvent::Click(id) = event else {
             continue;
         };
+        let id = *id;
 
         if id == ids.remember.row {
             toggle_checkbox(tree, &ids.remember);

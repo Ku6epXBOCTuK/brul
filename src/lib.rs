@@ -43,7 +43,7 @@ impl Ui {
 
     pub fn dispatch(&mut self, events: &[WidgetEvent]) {
         for event in events {
-            let Some((widget, target)) = handler_target(*event) else {
+            let Some((widget, target)) = handler_target(event) else {
                 continue;
             };
             let Some(handler) = self
@@ -54,10 +54,17 @@ impl Ui {
                 continue;
             };
             let function = handler.function.clone();
+            let arguments = match event {
+                WidgetEvent::Key(code) => vec![Value::Object(vec![(
+                    "code".to_owned(),
+                    Value::String(code.clone()),
+                )])],
+                _ => Vec::new(),
+            };
             if let Err(error) = self
                 .component
                 .borrow_mut()
-                .call_function(&function, Vec::new())
+                .call_function(&function, arguments)
             {
                 eprintln!("{error}");
             }
@@ -65,13 +72,15 @@ impl Ui {
     }
 }
 
-fn handler_target(event: WidgetEvent) -> Option<(WidgetId, HandlerEvent)> {
+fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent)> {
     match event {
-        WidgetEvent::Click(id) => Some((id, HandlerEvent::Click)),
-        WidgetEvent::Press(id) => Some((id, HandlerEvent::Press)),
-        WidgetEvent::Release(id) => Some((id, HandlerEvent::Release)),
-        WidgetEvent::PointerEnter(id) => Some((id, HandlerEvent::Enter)),
-        WidgetEvent::PointerLeave(id) => Some((id, HandlerEvent::Leave)),
+        WidgetEvent::Click(id) => Some((Some(*id), HandlerEvent::Click)),
+        WidgetEvent::Press(id) => Some((Some(*id), HandlerEvent::Press)),
+        WidgetEvent::Release(id) => Some((Some(*id), HandlerEvent::Release)),
+        WidgetEvent::PointerEnter(id) => Some((Some(*id), HandlerEvent::Enter)),
+        WidgetEvent::PointerLeave(id) => Some((Some(*id), HandlerEvent::Leave)),
+        WidgetEvent::Key(_) => Some((None, HandlerEvent::Key)),
+        WidgetEvent::Drag(_) => None,
     }
 }
 

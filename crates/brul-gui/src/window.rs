@@ -294,6 +294,23 @@ impl ApplicationHandler for App {
 type EventHandler = Box<dyn FnMut(&[WidgetEvent])>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
 
+fn key_code(key: &Key) -> Option<String> {
+    let named = match key {
+        Key::Named(NamedKey::Escape) => "Escape",
+        Key::Named(NamedKey::Enter) => "Enter",
+        Key::Named(NamedKey::Tab) => "Tab",
+        Key::Named(NamedKey::Backspace) => "Backspace",
+        Key::Named(NamedKey::Delete) => "Delete",
+        Key::Named(NamedKey::ArrowUp) => "ArrowUp",
+        Key::Named(NamedKey::ArrowDown) => "ArrowDown",
+        Key::Named(NamedKey::ArrowLeft) => "ArrowLeft",
+        Key::Named(NamedKey::ArrowRight) => "ArrowRight",
+        Key::Character(text) => return Some(text.to_string()),
+        _ => return None,
+    };
+    Some(named.to_owned())
+}
+
 struct TreeApp {
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
@@ -365,10 +382,13 @@ impl ApplicationHandler for TreeApp {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed
-                    && event.logical_key == Key::Named(NamedKey::Escape)
-                {
-                    event_loop.exit();
+                if event.state == ElementState::Pressed {
+                    if let Some(code) = key_code(&event.logical_key) {
+                        self.dispatch_events(&window, vec![WidgetEvent::Key(code)]);
+                    }
+                    if event.logical_key == Key::Named(NamedKey::Escape) {
+                        event_loop.exit();
+                    }
                 }
             }
             WindowEvent::PointerMoved { position, .. } => {
@@ -462,6 +482,12 @@ impl TreeApp {
     fn dispatch_events(&mut self, window: &Arc<dyn Window>, events: Vec<WidgetEvent>) {
         if events.is_empty() {
             return;
+        }
+        if events
+            .iter()
+            .any(|event| matches!(event, WidgetEvent::Drag(_)))
+        {
+            let _ = window.drag_window();
         }
         (self.handler)(&events);
         brul_reactive::flush();

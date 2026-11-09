@@ -105,7 +105,7 @@
   равном значении.
 - [x] 3.5.5.1 — события элементов: click/press/release/enter/leave → обработчик
   скрипта.
-- [ ] 3.5.5.2 — клавиши и drag: `on key` с полем `code`, `on drag`/`dragWindow`,
+- [x] 3.5.5.2 — клавиши и drag: `on key` с полем `code`, `on drag`/`dragWindow`,
   события окна в `brul-gui`.
 - [ ] 3.5.5.3 — хост и таймеры: `Host` (`launch_browser`, `exit`, `set_theme`),
   `every`, ошибки обработчика в лог.

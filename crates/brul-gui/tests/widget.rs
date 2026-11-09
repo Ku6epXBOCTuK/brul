@@ -19,6 +19,29 @@ fn style(background: Color) -> WidgetStyle {
 }
 
 #[test]
+fn draggable_widget_reports_a_drag_on_press() {
+    let text = Widget::text("drag")
+        .with_layout(fixed(40, 20))
+        .draggable(true);
+    let text_id = text.id();
+    let root = Widget::column(vec![text]).with_layout(fixed(100, 100));
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 100,
+            height: 100,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    let events = tree.pointer_down(5, 5).expect("down");
+    assert!(events.contains(&WidgetEvent::Drag(text_id)));
+}
+
+#[test]
 fn children_are_placed_inside_padding_and_spacing() {
     let first = Widget::column(vec![]).with_layout(fixed(40, 20));
     let first_id = first.id();

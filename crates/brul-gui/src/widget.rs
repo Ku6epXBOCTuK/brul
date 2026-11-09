@@ -138,6 +138,7 @@ pub struct Widget {
     styles: StyleSet,
     state: WidgetState,
     offset: Option<Offset>,
+    draggable: bool,
 }
 
 enum WidgetData {
@@ -191,6 +192,7 @@ impl Widget {
             styles: StyleSet::default(),
             state: WidgetState::default(),
             offset: None,
+            draggable: false,
         }
     }
 
@@ -218,6 +220,11 @@ impl Widget {
 
     pub fn with_offset(mut self, x: i32, y: i32) -> Self {
         self.offset = Some(Offset { x, y });
+        self
+    }
+
+    pub fn draggable(mut self, draggable: bool) -> Self {
+        self.draggable = draggable;
         self
     }
 
@@ -287,13 +294,15 @@ pub struct WidgetSnapshotNode {
     pub texture: Option<Rc<Texture>>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WidgetEvent {
     PointerEnter(WidgetId),
     PointerLeave(WidgetId),
     Press(WidgetId),
     Release(WidgetId),
     Click(WidgetId),
+    Drag(WidgetId),
+    Key(String),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -575,6 +584,9 @@ impl WidgetTree {
             }
             self.mark_dirty(id);
             events.push(WidgetEvent::Press(id));
+            if is_draggable(&self.root, id) {
+                events.push(WidgetEvent::Drag(id));
+            }
         }
         if !path.is_empty() {
             self.snapshot = None;
@@ -722,6 +734,16 @@ fn find_widget_mut(widget: &mut Widget, id: WidgetId) -> Option<&mut Widget> {
         }
     }
     None
+}
+
+fn is_draggable(widget: &Widget, id: WidgetId) -> bool {
+    if widget.id == id {
+        return widget.draggable;
+    }
+    widget
+        .children()
+        .iter()
+        .any(|child| is_draggable(child, id))
 }
 
 fn build_layout(

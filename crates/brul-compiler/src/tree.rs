@@ -20,6 +20,8 @@ pub enum HandlerEvent {
     Release,
     Enter,
     Leave,
+    Drag,
+    Key,
 }
 
 impl HandlerEvent {
@@ -30,16 +32,20 @@ impl HandlerEvent {
             Self::Release => "release",
             Self::Enter => "enter",
             Self::Leave => "leave",
+            Self::Drag => "drag",
+            Self::Key => "key",
         }
     }
 
-    fn parse(name: &str) -> Option<Self> {
+    pub(crate) fn parse(name: &str) -> Option<Self> {
         match name {
             "click" => Some(Self::Click),
             "press" => Some(Self::Press),
             "release" => Some(Self::Release),
             "enter" => Some(Self::Enter),
             "leave" => Some(Self::Leave),
+            "drag" => Some(Self::Drag),
+            "key" => Some(Self::Key),
             _ => None,
         }
     }
@@ -47,7 +53,7 @@ impl HandlerEvent {
 
 #[derive(Debug, Clone)]
 pub struct Handler {
-    pub widget: WidgetId,
+    pub widget: Option<WidgetId>,
     pub event: HandlerEvent,
     pub function: String,
 }
@@ -206,6 +212,22 @@ fn parameters(
                         format!("event '{event}' is not supported yet"),
                     ));
                 };
+                if event == HandlerEvent::Key {
+                    return Err(error_at(
+                        element.position,
+                        "key events are only supported on the window",
+                    ));
+                }
+                if event == HandlerEvent::Drag {
+                    if handler != "dragWindow" {
+                        return Err(error_at(
+                            element.position,
+                            "drag handler must be dragWindow",
+                        ));
+                    }
+                    widget = widget.draggable(true);
+                    continue;
+                }
                 if handlers.iter().any(|item: &Handler| item.event == event) {
                     return Err(error_at(
                         element.position,
@@ -219,7 +241,7 @@ fn parameters(
                     ));
                 }
                 handlers.push(Handler {
-                    widget: id,
+                    widget: Some(id),
                     event,
                     function: handler.clone(),
                 });

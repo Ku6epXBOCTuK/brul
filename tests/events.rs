@@ -61,6 +61,117 @@ fn count(ui: &Ui) -> f64 {
     }
 }
 
+const KEY: &str = r#"
+<script>
+let code = "";
+function handleKey(ev) {
+    code = ev.code;
+}
+</script>
+
+<markup>
+window Demo (title: "Demo", on key: handleKey) {
+    Column {
+        Text { "press a key" }
+    }
+}
+</markup>
+"#;
+
+#[test]
+fn window_key_handler_receives_the_code() {
+    let mut ui = build(KEY);
+    ui.dispatch(&[WidgetEvent::Key("Enter".to_owned())]);
+    assert_eq!(
+        ui.component.borrow().read("code").expect("code"),
+        Value::String("Enter".to_owned())
+    );
+}
+
+#[test]
+fn drag_accepts_drag_window_handler() {
+    let source = r#"
+<markup>
+window Demo (title: "Demo") {
+    Column (on drag: dragWindow) {
+        Text { "drag" }
+    }
+}
+</markup>
+"#;
+    let loaded = load(source, None).expect("app loads");
+    assert!(loaded.handlers.is_empty());
+}
+
+#[test]
+fn key_on_an_element_is_rejected() {
+    let source = r#"
+<script>
+function handleKey(ev) {
+}
+</script>
+
+<markup>
+window Demo (title: "Demo") {
+    Column (on key: handleKey) {
+        Text { "x" }
+    }
+}
+</markup>
+"#;
+    let error = load(source, None).err().expect("error");
+    assert_eq!(
+        error.to_string(),
+        "line 9, column 5: key events are only supported on the window"
+    );
+}
+
+#[test]
+fn window_rejects_element_events() {
+    let source = r#"
+<script>
+function handleClick() {
+}
+</script>
+
+<markup>
+window Demo (title: "Demo", on click: handleClick) {
+    Column {
+        Text { "x" }
+    }
+}
+</markup>
+"#;
+    let error = load(source, None).err().expect("error");
+    assert_eq!(
+        error.to_string(),
+        "line 8, column 7: window event 'click' is not supported yet"
+    );
+}
+
+#[test]
+fn window_rejects_a_second_key_handler() {
+    let source = r#"
+<script>
+function handleKey(ev) {
+}
+</script>
+
+<markup>
+window Demo (title: "Demo", on key: handleKey, on key: handleKey) {
+    Column {
+        Text { "x" }
+    }
+}
+</markup>
+"#;
+    let error = load(source, None).err().expect("error");
+    assert_eq!(
+        error.to_string(),
+        "line 8, column 7: event 'key' is handled twice"
+    );
+}
+
 #[test]
 fn widget_events_call_script_handlers() {
     let mut ui = build(APP);
