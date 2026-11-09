@@ -16,3 +16,6 @@ toml = { workspace = true }
 
 [dev-dependencies]
 brul-compiler = { workspace = true }
+
+[build-dependencies]
+brul-codegen = { workspace = true }

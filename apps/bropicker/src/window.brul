@@ -1,0 +1,11 @@
+<markup>
+    window Bropicker (
+        title: "bropicker",
+        width: 488,
+        height: 800,
+        frameless: true,
+        transparent: true
+    ) {
+        Column { }
+    }
+</markup>

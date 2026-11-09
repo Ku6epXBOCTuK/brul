@@ -5,6 +5,9 @@ use bropicker::launcher::Launcher;
 use bropicker::{BrowserEntry, Config, Theme, demo_browsers};
 use brul::{Host, Value};
 
+#[allow(dead_code)]
+mod generated;
+
 struct LauncherHost {
     browsers: Vec<BrowserEntry>,
     url: String,
