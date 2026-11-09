@@ -1,6 +1,14 @@
 use brul_compiler::build_tree;
 use brul_gui::{Size, TextEngine, Widget, WidgetKind, WidgetSnapshot, WidgetTree};
 use brul_syntax::markup::{Declaration, Element, Member, parse_file};
+use brul_syntax::style::Stylesheet;
+
+fn empty_stylesheet() -> Stylesheet {
+    Stylesheet {
+        themes: Vec::new(),
+        rules: Vec::new(),
+    }
+}
 
 fn root(source: &str) -> Element {
     let file = parse_file(source).expect("markup parses");
@@ -47,7 +55,7 @@ fn static_tree_builds_containers_and_text() {
         }
         "#,
     );
-    let widget = build_tree(&element).expect("tree builds");
+    let widget = build_tree(&element, &empty_stylesheet(), None).expect("tree builds");
     let snapshot = snapshot(widget);
     let kinds: Vec<WidgetKind> = snapshot.nodes.iter().map(|node| node.kind).collect();
 
@@ -79,7 +87,9 @@ fn unknown_widget_reports_its_position() {
         }
         "#,
     );
-    let error = build_tree(&element).err().expect("unknown widget");
+    let error = build_tree(&element, &empty_stylesheet(), None)
+        .err()
+        .expect("unknown widget");
 
     assert_eq!(error.message, "unknown widget 'Toolbar'");
     assert_eq!((error.line, error.column), (4, 17));
@@ -94,7 +104,9 @@ fn image_is_not_supported_yet() {
         }
         "#,
     );
-    let error = build_tree(&element).err().expect("image is deferred");
+    let error = build_tree(&element, &empty_stylesheet(), None)
+        .err()
+        .expect("image is deferred");
 
     assert_eq!(error.message, "widget 'Image' is not supported yet");
     assert_eq!((error.line, error.column), (3, 13));
@@ -109,7 +121,9 @@ fn text_content_must_be_a_string_literal() {
         }
         "#,
     );
-    let error = build_tree(&element).err().expect("expression content");
+    let error = build_tree(&element, &empty_stylesheet(), None)
+        .err()
+        .expect("expression content");
 
     assert_eq!(error.message, "Text content must be a string literal");
     assert_eq!((error.line, error.column), (3, 20));
@@ -120,11 +134,13 @@ fn element_arguments_are_not_supported_yet() {
     let element = root(
         r#"
         window Picker (title: "x") {
-            Column (root) { }
+            Column (title: "x") { }
         }
         "#,
     );
-    let error = build_tree(&element).err().expect("arguments");
+    let error = build_tree(&element, &empty_stylesheet(), None)
+        .err()
+        .expect("arguments");
 
     assert_eq!(error.message, "element arguments are not supported yet");
     assert_eq!((error.line, error.column), (3, 13));
@@ -141,7 +157,9 @@ fn if_is_not_supported_yet() {
         }
         "#,
     );
-    let error = build_tree(&element).err().expect("if");
+    let error = build_tree(&element, &empty_stylesheet(), None)
+        .err()
+        .expect("if");
 
     assert_eq!(error.message, "'if' is not supported yet");
     assert_eq!((error.line, error.column), (3, 13));

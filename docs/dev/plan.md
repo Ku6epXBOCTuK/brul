@@ -91,7 +91,7 @@
 
 - [x] 3.5.1 — статическое дерево виджетов из AST разметки:
   `View`/`Row`/`Column`, `Text` с литералом; остальное — ошибка с позицией.
-- [ ] 3.5.2 — стили: классы через `Stylesheet::snapshot` в
+- [x] 3.5.2 — стили: классы через `Stylesheet::snapshot` в
   `LayoutStyle`/`WidgetStyle`/`TextStyle`/`StyleSet`, состояния и темы.
 - [ ] 3.5.3 — окно: аргументы `window` → `WindowConfig`, загрузка `.brul`
   (markup/style/script), bootstrap приложения.
