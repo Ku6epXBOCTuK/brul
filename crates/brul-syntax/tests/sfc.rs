@@ -3,8 +3,14 @@
 const PICKER: &str = include_str!("fixtures/picker.brul");
 
 #[test]
-fn splits_three_blocks() {
+fn splits_four_blocks() {
     let sfc = parse(PICKER).unwrap();
+    assert!(
+        sfc.uses
+            .unwrap()
+            .content
+            .contains("import BrowserItem from")
+    );
     assert!(sfc.markup.content.contains("component CheckRow"));
     assert!(sfc.markup.content.contains("window Picker"));
     assert!(sfc.style.unwrap().content.contains(".checkbox:checked"));
@@ -14,7 +20,7 @@ fn splits_three_blocks() {
 #[test]
 fn content_offsets_point_into_source() {
     let sfc = parse(PICKER).unwrap();
-    for block in [Some(sfc.markup), sfc.style, sfc.script]
+    for block in [sfc.uses, Some(sfc.markup), sfc.style, sfc.script]
         .into_iter()
         .flatten()
     {
@@ -27,6 +33,7 @@ fn content_offsets_point_into_source() {
 fn style_and_script_are_optional() {
     let sfc = parse("<markup>component A { }</markup>").unwrap();
     assert_eq!(sfc.markup.content, "component A { }");
+    assert!(sfc.uses.is_none());
     assert!(sfc.style.is_none());
     assert!(sfc.script.is_none());
 }
@@ -50,6 +57,19 @@ fn duplicate_block_is_reported() {
     match error {
         Error::Duplicate { name, line, .. } => {
             assert_eq!(name, "style");
+            assert_eq!(line, 3);
+        }
+        other => panic!("expected Duplicate, got {other:?}"),
+    }
+}
+
+#[test]
+fn duplicate_use_block_is_reported() {
+    let source = "<use></use>\n<markup></markup>\n<use></use>";
+    let error = parse(source).unwrap_err();
+    match error {
+        Error::Duplicate { name, line, .. } => {
+            assert_eq!(name, "use");
             assert_eq!(line, 3);
         }
         other => panic!("expected Duplicate, got {other:?}"),

@@ -16,6 +16,7 @@ pub struct Block<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sfc<'a> {
+    pub uses: Option<Block<'a>>,
     pub markup: Block<'a>,
     pub style: Option<Block<'a>>,
     pub script: Option<Block<'a>>,
@@ -66,6 +67,7 @@ pub fn parse(source: &str) -> Result<Sfc<'_>, Error> {
         }
     })?;
 
+    let mut uses = None;
     let mut markup = None;
     let mut style = None;
     let mut script = None;
@@ -73,12 +75,14 @@ pub fn parse(source: &str) -> Result<Sfc<'_>, Error> {
     for pair in pairs.into_iter().flat_map(|file| file.into_inner()) {
         let (line, column) = pair.as_span().start_pos().line_col();
         let name = match pair.as_rule() {
+            Rule::use_block => "use",
             Rule::markup => "markup",
             Rule::style => "style",
             Rule::script => "script",
             _ => continue,
         };
         let slot = match name {
+            "use" => &mut uses,
             "markup" => &mut markup,
             "style" => &mut style,
             _ => &mut script,
@@ -89,6 +93,7 @@ pub fn parse(source: &str) -> Result<Sfc<'_>, Error> {
     }
 
     Ok(Sfc {
+        uses,
         markup: markup.ok_or(Error::MissingMarkup)?,
         style,
         script,

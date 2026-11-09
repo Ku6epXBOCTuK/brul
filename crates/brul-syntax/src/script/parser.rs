@@ -1,7 +1,7 @@
 use crate::ast::Expr;
 use crate::error::Error;
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
-use crate::script::ast::{Function, Import, Program, Statement};
+use crate::script::ast::{Function, Program, Statement};
 
 pub fn parse(source: &str) -> Result<Program, Error> {
     let tokens = lexer::tokenize(source)?;
@@ -10,10 +10,6 @@ pub fn parse(source: &str) -> Result<Program, Error> {
         tokens,
         at: 0,
     };
-    let mut imports = Vec::new();
-    while parser.at_keyword("import") {
-        imports.push(parser.import()?);
-    }
     let mut functions = Vec::new();
     let mut statements = Vec::new();
     while !parser.at_end() {
@@ -24,7 +20,6 @@ pub fn parse(source: &str) -> Result<Program, Error> {
         }
     }
     Ok(Program {
-        imports,
         functions,
         statements,
     })
@@ -37,15 +32,6 @@ struct Parser<'a> {
 }
 
 impl Parser<'_> {
-    fn import(&mut self) -> Result<Import, Error> {
-        self.expect_keyword("import")?;
-        let name = self.ident("expected import name")?;
-        self.expect_keyword("from")?;
-        let path = self.string()?;
-        self.expect_punct(Punct::Semicolon, "expected ';'")?;
-        Ok(Import { name, path })
-    }
-
     fn statement(&mut self) -> Result<Statement, Error> {
         if self.at_keyword("let") {
             return self.let_statement(false);
@@ -185,18 +171,6 @@ impl Parser<'_> {
                 Ok(name)
             }
             _ => Err(self.error(token.span, message)),
-        }
-    }
-
-    fn string(&mut self) -> Result<String, Error> {
-        let token = &self.tokens[self.at];
-        match &token.kind {
-            TokenKind::String(value) => {
-                let value = value.clone();
-                self.at += 1;
-                Ok(value)
-            }
-            _ => Err(self.error(token.span, "expected module path")),
         }
     }
 

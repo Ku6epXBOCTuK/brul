@@ -1,0 +1,7 @@
+File   = { Use } ;
+Use    = "import" Ident "from" String ";" ;
+
+Ident  = letter { letter | digit | "_" } ;
+String = '"' { ? any character except '"' and newline ? } '"' ;
+letter = ? ASCII letter ? ;
+digit  = ? ASCII digit ? ;

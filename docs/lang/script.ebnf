@@ -16,8 +16,7 @@ Array       = "[" [ Expr { "," Expr } ] "]" ;
 Object      = "{" [ Ident ":" Expr { "," Ident ":" Expr } ] "}" ;
 Template    = "`" { TemplateChar | "${" Expr "}" } "`" ;
 
-Program      = { ImportStmt | FunctionDecl | Statement } ;
-ImportStmt   = "import" Ident "from" String ";" ;   (* только в начале блока *)
+Program      = { FunctionDecl | Statement } ;
 FunctionDecl = "function" Ident "(" [ ParamList ] ")" Block ;
 ParamList    = Ident { "," Ident } ;              (* без типов — MVP *)
 Statement    = LetStmt | IfStmt | ExprStmt | Block ;

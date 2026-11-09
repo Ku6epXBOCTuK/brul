@@ -1,11 +1,13 @@
 use brul_syntax::markup::Rule as ParserRule;
 use brul_syntax::script::Rule as ScriptRule;
 use brul_syntax::style::Rule as StyleRule;
+use brul_syntax::uses::Rule as UsesRule;
 use std::collections::{BTreeMap, BTreeSet};
 
 const MARKUP: &str = include_str!("../../../docs/lang/markup.ebnf");
 const STYLE: &str = include_str!("../../../docs/lang/style.ebnf");
 const SCRIPT: &str = include_str!("../../../docs/lang/script.ebnf");
+const USES: &str = include_str!("../../../docs/lang/use.ebnf");
 
 #[derive(Clone, Debug, PartialEq)]
 enum Token {
@@ -33,8 +35,13 @@ struct Rule {
     refs: Vec<Ref>,
 }
 
-fn files() -> [(&'static str, &'static str); 3] {
-    [("Markup", MARKUP), ("Style", STYLE), ("Script", SCRIPT)]
+fn files() -> [(&'static str, &'static str); 4] {
+    [
+        ("Markup", MARKUP),
+        ("Style", STYLE),
+        ("Script", SCRIPT),
+        ("Uses", USES),
+    ]
 }
 
 fn line_of(src: &str, pos: usize) -> usize {
@@ -246,7 +253,7 @@ fn tables() -> BTreeMap<&'static str, BTreeMap<String, Rule>> {
 #[test]
 fn spec_grammar_is_well_formed() {
     let tables = tables();
-    assert_eq!(tables.len(), 3);
+    assert_eq!(tables.len(), 4);
 }
 
 #[test]
@@ -305,6 +312,26 @@ fn script_rules_match_the_spec() {
         assert!(
             spec.contains(name),
             "parser rule {name} is missing from script.ebnf"
+        );
+    }
+}
+
+#[test]
+fn use_rules_match_the_spec() {
+    let tables = tables();
+    let spec: BTreeSet<&str> = tables["Uses"]
+        .keys()
+        .map(String::as_str)
+        .filter(|name| name.chars().next().is_some_and(char::is_uppercase))
+        .collect();
+    let parser: BTreeSet<&str> = UsesRule::ALL.iter().map(|rule| rule.name()).collect();
+    for name in &spec {
+        assert!(parser.contains(name), "no parser rule for {name}");
+    }
+    for name in &parser {
+        assert!(
+            spec.contains(name),
+            "parser rule {name} is missing from use.ebnf"
         );
     }
 }

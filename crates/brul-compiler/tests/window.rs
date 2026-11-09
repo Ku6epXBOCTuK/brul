@@ -75,6 +75,19 @@ fn script_block_is_parsed_into_a_program() {
 }
 
 #[test]
+fn use_block_is_parsed_before_markup() {
+    let loaded = load(
+        "<use>\nimport BrowserItem from \"./browser_item\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Column { } }\n</markup>",
+        None,
+    )
+    .expect("app loads");
+
+    assert_eq!(loaded.uses.len(), 1);
+    assert_eq!(loaded.uses[0].name, "BrowserItem");
+    assert_eq!(loaded.uses[0].path, "./browser_item");
+}
+
+#[test]
 fn missing_arguments_keep_window_defaults() {
     let (config, _) = snapshot(
         r#"

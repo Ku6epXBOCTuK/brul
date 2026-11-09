@@ -1,5 +1,5 @@
 use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position};
-use brul_syntax::script::{Function, Import, Program, Statement, parse};
+use brul_syntax::script::{Function, Program, Statement, parse};
 
 fn expr(kind: ExprKind) -> Expr {
     Expr::new(kind, Position::default())
@@ -40,70 +40,10 @@ fn empty_script_is_an_empty_program() {
     assert_eq!(
         parse("").unwrap(),
         Program {
-            imports: vec![],
             functions: vec![],
             statements: vec![],
         }
     );
-}
-
-#[test]
-fn import_parses_name_and_path() {
-    let program = parse(r#"import BrowserItem from "./browser_item";"#).unwrap();
-    assert_eq!(
-        program.imports,
-        vec![Import {
-            name: "BrowserItem".to_owned(),
-            path: "./browser_item".to_owned(),
-        }]
-    );
-}
-
-#[test]
-fn imports_parse_in_order_and_skip_comments() {
-    let source = r#"
-        // components used by the markup
-        import BrowserItem from "./browser_item";
-
-        import Footer from "./footer";
-    "#;
-    let program = parse(source).unwrap();
-    assert_eq!(
-        program
-            .imports
-            .iter()
-            .map(|import| import.name.as_str())
-            .collect::<Vec<_>>(),
-        vec!["BrowserItem", "Footer"]
-    );
-}
-
-#[test]
-fn import_without_name_points_at_the_path() {
-    let error = parse(r#"import "./a";"#).unwrap_err();
-    assert_eq!(error.message, "expected import name");
-    assert_eq!((error.line, error.column), (1, 8));
-}
-
-#[test]
-fn import_without_from_points_at_the_path() {
-    let error = parse(r#"import A "./a";"#).unwrap_err();
-    assert_eq!(error.message, "expected 'from'");
-    assert_eq!((error.line, error.column), (1, 10));
-}
-
-#[test]
-fn import_with_non_string_path_is_rejected() {
-    let error = parse("import A from x;").unwrap_err();
-    assert_eq!(error.message, "expected module path");
-    assert_eq!((error.line, error.column), (1, 15));
-}
-
-#[test]
-fn import_without_semicolon_points_at_the_end() {
-    let error = parse(r#"import A from "./a""#).unwrap_err();
-    assert_eq!(error.message, "expected ';'");
-    assert_eq!((error.line, error.column), (1, 20));
 }
 
 #[test]
@@ -366,11 +306,4 @@ fn function_between_statements_is_a_top_level_item() {
     let program = parse("let a = 1; function f() { } let b = 2;").unwrap();
     assert_eq!(program.statements.len(), 2);
     assert_eq!(program.functions.len(), 1);
-}
-
-#[test]
-fn statements_follow_imports() {
-    let program = parse("import A from \"./a\";\nlet a = 1;").unwrap();
-    assert_eq!(program.imports.len(), 1);
-    assert_eq!(program.statements.len(), 1);
 }

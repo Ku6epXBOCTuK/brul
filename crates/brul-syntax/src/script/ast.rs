@@ -2,7 +2,6 @@ use crate::ast::Expr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub imports: Vec<Import>,
     pub functions: Vec<Function>,
     pub statements: Vec<Statement>,
 }
@@ -12,12 +11,6 @@ pub struct Function {
     pub name: String,
     pub params: Vec<String>,
     pub body: Vec<Statement>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Import {
-    pub name: String,
-    pub path: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]

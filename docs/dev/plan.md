@@ -95,6 +95,8 @@
   `LayoutStyle`/`WidgetStyle`/`TextStyle`/`StyleSet`, состояния и темы.
 - [x] 3.5.3 — окно: аргументы `window` → `WindowConfig`, загрузка `.brul`
   (markup/style/script), bootstrap приложения.
+- [x] 3.5.3.1 — импорты в отдельном блоке `<use>`: сплиттер и `Sfc`, разбор
+  `Import` вне скрипта, спека и фикстуры.
 - [ ] 3.5.4 — выражения и привязки: `Component`/`eval` в `Text` и параметрах
   (`checked`/`selected`/`disabled`/`visible`/`x`/`y`), update-функции; сеттер
   виджета не помечает узел dirty при равном значении.

@@ -1,3 +1,8 @@
+<use>
+    import BrowserItem from "./browser_item";
+    import Footer from "./footer";
+</use>
+
 <markup>
 component CheckRow {
     prop label: String = ""

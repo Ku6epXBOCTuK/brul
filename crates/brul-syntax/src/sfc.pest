@@ -1,20 +1,25 @@
 // NOTE: tags delimit blocks, so braces and strings inside languages need no counting
 file        = { SOI ~ spacing ~ (block ~ spacing)* ~ EOI }
-block       = _{ markup | style | script }
+block       = _{ use_block | markup | style | script }
+
+use_block   = { use_open ~ use_inner ~ use_close }
+use_open    = { "<use>" }
+use_inner   = { (!(use_open | markup_open | style_open | script_open | use_close) ~ ANY)* }
+use_close   = { "</use>" }
 
 markup      = { markup_open ~ markup_inner ~ markup_close }
 markup_open = { "<markup>" }
-markup_inner= { (!(markup_open | style_open | script_open | markup_close) ~ ANY)* }
+markup_inner= { (!(use_open | markup_open | style_open | script_open | markup_close) ~ ANY)* }
 markup_close= { "</markup>" }
 
 style       = { style_open ~ style_inner ~ style_close }
 style_open  = { "<style>" }
-style_inner = { (!(markup_open | style_open | script_open | style_close) ~ ANY)* }
+style_inner = { (!(use_open | markup_open | style_open | script_open | style_close) ~ ANY)* }
 style_close = { "</style>" }
 
 script      = { script_open ~ script_inner ~ script_close }
 script_open = { "<script>" }
-script_inner= { (!(markup_open | style_open | script_open | script_close) ~ ANY)* }
+script_inner= { (!(use_open | markup_open | style_open | script_open | script_close) ~ ANY)* }
 script_close= { "</script>" }
 
 spacing     = _{ (" " | "\t" | "\r" | "\n")* }

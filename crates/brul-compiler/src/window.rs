@@ -6,12 +6,14 @@ use brul_syntax::markup::{self, Arg, Declaration, Element, Member, Window};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
 use brul_syntax::style::{self, Stylesheet};
+use brul_syntax::uses::{self, Use};
 
 use crate::build_tree;
 
 pub struct Loaded {
     pub config: WindowConfig,
     pub tree: Widget,
+    pub uses: Vec<Use>,
     pub program: Option<Program>,
 }
 
@@ -39,6 +41,10 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
             rules: Vec::new(),
         },
     };
+    let uses = match sfc.uses {
+        Some(block) => uses::parse(&padded(source, block))?,
+        None => Vec::new(),
+    };
     let program = match sfc.script {
         Some(block) => Some(script::parse(&padded(source, block))?),
         None => None,
@@ -51,6 +57,7 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
     Ok(Loaded {
         config,
         tree,
+        uses,
         program,
     })
 }
