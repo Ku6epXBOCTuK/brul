@@ -1,8 +1,8 @@
 use brul_gui::{Direction, Widget, WidgetId};
-use brul_script::{Component, Value, eval};
+use brul_script::{Component, Value, Variable, eval};
 use brul_syntax::ast::{Expr, Position};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, BlockItem, Element, IfBlock};
+use brul_syntax::markup::{Arg, BlockItem, EachBlock, Element, IfBlock};
 use brul_syntax::style::Stylesheet;
 
 use crate::styles::{self, Resolved};
@@ -11,6 +11,7 @@ use crate::styles::{self, Resolved};
 pub struct Binding {
     pub widget: WidgetId,
     pub target: BindingTarget,
+    pub scopes: Vec<Vec<Variable>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,6 +106,7 @@ pub fn build_bound_tree(
             let binding = Binding {
                 widget: widget.id(),
                 target: BindingTarget::Text(expression),
+                scopes: component.build_scopes(),
             };
             (widget, vec![binding], Vec::new())
         }
@@ -167,6 +169,7 @@ fn parameters(
                     bindings.push(Binding {
                         widget: id,
                         target: BindingTarget::Checked(value.clone()),
+                        scopes: component.build_scopes(),
                     });
                 }
                 "selected" => {
@@ -174,6 +177,7 @@ fn parameters(
                     bindings.push(Binding {
                         widget: id,
                         target: BindingTarget::Selected(value.clone()),
+                        scopes: component.build_scopes(),
                     });
                 }
                 "disabled" => {
@@ -181,6 +185,7 @@ fn parameters(
                     bindings.push(Binding {
                         widget: id,
                         target: BindingTarget::Disabled(value.clone()),
+                        scopes: component.build_scopes(),
                     });
                 }
                 "visible" => {
@@ -188,6 +193,7 @@ fn parameters(
                     bindings.push(Binding {
                         widget: id,
                         target: BindingTarget::Visible(value.clone()),
+                        scopes: component.build_scopes(),
                     });
                 }
                 "x" => {
@@ -253,6 +259,7 @@ fn parameters(
         bindings.push(Binding {
             widget: id,
             target: BindingTarget::Offset { x, y },
+            scopes: component.build_scopes(),
         });
     }
     Ok(Built {
@@ -307,8 +314,8 @@ fn build_items(
             BlockItem::If(block) => {
                 built.extend(build_if(block, stylesheet, theme, component, position)?);
             }
-            BlockItem::Each(_) => {
-                return Err(error_at(position, "'each' is not supported yet"));
+            BlockItem::Each(block) => {
+                built.extend(build_each(block, stylesheet, theme, component, position)?);
             }
             BlockItem::Expr(expression) => {
                 return Err(error_at(
@@ -346,6 +353,47 @@ fn build_if(
         Some(branch) => build_items(&branch.items, stylesheet, theme, component, position),
         None => Ok(Vec::new()),
     }
+}
+
+fn build_each(
+    block: &EachBlock,
+    stylesheet: &Stylesheet,
+    theme: Option<&str>,
+    component: &mut Component,
+    position: Position,
+) -> Result<Vec<Built>, Error> {
+    let items = match evaluate(component, &block.collection)? {
+        Value::Array(items) => items,
+        other => {
+            return Err(error_at(
+                block.collection.position,
+                format!("each expects Array, got {}", other.type_name()),
+            ));
+        }
+    };
+    let mut built = Vec::new();
+    for (index, item) in items.into_iter().enumerate() {
+        let mut variables = vec![Variable {
+            name: block.item.clone(),
+            value: item,
+        }];
+        if let Some(name) = &block.index {
+            variables.push(Variable {
+                name: name.clone(),
+                value: Value::Number(index as f64),
+            });
+        }
+        component.push_build_scope(&variables);
+        let row = match &block.key {
+            Some(key) => evaluate(component, key).and_then(|_| {
+                build_items(&block.block.items, stylesheet, theme, component, position)
+            }),
+            None => build_items(&block.block.items, stylesheet, theme, component, position),
+        };
+        component.pop_build_scope();
+        built.extend(row?);
+    }
+    Ok(built)
 }
 
 fn text(

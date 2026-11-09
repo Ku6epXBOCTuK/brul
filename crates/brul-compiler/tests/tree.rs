@@ -330,3 +330,68 @@ fn if_condition_must_be_bool() {
     assert_eq!(error.message, "if condition expects Bool, got Number");
     assert_eq!((error.line, error.column), (3, 13));
 }
+
+#[test]
+fn each_builds_a_row_per_item() {
+    let element = root(
+        r#"window Picker (title: "x") {
+    Column {
+        each (browsers as browser) {
+            Text { browser.name }
+        }
+    }
+}"#,
+    );
+    let mut component = component(r#"let browsers = [{ name: "A" }, { name: "B" }];"#);
+    let widget = build_tree(&element, &empty_stylesheet(), None, &mut component).expect("each");
+    assert_eq!(snapshot(widget).nodes.len(), 3);
+}
+
+#[test]
+fn each_binds_item_and_index() {
+    let element = root(
+        r#"window Picker (title: "x") {
+    Column {
+        each (browsers as browser, i) {
+            Text { String(i) + browser.name }
+        }
+    }
+}"#,
+    );
+    let mut component = component(r#"let browsers = [{ name: "A" }, { name: "B" }];"#);
+    let widget = build_tree(&element, &empty_stylesheet(), None, &mut component).expect("each");
+    assert_eq!(snapshot(widget).nodes.len(), 3);
+}
+
+#[test]
+fn each_key_is_evaluated_in_row_scope() {
+    let element = root(
+        r#"window Picker (title: "x") {
+    Column {
+        each (browsers as browser, i (browser.name)) {
+            Text { browser.name }
+        }
+    }
+}"#,
+    );
+    let mut component = component(r#"let browsers = [{ name: "A" }];"#);
+    let widget = build_tree(&element, &empty_stylesheet(), None, &mut component).expect("each");
+    assert_eq!(snapshot(widget).nodes.len(), 2);
+}
+
+#[test]
+fn each_requires_an_array() {
+    let element = root(
+        r#"window Picker (title: "x") {
+    Column {
+        each (1 as item) { }
+    }
+}"#,
+    );
+    let error = build_tree(&element, &empty_stylesheet(), None, &mut Component::new())
+        .err()
+        .expect("each");
+
+    assert_eq!(error.message, "each expects Array, got Number");
+    assert_eq!((error.line, error.column), (3, 15));
+}

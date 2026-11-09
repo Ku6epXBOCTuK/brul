@@ -202,6 +202,8 @@ fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent
 
 fn apply(binding: &Binding, component: &RefCell<Component>, tree: &RefCell<WidgetTree>) {
     component.borrow().track();
+    let count = binding.scopes.len();
+    component.borrow_mut().push_binding_scopes(&binding.scopes);
     match &binding.target {
         BindingTarget::Text(expression) => {
             if let Some(content) = text(component, expression) {
@@ -236,6 +238,7 @@ fn apply(binding: &Binding, component: &RefCell<Component>, tree: &RefCell<Widge
             }
         }
     }
+    component.borrow_mut().pop_binding_scopes(count);
 }
 
 fn text(component: &RefCell<Component>, expression: &Expr) -> Option<String> {

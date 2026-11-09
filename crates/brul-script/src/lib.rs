@@ -8,7 +8,7 @@ pub mod execute;
 pub mod host;
 pub mod value;
 
-pub use component::Component;
+pub use component::{Component, Variable};
 pub use environment::Environment;
 pub use error::Error;
 pub use eval::eval;

@@ -12,12 +12,19 @@ struct Property {
     value: Signal<Value>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Variable {
+    pub name: String,
+    pub value: Value,
+}
+
 pub struct Component {
     environment: Environment,
     properties: Vec<Property>,
     functions: Vec<Function>,
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
+    build_scopes: Vec<Vec<Variable>>,
     revision: Signal<u64>,
 }
 
@@ -29,6 +36,7 @@ impl Default for Component {
             functions: Vec::new(),
             host: None,
             pending_every: Vec::new(),
+            build_scopes: Vec::new(),
             revision: Signal::new(0),
         }
     }
@@ -62,6 +70,42 @@ impl Component {
 
     pub fn take_every(&mut self) -> Vec<(f64, String)> {
         std::mem::take(&mut self.pending_every)
+    }
+
+    pub fn push_build_scope(&mut self, variables: &[Variable]) {
+        self.environment.push_frame();
+        for variable in variables {
+            let _ = self
+                .environment
+                .declare(&variable.name, variable.value.clone(), false);
+        }
+        self.build_scopes.push(variables.to_vec());
+    }
+
+    pub fn pop_build_scope(&mut self) {
+        self.environment.pop_frame();
+        self.build_scopes.pop();
+    }
+
+    pub fn build_scopes(&self) -> Vec<Vec<Variable>> {
+        self.build_scopes.clone()
+    }
+
+    pub fn push_binding_scopes(&mut self, scopes: &[Vec<Variable>]) {
+        for scope in scopes {
+            self.environment.push_frame();
+            for variable in scope {
+                let _ = self
+                    .environment
+                    .declare(&variable.name, variable.value.clone(), false);
+            }
+        }
+    }
+
+    pub fn pop_binding_scopes(&mut self, count: usize) {
+        for _ in 0..count {
+            self.environment.pop_frame();
+        }
     }
 
     pub fn define_function(&mut self, function: Function) -> Result<(), Error> {

@@ -90,3 +90,51 @@ fn equal_values_do_not_mark_the_tree_dirty() {
     assert!(dirty.ids.is_empty());
     assert!(!ui.tree.borrow().layout_dirty());
 }
+
+#[test]
+fn each_rows_bindings_keep_their_item_scope() {
+    let source = r#"
+<script>
+let prefix = "x";
+let items = [{ label: "one" }, { label: "two" }];
+</script>
+
+<markup>
+window Demo (title: "Demo") {
+    Column {
+        each (items as item, i (item.label)) {
+            Text { prefix + item.label }
+        }
+    }
+}
+</markup>
+"#;
+    let loaded = load(source, None).expect("app loads");
+    let ui = Ui::new(
+        loaded.component,
+        loaded.tree,
+        loaded.bindings,
+        loaded.handlers,
+        loaded.root,
+        loaded.stylesheet,
+    );
+    layout(&ui);
+
+    ui.component
+        .borrow_mut()
+        .assign("prefix", Value::String("long".to_owned()))
+        .expect("assign");
+    brul_reactive::flush();
+    layout(&ui);
+
+    let mut tree = ui.tree.borrow_mut();
+    let snapshot = tree.snapshot().cloned().expect("snapshot");
+    drop(tree);
+    let glyphs: Vec<usize> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.kind == WidgetKind::Text)
+        .map(|node| node.text.as_ref().expect("text").glyphs.len())
+        .collect();
+    assert_eq!(glyphs, vec![7, 7]);
+}
