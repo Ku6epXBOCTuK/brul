@@ -1,9 +1,9 @@
 //! Сборка дерева BRUL: разметка, стили и скрипт в виджеты.
 
-pub mod styles;
 pub mod tree;
 pub mod window;
 
+pub use brul_codegen::styles;
 pub use brul_codegen::{Definition, Import, Registry};
 pub use tree::{
     Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, PropBinding,

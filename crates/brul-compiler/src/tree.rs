@@ -9,7 +9,7 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, BlockItem, EachBlock, Element, IfBlock, Member, PropType};
 use brul_syntax::style::Stylesheet;
 
-use crate::styles::{self, Resolved};
+use brul_codegen::styles::{self, Resolved};
 
 pub type ComponentHandle = Rc<RefCell<Component>>;
 

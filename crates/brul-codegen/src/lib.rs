@@ -1,8 +1,10 @@
 //! Загрузка `.brul`: разбор SFC, реестр компонентов, аргументы окна.
 
 mod diagnostics;
+pub mod emit;
 mod loader;
 mod source;
+pub mod styles;
 mod window;
 
 pub use diagnostics::{error_at, padded, sfc_error};
