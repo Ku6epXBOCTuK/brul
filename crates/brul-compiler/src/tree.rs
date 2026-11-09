@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use brul_codegen::runtime::{
     Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, PropBinding,
-    RowInfo, Structure, StructureKind,
+    Structure,
 };
 use brul_codegen::{Definition, Registry};
 use brul_gui::{Direction, LayoutStyle, Widget};
@@ -588,39 +588,14 @@ fn build_items(
                 built.push(build_bound_tree(child, component, context, theme)?);
             }
             BlockItem::If(block) => {
-                let (mut node, last) = build_if(
+                built.push(build_if(
                     block, component, context, theme, position, direction, spacing,
-                )?;
-                node.structures.push(Structure {
-                    parent: node.widget.id(),
-                    direction,
-                    spacing,
-                    kind: StructureKind::If {
-                        block: block.clone(),
-                        last,
-                    },
-                    component: Rc::clone(component),
-                    context: context.clone(),
-                });
-                built.push(node);
+                )?);
             }
             BlockItem::Each(block) => {
-                let (mut node, last, rows) = build_each(
+                built.push(build_each(
                     block, component, context, theme, position, direction, spacing,
-                )?;
-                node.structures.push(Structure {
-                    parent: node.widget.id(),
-                    direction,
-                    spacing,
-                    kind: StructureKind::Each {
-                        block: block.clone(),
-                        last,
-                        rows,
-                    },
-                    component: Rc::clone(component),
-                    context: context.clone(),
-                });
-                built.push(node);
+                )?);
             }
             BlockItem::Expr(expression) => {
                 return Err(error_at(
@@ -641,7 +616,7 @@ fn build_if(
     position: Position,
     direction: Direction,
     spacing: u32,
-) -> Result<(Built, bool), Error> {
+) -> Result<Built, Error> {
     let condition = match evaluate(component, &block.condition)? {
         Value::Bool(condition) => condition,
         other => {
@@ -673,16 +648,13 @@ fn build_if(
         ..Default::default()
     });
     wrapper.set_children(children);
-    Ok((
-        Built {
-            widget: wrapper,
-            bindings,
-            handlers,
-            structures,
-            props,
-        },
-        condition,
-    ))
+    Ok(Built {
+        widget: wrapper,
+        bindings,
+        handlers,
+        structures,
+        props,
+    })
 }
 
 fn flatten(built: Vec<Built>) -> Children {
@@ -709,7 +681,7 @@ fn build_each(
     position: Position,
     direction: Direction,
     spacing: u32,
-) -> Result<(Built, Vec<Value>, Vec<RowInfo>), Error> {
+) -> Result<Built, Error> {
     let items = match evaluate(component, &block.collection)? {
         Value::Array(items) => items,
         other => {
@@ -719,9 +691,7 @@ fn build_each(
             ));
         }
     };
-    let last = items.clone();
     let mut all = Vec::new();
-    let mut rows = Vec::new();
     for (index, item) in items.into_iter().enumerate() {
         let mut variables = vec![Variable {
             name: block.item.clone(),
@@ -734,32 +704,17 @@ fn build_each(
             });
         }
         component.borrow_mut().push_build_scope(&variables);
-        let outcome = (|| -> Result<(Option<Value>, Vec<Built>), Error> {
-            let key = match &block.key {
-                Some(expression) => Some(evaluate(component, expression)?),
-                None => None,
-            };
-            let built = build_items(
-                &block.block.items,
-                component,
-                context,
-                theme,
-                position,
-                direction,
-                spacing,
-            )?;
-            Ok((key, built))
-        })();
+        let built = build_items(
+            &block.block.items,
+            component,
+            context,
+            theme,
+            position,
+            direction,
+            spacing,
+        );
         component.borrow_mut().pop_build_scope();
-        let (key, row) = outcome?;
-        let start = all.len();
-        all.extend(row);
-        rows.push(RowInfo {
-            key,
-            item,
-            start,
-            count: all.len() - start,
-        });
+        all.extend(built?);
     }
     let (children, bindings, handlers, structures, props) = flatten(all);
     let mut wrapper = Widget::view(direction, Vec::new()).with_layout(LayoutStyle {
@@ -767,49 +722,13 @@ fn build_each(
         ..Default::default()
     });
     wrapper.set_children(children);
-    Ok((
-        Built {
-            widget: wrapper,
-            bindings,
-            handlers,
-            structures,
-            props,
-        },
-        last,
-        rows,
-    ))
-}
-
-pub fn rebuild_structure(
-    structure: &Structure,
-    theme: Option<&str>,
-) -> Result<(Built, Value, Vec<RowInfo>), Error> {
-    match &structure.kind {
-        StructureKind::If { block, .. } => {
-            let (built, condition) = build_if(
-                block,
-                &structure.component,
-                &structure.context,
-                theme,
-                block.condition.position,
-                structure.direction,
-                structure.spacing,
-            )?;
-            Ok((built, Value::Bool(condition), Vec::new()))
-        }
-        StructureKind::Each { block, .. } => {
-            let (built, items, rows) = build_each(
-                block,
-                &structure.component,
-                &structure.context,
-                theme,
-                block.collection.position,
-                structure.direction,
-                structure.spacing,
-            )?;
-            Ok((built, Value::Array(items), rows))
-        }
-    }
+    Ok(Built {
+        widget: wrapper,
+        bindings,
+        handlers,
+        structures,
+        props,
+    })
 }
 
 fn text(

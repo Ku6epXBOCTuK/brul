@@ -340,19 +340,15 @@ fn component_props_come_from_arguments_and_defaults() {
             ),
             (
                 "card.brul",
-                "<script>\nlet fallback = \"from script\";\n</script>\n\n<markup>\ncomponent Card {\n    prop name: String = fallback\n    prop flag: Bool = false\n    Column { if (flag) { } }\n}\n</markup>",
+                "<script>\nlet fallback = \"from script\";\n</script>\n\n<markup>\ncomponent Card {\n    prop name: String = fallback\n    prop flag: Bool = false\n    Column { if (flag && name == \"given\") { Text { name } } }\n}\n</markup>",
             ),
         ],
     );
 
     let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
-    let child = loaded.structures[0].component.clone();
-    assert_eq!(
-        child.borrow().read("name"),
-        Ok(Value::String("given".to_owned()))
-    );
-    assert_eq!(child.borrow().read("flag"), Ok(Value::Bool(true)));
-    assert!(!Rc::ptr_eq(&child, &loaded.component));
+    let mut column = loaded.tree.into_children();
+    let branch = column.remove(0);
+    assert_eq!(branch.into_children().len(), 1);
     fs::remove_dir_all(dir).expect("cleanup");
 }
 
@@ -399,16 +395,15 @@ fn component_default_uses_its_own_script() {
             ),
             (
                 "card.brul",
-                "<script>\nlet fallback = \"from script\";\n</script>\n\n<markup>\ncomponent Card {\n    prop name: String = fallback\n    Column { if (name == \"\") { } }\n}\n</markup>",
+                "<script>\nlet fallback = \"from script\";\n</script>\n\n<markup>\ncomponent Card {\n    prop name: String = fallback\n    Column { if (name == \"from script\") { Text { name } } }\n}\n</markup>",
             ),
         ],
     );
 
     let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
-    assert_eq!(
-        loaded.structures[0].component.borrow().read("name"),
-        Ok(Value::String("from script".to_owned()))
-    );
+    let mut column = loaded.tree.into_children();
+    let branch = column.remove(0);
+    assert_eq!(branch.into_children().len(), 1);
     fs::remove_dir_all(dir).expect("cleanup");
 }
 

@@ -170,8 +170,8 @@ bropicker сломан с 3.5.11.2a до 3.6.2. PNG/tint и градиент о�
   `with_host(Loaded)`, `run*`/`load*`, `open` удаляются, `bropicker` идёт на
   `run_generated` и показывает пустое окно. `brul-compiler` остаётся в workspace
   только как эталон.
-- [ ] 3.5.11.2b — рантайм под структуры-эффекты:
-  `Structure { parent, value,   rebuild }`, триггер `Effect`, `Ui::settle()`
+- [x] 3.5.11.2b — рантайм под структуры-эффекты:
+  `Structure { parent, each, value, rebuild }`, триггер `Effect`, `Ui::settle()`
   после `flush`; `poll` и AST-носители (`StructureKind`, `RowInfo`) уходят,
   `reconcile_each` остаётся.
 - [ ] 3.5.11.2c — эмиссия `if`/`each`: `fn value`/`fn rebuild` на структуру,

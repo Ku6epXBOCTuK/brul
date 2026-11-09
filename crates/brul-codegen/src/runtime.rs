@@ -1,11 +1,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_gui::{Direction, Widget, WidgetId, WidgetTree};
+use brul_gui::{Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Value, Variable, eval};
 use brul_syntax::ast::Expr;
-use brul_syntax::markup::{EachBlock, IfBlock, PropType};
+use brul_syntax::markup::PropType;
 use brul_syntax::style::Stylesheet;
 
 use crate::{Import, Registry};
@@ -121,14 +121,16 @@ pub enum BindingTarget {
     Offset { x: Option<Expr>, y: Option<Expr> },
 }
 
+pub type StructureValue = fn(&ComponentHandle) -> Option<Value>;
+pub type StructureRebuild =
+    fn(Option<&str>, &ComponentHandle) -> Result<(Built, Vec<RowInfo>), String>;
+
 #[derive(Clone)]
 pub struct Structure {
     pub parent: WidgetId,
-    pub direction: Direction,
-    pub spacing: u32,
-    pub kind: StructureKind,
-    pub component: ComponentHandle,
-    pub context: Context,
+    pub each: bool,
+    pub value: StructureValue,
+    pub rebuild: StructureRebuild,
 }
 
 #[derive(Debug, Clone)]
@@ -137,19 +139,6 @@ pub struct RowInfo {
     pub item: Value,
     pub start: usize,
     pub count: usize,
-}
-
-#[derive(Debug, Clone)]
-pub enum StructureKind {
-    If {
-        block: IfBlock,
-        last: bool,
-    },
-    Each {
-        block: EachBlock,
-        last: Vec<Value>,
-        rows: Vec<RowInfo>,
-    },
 }
 
 pub struct Built {

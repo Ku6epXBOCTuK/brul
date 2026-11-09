@@ -1,18 +1,17 @@
 //! Фасад BRUL: запуск приложения, корни окон, общий контекст.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
 use brul_compiler::{Handler, accepts_prop};
-use brul_gui::{WidgetEvent, WidgetId, WidgetTree, window};
+use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, eval, execute_program};
 use brul_syntax::ast::Expr;
 
 pub use brul_compiler::{
     Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, PropBinding, RowInfo, Structure,
-    StructureKind,
 };
 pub use brul_gui::window::WindowConfig;
 pub use brul_script::{Error, Host, Value};
@@ -27,6 +26,9 @@ pub struct Ui {
     commands: Rc<RefCell<Vec<window::WindowCommand>>>,
     bindings: Vec<Binding>,
     props: Vec<PropBinding>,
+    structures: Vec<Structure>,
+    rows: Vec<(WidgetId, Vec<RowInfo>)>,
+    requests: Rc<RefCell<Vec<WidgetId>>>,
     view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
     theme: Option<String>,
     scope: EffectScope,
@@ -103,7 +105,7 @@ impl Ui {
             bindings,
             handlers,
             props,
-            ..
+            structures,
         } = built;
         let commands = Rc::new(RefCell::new(Vec::new()));
         for (interval_ms, function) in component.borrow_mut().take_every() {
@@ -134,12 +136,16 @@ impl Ui {
             commands,
             bindings,
             props,
+            structures,
+            rows: Vec::new(),
+            requests: Rc::new(RefCell::new(Vec::new())),
             view,
             theme,
             scope: EffectScope::new(),
         };
         ui.bind(&ui.bindings);
         ui.bind_props(&ui.props);
+        ui.bind_structures(&ui.structures);
         ui
     }
 
@@ -162,6 +168,34 @@ impl Ui {
         }
     }
 
+    fn bind_structures(&self, structures: &[Structure]) {
+        for structure in structures {
+            let structure = structure.clone();
+            let component = Rc::clone(&self.component);
+            let requests = Rc::clone(&self.requests);
+            let initialized = Rc::new(Cell::new(false));
+            let last: Rc<RefCell<Option<Value>>> = Rc::new(RefCell::new(None));
+            self.scope.run(|| {
+                Effect::new(move || {
+                    component.borrow().track();
+                    let value = (structure.value)(&component);
+                    if !initialized.replace(true) {
+                        *last.borrow_mut() = value;
+                        return;
+                    }
+                    if *last.borrow() == value {
+                        return;
+                    }
+                    *last.borrow_mut() = value;
+                    let mut requests = requests.borrow_mut();
+                    if !requests.contains(&structure.parent) {
+                        requests.push(structure.parent);
+                    }
+                });
+            });
+        }
+    }
+
     fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
         let built = (self.view)(self.theme.as_deref(), &self.component).map_err(|message| {
             brul_syntax::error::Error {
@@ -176,9 +210,13 @@ impl Ui {
         self.handlers = handlers;
         self.bindings = built.bindings;
         self.props = built.props;
+        self.structures = built.structures;
+        self.rows.clear();
+        self.requests.borrow_mut().clear();
         self.scope = EffectScope::new();
         self.bind(&self.bindings);
         self.bind_props(&self.props);
+        self.bind_structures(&self.structures);
         Ok(())
     }
 
@@ -243,6 +281,142 @@ impl Ui {
         }
         output
     }
+
+    pub fn settle(&mut self) {
+        let requests = std::mem::take(&mut *self.requests.borrow_mut());
+        if requests.is_empty() {
+            return;
+        }
+        let mut structures = std::mem::take(&mut self.structures);
+        let mut rows = std::mem::take(&mut self.rows);
+        let mut bindings = Vec::new();
+        let mut handlers = Vec::new();
+        let mut props = Vec::new();
+        let mut changed = false;
+        for parent in requests {
+            let Some(index) = structures
+                .iter()
+                .position(|structure| structure.parent == parent)
+            else {
+                continue;
+            };
+            if !self.tree.borrow().contains(parent) {
+                continue;
+            }
+            let structure = structures[index].clone();
+            let (built, rebuilt_rows) =
+                match (structure.rebuild)(self.theme.as_deref(), &self.component) {
+                    Ok(result) => result,
+                    Err(message) => {
+                        eprintln!("{message}");
+                        continue;
+                    }
+                };
+            let Built {
+                widget,
+                bindings: added_bindings,
+                handlers: added_handlers,
+                structures: added_structures,
+                props: added_props,
+            } = built;
+            let children = if structure.each {
+                let old_rows = rows
+                    .iter()
+                    .position(|(id, _)| *id == parent)
+                    .map(|position| rows.remove(position).1)
+                    .unwrap_or_default();
+                rows.push((parent, rebuilt_rows.clone()));
+                reconcile_each(&self.tree, parent, &old_rows, widget, &rebuilt_rows)
+            } else {
+                widget.into_children()
+            };
+            self.tree
+                .borrow_mut()
+                .replace_all_children(parent, children);
+            bindings.extend(added_bindings);
+            handlers.extend(added_handlers);
+            props.extend(added_props);
+            structures.extend(added_structures);
+            changed = true;
+        }
+        self.structures = structures;
+        self.rows = rows;
+        if !changed {
+            return;
+        }
+        let tree = Rc::clone(&self.tree);
+        self.structures
+            .retain(|structure| tree.borrow().contains(structure.parent));
+        self.rows.retain(|(id, _)| tree.borrow().contains(*id));
+        self.bindings.extend(bindings);
+        self.bindings
+            .retain(|binding| tree.borrow().contains(binding.widget));
+        self.props.extend(props);
+        self.props
+            .retain(|prop| tree.borrow().contains(prop.widget));
+        self.handlers.extend(handlers);
+        self.handlers.retain(|handler| match handler.widget {
+            Some(widget) => tree.borrow().contains(widget),
+            None => true,
+        });
+        self.scope = EffectScope::new();
+        self.bind(&self.bindings);
+        self.bind_props(&self.props);
+        self.bind_structures(&self.structures);
+    }
+}
+
+fn reconcile_each(
+    tree: &RefCell<WidgetTree>,
+    parent: WidgetId,
+    old_rows: &[RowInfo],
+    new_widget: Widget,
+    new_rows: &[RowInfo],
+) -> Vec<Widget> {
+    let Some(old_children) = tree.borrow_mut().take_children(parent) else {
+        return new_widget.into_children();
+    };
+    let mut remaining = old_children;
+    let mut old_widgets = Vec::with_capacity(old_rows.len());
+    for row in old_rows {
+        let take = row.count.min(remaining.len());
+        old_widgets.push(remaining.drain(..take).collect::<Vec<_>>());
+    }
+
+    let mut remaining = new_widget.into_children();
+    let mut new_widgets = Vec::with_capacity(new_rows.len());
+    for row in new_rows {
+        let take = row.count.min(remaining.len());
+        new_widgets.push(remaining.drain(..take).collect::<Vec<_>>());
+    }
+
+    let mut used = vec![false; old_widgets.len()];
+    let mut children = Vec::new();
+    for (index, row) in new_rows.iter().enumerate() {
+        let mut reused = None;
+        if let Some(key) = &row.key {
+            for (other, old) in old_rows.iter().enumerate() {
+                if !used[other] && old.key.as_ref() == Some(key) && old.item == row.item {
+                    reused = Some(other);
+                    break;
+                }
+            }
+        } else if let Some(old) = old_rows.get(index)
+            && !used[index]
+            && old.key.is_none()
+            && old.item == row.item
+        {
+            reused = Some(index);
+        }
+        match reused {
+            Some(other) => {
+                used[other] = true;
+                children.append(&mut old_widgets[other]);
+            }
+            None => children.append(&mut new_widgets[index]),
+        }
+    }
+    children
 }
 
 fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent)> {
@@ -401,7 +575,12 @@ fn run_ui(
             }
             Rc::clone(&ui.tree)
         },
-        move |events| handler.borrow_mut().dispatch(events),
+        move |events| {
+            let commands = handler.borrow_mut().dispatch(events);
+            brul_reactive::flush();
+            handler.borrow_mut().settle();
+            commands
+        },
     )?;
     Ok(())
 }
@@ -416,7 +595,7 @@ fn scheme_theme(fixed: Option<&str>, scheme: window::ColorScheme) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use brul_gui::Widget;
+    use brul_gui::{Direction, Widget};
     use brul_syntax::ast::{ExprKind, Position};
 
     fn generated_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
@@ -497,5 +676,122 @@ mod tests {
     fn system_theme_follows_the_color_scheme() {
         assert_eq!(scheme_theme(None, window::ColorScheme::Light), "light");
         assert_eq!(scheme_theme(None, window::ColorScheme::Dark), "dark");
+    }
+
+    fn ident(name: &str) -> Expr {
+        Expr::new(ExprKind::Ident(name.to_owned()), Position::default())
+    }
+
+    fn shown(component: &ComponentHandle) -> Option<Value> {
+        component.borrow().track();
+        Some(Value::Bool(
+            boolean(component, &ident("shown")).unwrap_or(false),
+        ))
+    }
+
+    fn rebuild_shown(
+        theme: Option<&str>,
+        component: &ComponentHandle,
+    ) -> Result<(Built, Vec<RowInfo>), String> {
+        if theme.is_some() {
+            return Err("unknown theme".to_owned());
+        }
+        let mut widget = Widget::view(Direction::Column, Vec::new());
+        if boolean(component, &ident("shown")).unwrap_or(false) {
+            widget.set_children(vec![Widget::text("shown")]);
+        }
+        Ok((
+            Built {
+                widget,
+                bindings: Vec::new(),
+                handlers: Vec::new(),
+                structures: Vec::new(),
+                props: Vec::new(),
+            },
+            Vec::new(),
+        ))
+    }
+
+    fn structured_view(theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, String> {
+        if theme.is_some() {
+            return Err("unknown theme".to_owned());
+        }
+        let widget = Widget::view(Direction::Column, Vec::new());
+        let parent = widget.id();
+        Ok(Built {
+            widget,
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            structures: vec![Structure {
+                parent,
+                each: false,
+                value: shown,
+                rebuild: rebuild_shown,
+            }],
+            props: Vec::new(),
+        })
+    }
+
+    fn child_count(ui: &Ui, parent: WidgetId) -> usize {
+        let children = ui
+            .tree
+            .borrow_mut()
+            .take_children(parent)
+            .unwrap_or_default();
+        let count = children.len();
+        ui.tree.borrow_mut().replace_all_children(parent, children);
+        count
+    }
+
+    #[test]
+    fn structure_rebuilds_when_its_value_changes() {
+        let program = script::Program {
+            functions: Vec::new(),
+            statements: vec![script::Statement::Let {
+                constant: false,
+                name: "shown".to_owned(),
+                value: Some(Expr::new(ExprKind::Bool(false), Position::default())),
+            }],
+        };
+        let (component, built) =
+            generated_built(structured_view, None, &[], Some(&program)).expect("launch succeeds");
+        let parent = built.widget.id();
+        let mut ui = Ui::assemble(component, built, structured_view, None, None);
+        brul_reactive::flush();
+        assert_eq!(child_count(&ui, parent), 0);
+
+        ui.component
+            .borrow_mut()
+            .assign("shown", Value::Bool(true))
+            .unwrap();
+        brul_reactive::flush();
+        ui.settle();
+        assert_eq!(child_count(&ui, parent), 1);
+    }
+
+    #[test]
+    fn each_reuses_rows_with_the_same_key() {
+        let first = Widget::text("a");
+        let second = Widget::text("b");
+        let (first_id, second_id) = (first.id(), second.id());
+        let root = Widget::view(Direction::Column, vec![first, second]);
+        let parent = root.id();
+        let tree = RefCell::new(WidgetTree::new(root));
+        let row = |key: f64, item: &str, start: usize| RowInfo {
+            key: Some(Value::Number(key)),
+            item: Value::String(item.to_owned()),
+            start,
+            count: 1,
+        };
+        let old_rows = [row(1.0, "a", 0), row(2.0, "b", 1)];
+        let new_rows = [row(2.0, "b", 0), row(1.0, "a", 1)];
+        let fresh = Widget::view(
+            Direction::Column,
+            vec![Widget::text("b"), Widget::text("a")],
+        );
+
+        let children = reconcile_each(&tree, parent, &old_rows, fresh, &new_rows);
+        let ids: Vec<WidgetId> = children.iter().map(Widget::id).collect();
+        assert_eq!(ids, vec![second_id, first_id]);
     }
 }
