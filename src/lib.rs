@@ -5,15 +5,14 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use brul_compiler::{
-    Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, Loaded, RowInfo,
-    Structure, StructureKind, build_bound_tree, rebuild_structure,
+    Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, Loaded,
+    RowInfo, Structure, StructureKind, build_bound_tree, rebuild_structure,
 };
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Error, Host, Value, eval};
 use brul_syntax::ast::Expr;
 use brul_syntax::markup::Element;
-use brul_syntax::style::Stylesheet;
 
 pub struct Ui {
     pub component: ComponentHandle,
@@ -24,7 +23,7 @@ pub struct Ui {
     bindings: Vec<Binding>,
     structures: Vec<Structure>,
     root: Element,
-    stylesheet: Stylesheet,
+    context: Context,
     theme: Option<String>,
     scope: EffectScope,
 }
@@ -79,7 +78,7 @@ impl Ui {
             handlers,
             structures,
             root,
-            stylesheet,
+            context,
             theme,
             ..
         } = loaded;
@@ -112,7 +111,7 @@ impl Ui {
             bindings,
             structures,
             root,
-            stylesheet,
+            context,
             theme,
             scope: EffectScope::new(),
         };
@@ -133,9 +132,9 @@ impl Ui {
     fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
         let built = build_bound_tree(
             &self.root,
-            &self.stylesheet,
-            self.theme.as_deref(),
             &self.component,
+            &self.context,
+            self.theme.as_deref(),
         )?;
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
@@ -185,12 +184,7 @@ impl Ui {
                 kept.push(structure);
                 continue;
             }
-            let built = rebuild_structure(
-                &structure,
-                &self.stylesheet,
-                self.theme.as_deref(),
-                &structure.component,
-            );
+            let built = rebuild_structure(&structure, self.theme.as_deref());
             match built {
                 Ok((built, last, new_rows)) => {
                     let Built {

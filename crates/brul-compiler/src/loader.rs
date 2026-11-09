@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{self, Component as Declaration, Declaration as Item};
+use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
+use brul_syntax::style::{self, Stylesheet};
 use brul_syntax::uses::{self, Use};
 
 use crate::window::{error_at, padded, sfc_error};
@@ -15,8 +18,11 @@ pub struct Definition {
     pub path: PathBuf,
     pub component: Declaration,
     pub imports: Vec<Import>,
+    pub stylesheet: Rc<Stylesheet>,
+    pub program: Option<Program>,
 }
 
+#[derive(Clone)]
 pub struct Import {
     pub name: String,
     pub definition: usize,
@@ -86,15 +92,17 @@ impl Loader {
         let source = fs::read_to_string(&path)
             .map_err(|error| at(origin, format!("cannot read '{}': {error}", path.display())))?;
         self.stack.push(path.clone());
-        let (component, uses) = parse(&source, &path)?;
-        let imports = self.imports(&uses, path.parent(), Some(&path))?;
+        let parsed = parse(&source, &path)?;
+        let imports = self.imports(&parsed.uses, path.parent(), Some(&path))?;
         self.stack.pop();
         let index = self.definitions.len();
         self.definitions.push(Definition {
-            name: component.name.clone(),
+            name: parsed.component.name.clone(),
             path: path.clone(),
-            component,
+            component: parsed.component,
             imports,
+            stylesheet: parsed.stylesheet,
+            program: parsed.program,
         });
         self.index.insert(path, index);
         Ok(index)
@@ -110,7 +118,14 @@ impl Loader {
     }
 }
 
-fn parse(source: &str, path: &Path) -> Result<(Declaration, Vec<Use>), Error> {
+struct Parsed {
+    component: Declaration,
+    uses: Vec<Use>,
+    stylesheet: Rc<Stylesheet>,
+    program: Option<Program>,
+}
+
+fn parse(source: &str, path: &Path) -> Result<Parsed, Error> {
     let sfc = sfc::parse(source).map_err(|error| named(path, sfc_error(error)))?;
     let markup =
         markup::parse_file(&padded(source, sfc.markup)).map_err(|error| named(path, error))?;
@@ -134,7 +149,27 @@ fn parse(source: &str, path: &Path) -> Result<(Declaration, Vec<Use>), Error> {
         Some(block) => uses::parse(&padded(source, block)).map_err(|error| named(path, error))?,
         None => Vec::new(),
     };
-    Ok((component, uses))
+    let stylesheet = match sfc.style {
+        Some(block) => {
+            style::parse_file(&padded(source, block)).map_err(|error| named(path, error))?
+        }
+        None => Stylesheet {
+            themes: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+    let program = match sfc.script {
+        Some(block) => {
+            Some(script::parse(&padded(source, block)).map_err(|error| named(path, error))?)
+        }
+        None => None,
+    };
+    Ok(Parsed {
+        component,
+        uses,
+        stylesheet: Rc::new(stylesheet),
+        program,
+    })
 }
 
 fn file_path(base: Option<&Path>, raw: &str, origin: Option<&Path>) -> Result<PathBuf, Error> {

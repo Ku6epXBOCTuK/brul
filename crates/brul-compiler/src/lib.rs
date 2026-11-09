@@ -7,7 +7,7 @@ pub mod window;
 
 pub use loader::{Definition, Import, Registry};
 pub use tree::{
-    Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, RowInfo, Structure,
-    StructureKind, build_bound_tree, build_tree, rebuild_structure,
+    Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, RowInfo,
+    Structure, StructureKind, build_bound_tree, build_tree, rebuild_structure,
 };
 pub use window::{Loaded, load, load_file};

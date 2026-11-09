@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use brul_compiler::{load, load_file};
@@ -326,4 +327,113 @@ fn window_without_a_root_element_is_rejected() {
 
     assert_eq!(error.message, "window has no root element");
     assert_eq!(error.line, 2);
+}
+
+#[test]
+fn component_props_come_from_arguments_and_defaults() {
+    let dir = workspace(
+        "props",
+        &[
+            (
+                "app.brul",
+                "<use>\nimport Card from \"./card\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Card (name: \"given\", flag: true) { } }\n</markup>",
+            ),
+            (
+                "card.brul",
+                "<script>\nlet fallback = \"from script\";\n</script>\n\n<markup>\ncomponent Card {\n    prop name: String = fallback\n    prop flag: Bool = false\n    Column { if (flag) { } }\n}\n</markup>",
+            ),
+        ],
+    );
+
+    let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
+    let child = loaded.structures[0].component.clone();
+    assert_eq!(
+        child.borrow().read("name"),
+        Ok(Value::String("given".to_owned()))
+    );
+    assert_eq!(child.borrow().read("flag"), Ok(Value::Bool(true)));
+    assert!(!Rc::ptr_eq(&child, &loaded.component));
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
+fn component_default_uses_its_own_script() {
+    let dir = workspace(
+        "default",
+        &[
+            (
+                "app.brul",
+                "<use>\nimport Card from \"./card\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Card { } }\n</markup>",
+            ),
+            (
+                "card.brul",
+                "<script>\nlet fallback = \"from script\";\n</script>\n\n<markup>\ncomponent Card {\n    prop name: String = fallback\n    Column { if (name == \"\") { } }\n}\n</markup>",
+            ),
+        ],
+    );
+
+    let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
+    assert_eq!(
+        loaded.structures[0].component.borrow().read("name"),
+        Ok(Value::String("from script".to_owned()))
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
+fn component_prop_type_is_checked() {
+    let dir = workspace(
+        "type",
+        &[
+            (
+                "app.brul",
+                "<use>\nimport Card from \"./card\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Card (flag: \"no\") { } }\n</markup>",
+            ),
+            (
+                "card.brul",
+                "<markup>\ncomponent Card {\n    prop flag: Bool = false\n    Column { }\n}\n</markup>",
+            ),
+        ],
+    );
+
+    let error = load_file(dir.join("app.brul"), None)
+        .err()
+        .expect("type error");
+    assert!(
+        error
+            .message
+            .contains("property 'flag' of component 'Card' expects Bool, got String"),
+        "{}",
+        error.message
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
+fn component_rejects_children() {
+    let dir = workspace(
+        "children",
+        &[
+            (
+                "app.brul",
+                "<use>\nimport Card from \"./card\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Card { Text { \"x\" } } }\n</markup>",
+            ),
+            (
+                "card.brul",
+                "<markup>\ncomponent Card {\n    Column { }\n}\n</markup>",
+            ),
+        ],
+    );
+
+    let error = load_file(dir.join("app.brul"), None)
+        .err()
+        .expect("children rejected");
+    assert!(
+        error
+            .message
+            .contains("component 'Card' does not accept children"),
+        "{}",
+        error.message
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
 }

@@ -16,7 +16,9 @@ use brul_syntax::uses::{self, Use};
 
 use crate::build_bound_tree;
 use crate::loader::{self, Registry};
-use crate::tree::{Binding, ComponentHandle, Handler, HandlerEvent, Structure, script_error};
+use crate::tree::{
+    Binding, ComponentHandle, Context, Handler, HandlerEvent, Structure, script_error,
+};
 
 pub struct Loaded {
     pub config: WindowConfig,
@@ -26,10 +28,10 @@ pub struct Loaded {
     pub handlers: Vec<Handler>,
     pub component: ComponentHandle,
     pub uses: Vec<Use>,
-    pub registry: Registry,
+    pub registry: Rc<Registry>,
+    pub context: Context,
     pub program: Option<Program>,
     pub root: Element,
-    pub stylesheet: Stylesheet,
     pub theme: Option<String>,
 }
 
@@ -64,18 +66,23 @@ fn load_from(source: &str, base: Option<&Path>, theme: Option<&str>) -> Result<L
             )
         })?;
 
-    let stylesheet = match sfc.style {
+    let stylesheet = Rc::new(match sfc.style {
         Some(block) => style::parse_file(&padded(source, block))?,
         None => Stylesheet {
             themes: Vec::new(),
             rules: Vec::new(),
         },
-    };
+    });
     let uses = match sfc.uses {
         Some(block) => uses::parse(&padded(source, block))?,
         None => Vec::new(),
     };
-    let registry = loader::resolve(&uses, base)?;
+    let registry = Rc::new(loader::resolve(&uses, base)?);
+    let context = Context {
+        registry: Rc::clone(&registry),
+        imports: registry.imports.clone(),
+        stylesheet: Rc::clone(&stylesheet),
+    };
     let program = match sfc.script {
         Some(block) => Some(script::parse(&padded(source, block))?),
         None => None,
@@ -88,7 +95,7 @@ fn load_from(source: &str, base: Option<&Path>, theme: Option<&str>) -> Result<L
 
     let root = root(&window)?.to_owned();
     let (config, window_handlers) = config(&window, &component)?;
-    let mut built = build_bound_tree(&root, &stylesheet, theme, &component)?;
+    let mut built = build_bound_tree(&root, &component, &context, theme)?;
     built.handlers.extend(window_handlers);
 
     Ok(Loaded {
@@ -100,9 +107,9 @@ fn load_from(source: &str, base: Option<&Path>, theme: Option<&str>) -> Result<L
         component,
         uses,
         registry,
+        context,
         program,
         root,
-        stylesheet,
         theme: theme.map(str::to_owned),
     })
 }

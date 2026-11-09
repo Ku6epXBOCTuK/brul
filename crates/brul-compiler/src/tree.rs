@@ -2,15 +2,23 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_gui::{Direction, LayoutStyle, Widget, WidgetId};
-use brul_script::{Component, Value, Variable, eval};
+use brul_script::{Component, Value, Variable, eval, execute_program};
 use brul_syntax::ast::{Expr, Position};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, BlockItem, EachBlock, Element, IfBlock};
+use brul_syntax::markup::{Arg, BlockItem, EachBlock, Element, IfBlock, Member, PropType};
 use brul_syntax::style::Stylesheet;
 
+use crate::loader::{Import, Registry};
 use crate::styles::{self, Resolved};
 
 pub type ComponentHandle = Rc<RefCell<Component>>;
+
+#[derive(Clone)]
+pub struct Context {
+    pub registry: Rc<Registry>,
+    pub imports: Vec<Import>,
+    pub stylesheet: Rc<Stylesheet>,
+}
 
 #[derive(Clone)]
 pub struct Binding {
@@ -83,6 +91,7 @@ pub struct Structure {
     pub spacing: u32,
     pub kind: StructureKind,
     pub component: ComponentHandle,
+    pub context: Context,
 }
 
 #[derive(Debug, Clone)]
@@ -123,7 +132,15 @@ pub fn build_tree(
     component: &mut Component,
 ) -> Result<Widget, Error> {
     let cell: ComponentHandle = Rc::new(RefCell::new(std::mem::take(component)));
-    let built = build_bound_tree(element, stylesheet, theme, &cell);
+    let context = Context {
+        registry: Rc::new(Registry {
+            definitions: Vec::new(),
+            imports: Vec::new(),
+        }),
+        imports: Vec::new(),
+        stylesheet: Rc::new(stylesheet.clone()),
+    };
+    let built = build_bound_tree(element, &cell, &context, theme);
     let widget = built.map(|built| built.widget);
     *component = Rc::try_unwrap(cell)
         .map(RefCell::into_inner)
@@ -133,11 +150,11 @@ pub fn build_tree(
 
 pub fn build_bound_tree(
     element: &Element,
-    stylesheet: &Stylesheet,
-    theme: Option<&str>,
     component: &ComponentHandle,
+    context: &Context,
+    theme: Option<&str>,
 ) -> Result<Built, Error> {
-    let resolved = resolve(element, stylesheet, theme)?;
+    let resolved = resolve(element, &context.stylesheet, theme)?;
 
     let (widget, bindings, handlers, structures) = match element.name.as_str() {
         "View" | "Row" | "Column" => {
@@ -146,7 +163,7 @@ pub fn build_bound_tree(
             } else {
                 Direction::Column
             };
-            container(direction, element, stylesheet, theme, component, resolved)?
+            container(direction, element, component, context, theme, resolved)?
         }
         "Text" => {
             let (widget, expression) = text(element, component, resolved)?;
@@ -165,10 +182,13 @@ pub fn build_bound_tree(
             ));
         }
         name => {
-            return Err(error_at(
-                element.position,
-                format!("unknown widget '{name}'"),
-            ));
+            let Some(import) = context.imports.iter().find(|import| import.name == name) else {
+                return Err(error_at(
+                    element.position,
+                    format!("unknown widget '{name}'"),
+                ));
+            };
+            return instance(element, component, context, theme, import.definition);
         }
     };
 
@@ -177,6 +197,174 @@ pub fn build_bound_tree(
     built.handlers.extend(handlers);
     built.structures.extend(structures);
     Ok(built)
+}
+
+fn instance(
+    element: &Element,
+    parent: &ComponentHandle,
+    context: &Context,
+    theme: Option<&str>,
+    index: usize,
+) -> Result<Built, Error> {
+    let definition = &context.registry.definitions[index];
+    if !element.block.items.is_empty() {
+        return Err(error_at(
+            element.position,
+            format!("component '{}' does not accept children", definition.name),
+        ));
+    }
+
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    if let Some(program) = &definition.program {
+        execute_program(&mut component.borrow_mut(), program).map_err(script_error)?;
+    }
+
+    let mut given: Vec<&str> = Vec::new();
+    for arg in &element.args {
+        match arg {
+            Arg::Class(_) => {
+                return Err(error_at(
+                    element.position,
+                    format!(
+                        "component '{}' does not accept classes yet",
+                        definition.name
+                    ),
+                ));
+            }
+            Arg::Handler { .. } => {
+                return Err(error_at(
+                    element.position,
+                    format!(
+                        "component '{}' events are not supported yet",
+                        definition.name
+                    ),
+                ));
+            }
+            Arg::Named { name, value } => {
+                if given.contains(&name.as_str()) {
+                    return Err(error_at(
+                        value.position,
+                        format!("property '{name}' is given twice"),
+                    ));
+                }
+                let Some(prop) =
+                    definition
+                        .component
+                        .members
+                        .iter()
+                        .find_map(|member| match member {
+                            Member::Prop(prop) if prop.name == *name => Some(prop),
+                            _ => None,
+                        })
+                else {
+                    return Err(error_at(
+                        value.position,
+                        format!("component '{}' has no property '{name}'", definition.name),
+                    ));
+                };
+                let position = value.position;
+                let value = evaluate(parent, value)?;
+                let value = typed(value, prop.ty, name, &definition.name, position)?;
+                component
+                    .borrow_mut()
+                    .declare_property(name, value)
+                    .map_err(|error| error_at(position, error.reason()))?;
+                given.push(name);
+            }
+        }
+    }
+
+    for member in &definition.component.members {
+        let Member::Prop(prop) = member else {
+            continue;
+        };
+        if given.contains(&prop.name.as_str()) {
+            continue;
+        }
+        let Some(default) = &prop.default else {
+            return Err(error_at(
+                element.position,
+                format!(
+                    "property '{}' of component '{}' requires a default value",
+                    prop.name, definition.name
+                ),
+            ));
+        };
+        let value = evaluate(&component, default)?;
+        let value = typed(
+            value,
+            prop.ty,
+            &prop.name,
+            &definition.name,
+            default.position,
+        )?;
+        component
+            .borrow_mut()
+            .declare_property(&prop.name, value)
+            .map_err(|error| error_at(default.position, error.reason()))?;
+    }
+
+    let mut roots = definition
+        .component
+        .members
+        .iter()
+        .filter_map(|member| match member {
+            Member::Element(element) => Some(element),
+            Member::Prop(_) | Member::Event(_) => None,
+        });
+    let Some(root) = roots.next() else {
+        return Err(error_at(
+            element.position,
+            format!("component '{}' has no root element", definition.name),
+        ));
+    };
+    if roots.next().is_some() {
+        return Err(error_at(
+            element.position,
+            format!(
+                "component '{}' has more than one root element",
+                definition.name
+            ),
+        ));
+    }
+
+    let context = Context {
+        registry: Rc::clone(&context.registry),
+        imports: definition.imports.clone(),
+        stylesheet: Rc::clone(&definition.stylesheet),
+    };
+    build_bound_tree(root, &component, &context, theme)
+}
+
+fn typed(
+    value: Value,
+    ty: PropType,
+    name: &str,
+    component: &str,
+    position: Position,
+) -> Result<Value, Error> {
+    let matches = match ty {
+        PropType::Bool => matches!(value, Value::Bool(_)),
+        PropType::Number => matches!(value, Value::Number(_)),
+        PropType::String => matches!(value, Value::String(_)),
+        PropType::Image => matches!(value, Value::Null),
+    };
+    if matches {
+        return Ok(value);
+    }
+    let expected = match ty {
+        PropType::Bool => "Bool",
+        PropType::Number => "Number",
+        PropType::String => "String",
+        PropType::Image => "Image",
+    };
+    Err(error_at(
+        position,
+        format!(
+            "property '{name}' of component '{component}' expects {expected}, got {}",
+            value.type_name()
+        ),
+    ))
 }
 
 fn resolve(
@@ -328,16 +516,16 @@ fn parameters(
 fn container(
     direction: Direction,
     element: &Element,
-    stylesheet: &Stylesheet,
-    theme: Option<&str>,
     component: &ComponentHandle,
+    context: &Context,
+    theme: Option<&str>,
     resolved: Resolved,
 ) -> Result<Parts, Error> {
     let built = build_items(
         &element.block.items,
-        stylesheet,
-        theme,
         component,
+        context,
+        theme,
         element.position,
         direction,
         resolved.layout.spacing,
@@ -360,9 +548,9 @@ fn container(
 
 fn build_items(
     items: &[BlockItem],
-    stylesheet: &Stylesheet,
-    theme: Option<&str>,
     component: &ComponentHandle,
+    context: &Context,
+    theme: Option<&str>,
     position: Position,
     direction: Direction,
     spacing: u32,
@@ -371,11 +559,11 @@ fn build_items(
     for item in items {
         match item {
             BlockItem::Element(child) => {
-                built.push(build_bound_tree(child, stylesheet, theme, component)?);
+                built.push(build_bound_tree(child, component, context, theme)?);
             }
             BlockItem::If(block) => {
                 let (mut node, last) = build_if(
-                    block, stylesheet, theme, component, position, direction, spacing,
+                    block, component, context, theme, position, direction, spacing,
                 )?;
                 node.structures.push(Structure {
                     parent: node.widget.id(),
@@ -386,12 +574,13 @@ fn build_items(
                         last,
                     },
                     component: Rc::clone(component),
+                    context: context.clone(),
                 });
                 built.push(node);
             }
             BlockItem::Each(block) => {
                 let (mut node, last, rows) = build_each(
-                    block, stylesheet, theme, component, position, direction, spacing,
+                    block, component, context, theme, position, direction, spacing,
                 )?;
                 node.structures.push(Structure {
                     parent: node.widget.id(),
@@ -403,6 +592,7 @@ fn build_items(
                         rows,
                     },
                     component: Rc::clone(component),
+                    context: context.clone(),
                 });
                 built.push(node);
             }
@@ -419,9 +609,9 @@ fn build_items(
 
 fn build_if(
     block: &IfBlock,
-    stylesheet: &Stylesheet,
-    theme: Option<&str>,
     component: &ComponentHandle,
+    context: &Context,
+    theme: Option<&str>,
     position: Position,
     direction: Direction,
     spacing: u32,
@@ -443,9 +633,9 @@ fn build_if(
     let (children, bindings, handlers, structures) = match branch {
         Some(branch) => flatten(build_items(
             &branch.items,
-            stylesheet,
-            theme,
             component,
+            context,
+            theme,
             position,
             direction,
             spacing,
@@ -484,9 +674,9 @@ fn flatten(built: Vec<Built>) -> Children {
 
 fn build_each(
     block: &EachBlock,
-    stylesheet: &Stylesheet,
-    theme: Option<&str>,
     component: &ComponentHandle,
+    context: &Context,
+    theme: Option<&str>,
     position: Position,
     direction: Direction,
     spacing: u32,
@@ -522,9 +712,9 @@ fn build_each(
             };
             let built = build_items(
                 &block.block.items,
-                stylesheet,
-                theme,
                 component,
+                context,
+                theme,
                 position,
                 direction,
                 spacing,
@@ -562,17 +752,15 @@ fn build_each(
 
 pub fn rebuild_structure(
     structure: &Structure,
-    stylesheet: &Stylesheet,
     theme: Option<&str>,
-    component: &ComponentHandle,
 ) -> Result<(Built, Value, Vec<RowInfo>), Error> {
     match &structure.kind {
         StructureKind::If { block, .. } => {
             let (built, condition) = build_if(
                 block,
-                stylesheet,
+                &structure.component,
+                &structure.context,
                 theme,
-                component,
                 block.condition.position,
                 structure.direction,
                 structure.spacing,
@@ -582,9 +770,9 @@ pub fn rebuild_structure(
         StructureKind::Each { block, .. } => {
             let (built, items, rows) = build_each(
                 block,
-                stylesheet,
+                &structure.component,
+                &structure.context,
                 theme,
-                component,
                 block.collection.position,
                 structure.direction,
                 structure.spacing,
