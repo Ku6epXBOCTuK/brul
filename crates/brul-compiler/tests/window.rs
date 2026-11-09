@@ -1,7 +1,25 @@
-use brul_compiler::load;
+use std::fs;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use brul_compiler::{load, load_file};
 use brul_gui::{Color, Size, TextEngine, WidgetTree};
 use brul_script::Value;
 use brul_syntax::error::Error;
+
+fn workspace(tag: &str, files: &[(&str, &str)]) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let dir =
+        std::env::temp_dir().join(format!("brul-window-{tag}-{}-{nanos}", std::process::id()));
+    fs::create_dir_all(&dir).expect("workspace");
+    for (name, source) in files {
+        fs::write(dir.join(name), source).expect("fixture");
+    }
+    dir
+}
 
 fn snapshot(
     source: &str,
@@ -105,15 +123,139 @@ window Picker (title: "x") { Column { } }
 
 #[test]
 fn use_block_is_parsed_before_markup() {
-    let loaded = load(
-        "<use>\nimport BrowserItem from \"./browser_item\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Column { } }\n</markup>",
-        None,
-    )
-    .expect("app loads");
+    let dir = workspace(
+        "uses",
+        &[
+            (
+                "app.brul",
+                "<use>\nimport BrowserItem from \"./browser_item\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Column { } }\n</markup>",
+            ),
+            (
+                "browser_item.brul",
+                "<markup>\ncomponent BrowserItem { prop name: String = \"\" }\n</markup>",
+            ),
+        ],
+    );
+
+    let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
 
     assert_eq!(loaded.uses.len(), 1);
     assert_eq!(loaded.uses[0].name, "BrowserItem");
     assert_eq!(loaded.uses[0].path, "./browser_item");
+    assert_eq!(loaded.registry.imports.len(), 1);
+    assert_eq!(loaded.registry.imports[0].name, "BrowserItem");
+    assert_eq!(loaded.registry.definitions.len(), 1);
+    assert_eq!(loaded.registry.definitions[0].name, "BrowserItem");
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
+fn nested_imports_share_one_definition() {
+    let dir = workspace(
+        "nested",
+        &[
+            (
+                "app.brul",
+                "<use>\nimport A from \"./a\";\nimport B from \"./b\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Column { } }\n</markup>",
+            ),
+            (
+                "a.brul",
+                "<use>\nimport Shared from \"./shared\";\n</use>\n\n<markup>\ncomponent A { prop x: Number = 0 }\n</markup>",
+            ),
+            (
+                "b.brul",
+                "<use>\nimport Shared from \"./shared\";\n</use>\n\n<markup>\ncomponent B { prop x: Number = 0 }\n</markup>",
+            ),
+            (
+                "shared.brul",
+                "<markup>\ncomponent Shared { prop x: Number = 0 }\n</markup>",
+            ),
+        ],
+    );
+
+    let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
+
+    assert_eq!(loaded.registry.definitions.len(), 3);
+    assert_eq!(loaded.registry.definitions[0].name, "Shared");
+    assert_eq!(loaded.registry.definitions[1].name, "A");
+    assert_eq!(loaded.registry.definitions[2].name, "B");
+    assert_eq!(loaded.registry.definitions[1].imports[0].definition, 0);
+    assert_eq!(loaded.registry.definitions[2].imports[0].definition, 0);
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
+fn import_cycle_is_reported() {
+    let dir = workspace(
+        "cycle",
+        &[
+            (
+                "app.brul",
+                "<use>\nimport A from \"./a\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Column { } }\n</markup>",
+            ),
+            (
+                "a.brul",
+                "<use>\nimport B from \"./b\";\n</use>\n\n<markup>\ncomponent A { prop x: Number = 0 }\n</markup>",
+            ),
+            (
+                "b.brul",
+                "<use>\nimport A from \"./a\";\n</use>\n\n<markup>\ncomponent B { prop x: Number = 0 }\n</markup>",
+            ),
+        ],
+    );
+
+    let error = load_file(dir.join("app.brul"), None).err().expect("cycle");
+    assert!(
+        error.message.starts_with("import cycle: "),
+        "{}",
+        error.message
+    );
+    assert_eq!(
+        error.message.matches("a.brul").count(),
+        2,
+        "{}",
+        error.message
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
+fn import_without_a_file_path_is_rejected() {
+    let error = failure(
+        "<use>\nimport BrowserItem from \"./browser_item\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Column { } }\n</markup>",
+    );
+
+    assert_eq!(
+        error.message,
+        "cannot resolve import './browser_item': source has no file path"
+    );
+}
+
+#[test]
+fn imported_file_must_declare_a_component() {
+    let dir = workspace(
+        "names",
+        &[
+            (
+                "app.brul",
+                "<use>\nimport BrowserItem from \"./browser_item\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Column { } }\n</markup>",
+            ),
+            (
+                "browser_item.brul",
+                "<markup>\nwindow Other (title: \"x\") { Column { } }\n</markup>",
+            ),
+        ],
+    );
+
+    let error = load_file(dir.join("app.brul"), None)
+        .err()
+        .expect("missing component");
+    assert!(
+        error.message.contains("file has no component declaration"),
+        "{}",
+        error.message
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
 }
 
 #[test]

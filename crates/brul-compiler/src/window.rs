@@ -1,4 +1,6 @@
 use std::cell::RefCell;
+use std::fs;
+use std::path::Path;
 use std::rc::Rc;
 
 use brul_gui::Widget;
@@ -13,6 +15,7 @@ use brul_syntax::style::{self, Stylesheet};
 use brul_syntax::uses::{self, Use};
 
 use crate::build_bound_tree;
+use crate::loader::{self, Registry};
 use crate::tree::{Binding, ComponentHandle, Handler, HandlerEvent, Structure, script_error};
 
 pub struct Loaded {
@@ -23,6 +26,7 @@ pub struct Loaded {
     pub handlers: Vec<Handler>,
     pub component: ComponentHandle,
     pub uses: Vec<Use>,
+    pub registry: Registry,
     pub program: Option<Program>,
     pub root: Element,
     pub stylesheet: Stylesheet,
@@ -30,6 +34,20 @@ pub struct Loaded {
 }
 
 pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
+    load_from(source, None, theme)
+}
+
+pub fn load_file(path: impl AsRef<Path>, theme: Option<&str>) -> Result<Loaded, Error> {
+    let path = path.as_ref();
+    let source = fs::read_to_string(path).map_err(|error| Error {
+        message: format!("cannot read '{}': {error}", path.display()),
+        line: 1,
+        column: 1,
+    })?;
+    load_from(&source, path.parent(), theme)
+}
+
+fn load_from(source: &str, base: Option<&Path>, theme: Option<&str>) -> Result<Loaded, Error> {
     let sfc = sfc::parse(source).map_err(sfc_error)?;
     let markup = markup::parse_file(&padded(source, sfc.markup))?;
     let window = markup
@@ -57,6 +75,7 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
         Some(block) => uses::parse(&padded(source, block))?,
         None => Vec::new(),
     };
+    let registry = loader::resolve(&uses, base)?;
     let program = match sfc.script {
         Some(block) => Some(script::parse(&padded(source, block))?),
         None => None,
@@ -80,6 +99,7 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
         handlers: built.handlers,
         component,
         uses,
+        registry,
         program,
         root,
         stylesheet,
@@ -203,7 +223,7 @@ fn flag(value: &Expr, name: &str) -> Result<(), Error> {
     }
 }
 
-fn padded(source: &str, block: sfc::Block<'_>) -> String {
+pub(crate) fn padded(source: &str, block: sfc::Block<'_>) -> String {
     let mut text = String::with_capacity(block.offset + block.content.len());
     for character in source[..block.offset].chars() {
         text.push(if character == '\n' { '\n' } else { ' ' });
@@ -212,7 +232,7 @@ fn padded(source: &str, block: sfc::Block<'_>) -> String {
     text
 }
 
-fn sfc_error(error: sfc::Error) -> Error {
+pub(crate) fn sfc_error(error: sfc::Error) -> Error {
     match error {
         sfc::Error::Syntax {
             message,
@@ -234,7 +254,7 @@ fn sfc_error(error: sfc::Error) -> Error {
     }
 }
 
-fn error_at(position: Position, message: impl Into<String>) -> Error {
+pub(crate) fn error_at(position: Position, message: impl Into<String>) -> Error {
     Error {
         message: message.into(),
         line: position.line,
