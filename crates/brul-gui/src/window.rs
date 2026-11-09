@@ -150,10 +150,16 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     result.map_err(|error| WindowError::EventLoop(error.to_string()))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowCommand {
+    Exit,
+    Drag,
+}
+
 pub fn run_tree(
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
-    handler: impl FnMut(&[WidgetEvent]) + 'static,
+    handler: impl FnMut(&[WidgetEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
     run_tree_themed(config, move |_| Rc::clone(&tree), handler)
 }
@@ -161,7 +167,7 @@ pub fn run_tree(
 pub fn run_tree_themed(
     config: WindowConfig,
     mut build: impl FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>> + 'static,
-    handler: impl FnMut(&[WidgetEvent]) + 'static,
+    handler: impl FnMut(&[WidgetEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
     config.validate()?;
     let event_loop = EventLoop::new().map_err(|error| WindowError::EventLoop(error.to_string()))?;
@@ -291,7 +297,7 @@ impl ApplicationHandler for App {
     }
 }
 
-type EventHandler = Box<dyn FnMut(&[WidgetEvent])>;
+type EventHandler = Box<dyn FnMut(&[WidgetEvent]) -> Vec<WindowCommand>>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
 
 fn key_code(key: &Key) -> Option<String> {
@@ -384,7 +390,7 @@ impl ApplicationHandler for TreeApp {
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state == ElementState::Pressed {
                     if let Some(code) = key_code(&event.logical_key) {
-                        self.dispatch_events(&window, vec![WidgetEvent::Key(code)]);
+                        self.dispatch_events(event_loop, &window, vec![WidgetEvent::Key(code)]);
                     }
                     if event.logical_key == Key::Named(NamedKey::Escape) {
                         event_loop.exit();
@@ -400,7 +406,7 @@ impl ApplicationHandler for TreeApp {
             }
             WindowEvent::PointerLeft { .. } => {
                 let events = self.tree.borrow_mut().pointer_leave();
-                self.dispatch_events(&window, events);
+                self.dispatch_events(event_loop, &window, events);
             }
             WindowEvent::PointerButton {
                 state,
@@ -474,12 +480,17 @@ impl TreeApp {
         events: Result<Vec<WidgetEvent>, crate::WidgetError>,
     ) {
         match events {
-            Ok(events) => self.dispatch_events(window, events),
+            Ok(events) => self.dispatch_events(event_loop, window, events),
             Err(error) => self.fail(event_loop, WindowError::Widget(error.to_string())),
         }
     }
 
-    fn dispatch_events(&mut self, window: &Arc<dyn Window>, events: Vec<WidgetEvent>) {
+    fn dispatch_events(
+        &mut self,
+        event_loop: &dyn ActiveEventLoop,
+        window: &Arc<dyn Window>,
+        events: Vec<WidgetEvent>,
+    ) {
         if events.is_empty() {
             return;
         }
@@ -489,7 +500,15 @@ impl TreeApp {
         {
             let _ = window.drag_window();
         }
-        (self.handler)(&events);
+        let commands = (self.handler)(&events);
+        for command in commands {
+            match command {
+                WindowCommand::Exit => event_loop.exit(),
+                WindowCommand::Drag => {
+                    let _ = window.drag_window();
+                }
+            }
+        }
         brul_reactive::flush();
         if self.tree.borrow().snapshot_dirty() {
             window.request_redraw();

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use bropicker::launcher::Launcher;
 use bropicker::ui::{PickerIds, apply_events, build_view, demo_browsers};
 use bropicker::{Config, Theme};
-use brul_gui::window::{ColorScheme, WindowConfig, run_tree_themed};
+use brul_gui::window::{ColorScheme, WindowCommand, WindowConfig, run_tree_themed};
 use brul_gui::{WidgetEvent, WidgetTree};
 
 struct AppState {
@@ -79,7 +79,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let handler_state = Rc::clone(&state);
     let handler_browsers = browsers.clone();
     let handler_url = url.clone();
-    let handler = move |events: &[WidgetEvent]| {
+    let handler = move |events: &[WidgetEvent]| -> Vec<WindowCommand> {
         let (tree, ids) = {
             let state = handler_state.borrow();
             (Rc::clone(&state.tree), state.ids.clone())
@@ -109,6 +109,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         {
             eprintln!("launch: {error}");
         }
+
+        Vec::new()
     };
 
     run_tree_themed(

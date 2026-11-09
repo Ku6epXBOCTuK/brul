@@ -1,5 +1,6 @@
 use brul::Ui;
 use brul_compiler::load;
+use brul_gui::window::WindowCommand;
 use brul_gui::{Size, TextEngine, WidgetEvent, WidgetId, WidgetKind};
 use brul_script::Value;
 
@@ -81,7 +82,7 @@ window Demo (title: "Demo", on key: handleKey) {
 #[test]
 fn window_key_handler_receives_the_code() {
     let mut ui = build(KEY);
-    ui.dispatch(&[WidgetEvent::Key("Enter".to_owned())]);
+    let _ = ui.dispatch(&[WidgetEvent::Key("Enter".to_owned())]);
     assert_eq!(
         ui.component.borrow().read("code").expect("code"),
         Value::String("Enter".to_owned())
@@ -177,7 +178,7 @@ fn widget_events_call_script_handlers() {
     let mut ui = build(APP);
     let id = text_ids(&ui)[0];
 
-    ui.dispatch(&[
+    let _ = ui.dispatch(&[
         WidgetEvent::Click(id),
         WidgetEvent::Press(id),
         WidgetEvent::Release(id),
@@ -193,9 +194,43 @@ fn events_of_other_widgets_are_ignored() {
     let mut ui = build(APP);
     let id = text_ids(&ui)[1];
 
-    ui.dispatch(&[WidgetEvent::Click(id)]);
+    let _ = ui.dispatch(&[WidgetEvent::Click(id)]);
 
     assert_eq!(count(&ui), 0.0);
+}
+
+#[test]
+fn builtin_exit_and_drag_push_window_commands() {
+    let source = r#"
+<script>
+function leave() {
+    exit();
+}
+function move() {
+    dragWindow();
+}
+</script>
+
+<markup>
+window Demo (title: "Demo") {
+    Column {
+        Text (on click: leave) { "exit" }
+        Text (on click: move) { "drag" }
+    }
+}
+</markup>
+"#;
+    let mut ui = build(source);
+    let ids = text_ids(&ui);
+
+    assert_eq!(
+        ui.dispatch(&[WidgetEvent::Click(ids[0])]),
+        vec![WindowCommand::Exit]
+    );
+    assert_eq!(
+        ui.dispatch(&[WidgetEvent::Click(ids[1])]),
+        vec![WindowCommand::Drag]
+    );
 }
 
 #[test]

@@ -51,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             batch(|| checked.set(!checked.get()));
         }
+        Vec::new()
     })?;
     Ok(())
 }

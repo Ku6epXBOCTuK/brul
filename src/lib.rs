@@ -6,14 +6,37 @@ use std::rc::Rc;
 use brul_compiler::{Binding, BindingTarget, Handler, HandlerEvent, Loaded};
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Value, eval};
+use brul_script::{Component, Error, Host, Value, eval};
 use brul_syntax::ast::Expr;
 
 pub struct Ui {
     pub component: Rc<RefCell<Component>>,
     pub tree: Rc<RefCell<WidgetTree>>,
     handlers: Vec<Handler>,
+    commands: Rc<RefCell<Vec<window::WindowCommand>>>,
     _scope: EffectScope,
+}
+
+struct CommandHost {
+    commands: Rc<RefCell<Vec<window::WindowCommand>>>,
+}
+
+impl Host for CommandHost {
+    fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
+        let command = match name {
+            "exit" => window::WindowCommand::Exit,
+            "dragWindow" => window::WindowCommand::Drag,
+            _ => return Err(Error::UnknownFunction(name.to_owned())),
+        };
+        if !arguments.is_empty() {
+            return Err(Error::Arity {
+                name: name.to_owned(),
+                expected: "no",
+            });
+        }
+        self.commands.borrow_mut().push(command);
+        Ok(Value::Null)
+    }
 }
 
 impl Ui {
@@ -23,6 +46,11 @@ impl Ui {
         bindings: Vec<Binding>,
         handlers: Vec<Handler>,
     ) -> Self {
+        let mut component = component;
+        let commands = Rc::new(RefCell::new(Vec::new()));
+        component.set_host(CommandHost {
+            commands: Rc::clone(&commands),
+        });
         let component = Rc::new(RefCell::new(component));
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         let scope = EffectScope::new();
@@ -37,11 +65,12 @@ impl Ui {
             component,
             tree,
             handlers,
+            commands,
             _scope: scope,
         }
     }
 
-    pub fn dispatch(&mut self, events: &[WidgetEvent]) {
+    pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<window::WindowCommand> {
         for event in events {
             let Some((widget, target)) = handler_target(event) else {
                 continue;
@@ -69,6 +98,7 @@ impl Ui {
                 eprintln!("{error}");
             }
         }
+        std::mem::take(&mut self.commands.borrow_mut())
     }
 }
 
