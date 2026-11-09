@@ -11,7 +11,7 @@
 
 Канон живёт здесь: `markup.ebnf`, `style.ebnf`, `script.ebnf`, `use.ebnf`.
 Markdown-спеки включают их через mdBook include, копий не появляется. Вместе с
-парсером файлы переезжают в `crates/brul-compiler/lang/` без правок.
+парсером файлы переезжают в `crates/brul-syntax/lang/` без правок.
 
 ## Общие договорённости
 

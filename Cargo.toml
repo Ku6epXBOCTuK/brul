@@ -9,7 +9,7 @@ repository = "https://github.com/Ku6epXBOCTuK/brul"
 workspace = true
 
 [dependencies]
-brul-compiler = { workspace = true }
+brul-codegen = { workspace = true }
 brul-gui = { workspace = true }
 brul-reactive = { workspace = true }
 brul-script = { workspace = true }
@@ -30,7 +30,6 @@ debug = false
 
 [workspace.dependencies]
 brul-codegen = { path = 'crates\brul-codegen' }
-brul-compiler = { path = 'crates\brul-compiler' }
 brul-gui = { path = 'crates\brul-gui' }
 brul-reactive = { path = 'crates\brul-reactive' }
 brul-script = { path = 'crates\brul-script' }

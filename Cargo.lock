@@ -197,7 +197,7 @@ dependencies = [
 name = "brul"
 version = "0.1.0"
 dependencies = [
- "brul-compiler",
+ "brul-codegen",
  "brul-gui",
  "brul-reactive",
  "brul-script",
@@ -210,16 +210,6 @@ version = "0.1.0"
 dependencies = [
  "brul-gui",
  "brul-reactive",
- "brul-script",
- "brul-syntax",
-]
-
-[[package]]
-name = "brul-compiler"
-version = "0.1.0"
-dependencies = [
- "brul-codegen",
- "brul-gui",
  "brul-script",
  "brul-syntax",
 ]
