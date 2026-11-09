@@ -1,4 +1,4 @@
-use crate::ast::Expr;
+use crate::ast::{Expr, Position};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct File {
@@ -31,11 +31,18 @@ pub enum Member {
     Element(Element),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Element {
     pub name: String,
     pub args: Vec<Arg>,
     pub block: Block,
+    pub position: Position,
+}
+
+impl PartialEq for Element {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.args == other.args && self.block == other.block
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

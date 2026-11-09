@@ -68,6 +68,7 @@ fn element_args_parse_handlers_and_expressions() {
     assert_eq!(
         component.members,
         vec![Member::Element(Element {
+            position: Position::default(),
             name: "Button".to_owned(),
             args: vec![
                 Arg::Class("check-row".to_owned()),
@@ -229,6 +230,7 @@ fn nested_elements_parse() {
         panic!("expected a component");
     };
     let view = || Element {
+        position: Position::default(),
         name: "View".to_owned(),
         args: Vec::new(),
         block: Block { items: Vec::new() },
@@ -236,11 +238,13 @@ fn nested_elements_parse() {
     assert_eq!(
         component.members,
         vec![Member::Element(Element {
+            position: Position::default(),
             name: "Row".to_owned(),
             args: Vec::new(),
             block: Block {
                 items: vec![
                     BlockItem::Element(Element {
+                        position: Position::default(),
                         name: "Text".to_owned(),
                         args: Vec::new(),
                         block: Block {
@@ -248,6 +252,7 @@ fn nested_elements_parse() {
                         },
                     }),
                     BlockItem::Element(Element {
+                        position: Position::default(),
                         name: "View".to_owned(),
                         args: Vec::new(),
                         block: Block {
@@ -303,6 +308,7 @@ fn if_else_blocks_parse() {
         panic!("expected a component");
     };
     let element = |name: &str| Element {
+        position: Position::default(),
         name: name.to_owned(),
         args: Vec::new(),
         block: Block { items: Vec::new() },
@@ -310,6 +316,7 @@ fn if_else_blocks_parse() {
     assert_eq!(
         component.members,
         vec![Member::Element(Element {
+            position: Position::default(),
             name: "Row".to_owned(),
             args: Vec::new(),
             block: Block {
@@ -327,6 +334,7 @@ fn if_else_blocks_parse() {
                         condition: ident("failed"),
                         then_block: Block {
                             items: vec![BlockItem::Element(Element {
+                                position: Position::default(),
                                 name: "Text".to_owned(),
                                 args: Vec::new(),
                                 block: Block {
@@ -390,6 +398,7 @@ fn leaf_blocks_hold_one_expression() {
     };
     let text = |block: Block| {
         BlockItem::Element(Element {
+            position: Position::default(),
             name: "Text".to_owned(),
             args: Vec::new(),
             block,
@@ -398,11 +407,13 @@ fn leaf_blocks_hold_one_expression() {
     assert_eq!(
         component.members,
         vec![Member::Element(Element {
+            position: Position::default(),
             name: "Row".to_owned(),
             args: Vec::new(),
             block: Block {
                 items: vec![
                     BlockItem::Element(Element {
+                        position: Position::default(),
                         name: "Text".to_owned(),
                         args: vec![Arg::Class("text-main".to_owned())],
                         block: Block {
@@ -414,6 +425,7 @@ fn leaf_blocks_hold_one_expression() {
                         },
                     }),
                     BlockItem::Element(Element {
+                        position: Position::default(),
                         name: "Image".to_owned(),
                         args: vec![Arg::Class("item-image".to_owned())],
                         block: Block {
@@ -477,6 +489,7 @@ fn each_blocks_parse() {
         panic!("expected a component");
     };
     let element = |name: &str| Element {
+        position: Position::default(),
         name: name.to_owned(),
         args: Vec::new(),
         block: Block { items: Vec::new() },
@@ -491,6 +504,7 @@ fn each_blocks_parse() {
     assert_eq!(
         component.members,
         vec![Member::Element(Element {
+            position: Position::default(),
             name: "Column".to_owned(),
             args: Vec::new(),
             block: Block {
@@ -509,6 +523,7 @@ fn each_blocks_parse() {
                         key: None,
                         block: Block {
                             items: vec![BlockItem::Element(Element {
+                                position: Position::default(),
                                 name: "Row".to_owned(),
                                 args: vec![Arg::Named {
                                     name: "number".to_owned(),

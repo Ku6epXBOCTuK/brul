@@ -1,4 +1,6 @@
+use crate::ast::Position;
 use crate::error::Error;
+use crate::lexer::Span;
 use crate::markup::ast::{
     Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
     IfBlock, Member, Prop, PropType, Window,
@@ -73,15 +75,16 @@ impl Parser<'_> {
 
     fn member(&mut self) -> Result<Member, Error> {
         self.skip_trivia();
+        let start = self.pos;
         let name = self.ident()?;
         match name.as_str() {
             "prop" => self.prop(),
             "event" => self.event(),
-            _ => self.element(name).map(Member::Element),
+            _ => self.element(name, start).map(Member::Element),
         }
     }
 
-    fn element(&mut self, name: String) -> Result<Element, Error> {
+    fn element(&mut self, name: String, start: usize) -> Result<Element, Error> {
         self.skip_trivia();
         let args = if self.peek() == Some('(') {
             self.arg_list()?
@@ -93,7 +96,12 @@ impl Parser<'_> {
         } else {
             self.block()?
         };
-        Ok(Element { name, args, block })
+        Ok(Element {
+            name,
+            args,
+            block,
+            position: self.position(start),
+        })
     }
 
     fn leaf_block(&mut self, name: &str) -> Result<Block, Error> {
@@ -166,11 +174,12 @@ impl Parser<'_> {
     }
 
     fn block_item(&mut self) -> Result<BlockItem, Error> {
+        let start = self.pos;
         let name = self.ident()?;
         match name.as_str() {
             "if" => self.if_block().map(BlockItem::If),
             "each" => self.each_block().map(BlockItem::Each),
-            _ => self.element(name).map(BlockItem::Element),
+            _ => self.element(name, start).map(BlockItem::Element),
         }
     }
 
@@ -351,6 +360,15 @@ impl Parser<'_> {
         if let Some(ch) = self.peek() {
             self.pos += ch.len_utf8();
         }
+    }
+
+    fn position(&self, pos: usize) -> Position {
+        let (line, column) = Span {
+            start: pos,
+            end: pos,
+        }
+        .line_col(self.source);
+        Position { line, column }
     }
 
     fn error(&self, message: impl Into<String>) -> Error {
