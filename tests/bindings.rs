@@ -132,6 +132,57 @@ fn node_count(ui: &Ui) -> usize {
     snapshot.nodes.len()
 }
 
+fn text_ids(ui: &Ui) -> Vec<WidgetId> {
+    layout(ui);
+    let mut tree = ui.tree.borrow_mut();
+    let snapshot = tree.snapshot().cloned().expect("snapshot");
+    snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.kind == WidgetKind::Text)
+        .map(|node| node.id)
+        .collect()
+}
+
+#[test]
+fn keyed_rows_keep_their_widgets_when_reordered() {
+    let source = r#"
+<script>
+let items = [{ id: "a", label: "A" }, { id: "b", label: "B" }];
+</script>
+
+<markup>
+window Demo (title: "Demo") {
+    Column {
+        each (items as item, i (item.id)) {
+            Text { item.label }
+        }
+    }
+}
+</markup>
+"#;
+    let loaded = load(source, None).expect("app loads");
+    let mut ui = Ui::new(loaded);
+    let before = text_ids(&ui);
+
+    let entry = |id: &str, label: &str| {
+        Value::Object(vec![
+            ("id".to_owned(), Value::String(id.to_owned())),
+            ("label".to_owned(), Value::String(label.to_owned())),
+        ])
+    };
+    ui.component
+        .borrow_mut()
+        .assign(
+            "items",
+            Value::Array(vec![entry("b", "B"), entry("a", "A")]),
+        )
+        .expect("assign");
+    let _ = ui.dispatch(&[]);
+
+    assert_eq!(text_ids(&ui), vec![before[1], before[0]]);
+}
+
 #[test]
 fn if_condition_change_rebuilds_the_branch() {
     let source = r#"
@@ -200,18 +251,6 @@ window Demo (title: "Demo") {
     let _ = ui.dispatch(&[]);
 
     assert_eq!(node_count(&ui), 5);
-}
-
-fn text_ids(ui: &Ui) -> Vec<WidgetId> {
-    layout(ui);
-    let mut tree = ui.tree.borrow_mut();
-    let snapshot = tree.snapshot().cloned().expect("snapshot");
-    snapshot
-        .nodes
-        .iter()
-        .filter(|node| node.kind == WidgetKind::Text)
-        .map(|node| node.id)
-        .collect()
 }
 
 #[test]

@@ -469,6 +469,18 @@ impl WidgetTree {
         self.replace_children(parent, 0, count, children)
     }
 
+    pub fn take_children(&mut self, parent: WidgetId) -> Option<Vec<Widget>> {
+        let children = {
+            let widget = find_widget_mut(&mut self.root, parent)?;
+            let WidgetData::View { children, .. } = &mut widget.data else {
+                return None;
+            };
+            std::mem::take(children)
+        };
+        self.refresh();
+        Some(children)
+    }
+
     pub fn contains(&self, id: WidgetId) -> bool {
         fn contains(widget: &Widget, id: WidgetId) -> bool {
             widget.id == id || widget.children().iter().any(|child| contains(child, id))

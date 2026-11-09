@@ -5,10 +5,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use brul_compiler::{
-    Binding, BindingTarget, Handler, HandlerEvent, Loaded, Structure, StructureKind,
-    build_bound_tree, rebuild_structure,
+    Binding, BindingTarget, Built, Handler, HandlerEvent, Loaded, RowInfo, Structure,
+    StructureKind, build_bound_tree, rebuild_structure,
 };
-use brul_gui::{WidgetEvent, WidgetId, WidgetTree, window};
+use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Error, Host, Value, eval};
 use brul_syntax::ast::Expr;
@@ -180,7 +180,7 @@ impl Ui {
                         _ => false,
                     }
                 }
-                StructureKind::Each { block, last } => {
+                StructureKind::Each { block, last, .. } => {
                     match evaluate(&self.component, &block.collection) {
                         Some(Value::Array(items)) => items != *last,
                         _ => false,
@@ -201,19 +201,33 @@ impl Ui {
                 )
             };
             match built {
-                Ok((built, last)) => {
-                    let children = built.widget.into_children();
+                Ok((built, last, new_rows)) => {
+                    let Built {
+                        widget,
+                        bindings: added_bindings,
+                        handlers: added_handlers,
+                        structures: added_structures,
+                    } = built;
+                    let children = match &structure.kind {
+                        StructureKind::Each { rows, .. } => {
+                            reconcile_each(&self.tree, structure.parent, rows, widget, &new_rows)
+                        }
+                        _ => widget.into_children(),
+                    };
                     self.tree
                         .borrow_mut()
                         .replace_all_children(structure.parent, children);
                     match (&mut structure.kind, last) {
                         (StructureKind::If { last, .. }, Value::Bool(value)) => *last = value,
-                        (StructureKind::Each { last, .. }, Value::Array(items)) => *last = items,
+                        (StructureKind::Each { last, rows, .. }, Value::Array(items)) => {
+                            *last = items;
+                            *rows = new_rows;
+                        }
                         _ => {}
                     }
-                    bindings.extend(built.bindings);
-                    handlers.extend(built.handlers);
-                    kept.extend(built.structures);
+                    bindings.extend(added_bindings);
+                    handlers.extend(added_handlers);
+                    kept.extend(added_structures);
                     kept.push(structure);
                     changed = true;
                 }
@@ -226,14 +240,14 @@ impl Ui {
         self.structures = kept;
         if changed {
             let tree = Rc::clone(&self.tree);
+            self.bindings.extend(bindings);
             self.bindings
                 .retain(|binding| tree.borrow().contains(binding.widget));
-            self.bindings.extend(bindings);
+            self.handlers.extend(handlers);
             self.handlers.retain(|handler| match handler.widget {
                 Some(widget) => tree.borrow().contains(widget),
                 None => true,
             });
-            self.handlers.extend(handlers);
             self.scope = EffectScope::new();
             self.bind(&self.bindings);
         }
@@ -292,6 +306,59 @@ impl Ui {
         self.poll();
         output
     }
+}
+
+fn reconcile_each(
+    tree: &RefCell<WidgetTree>,
+    parent: WidgetId,
+    old_rows: &[RowInfo],
+    new_widget: Widget,
+    new_rows: &[RowInfo],
+) -> Vec<Widget> {
+    let Some(old_children) = tree.borrow_mut().take_children(parent) else {
+        return new_widget.into_children();
+    };
+    let mut remaining = old_children;
+    let mut old_widgets = Vec::with_capacity(old_rows.len());
+    for row in old_rows {
+        let take = row.count.min(remaining.len());
+        old_widgets.push(remaining.drain(..take).collect::<Vec<_>>());
+    }
+
+    let mut remaining = new_widget.into_children();
+    let mut new_widgets = Vec::with_capacity(new_rows.len());
+    for row in new_rows {
+        let take = row.count.min(remaining.len());
+        new_widgets.push(remaining.drain(..take).collect::<Vec<_>>());
+    }
+
+    let mut used = vec![false; old_widgets.len()];
+    let mut children = Vec::new();
+    for (index, row) in new_rows.iter().enumerate() {
+        let mut reused = None;
+        if let Some(key) = &row.key {
+            for (other, old) in old_rows.iter().enumerate() {
+                if !used[other] && old.key.as_ref() == Some(key) && old.item == row.item {
+                    reused = Some(other);
+                    break;
+                }
+            }
+        } else if let Some(old) = old_rows.get(index)
+            && !used[index]
+            && old.key.is_none()
+            && old.item == row.item
+        {
+            reused = Some(index);
+        }
+        match reused {
+            Some(other) => {
+                used[other] = true;
+                children.append(&mut old_widgets[other]);
+            }
+            None => children.append(&mut new_widgets[index]),
+        }
+    }
+    children
 }
 
 fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent)> {

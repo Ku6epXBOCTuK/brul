@@ -78,9 +78,24 @@ pub struct Structure {
 }
 
 #[derive(Debug, Clone)]
+pub struct RowInfo {
+    pub key: Option<Value>,
+    pub item: Value,
+    pub start: usize,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone)]
 pub enum StructureKind {
-    If { block: IfBlock, last: bool },
-    Each { block: EachBlock, last: Vec<Value> },
+    If {
+        block: IfBlock,
+        last: bool,
+    },
+    Each {
+        block: EachBlock,
+        last: Vec<Value>,
+        rows: Vec<RowInfo>,
+    },
 }
 
 pub struct Built {
@@ -353,7 +368,7 @@ fn build_items(
                 built.push(node);
             }
             BlockItem::Each(block) => {
-                let (mut node, last) = build_each(
+                let (mut node, last, rows) = build_each(
                     block, stylesheet, theme, component, position, direction, spacing,
                 )?;
                 node.structures.push(Structure {
@@ -363,6 +378,7 @@ fn build_items(
                     kind: StructureKind::Each {
                         block: block.clone(),
                         last,
+                        rows,
                     },
                 });
                 built.push(node);
@@ -451,7 +467,7 @@ fn build_each(
     position: Position,
     direction: Direction,
     spacing: u32,
-) -> Result<(Built, Vec<Value>), Error> {
+) -> Result<(Built, Vec<Value>, Vec<RowInfo>), Error> {
     let items = match evaluate(component, &block.collection)? {
         Value::Array(items) => items,
         other => {
@@ -463,10 +479,11 @@ fn build_each(
     };
     let last = items.clone();
     let mut all = Vec::new();
+    let mut rows = Vec::new();
     for (index, item) in items.into_iter().enumerate() {
         let mut variables = vec![Variable {
             name: block.item.clone(),
-            value: item,
+            value: item.clone(),
         }];
         if let Some(name) = &block.index {
             variables.push(Variable {
@@ -475,19 +492,12 @@ fn build_each(
             });
         }
         component.push_build_scope(&variables);
-        let row = match &block.key {
-            Some(key) => evaluate(component, key).and_then(|_| {
-                build_items(
-                    &block.block.items,
-                    stylesheet,
-                    theme,
-                    component,
-                    position,
-                    direction,
-                    spacing,
-                )
-            }),
-            None => build_items(
+        let outcome = (|| -> Result<(Option<Value>, Vec<Built>), Error> {
+            let key = match &block.key {
+                Some(expression) => Some(evaluate(component, expression)?),
+                None => None,
+            };
+            let built = build_items(
                 &block.block.items,
                 stylesheet,
                 theme,
@@ -495,10 +505,19 @@ fn build_each(
                 position,
                 direction,
                 spacing,
-            ),
-        };
+            )?;
+            Ok((key, built))
+        })();
         component.pop_build_scope();
-        all.extend(row?);
+        let (key, row) = outcome?;
+        let start = all.len();
+        all.extend(row);
+        rows.push(RowInfo {
+            key,
+            item,
+            start,
+            count: all.len() - start,
+        });
     }
     let (children, bindings, handlers, structures) = flatten(all);
     let mut wrapper = Widget::view(direction, Vec::new()).with_layout(LayoutStyle {
@@ -514,6 +533,7 @@ fn build_each(
             structures,
         },
         last,
+        rows,
     ))
 }
 
@@ -522,7 +542,7 @@ pub fn rebuild_structure(
     stylesheet: &Stylesheet,
     theme: Option<&str>,
     component: &mut Component,
-) -> Result<(Built, Value), Error> {
+) -> Result<(Built, Value, Vec<RowInfo>), Error> {
     match &structure.kind {
         StructureKind::If { block, .. } => {
             let (built, condition) = build_if(
@@ -534,10 +554,10 @@ pub fn rebuild_structure(
                 structure.direction,
                 structure.spacing,
             )?;
-            Ok((built, Value::Bool(condition)))
+            Ok((built, Value::Bool(condition), Vec::new()))
         }
         StructureKind::Each { block, .. } => {
-            let (built, items) = build_each(
+            let (built, items, rows) = build_each(
                 block,
                 stylesheet,
                 theme,
@@ -546,7 +566,7 @@ pub fn rebuild_structure(
                 structure.direction,
                 structure.spacing,
             )?;
-            Ok((built, Value::Array(items)))
+            Ok((built, Value::Array(items), rows))
         }
     }
 }
