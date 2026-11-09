@@ -221,3 +221,25 @@ fn place_glyphs(
 fn ceil_pixels(value: f32) -> u32 {
     value.max(0.0).ceil() as u32
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TextError;
+
+    #[test]
+    fn every_text_error_has_its_own_message() {
+        let messages = [
+            TextError::InvalidMetrics,
+            TextError::InvalidScale,
+            TextError::InvalidWidth,
+            TextError::AtlasFull,
+        ]
+        .map(|error| error.to_string());
+
+        assert!(messages.iter().all(|message| !message.is_empty()));
+        let mut unique = messages.to_vec();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), messages.len());
+    }
+}

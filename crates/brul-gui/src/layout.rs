@@ -569,3 +569,17 @@ fn validate_stretch(style: &LayoutStyle) -> Result<(), LayoutError> {
 fn clamp_i32(value: i64) -> i32 {
     value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LayoutError;
+
+    #[test]
+    fn every_layout_error_has_its_own_message() {
+        let messages = [LayoutError::InvalidDimension, LayoutError::InvalidStretch]
+            .map(|error| error.to_string());
+
+        assert!(messages.iter().all(|message| !message.is_empty()));
+        assert_ne!(messages[0], messages[1]);
+    }
+}

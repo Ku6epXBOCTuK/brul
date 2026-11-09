@@ -106,3 +106,16 @@ impl Texture {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TextureError;
+
+    #[test]
+    fn texture_error_message_keeps_the_decoder_error() {
+        let decode = TextureError::Decode("boom".to_owned()).to_string();
+
+        assert!(decode.contains("boom"));
+        assert_ne!(decode, TextureError::InvalidRgba.to_string());
+    }
+}

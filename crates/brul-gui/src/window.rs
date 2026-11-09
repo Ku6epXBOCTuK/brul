@@ -104,13 +104,20 @@ pub enum ColorScheme {
 pub enum WindowError {
     EmptySize,
     HeaderTooTall,
-    EventLoop(String),
-    CreateWindow(String),
-    Surface(String),
-    Adapter(String),
-    Device(String),
     NoSurfaceConfig,
-    Widget(String),
+    Stage {
+        stage: &'static str,
+        message: String,
+    },
+}
+
+impl WindowError {
+    fn stage(stage: &'static str, error: impl std::fmt::Display) -> Self {
+        Self::Stage {
+            stage,
+            message: error.to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for WindowError {
@@ -118,13 +125,8 @@ impl std::fmt::Display for WindowError {
         match self {
             Self::EmptySize => formatter.write_str("window size must be greater than zero"),
             Self::HeaderTooTall => formatter.write_str("header is taller than the window"),
-            Self::EventLoop(message) => write!(formatter, "event loop: {message}"),
-            Self::CreateWindow(message) => write!(formatter, "window creation: {message}"),
-            Self::Surface(message) => write!(formatter, "surface: {message}"),
-            Self::Adapter(message) => write!(formatter, "adapter: {message}"),
-            Self::Device(message) => write!(formatter, "device: {message}"),
             Self::NoSurfaceConfig => formatter.write_str("no suitable surface configuration"),
-            Self::Widget(message) => write!(formatter, "widgets: {message}"),
+            Self::Stage { stage, message } => write!(formatter, "{stage}: {message}"),
         }
     }
 }
@@ -133,7 +135,7 @@ impl std::error::Error for WindowError {}
 
 pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     config.validate()?;
-    let event_loop = EventLoop::new().map_err(|error| WindowError::EventLoop(error.to_string()))?;
+    let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let error = Rc::new(RefCell::new(None));
@@ -148,7 +150,7 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     if let Some(error) = error.borrow_mut().take() {
         return Err(error);
     }
-    result.map_err(|error| WindowError::EventLoop(error.to_string()))
+    result.map_err(|error| WindowError::stage("event loop", error))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -178,7 +180,7 @@ pub fn run_tree_themed(
     handler: impl FnMut(&[WidgetEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
     config.validate()?;
-    let event_loop = EventLoop::new().map_err(|error| WindowError::EventLoop(error.to_string()))?;
+    let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let error = Rc::new(RefCell::new(None));
@@ -209,7 +211,7 @@ pub fn run_tree_themed(
     if let Some(error) = error.borrow_mut().take() {
         return Err(error);
     }
-    result.map_err(|error| WindowError::EventLoop(error.to_string()))
+    result.map_err(|error| WindowError::stage("event loop", error))
 }
 
 fn create_window(
@@ -230,7 +232,7 @@ fn create_window(
     event_loop
         .create_window(attributes)
         .map(Arc::from)
-        .map_err(|error| WindowError::CreateWindow(error.to_string()))
+        .map_err(|error| WindowError::stage("window creation", error))
 }
 
 struct App {
@@ -384,7 +386,7 @@ impl ApplicationHandler for TreeApp {
                 .borrow_mut()
                 .layout(&mut engine, viewport, window.scale_factor() as f32);
         if let Err(error) = layout {
-            return self.fail(event_loop, WindowError::Widget(error.to_string()));
+            return self.fail(event_loop, WindowError::stage("widgets", error));
         }
 
         self.window = Some(Arc::clone(&window));
@@ -527,7 +529,7 @@ impl TreeApp {
     ) {
         match events {
             Ok(events) => self.dispatch_events(event_loop, window, events),
-            Err(error) => self.fail(event_loop, WindowError::Widget(error.to_string())),
+            Err(error) => self.fail(event_loop, WindowError::stage("widgets", error)),
         }
     }
 
@@ -589,7 +591,7 @@ impl TreeApp {
             None => Ok(()),
         };
         if let Err(error) = layout {
-            return self.fail(event_loop, WindowError::Widget(error.to_string()));
+            return self.fail(event_loop, WindowError::stage("widgets", error));
         }
         if let Some(frame) = self.frame.as_mut() {
             frame.resize(width, height);
@@ -602,7 +604,7 @@ impl TreeApp {
     fn render(&mut self, event_loop: &dyn ActiveEventLoop, window: &Arc<dyn Window>) {
         brul_reactive::flush();
         if let Err(error) = self.render_frame(window) {
-            self.fail(event_loop, WindowError::Widget(error.to_string()));
+            self.fail(event_loop, WindowError::stage("widgets", error));
         }
     }
 
@@ -722,16 +724,16 @@ impl Gpu {
         let instance = wgpu::Instance::default();
         let surface = instance
             .create_surface(Arc::clone(window))
-            .map_err(|error| WindowError::Surface(error.to_string()))?;
+            .map_err(|error| WindowError::stage("surface", error))?;
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::None,
             force_fallback_adapter: false,
             compatible_surface: Some(&surface),
             apply_limit_buckets: false,
         }))
-        .map_err(|error| WindowError::Adapter(error.to_string()))?;
+        .map_err(|error| WindowError::stage("adapter", error))?;
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .map_err(|error| WindowError::Device(error.to_string()))?;
+            .map_err(|error| WindowError::stage("device", error))?;
 
         let size = window.surface_size();
         let capabilities = surface.get_capabilities(&adapter);
@@ -1027,6 +1029,24 @@ mod tests {
             ..WindowConfig::default()
         };
         assert!(matches!(config.validate(), Err(WindowError::HeaderTooTall)));
+    }
+
+    #[test]
+    fn window_error_keeps_the_stage_names_apart() {
+        let messages = [
+            WindowError::EmptySize.to_string(),
+            WindowError::HeaderTooTall.to_string(),
+            WindowError::NoSurfaceConfig.to_string(),
+        ];
+        let mut unique = messages.to_vec();
+        unique.sort();
+        unique.dedup();
+
+        assert_eq!(unique.len(), messages.len());
+        assert_eq!(
+            WindowError::stage("surface", "boom").to_string(),
+            "surface: boom"
+        );
     }
 
     #[test]

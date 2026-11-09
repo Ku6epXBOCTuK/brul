@@ -336,3 +336,32 @@ fn opacity(value: f32) -> f32 {
 fn pixel_len(width: u32, height: u32) -> usize {
     width as usize * height as usize * 4
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Frame;
+
+    #[test]
+    fn resize_keeps_the_buffer_of_the_same_size() {
+        let mut frame = Frame::new(2, 3);
+
+        frame.resize(2, 3);
+
+        assert_eq!((frame.width(), frame.height()), (2, 3));
+        assert_eq!(frame.pixels().len(), 24);
+    }
+
+    #[test]
+    fn resize_reallocates_the_buffer() {
+        let mut frame = Frame::new(2, 3);
+
+        frame.resize(0, 0);
+        assert_eq!((frame.width(), frame.height()), (0, 0));
+        assert!(frame.pixels().is_empty());
+
+        frame.resize(4, 1);
+        assert_eq!((frame.width(), frame.height()), (4, 1));
+        assert_eq!(frame.pixels().len(), 16);
+        assert!(frame.pixels().iter().all(|byte| *byte == 0));
+    }
+}
