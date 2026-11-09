@@ -95,6 +95,22 @@ pub struct Handler {
     pub component: ComponentHandle,
 }
 
+impl Handler {
+    pub fn new(
+        component: &ComponentHandle,
+        widget: Option<WidgetId>,
+        event: HandlerEvent,
+        function: &str,
+    ) -> Self {
+        Self {
+            widget,
+            event,
+            function: function.to_owned(),
+            component: Rc::clone(component),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum BindingTarget {
     Text(Expr),

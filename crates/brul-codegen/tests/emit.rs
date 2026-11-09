@@ -14,6 +14,7 @@ window Demo (title: "demo") {
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
     let widget = match theme {
         None => {
             {
@@ -35,7 +36,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     Ok(brul::Built {
         widget,
         bindings,
-        handlers: Vec::new(),
+        handlers,
         structures: Vec::new(),
         props: Vec::new(),
     })
@@ -84,6 +85,7 @@ window Styled (title: "styled") {
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
     let widget = match theme {
         None => {
             {
@@ -114,7 +116,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     Ok(brul::Built {
         widget,
         bindings,
-        handlers: Vec::new(),
+        handlers,
         structures: Vec::new(),
         props: Vec::new(),
     })
@@ -189,6 +191,97 @@ window Demo (title: "demo") {
 "#;
     let error = emit::module(source).expect_err("error");
     assert_eq!(error.message, "parameter 'hovered' is not supported yet");
+}
+
+#[test]
+fn emits_widget_handlers() {
+    let source = r#"<script>
+    function toggle() { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Column (on drag: dragWindow) {
+        Row (on click: toggle, on enter: toggle) { }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        r#"handlers.push(brul::Handler::new(component, Some(widget1.id()), brul::HandlerEvent::Click, "toggle"));"#
+    ));
+    assert!(module.contains(
+        r#"handlers.push(brul::Handler::new(component, Some(widget1.id()), brul::HandlerEvent::Enter, "toggle"));"#
+    ));
+    assert!(module.contains("brul_gui::Widget::column(vec!["));
+    assert!(module.contains(".draggable(true);"));
+    assert!(!module.contains("HandlerEvent::Drag"));
+}
+
+#[test]
+fn emits_window_handler() {
+    let source = r#"<script>
+    function quit() { }
+</script>
+
+<markup>
+window Demo (title: "demo", on key: quit) {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        r#"handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::Key, "quit"));"#
+    ));
+}
+
+#[test]
+fn rejects_invalid_events() {
+    let unknown = r#"<markup>
+window Demo (title: "demo") {
+    View (on hovered: toggle) { }
+}
+</markup>
+"#;
+    assert_eq!(
+        emit::module(unknown).expect_err("error").message,
+        "event 'hovered' is not supported yet"
+    );
+
+    let missing = r#"<markup>
+window Demo (title: "demo") {
+    View (on click: toggle) { }
+}
+</markup>
+"#;
+    assert_eq!(
+        emit::module(missing).expect_err("error").message,
+        "function 'toggle' is not defined"
+    );
+
+    let key = r#"<markup>
+window Demo (title: "demo") {
+    View (on key: quit) { }
+}
+</markup>
+"#;
+    assert_eq!(
+        emit::module(key).expect_err("error").message,
+        "key events are only supported on the window"
+    );
+
+    let window = r#"<markup>
+window Demo (title: "demo", on click: quit) {
+    View { }
+}
+</markup>
+"#;
+    assert_eq!(
+        emit::module(window).expect_err("error").message,
+        "window event 'click' is not supported yet"
+    );
 }
 
 fn emitted(source: &str) -> String {
