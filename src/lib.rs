@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use brul_compiler::{
     Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, Loaded,
-    RowInfo, Structure, StructureKind, build_bound_tree, rebuild_structure,
+    PropBinding, RowInfo, Structure, StructureKind, accepts_prop, build_bound_tree,
+    rebuild_structure,
 };
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
@@ -21,6 +22,7 @@ pub struct Ui {
     window_handlers: Vec<Handler>,
     commands: Rc<RefCell<Vec<window::WindowCommand>>>,
     bindings: Vec<Binding>,
+    props: Vec<PropBinding>,
     structures: Vec<Structure>,
     root: Element,
     context: Context,
@@ -75,6 +77,7 @@ impl Ui {
             component,
             tree: widget,
             bindings,
+            props,
             handlers,
             structures,
             root,
@@ -109,6 +112,7 @@ impl Ui {
             window_handlers,
             commands,
             bindings,
+            props,
             structures,
             root,
             context,
@@ -116,6 +120,7 @@ impl Ui {
             scope: EffectScope::new(),
         };
         ui.bind(&ui.bindings);
+        ui.bind_props(&ui.props);
         ui
     }
 
@@ -125,6 +130,15 @@ impl Ui {
             let tree = Rc::clone(&self.tree);
             self.scope.run(|| {
                 Effect::new(move || apply(&binding, &binding.component, &tree));
+            });
+        }
+    }
+
+    fn bind_props(&self, props: &[PropBinding]) {
+        for prop in props {
+            let prop = prop.clone();
+            self.scope.run(|| {
+                Effect::new(move || apply_prop(&prop));
             });
         }
     }
@@ -141,9 +155,11 @@ impl Ui {
         handlers.extend(self.window_handlers.iter().cloned());
         self.handlers = handlers;
         self.bindings = built.bindings;
+        self.props = built.props;
         self.structures = built.structures;
         self.scope = EffectScope::new();
         self.bind(&self.bindings);
+        self.bind_props(&self.props);
         Ok(())
     }
 
@@ -160,6 +176,7 @@ impl Ui {
         let structures = std::mem::take(&mut self.structures);
         let mut kept = Vec::with_capacity(structures.len());
         let mut bindings = Vec::new();
+        let mut props = Vec::new();
         let mut handlers = Vec::new();
         let mut changed = false;
         for mut structure in structures {
@@ -192,6 +209,7 @@ impl Ui {
                         bindings: added_bindings,
                         handlers: added_handlers,
                         structures: added_structures,
+                        props: added_props,
                     } = built;
                     let children = match &structure.kind {
                         StructureKind::Each { rows, .. } => {
@@ -211,6 +229,7 @@ impl Ui {
                         _ => {}
                     }
                     bindings.extend(added_bindings);
+                    props.extend(added_props);
                     handlers.extend(added_handlers);
                     kept.extend(added_structures);
                     kept.push(structure);
@@ -228,6 +247,9 @@ impl Ui {
             self.bindings.extend(bindings);
             self.bindings
                 .retain(|binding| tree.borrow().contains(binding.widget));
+            self.props.extend(props);
+            self.props
+                .retain(|prop| tree.borrow().contains(prop.widget));
             self.handlers.extend(handlers);
             self.handlers.retain(|handler| match handler.widget {
                 Some(widget) => tree.borrow().contains(widget),
@@ -235,6 +257,7 @@ impl Ui {
             });
             self.scope = EffectScope::new();
             self.bind(&self.bindings);
+            self.bind_props(&self.props);
         }
     }
 
@@ -395,6 +418,21 @@ fn apply(binding: &Binding, component: &RefCell<Component>, tree: &RefCell<Widge
         }
     }
     component.borrow_mut().pop_binding_scopes(count);
+}
+
+fn apply_prop(prop: &PropBinding) {
+    prop.component.borrow().track();
+    let count = prop.scopes.len();
+    prop.component
+        .borrow_mut()
+        .push_binding_scopes(&prop.scopes);
+    if let Some(value) = evaluate(&prop.component, &prop.expression)
+        && accepts_prop(&value, prop.ty)
+        && let Err(error) = prop.target.borrow_mut().assign_property(&prop.name, value)
+    {
+        eprintln!("{error}");
+    }
+    prop.component.borrow_mut().pop_binding_scopes(count);
 }
 
 fn text(component: &RefCell<Component>, expression: &Expr) -> Option<String> {

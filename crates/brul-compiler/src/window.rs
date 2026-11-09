@@ -17,7 +17,7 @@ use brul_syntax::uses::{self, Use};
 use crate::build_bound_tree;
 use crate::loader::{self, Registry};
 use crate::tree::{
-    Binding, ComponentHandle, Context, Handler, HandlerEvent, Structure, script_error,
+    Binding, ComponentHandle, Context, Handler, HandlerEvent, PropBinding, Structure, script_error,
 };
 
 pub struct Loaded {
@@ -25,6 +25,7 @@ pub struct Loaded {
     pub tree: Widget,
     pub structures: Vec<Structure>,
     pub bindings: Vec<Binding>,
+    pub props: Vec<PropBinding>,
     pub handlers: Vec<Handler>,
     pub component: ComponentHandle,
     pub uses: Vec<Use>,
@@ -103,6 +104,7 @@ fn load_from(source: &str, base: Option<&Path>, theme: Option<&str>) -> Result<L
         tree: built.widget,
         structures: built.structures,
         bindings: built.bindings,
+        props: built.props,
         handlers: built.handlers,
         component,
         uses,

@@ -191,8 +191,17 @@ impl Component {
         Err(Error::Undefined(name.to_owned()))
     }
 
+    pub fn assign_property(&mut self, name: &str, value: Value) -> Result<(), Error> {
+        if let Some(property) = self.property(name) {
+            property.value.set(value);
+            self.changed();
+            return Ok(());
+        }
+        Err(Error::Undefined(name.to_owned()))
+    }
+
     fn changed(&self) {
-        self.revision.set(self.revision.get() + 1);
+        self.revision.update(|revision| *revision += 1);
     }
 
     fn property(&self, name: &str) -> Option<&Property> {

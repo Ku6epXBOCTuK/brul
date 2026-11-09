@@ -1,5 +1,8 @@
+use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use brul::Ui;
-use brul_compiler::load;
+use brul_compiler::{load, load_file};
 use brul_gui::{Size, TextEngine, WidgetId, WidgetKind};
 use brul_script::Value;
 
@@ -35,6 +38,22 @@ fn layout(ui: &Ui) -> Size {
         .expect("layout");
     ui.tree.borrow_mut().take_dirty();
     size
+}
+
+fn workspace(tag: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "brul-bindings-{tag}-{}-{nanos}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&dir).expect("workspace");
+    for (name, source) in files {
+        fs::write(dir.join(name), source).expect("fixture");
+    }
+    dir
 }
 
 #[test]
@@ -254,6 +273,66 @@ window Demo (title: "Demo") {
 }
 
 #[test]
+fn component_prop_follows_the_parent_value() {
+    let dir = workspace(
+        "prop",
+        &[
+            (
+                "app.brul",
+                r#"
+<script>
+let name = "one";
+</script>
+
+<use>
+import Card from "./card";
+</use>
+
+<markup>
+window Demo (title: "Demo") {
+    Column {
+        Card (name: name) { }
+    }
+}
+</markup>
+"#,
+            ),
+            (
+                "card.brul",
+                r#"
+<markup>
+component Card {
+    prop name: String = "none"
+    Text { name }
+}
+</markup>
+"#,
+            ),
+        ],
+    );
+
+    let ui = Ui::new(load_file(dir.join("app.brul"), None).expect("app loads"));
+    layout(&ui);
+    ui.component
+        .borrow_mut()
+        .assign("name", Value::String("long".to_owned()))
+        .expect("assign");
+    brul_reactive::flush();
+    layout(&ui);
+
+    let mut tree = ui.tree.borrow_mut();
+    let snapshot = tree.snapshot().expect("snapshot").clone();
+    let glyphs: Vec<usize> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.kind == WidgetKind::Text)
+        .map(|node| node.text.as_ref().expect("text").glyphs.len())
+        .collect();
+    assert_eq!(glyphs, vec![4]);
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
 fn if_change_keeps_widgets_outside_the_branch() {
     let source = r#"
 <script>
@@ -288,4 +367,64 @@ window Demo (title: "Demo") {
     assert_eq!(after.len(), 2);
     assert!(after.contains(&before[0]));
     assert!(!after.contains(&before[1]));
+}
+
+#[test]
+fn component_prop_change_rebuilds_its_if_branch() {
+    let dir = workspace(
+        "prop-if",
+        &[
+            (
+                "app.brul",
+                r#"
+<script>
+let show = true;
+</script>
+
+<use>
+import Panel from "./panel";
+</use>
+
+<markup>
+window Demo (title: "Demo") {
+    Column {
+        Panel (show: show) { }
+    }
+}
+</markup>
+"#,
+            ),
+            (
+                "panel.brul",
+                r#"
+<markup>
+component Panel {
+    prop show: Bool = false
+    Column {
+        if (show) {
+            Text { "a" }
+            Text { "b" }
+        } else {
+            Text { "c" }
+        }
+    }
+}
+</markup>
+"#,
+            ),
+        ],
+    );
+
+    let mut ui = Ui::new(load_file(dir.join("app.brul"), None).expect("app loads"));
+    assert_eq!(text_ids(&ui).len(), 2);
+
+    ui.component
+        .borrow_mut()
+        .assign("show", Value::Bool(false))
+        .expect("assign");
+    brul_reactive::flush();
+    let _ = ui.dispatch(&[]);
+
+    assert_eq!(text_ids(&ui).len(), 1);
+    fs::remove_dir_all(dir).expect("cleanup");
 }

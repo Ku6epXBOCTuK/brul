@@ -28,6 +28,17 @@ pub struct Binding {
     pub component: ComponentHandle,
 }
 
+#[derive(Clone)]
+pub struct PropBinding {
+    pub widget: WidgetId,
+    pub target: ComponentHandle,
+    pub name: String,
+    pub ty: PropType,
+    pub expression: Expr,
+    pub scopes: Vec<Vec<Variable>>,
+    pub component: ComponentHandle,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandlerEvent {
     Click,
@@ -120,10 +131,23 @@ pub struct Built {
     pub bindings: Vec<Binding>,
     pub handlers: Vec<Handler>,
     pub structures: Vec<Structure>,
+    pub props: Vec<PropBinding>,
 }
 
-type Parts = (Widget, Vec<Binding>, Vec<Handler>, Vec<Structure>);
-type Children = (Vec<Widget>, Vec<Binding>, Vec<Handler>, Vec<Structure>);
+type Parts = (
+    Widget,
+    Vec<Binding>,
+    Vec<Handler>,
+    Vec<Structure>,
+    Vec<PropBinding>,
+);
+type Children = (
+    Vec<Widget>,
+    Vec<Binding>,
+    Vec<Handler>,
+    Vec<Structure>,
+    Vec<PropBinding>,
+);
 
 pub fn build_tree(
     element: &Element,
@@ -156,7 +180,7 @@ pub fn build_bound_tree(
 ) -> Result<Built, Error> {
     let resolved = resolve(element, &context.stylesheet, theme)?;
 
-    let (widget, bindings, handlers, structures) = match element.name.as_str() {
+    let (widget, bindings, handlers, structures, props) = match element.name.as_str() {
         "View" | "Row" | "Column" => {
             let direction = if element.name == "Row" {
                 Direction::Row
@@ -173,7 +197,7 @@ pub fn build_bound_tree(
                 scopes: component.borrow().build_scopes(),
                 component: Rc::clone(component),
             };
-            (widget, vec![binding], Vec::new(), Vec::new())
+            (widget, vec![binding], Vec::new(), Vec::new(), Vec::new())
         }
         "Image" => {
             return Err(error_at(
@@ -196,6 +220,7 @@ pub fn build_bound_tree(
     built.bindings.extend(bindings);
     built.handlers.extend(handlers);
     built.structures.extend(structures);
+    built.props.extend(props);
     Ok(built)
 }
 
@@ -220,6 +245,7 @@ fn instance(
     }
 
     let mut given: Vec<&str> = Vec::new();
+    let mut reactive: Vec<(String, PropType, Expr, Vec<Vec<Variable>>)> = Vec::new();
     for arg in &element.args {
         match arg {
             Arg::Class(_) => {
@@ -263,12 +289,19 @@ fn instance(
                     ));
                 };
                 let position = value.position;
+                let expression = value.clone();
                 let value = evaluate(parent, value)?;
                 let value = typed(value, prop.ty, name, &definition.name, position)?;
                 component
                     .borrow_mut()
                     .declare_property(name, value)
                     .map_err(|error| error_at(position, error.reason()))?;
+                reactive.push((
+                    name.clone(),
+                    prop.ty,
+                    expression,
+                    parent.borrow().build_scopes(),
+                ));
                 given.push(name);
             }
         }
@@ -333,7 +366,29 @@ fn instance(
         imports: definition.imports.clone(),
         stylesheet: Rc::clone(&definition.stylesheet),
     };
-    build_bound_tree(root, &component, &context, theme)
+    let mut built = build_bound_tree(root, &component, &context, theme)?;
+    let widget = built.widget.id();
+    for (name, ty, expression, scopes) in reactive {
+        built.props.push(PropBinding {
+            widget,
+            target: Rc::clone(&component),
+            name,
+            ty,
+            expression,
+            scopes,
+            component: Rc::clone(parent),
+        });
+    }
+    Ok(built)
+}
+
+pub fn accepts_prop(value: &Value, ty: PropType) -> bool {
+    match ty {
+        PropType::Bool => matches!(value, Value::Bool(_)),
+        PropType::Number => matches!(value, Value::Number(_)),
+        PropType::String => matches!(value, Value::String(_)),
+        PropType::Image => matches!(value, Value::Null),
+    }
 }
 
 fn typed(
@@ -343,13 +398,7 @@ fn typed(
     component: &str,
     position: Position,
 ) -> Result<Value, Error> {
-    let matches = match ty {
-        PropType::Bool => matches!(value, Value::Bool(_)),
-        PropType::Number => matches!(value, Value::Number(_)),
-        PropType::String => matches!(value, Value::String(_)),
-        PropType::Image => matches!(value, Value::Null),
-    };
-    if matches {
+    if accepts_prop(&value, ty) {
         return Ok(value);
     }
     let expected = match ty {
@@ -510,6 +559,7 @@ fn parameters(
         bindings,
         handlers,
         structures: Vec::new(),
+        props: Vec::new(),
     })
 }
 
@@ -534,16 +584,18 @@ fn container(
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut structures = Vec::new();
+    let mut props = Vec::new();
     for child in built {
         children.push(child.widget);
         bindings.extend(child.bindings);
         handlers.extend(child.handlers);
         structures.extend(child.structures);
+        props.extend(child.props);
     }
     let widget = Widget::view(direction, children)
         .with_layout(resolved.layout)
         .with_styles(resolved.styles);
-    Ok((widget, bindings, handlers, structures))
+    Ok((widget, bindings, handlers, structures, props))
 }
 
 fn build_items(
@@ -630,7 +682,7 @@ fn build_if(
     } else {
         block.else_block.as_ref()
     };
-    let (children, bindings, handlers, structures) = match branch {
+    let (children, bindings, handlers, structures, props) = match branch {
         Some(branch) => flatten(build_items(
             &branch.items,
             component,
@@ -640,7 +692,7 @@ fn build_if(
             direction,
             spacing,
         )?),
-        None => (Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+        None => (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
     };
     let mut wrapper = Widget::view(direction, Vec::new()).with_layout(LayoutStyle {
         spacing,
@@ -653,6 +705,7 @@ fn build_if(
             bindings,
             handlers,
             structures,
+            props,
         },
         condition,
     ))
@@ -663,13 +716,15 @@ fn flatten(built: Vec<Built>) -> Children {
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut structures = Vec::new();
+    let mut props = Vec::new();
     for child in built {
         children.push(child.widget);
         bindings.extend(child.bindings);
         handlers.extend(child.handlers);
         structures.extend(child.structures);
+        props.extend(child.props);
     }
-    (children, bindings, handlers, structures)
+    (children, bindings, handlers, structures, props)
 }
 
 fn build_each(
@@ -732,7 +787,7 @@ fn build_each(
             count: all.len() - start,
         });
     }
-    let (children, bindings, handlers, structures) = flatten(all);
+    let (children, bindings, handlers, structures, props) = flatten(all);
     let mut wrapper = Widget::view(direction, Vec::new()).with_layout(LayoutStyle {
         spacing,
         ..Default::default()
@@ -744,6 +799,7 @@ fn build_each(
             bindings,
             handlers,
             structures,
+            props,
         },
         last,
         rows,

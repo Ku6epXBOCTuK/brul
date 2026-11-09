@@ -357,6 +357,38 @@ fn component_props_come_from_arguments_and_defaults() {
 }
 
 #[test]
+fn component_prop_is_bound_to_the_parent_expression() {
+    let dir = workspace(
+        "prop-binding",
+        &[
+            (
+                "app.brul",
+                "<script>\nlet name = \"one\";\n</script>\n\n<use>\nimport Card from \"./card\";\n</use>\n\n<markup>\nwindow Picker (title: \"x\") { Card (name: name) { } }\n</markup>",
+            ),
+            (
+                "card.brul",
+                "<markup>\ncomponent Card {\n    prop name: String = \"none\"\n    Text { name }\n}\n</markup>",
+            ),
+        ],
+    );
+
+    let loaded = load_file(dir.join("app.brul"), None).expect("app loads");
+    assert_eq!(loaded.props.len(), 1);
+    let prop = &loaded.props[0];
+    assert_eq!(prop.name, "name");
+    assert_eq!(prop.widget, loaded.tree.id());
+    assert_eq!(
+        prop.target.borrow().read("name"),
+        Ok(Value::String("one".to_owned()))
+    );
+    assert_eq!(
+        prop.component.borrow().read("name"),
+        Ok(Value::String("one".to_owned()))
+    );
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
 fn component_default_uses_its_own_script() {
     let dir = workspace(
         "default",
