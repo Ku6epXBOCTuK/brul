@@ -419,10 +419,21 @@ fn is_offset(value: f64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use brul_syntax::ast::{ExprKind, Position};
+    use brul_syntax::ast::{BinaryOp, ExprKind, Position};
+    use brul_syntax::script::{Function, Statement};
 
     fn ident(name: &str) -> Expr {
         Expr::new(ExprKind::Ident(name.to_owned()), Position::default())
+    }
+
+    fn number(value: f64) -> Expr {
+        Expr::new(ExprKind::Number(value), Position::default())
+    }
+
+    fn declared(name: &str, value: Value) -> Component {
+        let mut component = Component::new();
+        component.declare(name, value, false).unwrap();
+        component
     }
 
     #[test]
@@ -451,5 +462,182 @@ mod tests {
             .unwrap();
         brul_reactive::flush();
         assert!(!tree.borrow_mut().set_text(id, "bye".to_owned()));
+    }
+
+    #[test]
+    fn text_returns_the_string_and_names_the_actual_type() {
+        let mut component = declared("name", Value::String("hello".to_owned()));
+        assert_eq!(text(&mut component, &ident("name")), Ok("hello".to_owned()));
+
+        let mut component = declared("name", Value::Number(3.0));
+        let error = text(&mut component, &ident("name")).unwrap_err();
+        assert!(error.contains(Value::Number(3.0).type_name()));
+    }
+
+    #[test]
+    fn boolean_returns_the_flag_and_names_the_parameter() {
+        let name = "visible";
+        let mut component = declared(name, Value::Bool(true));
+        assert_eq!(boolean(&mut component, &ident(name), name), Ok(true));
+
+        let mut component = declared(name, Value::String("yes".to_owned()));
+        let error = boolean(&mut component, &ident(name), name).unwrap_err();
+        assert!(error.contains(name));
+    }
+
+    #[test]
+    fn an_absent_offset_is_zero() {
+        let mut component = Component::new();
+        assert_eq!(offset(&mut component, None, "x"), Ok(0));
+    }
+
+    #[test]
+    fn offset_takes_integers_and_rejects_the_rest() {
+        let name = "x";
+        let mut component = declared(name, Value::Number(-7.0));
+        assert_eq!(offset(&mut component, Some(&ident(name)), name), Ok(-7));
+
+        for value in [2.5, f64::NAN, f64::from(i32::MAX) + 1.0] {
+            let mut component = declared(name, Value::Number(value));
+            assert!(offset(&mut component, Some(&ident(name)), name).is_err());
+        }
+    }
+
+    #[test]
+    fn an_offset_binding_silently_ignores_what_it_cannot_place() {
+        let none = RefCell::new(Component::new());
+        assert_eq!(offset_value(&none, None), Some(0));
+
+        let fractional = RefCell::new(declared("x", Value::Number(1.5)));
+        assert_eq!(offset_value(&fractional, Some(&ident("x"))), None);
+
+        let missing = RefCell::new(Component::new());
+        assert_eq!(offset_value(&missing, Some(&ident("x"))), None);
+
+        let whole = RefCell::new(declared("x", Value::Number(4.0)));
+        assert_eq!(offset_value(&whole, Some(&ident("x"))), Some(4));
+    }
+
+    #[test]
+    fn is_offset_accepts_exactly_the_i32_range() {
+        for value in [0.0, -3.0, f64::from(i32::MIN), f64::from(i32::MAX)] {
+            assert!(is_offset(value), "{value}");
+        }
+        for value in [
+            1.5,
+            f64::NAN,
+            f64::INFINITY,
+            f64::from(i32::MIN) - 1.0,
+            f64::from(i32::MAX) + 1.0,
+        ] {
+            assert!(!is_offset(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn every_prop_type_has_its_own_name() {
+        let names: Vec<&str> = [
+            PropType::Bool,
+            PropType::Number,
+            PropType::String,
+            PropType::Image,
+        ]
+        .into_iter()
+        .map(prop_name)
+        .collect();
+        assert!(names.iter().all(|name| !name.is_empty()));
+        let mut unique = names.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len());
+    }
+
+    fn event_host(events: Vec<ComponentEvent>) -> EventHost {
+        EventHost { events }
+    }
+
+    fn event(
+        function: &'static str,
+        params: &'static [PropType],
+        component: &ComponentHandle,
+    ) -> ComponentEvent {
+        ComponentEvent {
+            name: "click",
+            function,
+            params,
+            component: Rc::clone(component),
+        }
+    }
+
+    #[test]
+    fn event_host_rejects_an_unknown_event() {
+        let component = Rc::new(RefCell::new(Component::new()));
+        let mut host = event_host(vec![event("on_click", &[], &component)]);
+        let error = host.call("hover", &[]).unwrap_err();
+        assert!(matches!(error, ScriptError::UnknownFunction(ref name) if name == "hover"));
+    }
+
+    #[test]
+    fn event_host_checks_the_arity_before_the_call() {
+        let component = Rc::new(RefCell::new(Component::new()));
+        let mut host = event_host(vec![event("on_click", &[PropType::Bool], &component)]);
+        let error = host.call("click", &[]).unwrap_err();
+        assert!(matches!(
+            error,
+            ScriptError::FunctionArity {
+                expected: 1,
+                found: 0,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn event_host_checks_the_argument_types() {
+        let component = Rc::new(RefCell::new(Component::new()));
+        let mut host = event_host(vec![event("on_click", &[PropType::Bool], &component)]);
+        let error = host.call("click", &[Value::Number(1.0)]).unwrap_err();
+        assert!(matches!(error, ScriptError::EventArgument { .. }));
+    }
+
+    #[test]
+    fn event_host_runs_the_component_function() {
+        let component = Rc::new(RefCell::new(Component::new()));
+        component
+            .borrow_mut()
+            .define_function(Function {
+                name: "on_click".to_owned(),
+                params: Vec::new(),
+                body: Vec::new(),
+            })
+            .unwrap();
+        let mut host = event_host(vec![event("on_click", &[], &component)]);
+        assert_eq!(host.call("click", &[]), Ok(Value::Null));
+    }
+
+    #[test]
+    fn event_host_surfaces_an_error_from_the_body() {
+        let component = Rc::new(RefCell::new(Component::new()));
+        let divide_by_zero = Expr::new(
+            ExprKind::Binary {
+                op: BinaryOp::Div,
+                left: Box::new(number(1.0)),
+                right: Box::new(number(0.0)),
+            },
+            Position::default(),
+        );
+        component
+            .borrow_mut()
+            .define_function(Function {
+                name: "on_click".to_owned(),
+                params: Vec::new(),
+                body: vec![Statement::Expr(divide_by_zero)],
+            })
+            .unwrap();
+        let mut host = event_host(vec![event("on_click", &[], &component)]);
+        assert_eq!(
+            host.call("click", &[]).unwrap_err().reason(),
+            ScriptError::DivisionByZero.reason()
+        );
     }
 }

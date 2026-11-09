@@ -204,3 +204,24 @@ fn short(path: &Path) -> String {
         .to_string_lossy()
         .into_owned()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MESSAGE: &str = "cannot resolve import 'x'";
+
+    #[test]
+    fn at_names_the_file_it_came_from() {
+        let error = at(Some(Path::new("views/app.brul")), MESSAGE);
+        assert!(error.message.contains("app.brul"));
+        assert!(error.message.contains(MESSAGE));
+    }
+
+    #[test]
+    fn at_without_a_file_keeps_the_message_alone() {
+        let error = at(None, MESSAGE);
+        assert_eq!(error.message, MESSAGE);
+        assert_eq!((error.line, error.column), (1, 1));
+    }
+}
