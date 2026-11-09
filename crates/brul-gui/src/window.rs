@@ -159,6 +159,7 @@ pub enum WindowCommand {
         interval: Duration,
         function: String,
     },
+    SetTheme(String),
 }
 
 pub fn run_tree(
@@ -557,6 +558,7 @@ impl TreeApp {
                     interval,
                     function,
                 }),
+                WindowCommand::SetTheme(_) => {}
             }
         }
         brul_reactive::flush();

@@ -4,18 +4,23 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use brul_compiler::{Binding, BindingTarget, Handler, HandlerEvent, Loaded};
+use brul_compiler::{Binding, BindingTarget, Handler, HandlerEvent, Loaded, build_bound_tree};
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Error, Host, Value, eval};
 use brul_syntax::ast::Expr;
+use brul_syntax::markup::Element;
+use brul_syntax::style::Stylesheet;
 
 pub struct Ui {
     pub component: Rc<RefCell<Component>>,
     pub tree: Rc<RefCell<WidgetTree>>,
     handlers: Vec<Handler>,
+    window_handlers: Vec<Handler>,
     commands: Rc<RefCell<Vec<window::WindowCommand>>>,
-    _scope: EffectScope,
+    root: Element,
+    stylesheet: Stylesheet,
+    scope: EffectScope,
 }
 
 struct CommandHost {
@@ -24,6 +29,25 @@ struct CommandHost {
 
 impl Host for CommandHost {
     fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
+        if name == "set_theme" {
+            if arguments.len() != 1 {
+                return Err(Error::Arity {
+                    name: name.to_owned(),
+                    expected: "one",
+                });
+            }
+            let Value::String(theme) = &arguments[0] else {
+                return Err(Error::Argument {
+                    name: "set_theme",
+                    expected: "String",
+                    found: arguments[0].type_name(),
+                });
+            };
+            self.commands
+                .borrow_mut()
+                .push(window::WindowCommand::SetTheme(theme.clone()));
+            return Ok(Value::Null);
+        }
         let command = match name {
             "exit" => window::WindowCommand::Exit,
             "dragWindow" => window::WindowCommand::Drag,
@@ -46,6 +70,8 @@ impl Ui {
         widget: Widget,
         bindings: Vec<Binding>,
         handlers: Vec<Handler>,
+        root: Element,
+        stylesheet: Stylesheet,
     ) -> Self {
         let mut component = component;
         let commands = Rc::new(RefCell::new(Vec::new()));
@@ -64,21 +90,47 @@ impl Ui {
         });
         let component = Rc::new(RefCell::new(component));
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
-        let scope = EffectScope::new();
-        for binding in bindings {
-            let component = Rc::clone(&component);
-            let tree = Rc::clone(&tree);
-            scope.run(|| {
-                Effect::new(move || apply(&binding, &component, &tree));
-            });
-        }
-        Self {
+        let window_handlers = handlers
+            .iter()
+            .filter(|handler| handler.widget.is_none())
+            .cloned()
+            .collect();
+        let ui = Self {
             component,
             tree,
             handlers,
+            window_handlers,
             commands,
-            _scope: scope,
+            root,
+            stylesheet,
+            scope: EffectScope::new(),
+        };
+        ui.bind(bindings);
+        ui
+    }
+
+    fn bind(&self, bindings: Vec<Binding>) {
+        for binding in bindings {
+            let component = Rc::clone(&self.component);
+            let tree = Rc::clone(&self.tree);
+            self.scope.run(|| {
+                Effect::new(move || apply(&binding, &component, &tree));
+            });
         }
+    }
+
+    fn set_theme(&mut self, theme: &str) -> Result<(), brul_syntax::error::Error> {
+        let built = {
+            let mut component = self.component.borrow_mut();
+            build_bound_tree(&self.root, &self.stylesheet, Some(theme), &mut component)?
+        };
+        self.tree.borrow_mut().replace_root(built.widget);
+        let mut handlers = built.handlers;
+        handlers.extend(self.window_handlers.iter().cloned());
+        self.handlers = handlers;
+        self.scope = EffectScope::new();
+        self.bind(built.bindings);
+        Ok(())
     }
 
     pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<window::WindowCommand> {
@@ -119,7 +171,19 @@ impl Ui {
                 eprintln!("{error}");
             }
         }
-        std::mem::take(&mut self.commands.borrow_mut())
+        let commands = std::mem::take(&mut *self.commands.borrow_mut());
+        let mut output = Vec::new();
+        for command in commands {
+            match command {
+                window::WindowCommand::SetTheme(theme) => {
+                    if let Err(error) = self.set_theme(&theme) {
+                        eprintln!("{error}");
+                    }
+                }
+                command => output.push(command),
+            }
+        }
+        output
     }
 }
 
@@ -217,9 +281,11 @@ pub fn run(source: &str, theme: Option<&str>) -> Result<(), Box<dyn std::error::
         bindings,
         handlers,
         component,
+        root,
+        stylesheet,
         ..
     } = brul_compiler::load(source, theme)?;
-    let mut ui = Ui::new(component, tree, bindings, handlers);
+    let mut ui = Ui::new(component, tree, bindings, handlers, root, stylesheet);
     let initial = ui.dispatch(&[]);
     let tree = Rc::clone(&ui.tree);
     window::run_tree(config, tree, initial, move |events| ui.dispatch(events))?;

@@ -1,7 +1,7 @@
 use brul::Ui;
 use brul_compiler::load;
 use brul_gui::window::WindowCommand;
-use brul_gui::{Size, TextEngine, WidgetEvent, WidgetId, WidgetKind};
+use brul_gui::{Color, Size, TextEngine, WidgetEvent, WidgetId, WidgetKind};
 use brul_script::Value;
 
 const APP: &str = r#"
@@ -31,6 +31,8 @@ fn build(source: &str) -> Ui {
         loaded.tree,
         loaded.bindings,
         loaded.handlers,
+        loaded.root,
+        loaded.stylesheet,
     )
 }
 
@@ -328,4 +330,61 @@ window Demo (title: "Demo") {
             function: "refresh".to_owned(),
         }]
     );
+}
+
+#[test]
+fn set_theme_rebuilds_the_tree_with_new_styles() {
+    let source = r#"
+<script>
+function dark() {
+    set_theme("dark");
+}
+</script>
+
+<style>
+theme light { accent: #00ff00; }
+theme dark { accent: #ff0000; }
+.page { background: theme.accent; }
+</style>
+
+<markup>
+window Demo (title: "Demo") {
+    Column (page) {
+        Text (on click: dark) { "tap" }
+    }
+}
+</markup>
+"#;
+    let loaded = load(source, Some("light")).expect("app loads");
+    let mut ui = Ui::new(
+        loaded.component,
+        loaded.tree,
+        loaded.bindings,
+        loaded.handlers,
+        loaded.root,
+        loaded.stylesheet,
+    );
+
+    let background = |ui: &Ui| {
+        let mut engine = TextEngine::new();
+        ui.tree
+            .borrow_mut()
+            .layout(
+                &mut engine,
+                Size {
+                    width: 300,
+                    height: 100,
+                },
+                1.0,
+            )
+            .expect("layout");
+        ui.tree.borrow_mut().snapshot().expect("snapshot").nodes[0]
+            .style
+            .background
+    };
+
+    assert_eq!(background(&ui), Color::rgba(0, 255, 0, 255));
+    let id = text_ids(&ui)[0];
+    assert!(ui.dispatch(&[WidgetEvent::Click(id)]).is_empty());
+    assert_eq!(background(&ui), Color::rgba(255, 0, 0, 255));
 }

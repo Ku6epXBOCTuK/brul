@@ -394,6 +394,20 @@ impl WidgetTree {
         }
     }
 
+    pub fn replace_root(&mut self, root: Widget) {
+        let mut states = HashMap::new();
+        collect_states(&root, &mut states);
+        self.root = root;
+        self.states = states;
+        self.geometry = None;
+        self.snapshot = None;
+        self.hovered.clear();
+        self.pressed.clear();
+        self.dirty.clear();
+        self.full_dirty = true;
+        self.layout_dirty = true;
+    }
+
     pub fn layout(
         &mut self,
         engine: &mut TextEngine,

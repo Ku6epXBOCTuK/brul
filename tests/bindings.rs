@@ -26,6 +26,8 @@ fn build() -> Ui {
         loaded.tree,
         loaded.bindings,
         loaded.handlers,
+        loaded.root,
+        loaded.stylesheet,
     )
 }
 

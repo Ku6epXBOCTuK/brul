@@ -20,6 +20,9 @@ pub struct Loaded {
     pub component: Component,
     pub uses: Vec<Use>,
     pub program: Option<Program>,
+    pub root: Element,
+    pub stylesheet: Stylesheet,
+    pub theme: Option<String>,
 }
 
 pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
@@ -60,9 +63,9 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
         execute_program(&mut component, program).map_err(script_error)?;
     }
 
-    let root = root(&window)?;
+    let root = root(&window)?.to_owned();
     let (config, window_handlers) = config(&window, &component)?;
-    let mut built = build_bound_tree(root, &stylesheet, theme, &mut component)?;
+    let mut built = build_bound_tree(&root, &stylesheet, theme, &mut component)?;
     built.handlers.extend(window_handlers);
 
     Ok(Loaded {
@@ -73,6 +76,9 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
         component,
         uses,
         program,
+        root,
+        stylesheet,
+        theme: theme.map(str::to_owned),
     })
 }
 
