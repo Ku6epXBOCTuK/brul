@@ -93,7 +93,7 @@
   `View`/`Row`/`Column`, `Text` с литералом; остальное — ошибка с позицией.
 - [x] 3.5.2 — стили: классы через `Stylesheet::snapshot` в
   `LayoutStyle`/`WidgetStyle`/`TextStyle`/`StyleSet`, состояния и темы.
-- [ ] 3.5.3 — окно: аргументы `window` → `WindowConfig`, загрузка `.brul`
+- [x] 3.5.3 — окно: аргументы `window` → `WindowConfig`, загрузка `.brul`
   (markup/style/script), bootstrap приложения.
 - [ ] 3.5.4 — выражения и привязки: `Component`/`eval` в `Text` и параметрах
   (`checked`/`selected`/`disabled`/`visible`/`x`/`y`), update-функции; сеттер

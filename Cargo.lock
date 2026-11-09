@@ -194,6 +194,10 @@ dependencies = [
 [[package]]
 name = "brul"
 version = "0.1.0"
+dependencies = [
+ "brul-compiler",
+ "brul-gui",
+]
 
 [[package]]
 name = "brul-compiler"

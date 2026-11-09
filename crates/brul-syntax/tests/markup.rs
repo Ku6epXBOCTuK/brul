@@ -52,6 +52,7 @@ fn args_parse_classes_names_and_handlers() {
                 },
             ],
             members: Vec::new(),
+            position: Position::default(),
         })]
     );
 }

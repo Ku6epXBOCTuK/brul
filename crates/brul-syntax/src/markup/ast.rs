@@ -17,11 +17,18 @@ pub struct Component {
     pub members: Vec<Member>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Window {
     pub name: String,
     pub args: Vec<Arg>,
     pub members: Vec<Member>,
+    pub position: Position,
+}
+
+impl PartialEq for Window {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.args == other.args && self.members == other.members
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

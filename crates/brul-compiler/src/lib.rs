@@ -2,5 +2,7 @@
 
 pub mod styles;
 pub mod tree;
+pub mod window;
 
 pub use tree::build_tree;
+pub use window::{Loaded, load};

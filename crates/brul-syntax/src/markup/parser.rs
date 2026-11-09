@@ -47,6 +47,7 @@ impl Parser<'_> {
     }
 
     fn window(&mut self) -> Result<Declaration, Error> {
+        let start = self.pos;
         let name = self.ident()?;
         let args = self.arg_list()?;
         let members = self.members()?;
@@ -54,6 +55,7 @@ impl Parser<'_> {
             name,
             args,
             members,
+            position: self.position(start),
         }))
     }
 

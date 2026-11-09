@@ -8,6 +8,10 @@ repository = "https://github.com/Ku6epXBOCTuK/brul"
 [lints]
 workspace = true
 
+[dependencies]
+brul-compiler = { workspace = true }
+brul-gui = { workspace = true }
+
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*"]
@@ -22,6 +26,7 @@ debug = "line-tables-only"
 debug = false
 
 [workspace.dependencies]
+brul-compiler = { path = 'crates\brul-compiler' }
 brul-gui = { path = 'crates\brul-gui' }
 brul-reactive = { path = 'crates\brul-reactive' }
 brul-syntax = { path = 'crates\brul-syntax' }
