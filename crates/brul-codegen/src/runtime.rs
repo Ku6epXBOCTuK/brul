@@ -27,6 +27,17 @@ pub struct Binding {
     pub component: ComponentHandle,
 }
 
+impl Binding {
+    pub fn new(component: &ComponentHandle, widget: WidgetId, target: BindingTarget) -> Self {
+        Self {
+            widget,
+            target,
+            scopes: component.borrow().build_scopes(),
+            component: Rc::clone(component),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct PropBinding {
     pub widget: WidgetId,

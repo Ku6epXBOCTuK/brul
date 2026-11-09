@@ -11,16 +11,34 @@ window Demo (title: "demo") {
 }
 </markup>
 "#;
-    let expected = r#"pub fn view(theme: Option<&str>) -> Result<brul_gui::Widget, String> {
-    match theme {
-        None => Ok(
-            brul_gui::Widget::row(vec![
-                brul_gui::Widget::text("a"),
-                brul_gui::Widget::column(vec![]),
-            ]),
-        ),
-        Some(theme) => Err(format!("unknown theme '{theme}'")),
-    }
+    let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
+    let mut bindings = Vec::new();
+    let widget = match theme {
+        None => {
+            {
+                let widget0 = brul_gui::Widget::row(vec![
+                    {
+                        let widget1 = brul_gui::Widget::text("a");
+                        widget1
+                    },
+                    {
+                        let widget2 = brul_gui::Widget::column(vec![]);
+                        widget2
+                    },
+                ]);
+                widget0
+            }
+        }
+        Some(theme) => return Err(format!("unknown theme '{theme}'")),
+    };
+    Ok(brul::Built {
+        widget,
+        bindings,
+        handlers: Vec::new(),
+        structures: Vec::new(),
+        props: Vec::new(),
+    })
 }
 "#;
     assert_eq!(emit::module(source).expect("module"), expected);
@@ -50,43 +68,101 @@ window Styled (title: "styled") {
 }
 </markup>
 "#;
-    let expected = r#"pub fn view(theme: Option<&str>) -> Result<brul_gui::Widget, String> {
-    match theme {
-        None => Ok(
-            brul_gui::Widget::column(vec![])
-            .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
-            .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(108, 140, 255, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) })),
-        ),
-        Some("dark") => Ok(
-            brul_gui::Widget::column(vec![])
-            .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
-            .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(108, 140, 255, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) })),
-        ),
-        Some("light") => Ok(
-            brul_gui::Widget::column(vec![])
-            .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
-            .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(17, 34, 51, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) })),
-        ),
-        Some(theme) => Err(format!("unknown theme '{theme}'")),
-    }
+    let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
+    let mut bindings = Vec::new();
+    let widget = match theme {
+        None => {
+            {
+                let widget0 = brul_gui::Widget::column(vec![])
+                .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(108, 140, 255, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) }));
+                widget0
+            }
+        }
+        Some("dark") => {
+            {
+                let widget0 = brul_gui::Widget::column(vec![])
+                .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(108, 140, 255, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) }));
+                widget0
+            }
+        }
+        Some("light") => {
+            {
+                let widget0 = brul_gui::Widget::column(vec![])
+                .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(17, 34, 51, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) }));
+                widget0
+            }
+        }
+        Some(theme) => return Err(format!("unknown theme '{theme}'")),
+    };
+    Ok(brul::Built {
+        widget,
+        bindings,
+        handlers: Vec::new(),
+        structures: Vec::new(),
+        props: Vec::new(),
+    })
 }
 "#;
     assert_eq!(emit::module(source).expect("module"), expected);
 }
 
 #[test]
-fn rejects_non_static_content() {
+fn emits_text_binding() {
     let source = r#"<markup>
 window Demo (title: "demo") {
     Text { name }
 }
 </markup>
 "#;
-    let error = emit::module(source).expect_err("error");
-    assert_eq!(
-        error.message,
-        "generated Text supports only string literals yet"
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(r#"let widget0 = brul_gui::Widget::text("");"#));
+    assert!(module.contains(
+        r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(brul::ast::Expr::new(brul::ast::ExprKind::Ident("name".to_owned()), brul::ast::Position { line: 3, column: 12 }))));"#
+    ));
+}
+
+#[test]
+fn emits_parameter_bindings() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    View {
+        View (checked: on, selected: on, disabled: off, visible: shown) { }
+        View (x: left, y: top) { }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    for target in ["Checked", "Selected", "Disabled", "Visible"] {
+        assert!(
+            module.contains(&format!("brul::BindingTarget::{target}(")),
+            "no {target} binding"
+        );
+    }
+    assert!(module.contains(
+        r#"brul::BindingTarget::Offset { x: Some(brul::ast::Expr::new(brul::ast::ExprKind::Ident("left".to_owned()"#
+    ));
+    assert!(
+        module.contains(
+            r#"y: Some(brul::ast::Expr::new(brul::ast::ExprKind::Ident("top".to_owned()"#
+        )
     );
+}
+
+#[test]
+fn rejects_unknown_parameter() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    View (hovered: on) { }
+}
+</markup>
+"#;
+    let error = emit::module(source).expect_err("error");
+    assert_eq!(error.message, "parameter 'hovered' is not supported yet");
 }
 
 fn emitted(source: &str) -> String {

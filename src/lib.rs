@@ -5,18 +5,19 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
 
-use brul_compiler::{
-    Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, Loaded,
-    PropBinding, RowInfo, Structure, StructureKind, accepts_prop, build_bound_tree,
-    rebuild_structure,
-};
+use brul_compiler::{Context, Handler, Loaded, accepts_prop, build_bound_tree, rebuild_structure};
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, eval};
 use brul_syntax::ast::Expr;
 use brul_syntax::markup::Element;
 
+pub use brul_compiler::{
+    Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, PropBinding, RowInfo, Structure,
+    StructureKind,
+};
 pub use brul_script::{Error, Host, Value};
+pub use brul_syntax::ast;
 
 pub struct Ui {
     pub component: ComponentHandle,
