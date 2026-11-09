@@ -242,7 +242,7 @@ fn unknown_parameters_are_rejected() {
 }
 
 #[test]
-fn handlers_are_not_supported_yet() {
+fn handlers_must_resolve_to_script_functions() {
     let element = root(
         r#"
         window Picker (title: "x") {
@@ -254,7 +254,7 @@ fn handlers_are_not_supported_yet() {
         .err()
         .expect("handlers");
 
-    assert_eq!(error.message, "handlers are not supported yet");
+    assert_eq!(error.message, "function 'toggle' is not defined");
 }
 
 #[test]

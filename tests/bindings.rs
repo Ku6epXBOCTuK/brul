@@ -21,7 +21,12 @@ window Demo (title: "Demo") {
 
 fn build() -> Ui {
     let loaded = load(APP, None).expect("app loads");
-    Ui::new(loaded.component, loaded.tree, loaded.bindings)
+    Ui::new(
+        loaded.component,
+        loaded.tree,
+        loaded.bindings,
+        loaded.handlers,
+    )
 }
 
 fn layout(ui: &Ui) -> Size {

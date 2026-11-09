@@ -13,6 +13,45 @@ pub struct Binding {
     pub target: BindingTarget,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandlerEvent {
+    Click,
+    Press,
+    Release,
+    Enter,
+    Leave,
+}
+
+impl HandlerEvent {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Click => "click",
+            Self::Press => "press",
+            Self::Release => "release",
+            Self::Enter => "enter",
+            Self::Leave => "leave",
+        }
+    }
+
+    fn parse(name: &str) -> Option<Self> {
+        match name {
+            "click" => Some(Self::Click),
+            "press" => Some(Self::Press),
+            "release" => Some(Self::Release),
+            "enter" => Some(Self::Enter),
+            "leave" => Some(Self::Leave),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Handler {
+    pub widget: WidgetId,
+    pub event: HandlerEvent,
+    pub function: String,
+}
+
 #[derive(Debug, Clone)]
 pub enum BindingTarget {
     Text(Expr),
@@ -26,6 +65,7 @@ pub enum BindingTarget {
 pub struct Built {
     pub widget: Widget,
     pub bindings: Vec<Binding>,
+    pub handlers: Vec<Handler>,
 }
 
 pub fn build_tree(
@@ -45,7 +85,7 @@ pub fn build_bound_tree(
 ) -> Result<Built, Error> {
     let resolved = resolve(element, stylesheet, theme)?;
 
-    let (widget, bindings) = match element.name.as_str() {
+    let (widget, bindings, handlers) = match element.name.as_str() {
         "View" | "Row" | "Column" => {
             let direction = if element.name == "Row" {
                 Direction::Row
@@ -60,7 +100,7 @@ pub fn build_bound_tree(
                 widget: widget.id(),
                 target: BindingTarget::Text(expression),
             };
-            (widget, vec![binding])
+            (widget, vec![binding], Vec::new())
         }
         "Image" => {
             return Err(error_at(
@@ -78,6 +118,7 @@ pub fn build_bound_tree(
 
     let mut built = parameters(element, component, widget)?;
     built.bindings.extend(bindings);
+    built.handlers.extend(handlers);
     Ok(built)
 }
 
@@ -106,6 +147,7 @@ fn parameters(
     let mut widget = widget;
     let id = widget.id();
     let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
     let mut x_value = None;
     let mut y_value = None;
     let mut x = None;
@@ -157,8 +199,30 @@ fn parameters(
                     ));
                 }
             },
-            Arg::Handler { .. } => {
-                return Err(error_at(element.position, "handlers are not supported yet"));
+            Arg::Handler { event, handler } => {
+                let Some(event) = HandlerEvent::parse(event) else {
+                    return Err(error_at(
+                        element.position,
+                        format!("event '{event}' is not supported yet"),
+                    ));
+                };
+                if handlers.iter().any(|item: &Handler| item.event == event) {
+                    return Err(error_at(
+                        element.position,
+                        format!("event '{}' is handled twice", event.name()),
+                    ));
+                }
+                if !component.has_function(handler) {
+                    return Err(error_at(
+                        element.position,
+                        format!("function '{handler}' is not defined"),
+                    ));
+                }
+                handlers.push(Handler {
+                    widget: id,
+                    event,
+                    function: handler.clone(),
+                });
             }
         }
     }
@@ -169,7 +233,11 @@ fn parameters(
             target: BindingTarget::Offset { x, y },
         });
     }
-    Ok(Built { widget, bindings })
+    Ok(Built {
+        widget,
+        bindings,
+        handlers,
+    })
 }
 
 fn container(
@@ -179,15 +247,17 @@ fn container(
     theme: Option<&str>,
     component: &mut Component,
     resolved: Resolved,
-) -> Result<(Widget, Vec<Binding>), Error> {
+) -> Result<(Widget, Vec<Binding>, Vec<Handler>), Error> {
     let mut children = Vec::with_capacity(element.block.items.len());
     let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
     for item in &element.block.items {
         match item {
             BlockItem::Element(child) => {
                 let child = build_bound_tree(child, stylesheet, theme, component)?;
                 children.push(child.widget);
                 bindings.extend(child.bindings);
+                handlers.extend(child.handlers);
             }
             BlockItem::If(_) => {
                 return Err(error_at(element.position, "'if' is not supported yet"));
@@ -206,7 +276,7 @@ fn container(
     let widget = Widget::view(direction, children)
         .with_layout(resolved.layout)
         .with_styles(resolved.styles);
-    Ok((widget, bindings))
+    Ok((widget, bindings, handlers))
 }
 
 fn text(

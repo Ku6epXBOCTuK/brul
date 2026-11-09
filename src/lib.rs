@@ -3,8 +3,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_compiler::{Binding, BindingTarget, Loaded};
-use brul_gui::{Widget, WidgetTree, window};
+use brul_compiler::{Binding, BindingTarget, Handler, HandlerEvent, Loaded};
+use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Value, eval};
 use brul_syntax::ast::Expr;
@@ -12,11 +12,17 @@ use brul_syntax::ast::Expr;
 pub struct Ui {
     pub component: Rc<RefCell<Component>>,
     pub tree: Rc<RefCell<WidgetTree>>,
+    handlers: Vec<Handler>,
     _scope: EffectScope,
 }
 
 impl Ui {
-    pub fn new(component: Component, widget: Widget, bindings: Vec<Binding>) -> Self {
+    pub fn new(
+        component: Component,
+        widget: Widget,
+        bindings: Vec<Binding>,
+        handlers: Vec<Handler>,
+    ) -> Self {
         let component = Rc::new(RefCell::new(component));
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         let scope = EffectScope::new();
@@ -30,8 +36,42 @@ impl Ui {
         Self {
             component,
             tree,
+            handlers,
             _scope: scope,
         }
+    }
+
+    pub fn dispatch(&mut self, events: &[WidgetEvent]) {
+        for event in events {
+            let Some((widget, target)) = handler_target(*event) else {
+                continue;
+            };
+            let Some(handler) = self
+                .handlers
+                .iter()
+                .find(|handler| handler.widget == widget && handler.event == target)
+            else {
+                continue;
+            };
+            let function = handler.function.clone();
+            if let Err(error) = self
+                .component
+                .borrow_mut()
+                .call_function(&function, Vec::new())
+            {
+                eprintln!("{error}");
+            }
+        }
+    }
+}
+
+fn handler_target(event: WidgetEvent) -> Option<(WidgetId, HandlerEvent)> {
+    match event {
+        WidgetEvent::Click(id) => Some((id, HandlerEvent::Click)),
+        WidgetEvent::Press(id) => Some((id, HandlerEvent::Press)),
+        WidgetEvent::Release(id) => Some((id, HandlerEvent::Release)),
+        WidgetEvent::PointerEnter(id) => Some((id, HandlerEvent::Enter)),
+        WidgetEvent::PointerLeave(id) => Some((id, HandlerEvent::Leave)),
     }
 }
 
@@ -114,10 +154,12 @@ pub fn run(source: &str, theme: Option<&str>) -> Result<(), Box<dyn std::error::
         config,
         tree,
         bindings,
+        handlers,
         component,
         ..
     } = brul_compiler::load(source, theme)?;
-    let ui = Ui::new(component, tree, bindings);
-    window::run_tree(config, Rc::clone(&ui.tree), |_| {})?;
+    let mut ui = Ui::new(component, tree, bindings, handlers);
+    let tree = Rc::clone(&ui.tree);
+    window::run_tree(config, tree, move |events| ui.dispatch(events))?;
     Ok(())
 }
