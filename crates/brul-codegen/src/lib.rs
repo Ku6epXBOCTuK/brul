@@ -3,6 +3,7 @@
 mod diagnostics;
 pub mod emit;
 mod loader;
+pub mod runtime;
 mod source;
 pub mod styles;
 mod window;

@@ -210,6 +210,8 @@ name = "brul-codegen"
 version = "0.1.0"
 dependencies = [
  "brul-gui",
+ "brul-reactive",
+ "brul-script",
  "brul-syntax",
 ]
 

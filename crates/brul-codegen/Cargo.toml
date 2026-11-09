@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 brul-gui = { workspace = true }
+brul-reactive = { workspace = true }
+brul-script = { workspace = true }
 brul-syntax = { workspace = true }
 
 [lints]
