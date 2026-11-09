@@ -5,6 +5,15 @@ use bropicker::generated;
 use brul::{Built, Component, ComponentHandle, HandlerEvent, Value};
 use brul_gui::WidgetKind;
 
+fn browser(name: &str, is_default: bool) -> Value {
+    Value::Object(vec![
+        ("icon".to_owned(), Value::String(name[..1].to_uppercase())),
+        ("name".to_owned(), Value::String(name.to_owned())),
+        ("path".to_owned(), Value::String(format!("C:/{name}"))),
+        ("isDefault".to_owned(), Value::Bool(is_default)),
+    ])
+}
+
 fn seeded() -> ComponentHandle {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
     let mut state = component.borrow_mut();
@@ -18,14 +27,22 @@ fn seeded() -> ComponentHandle {
     state
         .declare(
             "browsers",
-            Value::Array(vec![
-                Value::String("first".to_owned()),
-                Value::String("second".to_owned()),
-            ]),
+            Value::Array(vec![browser("first", true), browser("second", false)]),
             true,
         )
         .expect("browsers seed");
+    state
+        .declare("selected", Value::Number(0.0), true)
+        .expect("selected seed");
+    state
+        .declare("remember", Value::Bool(true), true)
+        .expect("remember seed");
+    state
+        .declare("alwaysAsk", Value::Bool(false), true)
+        .expect("alwaysAsk seed");
     drop(state);
+    let script = generated::script().expect("script block");
+    brul::execute_program(&mut component.borrow_mut(), &script).expect("script");
     component
 }
 
@@ -40,16 +57,19 @@ fn window_config_comes_from_the_markup() {
 #[test]
 fn markup_script_block_is_emitted() {
     let script = generated::script().expect("script block");
-    assert!(
-        script
-            .functions
-            .iter()
-            .any(|function| function.name == "handleBump")
-    );
+    for name in ["launch", "toggleRemember", "toggleAlwaysAsk", "handleKey"] {
+        assert!(
+            script
+                .functions
+                .iter()
+                .any(|function| function.name == name),
+            "{name} is missing"
+        );
+    }
 }
 
 #[test]
-fn view_builds_branches_each_and_the_imported_component() {
+fn view_builds_the_picker_layout() {
     let component = seeded();
     let built = generated::view(None, &component).expect("generated view");
     let Built {
@@ -60,28 +80,41 @@ fn view_builds_branches_each_and_the_imported_component() {
         props,
     } = built;
 
-    assert_eq!(structures.len(), 2);
-    assert!(!structures[0].each);
-    assert!(structures[1].each);
+    assert_eq!(structures.len(), 3);
+    assert_eq!(
+        structures.iter().filter(|structure| structure.each).count(),
+        1
+    );
 
-    assert_eq!(handlers.len(), 1);
-    assert_eq!(handlers[0].event, HandlerEvent::Click);
-    assert_eq!(handlers[0].function, "bump");
+    assert_eq!(handlers.len(), 5);
+    let key = handlers
+        .iter()
+        .find(|handler| handler.event == HandlerEvent::Key)
+        .expect("key handler");
+    assert_eq!(key.widget, None);
+    assert_eq!(key.function, "handleKey");
 
-    assert_eq!(props.len(), 1);
-    assert_eq!(props[0].name, "label");
+    assert_eq!(bindings.len(), 13);
+    assert_eq!(props.len(), 16);
 
-    assert_eq!(bindings.len(), 4);
-
-    let mut children = widget.into_children().into_iter();
-    let branch = children.next().expect("if branch");
-    let rows = children.next().expect("each rows");
-    let badge = children.next().expect("imported component");
-    assert!(children.next().is_none());
-
-    assert_eq!(branch.into_children().len(), 1);
-    assert_eq!(rows.into_children().len(), 2);
-    assert_eq!(badge.kind(), WidgetKind::Text);
+    let mut children: Vec<_> = widget.into_children();
+    assert_eq!(children.len(), 3);
+    assert!(
+        children
+            .iter()
+            .all(|child| child.kind() == WidgetKind::View)
+    );
+    let list = children.remove(1);
+    let rows: Vec<_> = list.into_children();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows.into_iter()
+            .next()
+            .expect("each rows")
+            .into_children()
+            .len(),
+        2
+    );
 }
 
 #[test]
@@ -89,36 +122,33 @@ fn structure_values_read_the_declared_seeds() {
     let component = seeded();
     let built = generated::view(None, &component).expect("generated view");
 
-    assert_eq!(
-        (built.structures[0].value)(&component),
-        Some(Value::Bool(true))
-    );
-    assert_eq!(
-        (built.structures[1].value)(&component),
-        Some(Value::Array(vec![
-            Value::String("first".to_owned()),
-            Value::String("second".to_owned()),
-        ]))
-    );
+    let each = built
+        .structures
+        .iter()
+        .find(|structure| structure.each)
+        .expect("each structure");
+    let Some(Value::Array(items)) = (each.value)(&component) else {
+        panic!("each value is not an array");
+    };
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[1], browser("second", false));
 }
 
 #[test]
-fn structure_rebuild_switches_the_branch() {
+fn structure_rebuild_rebuilds_rows() {
     let component = seeded();
     let built = generated::view(None, &component).expect("generated view");
 
-    let (rebuilt, rows) = (built.structures[0].rebuild)(None, &component).expect("rebuild");
-    assert_eq!(rebuilt.widget.into_children().len(), 1);
-    assert!(rows.is_empty());
-
-    component
-        .borrow_mut()
-        .assign("url", Value::String(String::new()))
-        .expect("clear url");
-    let (rebuilt, _) = (built.structures[0].rebuild)(None, &component).expect("rebuild");
-    let mut children = rebuilt.widget.into_children();
-    assert_eq!(children.len(), 1);
-    assert_eq!(children.remove(0).kind(), WidgetKind::Text);
+    let each = built
+        .structures
+        .iter()
+        .find(|structure| structure.each)
+        .expect("each structure");
+    let (rebuilt, rows) = (each.rebuild)(None, &component).expect("rebuild");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].key, Some(Value::String("first".to_owned())));
+    assert_eq!(rows[0].count, 1);
+    assert_eq!(rebuilt.widget.into_children().len(), 2);
 }
 
 #[test]

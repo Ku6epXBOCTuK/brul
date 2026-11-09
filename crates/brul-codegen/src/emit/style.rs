@@ -33,7 +33,12 @@ pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
     if layout.align != default.align {
         fields.push(format!("align: {}", align(layout.align)));
     }
-    (!fields.is_empty()).then(|| format!("brul_gui::LayoutStyle {{ {} }}", fields.join(", ")))
+    (!fields.is_empty()).then(|| {
+        format!(
+            "brul_gui::LayoutStyle {{ {}, ..brul_gui::LayoutStyle::default() }}",
+            fields.join(", ")
+        )
+    })
 }
 
 pub(super) fn style_set(set: StyleSet) -> Option<String> {
@@ -121,7 +126,10 @@ fn widget_style(style: WidgetStyle) -> String {
     if fields.is_empty() {
         "brul_gui::WidgetStyle::default()".to_owned()
     } else {
-        format!("brul_gui::WidgetStyle {{ {} }}", fields.join(", "))
+        format!(
+            "brul_gui::WidgetStyle {{ {}, ..brul_gui::WidgetStyle::default() }}",
+            fields.join(", ")
+        )
     }
 }
 
@@ -144,7 +152,12 @@ pub(super) fn text_style(style: TextStyle) -> Option<String> {
     if style.align != default.align {
         fields.push(format!("align: {}", text_align(style.align)));
     }
-    (!fields.is_empty()).then(|| format!("brul_gui::TextStyle {{ {} }}", fields.join(", ")))
+    (!fields.is_empty()).then(|| {
+        format!(
+            "brul_gui::TextStyle {{ {}, ..brul_gui::TextStyle::default() }}",
+            fields.join(", ")
+        )
+    })
 }
 
 fn dimension(value: Dimension) -> String {

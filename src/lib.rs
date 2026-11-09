@@ -7,7 +7,7 @@ use std::time::Duration;
 use brul_compiler::accepts_prop;
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{eval, execute_program};
+use brul_script::eval;
 use brul_syntax::ast::Expr;
 
 pub use brul_compiler::{
@@ -15,7 +15,7 @@ pub use brul_compiler::{
     Instance, PropArgument, PropBinding, Rebuilt, RowInfo, Structure, View, instance,
 };
 pub use brul_gui::window::WindowConfig;
-pub use brul_script::{Component, Error, Host, Value, Variable};
+pub use brul_script::{Component, Error, Host, Value, Variable, execute_program};
 pub use brul_syntax::ast;
 pub use brul_syntax::markup::PropType;
 pub use brul_syntax::script;

@@ -1,30 +1,110 @@
-<use>
-    import Badge from "./badge.brul";
-</use>
-
 <script>
-    function handleBump() {
+    let selectedIndex = selected;
+    let rememberChoice = remember;
+    let alwaysAskChoice = alwaysAsk;
+
+    function launch(i) {
+        selectedIndex = i;
+        launchBrowser(i);
+    }
+
+    function toggleRemember() {
+        rememberChoice = !rememberChoice;
+    }
+
+    function toggleAlwaysAsk() {
+        alwaysAskChoice = !alwaysAskChoice;
+    }
+
+    function handleKey(ev) {
+        if (ev.code == "Escape") {
+            exit();
+        }
     }
 </script>
 
+<use>
+    import BrowserItem from "./browser_item.brul";
+    import CheckRow from "./check_row.brul";
+</use>
+
 <markup>
-    window Bropicker (
+    window Picker (
         title: "bropicker",
         width: 488,
         height: 800,
         frameless: true,
-        transparent: true
+        transparent: true,
+        on key: handleKey
     ) {
-        Column {
-            if (url != "") {
-                Text { url }
-            } else {
-                Text { "bropicker" }
+        Column (root) {
+            Column (header, on drag: dragWindow) {
+                Text (muted) { "bropicker" }
+                Text (text) { url }
             }
-            each (browsers as browser) {
-                Text { browser }
+            Column (list) {
+                each (browsers as browser, index (browser.name)) {
+                    BrowserItem (index: index, icon: browser.icon, name: browser.name,
+                                path: browser.path, isDefault: browser.isDefault,
+                                selected: index == selectedIndex,
+                                on clicked: launch) { }
+                }
             }
-            Badge (label: "badge", on bumped: handleBump) { }
+            Row (footer) {
+                CheckRow (label: "Remember choice", checked: rememberChoice,
+                        on toggled: toggleRemember) { }
+                CheckRow (label: "Always ask", checked: alwaysAskChoice,
+                        on toggled: toggleAlwaysAsk) { }
+            }
         }
     }
 </markup>
+
+<style>
+    theme dark {
+        background: #14171d;
+        surface: #1c2028;
+        text: #f0f3f8;
+        muted: #98a2b3;
+    }
+    theme light {
+        background: #f4f6f9;
+        surface: #ffffff;
+        text: #171c24;
+        muted: #647080;
+    }
+    .root {
+        width: 100%;
+        height: 100%;
+        padding: 16px;
+        spacing: 12px;
+        background: theme.background;
+        radius: 22px;
+    }
+    .header {
+        width: 100%;
+        height: 56px;
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 2px;
+        background: theme.surface;
+        radius: 14px;
+    }
+    .text { color: theme.text; font-size: 16px; font-weight: 600; }
+    .muted { color: theme.muted; font-size: 12px; }
+    .list { width: 100%; stretch: 1; spacing: 8px; }
+    .footer {
+        width: 100%;
+        height: 44px;
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 24px;
+        align-items: center;
+        background: theme.surface;
+        radius: 12px;
+    }
+</style>

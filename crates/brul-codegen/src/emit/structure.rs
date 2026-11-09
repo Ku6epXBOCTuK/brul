@@ -235,7 +235,11 @@ fn each_arm(
     out.push_str("        ]);\n");
     match &block.key {
         Some(key) => {
-            let _ = writeln!(out, "        let key = Some({});", expression(key));
+            let _ = writeln!(
+                out,
+                "        let key = brul::evaluate(component, &{});",
+                expression(key)
+            );
         }
         None => out.push_str("        let key = None;\n"),
     }
