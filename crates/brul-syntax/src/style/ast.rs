@@ -107,3 +107,25 @@ impl Color {
         Color { r, g, b, a }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::State;
+
+    const ALL: [State; 5] = [
+        State::Hover,
+        State::Pressed,
+        State::Checked,
+        State::Selected,
+        State::Disabled,
+    ];
+
+    #[test]
+    fn every_state_has_its_own_name() {
+        let mut names: Vec<&str> = ALL.iter().map(|state| state.name()).collect();
+        assert!(names.iter().all(|name| !name.is_empty()));
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), ALL.len());
+    }
+}

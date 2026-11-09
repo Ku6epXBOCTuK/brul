@@ -200,3 +200,30 @@ fn color(value: Color) -> String {
         value.r, value.g, value.b, value.a
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::justify;
+    use brul_gui::Justify;
+
+    #[test]
+    fn every_justify_maps_to_its_own_constant() {
+        let mut constants: Vec<String> = [
+            Justify::Start,
+            Justify::Center,
+            Justify::End,
+            Justify::SpaceBetween,
+        ]
+        .iter()
+        .map(|value| justify(*value))
+        .collect();
+        assert!(
+            constants
+                .iter()
+                .all(|constant| constant.starts_with("brul_gui::Justify::"))
+        );
+        constants.sort_unstable();
+        constants.dedup();
+        assert_eq!(constants.len(), 4);
+    }
+}

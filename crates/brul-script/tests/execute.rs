@@ -129,3 +129,9 @@ fn nested_error_keeps_the_inner_position() {
         )
     );
 }
+
+#[test]
+fn assignment_to_a_non_place_is_unsupported() {
+    let error = run_error("(1 + 2) = 3;");
+    assert_eq!(error.reason(), Error::Unsupported("expression").reason());
+}

@@ -267,7 +267,7 @@ fn theme_key(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
         Some(ch) if ch.is_ascii_digit() => {
             let value = cursor
                 .number_literal()
-                .map_err(|_| Error::at(cursor.source(), at, message()))?;
+                .expect("parser accepts only numbers");
             if cursor.eat_unit("px") {
                 Ok(Value::Px(value))
             } else {

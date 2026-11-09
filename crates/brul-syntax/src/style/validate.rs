@@ -95,9 +95,8 @@ pub fn refs(
     };
     for (rule, position) in rules.iter().zip(positions) {
         for (property, at) in rule.properties.iter().zip(&position.properties) {
-            let Some(spec) = properties::get(&property.name) else {
-                continue;
-            };
+            let spec =
+                properties::get(&property.name).expect("the parser rejects unknown properties");
             let Some(expected) = spec.theme_type() else {
                 continue;
             };

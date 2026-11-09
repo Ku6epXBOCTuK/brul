@@ -552,6 +552,27 @@ mod tests {
         assert_eq!(unique.len(), names.len());
     }
 
+    #[test]
+    fn event_names_round_trip_and_stay_distinct() {
+        let events = [
+            HandlerEvent::Click,
+            HandlerEvent::Press,
+            HandlerEvent::Release,
+            HandlerEvent::Enter,
+            HandlerEvent::Leave,
+            HandlerEvent::Drag,
+            HandlerEvent::Key,
+        ];
+        for event in events {
+            assert_eq!(HandlerEvent::parse(event.name()), Some(event));
+        }
+        let mut names: Vec<_> = events.iter().map(|event| event.name()).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), events.len());
+        assert_eq!(HandlerEvent::parse("hover"), None);
+    }
+
     fn event_host(events: Vec<ComponentEvent>) -> EventHost {
         EventHost { events }
     }

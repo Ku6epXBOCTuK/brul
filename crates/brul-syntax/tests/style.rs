@@ -187,6 +187,18 @@ theme dark {
 }
 
 #[test]
+fn theme_keys_take_keyword_colors() {
+    let source = "theme light { accent: white; shade: transparent; }";
+    assert_eq!(
+        parse_file(source).unwrap().themes[0].properties,
+        vec![
+            property("accent", Value::Color(Color::WHITE)),
+            property("shade", Value::Color(Color::TRANSPARENT)),
+        ]
+    );
+}
+
+#[test]
 fn the_first_theme_is_the_default() {
     let source =
         "theme dark { accent: #000; }\ntheme light { accent: #fff; }\n.a { color: theme.accent; }";
@@ -478,6 +490,18 @@ fn errors_point_at_the_source() {
         ),
         (
             "theme light { accent: 4; }",
+            "expected color or px for theme key 'accent'",
+            1,
+            23,
+        ),
+        (
+            "theme light { accent: red; }",
+            "expected color or px for theme key 'accent'",
+            1,
+            23,
+        ),
+        (
+            "theme light { accent: \"#fff\"; }",
             "expected color or px for theme key 'accent'",
             1,
             23,

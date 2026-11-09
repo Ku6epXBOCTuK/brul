@@ -147,6 +147,21 @@ fn props_with_types_and_defaults_parse() {
 }
 
 #[test]
+fn event_without_parentheses_takes_no_params() {
+    let file = parse_file("component A { event clicked }").unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    assert_eq!(
+        component.members,
+        vec![Member::Event(Event {
+            name: "clicked".to_owned(),
+            params: Vec::new(),
+        })]
+    );
+}
+
+#[test]
 fn events_parse_params() {
     let source = "component A { event clicked(i: Number) event toggled() event moved(x: Number, y: Number) }";
     let file = parse_file(source).unwrap();
@@ -290,6 +305,9 @@ fn member_errors_point_at_the_source() {
     let error = parse_file("component A { event clicked(i) }").unwrap_err();
     assert_eq!(error.message, "expected ':'");
     assert_eq!((error.line, error.column), (1, 30));
+
+    let error = parse_file("component A { event clicked(i: Number j: Number) }").unwrap_err();
+    assert_eq!(error.message, "expected ',' or ')'");
 
     let error = parse_file("component A { prop x: Bool = }").unwrap_err();
     assert_eq!(error.message, "expected expression");

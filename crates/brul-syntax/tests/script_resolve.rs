@@ -133,3 +133,8 @@ fn a_variable_is_not_visible_in_its_own_initializer() {
         at("variable 'value' is not defined", 1, 13)
     );
 }
+
+#[test]
+fn a_declaration_without_an_initializer_resolves() {
+    accepts("let value;\nvalue = 1;", &[]);
+}
