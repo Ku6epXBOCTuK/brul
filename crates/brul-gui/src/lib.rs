@@ -123,6 +123,7 @@
 
 mod atlas;
 mod color;
+mod gpu;
 mod layout;
 mod paint;
 mod rect;
