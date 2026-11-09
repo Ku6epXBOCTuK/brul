@@ -236,39 +236,32 @@ impl Ui {
 
     pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<window::WindowCommand> {
         for event in events {
-            if let WidgetEvent::Timer(function) = event {
-                if let Err(error) = self
-                    .component
-                    .borrow_mut()
-                    .call_function(function, Vec::new())
-                {
-                    eprintln!("{error}");
+            match event {
+                WidgetEvent::Timer(function) => {
+                    call(&Rc::clone(&self.component), function, Vec::new());
                 }
-                continue;
-            }
-            let Some((widget, target)) = handler_target(event) else {
-                continue;
-            };
-            let Some(handler) = self
-                .handlers
-                .iter()
-                .find(|handler| handler.widget == widget && handler.event == target)
-            else {
-                continue;
-            };
-            let function = handler.function.clone();
-            let component = Rc::clone(&handler.component);
-            let arguments = match event {
-                WidgetEvent::Key(code) => vec![Value::Object(vec![(
-                    "code".to_owned(),
-                    Value::String(code.clone()),
-                )])],
-                _ => Vec::new(),
-            };
-            if let Err(error) = component.borrow_mut().call_function(&function, arguments) {
-                eprintln!("{error}");
+                _ => self.dispatch_event(event),
             }
         }
+        self.take_commands()
+    }
+
+    fn dispatch_event(&mut self, event: &WidgetEvent) {
+        let Some((widget, target)) = handler_target(event) else {
+            return;
+        };
+        let Some(handler) = self
+            .handlers
+            .iter()
+            .find(|handler| handler.widget == widget && handler.event == target)
+        else {
+            return;
+        };
+        let component = Rc::clone(&handler.component);
+        call(&component, &handler.function, arguments(event));
+    }
+
+    fn take_commands(&mut self) -> Vec<window::WindowCommand> {
         let commands = std::mem::take(&mut *self.commands.borrow_mut());
         let mut output = Vec::new();
         for command in commands {
@@ -378,39 +371,13 @@ fn reconcile_each(
     let Some(old_children) = tree.borrow_mut().take_children(parent) else {
         return new_widget.into_children();
     };
-    let mut remaining = old_children;
-    let mut old_widgets = Vec::with_capacity(old_rows.len());
-    for row in old_rows {
-        let take = row.count.min(remaining.len());
-        old_widgets.push(remaining.drain(..take).collect::<Vec<_>>());
-    }
-
-    let mut remaining = new_widget.into_children();
-    let mut new_widgets = Vec::with_capacity(new_rows.len());
-    for row in new_rows {
-        let take = row.count.min(remaining.len());
-        new_widgets.push(remaining.drain(..take).collect::<Vec<_>>());
-    }
+    let mut old_widgets = group(old_children, old_rows);
+    let mut new_widgets = group(new_widget.into_children(), new_rows);
 
     let mut used = vec![false; old_widgets.len()];
     let mut children = Vec::new();
     for (index, row) in new_rows.iter().enumerate() {
-        let mut reused = None;
-        if let Some(key) = &row.key {
-            for (other, old) in old_rows.iter().enumerate() {
-                if !used[other] && old.key.as_ref() == Some(key) && old.item == row.item {
-                    reused = Some(other);
-                    break;
-                }
-            }
-        } else if let Some(old) = old_rows.get(index)
-            && !used[index]
-            && old.key.is_none()
-            && old.item == row.item
-        {
-            reused = Some(index);
-        }
-        match reused {
+        match reuse_index(old_rows, row, index, &used) {
             Some(other) => {
                 used[other] = true;
                 children.append(&mut old_widgets[other]);
@@ -419,6 +386,45 @@ fn reconcile_each(
         }
     }
     children
+}
+
+fn group(children: Vec<Widget>, rows: &[RowInfo]) -> Vec<Vec<Widget>> {
+    let mut remaining = children;
+    rows.iter()
+        .map(|row| {
+            let take = row.count.min(remaining.len());
+            remaining.drain(..take).collect()
+        })
+        .collect()
+}
+
+fn reuse_index(old_rows: &[RowInfo], row: &RowInfo, index: usize, used: &[bool]) -> Option<usize> {
+    let Some(key) = &row.key else {
+        let same_place = index < old_rows.len()
+            && !used[index]
+            && old_rows[index].key.is_none()
+            && old_rows[index].item == row.item;
+        return same_place.then_some(index);
+    };
+    old_rows.iter().enumerate().position(|(other, old)| {
+        !used[other] && old.key.as_ref() == Some(key) && old.item == row.item
+    })
+}
+
+fn call(component: &ComponentHandle, function: &str, arguments: Vec<Value>) {
+    if let Err(error) = component.borrow_mut().call_function(function, arguments) {
+        eprintln!("{error}");
+    }
+}
+
+fn arguments(event: &WidgetEvent) -> Vec<Value> {
+    match event {
+        WidgetEvent::Key(code) => vec![Value::Object(vec![(
+            "code".to_owned(),
+            Value::String(code.clone()),
+        )])],
+        _ => Vec::new(),
+    }
 }
 
 fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent)> {
@@ -438,41 +444,68 @@ fn apply(binding: &Binding, component: &ComponentHandle, tree: &RefCell<WidgetTr
     component.borrow().track();
     let count = binding.scopes.len();
     component.borrow_mut().push_binding_scopes(&binding.scopes);
-    match &binding.target {
-        BindingTarget::Text(expression) => {
-            if let Some(content) = text(component, expression) {
-                tree.borrow_mut().set_text(binding.widget, content);
-            }
-        }
-        BindingTarget::Checked(expression) => {
-            if let Some(value) = boolean(component, expression) {
-                tree.borrow_mut().set_checked(binding.widget, value);
-            }
-        }
-        BindingTarget::Selected(expression) => {
-            if let Some(value) = boolean(component, expression) {
-                tree.borrow_mut().set_selected(binding.widget, value);
-            }
-        }
-        BindingTarget::Disabled(expression) => {
-            if let Some(value) = boolean(component, expression) {
-                tree.borrow_mut().set_disabled(binding.widget, value);
-            }
-        }
-        BindingTarget::Visible(expression) => {
-            if let Some(value) = boolean(component, expression) {
-                tree.borrow_mut().set_visible(binding.widget, value);
-            }
-        }
-        BindingTarget::Offset { x, y } => {
-            if let (Some(x), Some(y)) =
-                (offset(component, x.as_ref()), offset(component, y.as_ref()))
-            {
-                tree.borrow_mut().set_offset(binding.widget, x, y);
-            }
-        }
-    }
+    write_target(binding, component, tree);
     component.borrow_mut().pop_binding_scopes(count);
+}
+
+fn write_target(binding: &Binding, component: &ComponentHandle, tree: &RefCell<WidgetTree>) {
+    let widget = binding.widget;
+    match &binding.target {
+        BindingTarget::Text(expression) => set_text(tree, widget, text(component, expression)),
+        BindingTarget::Checked(expression) => set_flag(
+            tree,
+            widget,
+            boolean(component, expression),
+            WidgetTree::set_checked,
+        ),
+        BindingTarget::Selected(expression) => set_flag(
+            tree,
+            widget,
+            boolean(component, expression),
+            WidgetTree::set_selected,
+        ),
+        BindingTarget::Disabled(expression) => set_flag(
+            tree,
+            widget,
+            boolean(component, expression),
+            WidgetTree::set_disabled,
+        ),
+        BindingTarget::Visible(expression) => set_flag(
+            tree,
+            widget,
+            boolean(component, expression),
+            WidgetTree::set_visible,
+        ),
+        BindingTarget::Offset { x, y } => set_offset(
+            tree,
+            widget,
+            offset(component, x.as_ref()),
+            offset(component, y.as_ref()),
+        ),
+    }
+}
+
+fn set_text(tree: &RefCell<WidgetTree>, widget: WidgetId, value: Option<String>) {
+    if let Some(value) = value {
+        tree.borrow_mut().set_text(widget, value);
+    }
+}
+
+fn set_flag(
+    tree: &RefCell<WidgetTree>,
+    widget: WidgetId,
+    value: Option<bool>,
+    set: fn(&mut WidgetTree, WidgetId, bool) -> bool,
+) {
+    if let Some(value) = value {
+        set(&mut tree.borrow_mut(), widget, value);
+    }
+}
+
+fn set_offset(tree: &RefCell<WidgetTree>, widget: WidgetId, x: Option<i32>, y: Option<i32>) {
+    if let (Some(x), Some(y)) = (x, y) {
+        tree.borrow_mut().set_offset(widget, x, y);
+    }
 }
 
 fn apply_prop(prop: &PropBinding) {
@@ -598,8 +631,8 @@ fn scheme_theme(fixed: Option<&str>, scheme: window::ColorScheme) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use brul_gui::{Direction, Widget};
-    use brul_syntax::ast::{ExprKind, Position};
+    use brul_gui::{Direction, Size, TextEngine, Widget};
+    use brul_syntax::ast::{AssignOp, ExprKind, Position};
 
     fn generated_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
         if theme.is_some() {
@@ -1064,5 +1097,333 @@ mod tests {
         ui.set_theme("light").expect("same theme is a no-op");
         assert!(ui.set_theme("dark").is_err());
         assert_eq!(ui.theme.as_deref(), Some("light"));
+    }
+
+    fn binding(component: &ComponentHandle, widget: WidgetId, target: BindingTarget) -> Binding {
+        Binding::new(component, widget, target)
+    }
+
+    fn state_after(targets: [BindingTarget; 6]) -> (Vec<WidgetId>, RefCell<WidgetTree>) {
+        let mut component = Component::new();
+        component
+            .declare("title", Value::String("hi".to_owned()), false)
+            .unwrap();
+        component.declare("on", Value::Bool(true), false).unwrap();
+        component.declare("off", Value::Bool(false), false).unwrap();
+        component.declare("x", Value::Number(4.0), false).unwrap();
+        component.declare("y", Value::Number(6.0), false).unwrap();
+        let component = Rc::new(RefCell::new(component));
+        let widgets: Vec<Widget> = (0..targets.len())
+            .map(|index| Widget::text(index.to_string()))
+            .collect();
+        let ids: Vec<WidgetId> = widgets.iter().map(Widget::id).collect();
+        let tree = RefCell::new(WidgetTree::new(Widget::view(Direction::Column, widgets)));
+        for (index, target) in targets.into_iter().enumerate() {
+            apply(&binding(&component, ids[index], target), &component, &tree);
+        }
+        (ids, tree)
+    }
+
+    #[test]
+    fn every_binding_target_writes_its_own_state() {
+        let targets = [
+            BindingTarget::Text(ident("title")),
+            BindingTarget::Checked(ident("on")),
+            BindingTarget::Selected(ident("on")),
+            BindingTarget::Disabled(ident("on")),
+            BindingTarget::Visible(ident("off")),
+            BindingTarget::Offset {
+                x: Some(ident("x")),
+                y: Some(ident("y")),
+            },
+        ];
+        let (ids, tree) = state_after(targets);
+        assert!(!tree.borrow_mut().set_text(ids[0], "hi".to_owned()));
+        let state = tree.borrow().state(ids[1]).expect("state");
+        assert!(state.checked);
+        assert!(tree.borrow().state(ids[2]).expect("state").selected);
+        assert!(tree.borrow().state(ids[3]).expect("state").disabled);
+        assert!(!tree.borrow().state(ids[4]).expect("state").visible);
+        let mut engine = TextEngine::new();
+        tree.borrow_mut()
+            .layout(
+                &mut engine,
+                Size {
+                    width: 200,
+                    height: 200,
+                },
+                1.0,
+            )
+            .expect("layout");
+        let mut tree = tree.borrow_mut();
+        let snapshot = tree.snapshot().expect("snapshot");
+        let node = snapshot.node(ids[5]).cloned().expect("node");
+        assert_eq!((node.x, node.y), (4, 6));
+    }
+
+    fn row(key: Option<Value>, item: &str, count: usize) -> RowInfo {
+        RowInfo {
+            key,
+            item: Value::String(item.to_owned()),
+            start: 0,
+            count,
+        }
+    }
+
+    #[test]
+    fn each_without_old_children_builds_the_new_ones() {
+        let tree = RefCell::new(WidgetTree::new(Widget::view(Direction::Column, Vec::new())));
+        let absent = Widget::text("absent").id();
+        let fresh = Widget::view(Direction::Column, vec![Widget::text("a")]);
+        let new_id = fresh.id();
+        let children = reconcile_each(
+            &tree,
+            absent,
+            &[row(None, "a", 1)],
+            fresh,
+            &[row(None, "a", 1)],
+        );
+        assert_eq!(children.len(), 1);
+        assert_ne!(children[0].id(), new_id);
+    }
+
+    #[test]
+    fn an_unkeyed_row_reuses_the_widget_in_the_same_place() {
+        let first = Widget::text("a");
+        let first_id = first.id();
+        let root = Widget::view(Direction::Column, vec![first]);
+        let parent = root.id();
+        let tree = RefCell::new(WidgetTree::new(root));
+        let children = reconcile_each(
+            &tree,
+            parent,
+            &[row(None, "a", 1)],
+            Widget::view(Direction::Column, vec![Widget::text("a")]),
+            &[row(None, "a", 1)],
+        );
+        assert_eq!(children[0].id(), first_id);
+    }
+
+    #[test]
+    fn an_unkeyed_row_with_a_different_item_is_rebuilt() {
+        let first = Widget::text("a");
+        let first_id = first.id();
+        let root = Widget::view(Direction::Column, vec![first]);
+        let parent = root.id();
+        let tree = RefCell::new(WidgetTree::new(root));
+        let children = reconcile_each(
+            &tree,
+            parent,
+            &[row(None, "a", 1)],
+            Widget::view(Direction::Column, vec![Widget::text("b")]),
+            &[row(None, "b", 1)],
+        );
+        assert_ne!(children[0].id(), first_id);
+    }
+
+    #[test]
+    fn a_keyed_row_is_rebuilt_when_its_item_changes() {
+        let first = Widget::text("a");
+        let first_id = first.id();
+        let root = Widget::view(Direction::Column, vec![first]);
+        let parent = root.id();
+        let tree = RefCell::new(WidgetTree::new(root));
+        let key = Some(Value::Number(1.0));
+        let children = reconcile_each(
+            &tree,
+            parent,
+            &[row(key.clone(), "a", 1)],
+            Widget::view(Direction::Column, vec![Widget::text("b")]),
+            &[row(key, "b", 1)],
+        );
+        assert_ne!(children[0].id(), first_id);
+    }
+
+    #[test]
+    fn a_keyed_row_takes_its_widget_only_once() {
+        let first = Widget::text("a");
+        let first_id = first.id();
+        let root = Widget::view(Direction::Column, vec![first]);
+        let parent = root.id();
+        let tree = RefCell::new(WidgetTree::new(root));
+        let key = Some(Value::Number(1.0));
+        let fresh = Widget::view(
+            Direction::Column,
+            vec![Widget::text("a"), Widget::text("a")],
+        );
+        let children = reconcile_each(
+            &tree,
+            parent,
+            &[row(key.clone(), "a", 1)],
+            fresh,
+            &[row(key.clone(), "a", 1), row(key, "a", 1)],
+        );
+        assert_eq!(children[0].id(), first_id);
+        assert_ne!(children[1].id(), first_id);
+    }
+
+    #[test]
+    fn a_keyed_row_does_not_take_an_unkeyed_widget() {
+        let first = Widget::text("a");
+        let first_id = first.id();
+        let root = Widget::view(Direction::Column, vec![first]);
+        let parent = root.id();
+        let tree = RefCell::new(WidgetTree::new(root));
+        let children = reconcile_each(
+            &tree,
+            parent,
+            &[row(None, "a", 1)],
+            Widget::view(Direction::Column, vec![Widget::text("a")]),
+            &[row(Some(Value::Number(1.0)), "a", 1)],
+        );
+        assert_ne!(children[0].id(), first_id);
+    }
+
+    fn component_with(functions: Vec<script::Function>, declared: &[&str]) -> ComponentHandle {
+        let mut component = Component::new();
+        for name in declared {
+            component
+                .declare(name, Value::Null, false)
+                .expect("declared");
+        }
+        for function in functions {
+            component.define_function(function).expect("function");
+        }
+        Rc::new(RefCell::new(component))
+    }
+
+    fn function(name: &str, params: Vec<&str>, body: Vec<script::Statement>) -> script::Function {
+        script::Function {
+            name: name.to_owned(),
+            params: params.into_iter().map(str::to_owned).collect(),
+            body,
+        }
+    }
+
+    fn let_true(name: &str) -> script::Statement {
+        let value = Expr::new(ExprKind::Bool(true), Position::default());
+        let target = Expr::new(ExprKind::Ident(name.to_owned()), Position::default());
+        script::Statement::Expr(Expr::new(
+            ExprKind::Assign {
+                target: Box::new(target),
+                op: AssignOp::Set,
+                value: Box::new(value),
+            },
+            Position::default(),
+        ))
+    }
+
+    fn dispatching(
+        component: &ComponentHandle,
+        widget: Widget,
+        handlers: impl FnOnce(WidgetId) -> Vec<Handler>,
+    ) -> (WidgetId, Ui) {
+        let id = widget.id();
+        let built = Built {
+            widget,
+            bindings: Vec::new(),
+            handlers: handlers(id),
+            structures: Vec::new(),
+            props: Vec::new(),
+        };
+        (
+            id,
+            Ui::assemble(Rc::clone(component), built, generated_view, None, None),
+        )
+    }
+
+    #[test]
+    fn dispatch_calls_the_handler_of_the_widget() {
+        let component = component_with(
+            vec![function("clicked", Vec::new(), vec![let_true("ran")])],
+            &["ran"],
+        );
+        let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
+            vec![Handler::new(
+                &component,
+                Some(id),
+                HandlerEvent::Click,
+                "clicked",
+            )]
+        });
+        ui.dispatch(&[WidgetEvent::Click(id)]);
+        assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+    }
+
+    #[test]
+    fn dispatch_passes_the_key_code() {
+        let target = Expr::new(ExprKind::Ident("seen".to_owned()), Position::default());
+        let value = Expr::new(ExprKind::Ident("code".to_owned()), Position::default());
+        let body = vec![script::Statement::Expr(Expr::new(
+            ExprKind::Assign {
+                target: Box::new(target),
+                op: AssignOp::Set,
+                value: Box::new(value),
+            },
+            Position::default(),
+        ))];
+        let component = component_with(vec![function("pressed", vec!["code"], body)], &["seen"]);
+        let (_, mut ui) = dispatching(&component, Widget::text(""), |_| {
+            vec![Handler::new(&component, None, HandlerEvent::Key, "pressed")]
+        });
+        ui.dispatch(&[WidgetEvent::Key("Enter".to_owned())]);
+        let seen = ui.component.borrow().read("seen").expect("seen");
+        assert_eq!(
+            seen,
+            Value::Object(vec![("code".to_owned(), Value::String("Enter".to_owned()))])
+        );
+    }
+
+    #[test]
+    fn dispatch_runs_a_timer() {
+        let component = component_with(
+            vec![function("tick", Vec::new(), vec![let_true("ran")])],
+            &["ran"],
+        );
+        let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
+        ui.dispatch(&[WidgetEvent::Timer("tick".to_owned())]);
+        assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+    }
+
+    #[test]
+    fn dispatch_ignores_events_without_a_handler() {
+        let component = component_with(Vec::new(), &[]);
+        let (id, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
+        let other = Widget::text("other").id();
+        assert!(
+            ui.dispatch(&[WidgetEvent::Drag(id), WidgetEvent::Click(other)])
+                .is_empty()
+        );
+        assert!(ui.component.borrow().read("ran").is_err());
+    }
+
+    #[test]
+    fn dispatch_returns_commands_it_cannot_handle() {
+        let component = component_with(Vec::new(), &[]);
+        let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
+        ui.commands.borrow_mut().push(window::WindowCommand::Exit);
+        assert_eq!(ui.dispatch(&[]), vec![window::WindowCommand::Exit]);
+    }
+
+    #[test]
+    fn dispatch_applies_a_theme_command() {
+        let (component, built) = generated_built(themed_view, None, &[], None).expect("launch");
+        let mut ui = Ui::assemble(component, built, themed_view, None, None);
+        ui.commands
+            .borrow_mut()
+            .push(window::WindowCommand::SetTheme("dark".to_owned()));
+        assert!(ui.dispatch(&[]).is_empty());
+        assert_eq!(ui.theme.as_deref(), Some("dark"));
+    }
+
+    #[test]
+    fn dispatch_logs_a_theme_the_view_rejects() {
+        let (component, built) = generated_built(generated_view, None, &[], None).expect("launch");
+        let mut ui = Ui::assemble(component, built, generated_view, None, None);
+        ui.commands
+            .borrow_mut()
+            .push(window::WindowCommand::SetTheme("dark".to_owned()));
+        assert!(ui.dispatch(&[]).is_empty());
+        assert!(ui.theme.is_none());
     }
 }

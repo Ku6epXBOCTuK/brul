@@ -323,42 +323,82 @@ fn apply(binding: &Binding, tree: &RefCell<WidgetTree>) {
     component.borrow().track();
     let count = binding.scopes.len();
     component.borrow_mut().push_binding_scopes(&binding.scopes);
-    match &binding.target {
-        BindingTarget::Text(expression) => {
-            if let Ok(Value::String(content)) = eval(&mut component.borrow_mut(), expression) {
-                tree.borrow_mut().set_text(binding.widget, content);
-            }
-        }
-        BindingTarget::Checked(expression) => {
-            if let Ok(Value::Bool(value)) = eval(&mut component.borrow_mut(), expression) {
-                tree.borrow_mut().set_checked(binding.widget, value);
-            }
-        }
-        BindingTarget::Selected(expression) => {
-            if let Ok(Value::Bool(value)) = eval(&mut component.borrow_mut(), expression) {
-                tree.borrow_mut().set_selected(binding.widget, value);
-            }
-        }
-        BindingTarget::Disabled(expression) => {
-            if let Ok(Value::Bool(value)) = eval(&mut component.borrow_mut(), expression) {
-                tree.borrow_mut().set_disabled(binding.widget, value);
-            }
-        }
-        BindingTarget::Visible(expression) => {
-            if let Ok(Value::Bool(value)) = eval(&mut component.borrow_mut(), expression) {
-                tree.borrow_mut().set_visible(binding.widget, value);
-            }
-        }
-        BindingTarget::Offset { x, y } => {
-            if let (Some(x), Some(y)) = (
-                offset_value(&component, x.as_ref()),
-                offset_value(&component, y.as_ref()),
-            ) {
-                tree.borrow_mut().set_offset(binding.widget, x, y);
-            }
-        }
-    }
+    write_target(binding, &component, tree);
     component.borrow_mut().pop_binding_scopes(count);
+}
+
+fn write_target(binding: &Binding, component: &RefCell<Component>, tree: &RefCell<WidgetTree>) {
+    let widget = binding.widget;
+    match &binding.target {
+        BindingTarget::Text(expression) => set_text(tree, widget, string(component, expression)),
+        BindingTarget::Checked(expression) => set_flag(
+            tree,
+            widget,
+            flag(component, expression),
+            WidgetTree::set_checked,
+        ),
+        BindingTarget::Selected(expression) => set_flag(
+            tree,
+            widget,
+            flag(component, expression),
+            WidgetTree::set_selected,
+        ),
+        BindingTarget::Disabled(expression) => set_flag(
+            tree,
+            widget,
+            flag(component, expression),
+            WidgetTree::set_disabled,
+        ),
+        BindingTarget::Visible(expression) => set_flag(
+            tree,
+            widget,
+            flag(component, expression),
+            WidgetTree::set_visible,
+        ),
+        BindingTarget::Offset { x, y } => set_offset(
+            tree,
+            widget,
+            offset_value(component, x.as_ref()),
+            offset_value(component, y.as_ref()),
+        ),
+    }
+}
+
+fn string(component: &RefCell<Component>, expression: &Expr) -> Option<String> {
+    match eval(&mut component.borrow_mut(), expression) {
+        Ok(Value::String(content)) => Some(content),
+        _ => None,
+    }
+}
+
+fn flag(component: &RefCell<Component>, expression: &Expr) -> Option<bool> {
+    match eval(&mut component.borrow_mut(), expression) {
+        Ok(Value::Bool(value)) => Some(value),
+        _ => None,
+    }
+}
+
+fn set_text(tree: &RefCell<WidgetTree>, widget: WidgetId, value: Option<String>) {
+    if let Some(value) = value {
+        tree.borrow_mut().set_text(widget, value);
+    }
+}
+
+fn set_flag(
+    tree: &RefCell<WidgetTree>,
+    widget: WidgetId,
+    value: Option<bool>,
+    set: fn(&mut WidgetTree, WidgetId, bool) -> bool,
+) {
+    if let Some(value) = value {
+        set(&mut tree.borrow_mut(), widget, value);
+    }
+}
+
+fn set_offset(tree: &RefCell<WidgetTree>, widget: WidgetId, x: Option<i32>, y: Option<i32>) {
+    if let (Some(x), Some(y)) = (x, y) {
+        tree.borrow_mut().set_offset(widget, x, y);
+    }
 }
 
 pub fn text(component: &mut Component, expression: &Expr) -> Result<String, String> {
@@ -660,5 +700,114 @@ mod tests {
             host.call("click", &[]).unwrap_err().reason(),
             ScriptError::DivisionByZero.reason()
         );
+    }
+
+    fn declared_all() -> Rc<RefCell<Component>> {
+        let mut component = Component::new();
+        for (name, value) in [
+            ("title", Value::String("hi".to_owned())),
+            ("on", Value::Bool(true)),
+            ("off", Value::Bool(false)),
+            ("x", Value::Number(4.0)),
+            ("y", Value::Number(6.0)),
+        ] {
+            component.declare(name, value, false).unwrap();
+        }
+        Rc::new(RefCell::new(component))
+    }
+
+    fn targets() -> Vec<BindingTarget> {
+        vec![
+            BindingTarget::Text(ident("title")),
+            BindingTarget::Checked(ident("on")),
+            BindingTarget::Selected(ident("on")),
+            BindingTarget::Disabled(ident("on")),
+            BindingTarget::Visible(ident("off")),
+            BindingTarget::Offset {
+                x: Some(ident("x")),
+                y: Some(ident("y")),
+            },
+        ]
+    }
+
+    fn six_widgets() -> (Vec<WidgetId>, Rc<RefCell<WidgetTree>>) {
+        let widgets: Vec<Widget> = (0..6)
+            .map(|index| Widget::text(index.to_string()))
+            .collect();
+        let ids: Vec<WidgetId> = widgets.iter().map(Widget::id).collect();
+        let tree = Rc::new(RefCell::new(WidgetTree::new(Widget::view(
+            brul_gui::Direction::Column,
+            widgets,
+        ))));
+        (ids, tree)
+    }
+
+    #[test]
+    fn every_binding_target_writes_its_own_state() {
+        let component = declared_all();
+        let (ids, tree) = six_widgets();
+        let bindings: Vec<Binding> = targets()
+            .into_iter()
+            .enumerate()
+            .map(|(index, target)| Binding {
+                widget: ids[index],
+                target,
+                scopes: Vec::new(),
+                component: Rc::clone(&component),
+            })
+            .collect();
+
+        let _bindings = Bindings::new(&bindings, &tree);
+        assert!(!tree.borrow_mut().set_text(ids[0], "hi".to_owned()));
+        assert!(tree.borrow().state(ids[1]).expect("state").checked);
+        assert!(tree.borrow().state(ids[2]).expect("state").selected);
+        assert!(tree.borrow().state(ids[3]).expect("state").disabled);
+        assert!(!tree.borrow().state(ids[4]).expect("state").visible);
+        let mut engine = brul_gui::TextEngine::new();
+        tree.borrow_mut()
+            .layout(
+                &mut engine,
+                brul_gui::Size {
+                    width: 200,
+                    height: 200,
+                },
+                1.0,
+            )
+            .expect("layout");
+        let mut tree = tree.borrow_mut();
+        let node = tree.snapshot().expect("snapshot").node(ids[5]).cloned();
+        let node = node.expect("node");
+        assert_eq!((node.x, node.y), (4, 6));
+    }
+
+    #[test]
+    fn a_binding_ignores_a_value_of_the_wrong_type() {
+        let mut component = Component::new();
+        component
+            .declare("title", Value::Number(1.0), false)
+            .unwrap();
+        component
+            .declare("on", Value::String("yes".to_owned()), false)
+            .unwrap();
+        let component = Rc::new(RefCell::new(component));
+        let (ids, tree) = six_widgets();
+        let bindings = [
+            Binding {
+                widget: ids[0],
+                target: BindingTarget::Text(ident("title")),
+                scopes: Vec::new(),
+                component: Rc::clone(&component),
+            },
+            Binding {
+                widget: ids[1],
+                target: BindingTarget::Checked(ident("on")),
+                scopes: Vec::new(),
+                component: Rc::clone(&component),
+            },
+        ];
+
+        let _bindings = Bindings::new(&bindings, &tree);
+        assert!(!tree.borrow_mut().set_text(ids[0], "0".to_owned()));
+        assert!(!tree.borrow().state(ids[1]).expect("state").checked);
     }
 }
