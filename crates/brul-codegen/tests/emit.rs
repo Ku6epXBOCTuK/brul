@@ -11,46 +11,64 @@ window Demo (title: "demo") {
 }
 </markup>
 "#;
-    let expected = r#"pub fn view() -> brul_gui::Widget {
-    brul_gui::Widget::row(vec![
-        brul_gui::Widget::text("a"),
-        brul_gui::Widget::column(vec![]),
-    ])
+    let expected = r#"pub fn view(theme: Option<&str>) -> Result<brul_gui::Widget, String> {
+    match theme {
+        None => Ok(
+            brul_gui::Widget::row(vec![
+                brul_gui::Widget::text("a"),
+                brul_gui::Widget::column(vec![]),
+            ]),
+        ),
+        Some(theme) => Err(format!("unknown theme '{theme}'")),
+    }
 }
 "#;
     assert_eq!(emit::module(source).expect("module"), expected);
 }
 
 #[test]
-fn emits_resolved_classes() {
+fn emits_themes_and_states() {
     let source = r#"<style>
+theme dark {
+    accent: #6c8cff;
+}
+theme light {
+    accent: #112233;
+}
 .box {
     width: 10px;
-    padding: 2px;
-    background: #102030;
-    radius: 4px;
+    background: theme.accent;
 }
-.label {
-    color: #ff0000;
-    font-size: 20px;
+.box:checked {
+    background: #ff0000;
 }
 </style>
 
 <markup>
 window Styled (title: "styled") {
-    View (box) {
-        Text (label) { "hi" }
-    }
+    View (box) { }
 }
 </markup>
 "#;
-    let expected = r#"pub fn view() -> brul_gui::Widget {
-    brul_gui::Widget::column(vec![
-        brul_gui::Widget::styled_text("hi", brul_gui::TextStyle { font_size: 20.0f32, line_height: 24.0f32 })
-        .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { text: brul_gui::Color::rgba(255, 0, 0, 255) })),
-    ])
-    .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), padding: brul_gui::Padding { left: 2, top: 2, right: 2, bottom: 2 } })
-    .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(16, 32, 48, 255), radius: 4 }))
+    let expected = r#"pub fn view(theme: Option<&str>) -> Result<brul_gui::Widget, String> {
+    match theme {
+        None => Ok(
+            brul_gui::Widget::column(vec![])
+            .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
+            .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(108, 140, 255, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) })),
+        ),
+        Some("dark") => Ok(
+            brul_gui::Widget::column(vec![])
+            .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
+            .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(108, 140, 255, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) })),
+        ),
+        Some("light") => Ok(
+            brul_gui::Widget::column(vec![])
+            .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10) })
+            .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(17, 34, 51, 255) }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255) })),
+        ),
+        Some(theme) => Err(format!("unknown theme '{theme}'")),
+    }
 }
 "#;
     assert_eq!(emit::module(source).expect("module"), expected);

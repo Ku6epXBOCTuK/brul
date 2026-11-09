@@ -1,7 +1,8 @@
 use std::fmt::Write;
 
 use brul_gui::{
-    Align, Color, Dimension, Justify, LayoutStyle, StyleSet, TextAlign, TextStyle, WidgetStyle,
+    Align, Color, Dimension, Justify, LayoutStyle, StyleSet, TextAlign, TextStyle, WidgetState,
+    WidgetStyle,
 };
 use brul_syntax::ast::ExprKind;
 use brul_syntax::error::Error;
@@ -15,17 +16,42 @@ pub fn module(source: &str) -> Result<String, Error> {
     let parsed = crate::parse_source(source)?;
     let root = crate::root(&parsed.window)?;
     let mut out = String::new();
-    out.push_str("pub fn view() -> brul_gui::Widget {\n");
-    widget(&mut out, root, &parsed.stylesheet, 1)?;
-    out.push('\n');
-    out.push_str("}\n");
+    out.push_str("pub fn view(theme: Option<&str>) -> Result<brul_gui::Widget, String> {\n");
+    out.push_str("    match theme {\n");
+    branch(&mut out, "None", root, &parsed.stylesheet, None)?;
+    for theme in &parsed.stylesheet.themes {
+        let pattern = format!("Some({:?})", theme.name);
+        branch(
+            &mut out,
+            &pattern,
+            root,
+            &parsed.stylesheet,
+            Some(&theme.name),
+        )?;
+    }
+    out.push_str("        Some(theme) => Err(format!(\"unknown theme '{theme}'\")),\n");
+    out.push_str("    }\n}\n");
     Ok(out)
+}
+
+fn branch(
+    out: &mut String,
+    pattern: &str,
+    root: &Element,
+    stylesheet: &Stylesheet,
+    theme: Option<&str>,
+) -> Result<(), Error> {
+    let _ = writeln!(out, "        {pattern} => Ok(");
+    widget(out, root, stylesheet, theme, 3)?;
+    out.push_str(",\n        ),\n");
+    Ok(())
 }
 
 fn widget(
     out: &mut String,
     element: &Element,
     stylesheet: &Stylesheet,
+    theme: Option<&str>,
     depth: usize,
 ) -> Result<(), Error> {
     let classes: Vec<&str> = element
@@ -36,7 +62,7 @@ fn widget(
             Arg::Named { .. } | Arg::Handler { .. } => None,
         })
         .collect();
-    let resolved = styles::resolve(stylesheet, &classes, None)
+    let resolved = styles::resolve(stylesheet, &classes, theme)
         .map_err(|message| error_at(element.position, message))?;
     let pad = "    ".repeat(depth);
     let _ = write!(out, "{pad}");
@@ -58,7 +84,7 @@ fn widget(
                             "only elements are generated yet",
                         ));
                     };
-                    widget(out, child, stylesheet, depth + 1)?;
+                    widget(out, child, stylesheet, theme, depth + 1)?;
                     out.push_str(",\n");
                 }
                 let _ = write!(out, "{pad}])");
@@ -75,7 +101,7 @@ fn widget(
     if let Some(layout) = layout(resolved.layout) {
         let _ = write!(out, "\n{pad}.with_layout({layout})");
     }
-    if let Some(styles) = styles(resolved.styles) {
+    if let Some(styles) = style_set(resolved.styles) {
         let _ = write!(out, "\n{pad}.with_styles({styles})");
     }
     Ok(())
@@ -138,37 +164,93 @@ fn layout(layout: LayoutStyle) -> Option<String> {
     (!fields.is_empty()).then(|| format!("brul_gui::LayoutStyle {{ {} }}", fields.join(", ")))
 }
 
-fn styles(styles: StyleSet) -> Option<String> {
-    let base = styles.base();
+fn style_set(set: StyleSet) -> Option<String> {
+    let base = set.base();
+    let mut states = Vec::new();
+    for (name, state) in [
+        (
+            "Hovered",
+            WidgetState {
+                hovered: true,
+                ..WidgetState::default()
+            },
+        ),
+        (
+            "Pressed",
+            WidgetState {
+                pressed: true,
+                ..WidgetState::default()
+            },
+        ),
+        (
+            "Checked",
+            WidgetState {
+                checked: true,
+                ..WidgetState::default()
+            },
+        ),
+        (
+            "Selected",
+            WidgetState {
+                selected: true,
+                ..WidgetState::default()
+            },
+        ),
+        (
+            "Disabled",
+            WidgetState {
+                disabled: true,
+                ..WidgetState::default()
+            },
+        ),
+    ] {
+        let style = set.resolve(state);
+        if style != base {
+            states.push(format!(
+                ".with(brul_gui::StyleState::{name}, {})",
+                widget_style(style)
+            ));
+        }
+    }
+    if base == WidgetStyle::default() && states.is_empty() {
+        return None;
+    }
+    let mut out = format!("brul_gui::StyleSet::new({})", widget_style(base));
+    for state in states {
+        out.push_str(&state);
+    }
+    Some(out)
+}
+
+fn widget_style(style: WidgetStyle) -> String {
     let default = WidgetStyle::default();
     let mut fields = Vec::new();
-    if base.background != default.background {
-        fields.push(format!("background: {}", color(base.background)));
+    if style.background != default.background {
+        fields.push(format!("background: {}", color(style.background)));
     }
-    if base.border != default.border {
-        fields.push(format!("border: {}", color(base.border)));
+    if style.border != default.border {
+        fields.push(format!("border: {}", color(style.border)));
     }
-    if base.text != default.text {
-        fields.push(format!("text: {}", color(base.text)));
+    if style.text != default.text {
+        fields.push(format!("text: {}", color(style.text)));
     }
-    if base.radius != default.radius {
-        fields.push(format!("radius: {}", base.radius));
+    if style.radius != default.radius {
+        fields.push(format!("radius: {}", style.radius));
     }
-    if base.tint != default.tint {
+    if style.tint != default.tint {
         fields.push(format!(
             "tint: Some({})",
-            color(base.tint.unwrap_or(Color::TRANSPARENT))
+            color(style.tint.unwrap_or(Color::TRANSPARENT))
         ));
     }
-    if base.opacity != default.opacity {
-        fields.push(format!("opacity: {:?}f32", base.opacity));
+    if style.opacity != default.opacity {
+        fields.push(format!("opacity: {:?}f32", style.opacity));
     }
-    (!fields.is_empty()).then(|| {
-        format!(
-            "brul_gui::StyleSet::new(brul_gui::WidgetStyle {{ {} }})",
-            fields.join(", ")
-        )
-    })
+    if fields.is_empty() {
+        "brul_gui::WidgetStyle::default()".to_owned()
+    } else {
+        format!("brul_gui::WidgetStyle {{ {} }}", fields.join(", "))
+    }
 }
 
 fn text_style(style: TextStyle) -> Option<String> {
