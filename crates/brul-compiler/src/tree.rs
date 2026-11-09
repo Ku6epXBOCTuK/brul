@@ -1,4 +1,4 @@
-use brul_gui::{Direction, Widget};
+use brul_gui::{Direction, Widget, WidgetId};
 use brul_script::{Component, Value, eval};
 use brul_syntax::ast::{Expr, Position};
 use brul_syntax::error::Error;
@@ -7,41 +7,61 @@ use brul_syntax::style::Stylesheet;
 
 use crate::styles::{self, Resolved};
 
+#[derive(Debug, Clone)]
+pub struct Binding {
+    pub widget: WidgetId,
+    pub target: BindingTarget,
+}
+
+#[derive(Debug, Clone)]
+pub enum BindingTarget {
+    Text(Expr),
+    Checked(Expr),
+    Selected(Expr),
+    Disabled(Expr),
+    Visible(Expr),
+    Offset { x: Option<Expr>, y: Option<Expr> },
+}
+
+pub struct Built {
+    pub widget: Widget,
+    pub bindings: Vec<Binding>,
+}
+
 pub fn build_tree(
     element: &Element,
     stylesheet: &Stylesheet,
     theme: Option<&str>,
     component: &mut Component,
 ) -> Result<Widget, Error> {
-    let resolved = resolve(element, stylesheet, theme)?;
-    let parameters = parameters(element, component)?;
+    Ok(build_bound_tree(element, stylesheet, theme, component)?.widget)
+}
 
-    let widget = match element.name.as_str() {
-        "View" => container(
-            Direction::Column,
-            element,
-            stylesheet,
-            theme,
-            component,
-            resolved,
-        )?,
-        "Row" => container(
-            Direction::Row,
-            element,
-            stylesheet,
-            theme,
-            component,
-            resolved,
-        )?,
-        "Column" => container(
-            Direction::Column,
-            element,
-            stylesheet,
-            theme,
-            component,
-            resolved,
-        )?,
-        "Text" => text(element, component, resolved)?,
+pub fn build_bound_tree(
+    element: &Element,
+    stylesheet: &Stylesheet,
+    theme: Option<&str>,
+    component: &mut Component,
+) -> Result<Built, Error> {
+    let resolved = resolve(element, stylesheet, theme)?;
+
+    let (widget, bindings) = match element.name.as_str() {
+        "View" | "Row" | "Column" => {
+            let direction = if element.name == "Row" {
+                Direction::Row
+            } else {
+                Direction::Column
+            };
+            container(direction, element, stylesheet, theme, component, resolved)?
+        }
+        "Text" => {
+            let (widget, expression) = text(element, component, resolved)?;
+            let binding = Binding {
+                widget: widget.id(),
+                target: BindingTarget::Text(expression),
+            };
+            (widget, vec![binding])
+        }
         "Image" => {
             return Err(error_at(
                 element.position,
@@ -55,7 +75,10 @@ pub fn build_tree(
             ));
         }
     };
-    Ok(parameters.apply(widget))
+
+    let mut built = parameters(element, component, widget)?;
+    built.bindings.extend(bindings);
+    Ok(built)
 }
 
 fn resolve(
@@ -75,50 +98,58 @@ fn resolve(
         .map_err(|message| error_at(element.position, message))
 }
 
-#[derive(Default)]
-struct Parameters {
-    checked: Option<bool>,
-    selected: Option<bool>,
-    disabled: Option<bool>,
-    visible: Option<bool>,
-    x: Option<i32>,
-    y: Option<i32>,
-}
-
-impl Parameters {
-    fn apply(self, widget: Widget) -> Widget {
-        let mut widget = widget;
-        if let Some(value) = self.checked {
-            widget = widget.checked(value);
-        }
-        if let Some(value) = self.selected {
-            widget = widget.selected(value);
-        }
-        if let Some(value) = self.disabled {
-            widget = widget.disabled(value);
-        }
-        if let Some(value) = self.visible {
-            widget = widget.visible(value);
-        }
-        if self.x.is_some() || self.y.is_some() {
-            widget = widget.with_offset(self.x.unwrap_or(0), self.y.unwrap_or(0));
-        }
-        widget
-    }
-}
-
-fn parameters(element: &Element, component: &mut Component) -> Result<Parameters, Error> {
-    let mut parameters = Parameters::default();
+fn parameters(
+    element: &Element,
+    component: &mut Component,
+    widget: Widget,
+) -> Result<Built, Error> {
+    let mut widget = widget;
+    let id = widget.id();
+    let mut bindings = Vec::new();
+    let mut x_value = None;
+    let mut y_value = None;
+    let mut x = None;
+    let mut y = None;
     for arg in &element.args {
         match arg {
             Arg::Class(_) => {}
             Arg::Named { name, value } => match name.as_str() {
-                "checked" => parameters.checked = Some(boolean(component, value, name)?),
-                "selected" => parameters.selected = Some(boolean(component, value, name)?),
-                "disabled" => parameters.disabled = Some(boolean(component, value, name)?),
-                "visible" => parameters.visible = Some(boolean(component, value, name)?),
-                "x" => parameters.x = Some(integer(component, value, name)?),
-                "y" => parameters.y = Some(integer(component, value, name)?),
+                "checked" => {
+                    widget = widget.checked(boolean(component, value, name)?);
+                    bindings.push(Binding {
+                        widget: id,
+                        target: BindingTarget::Checked(value.clone()),
+                    });
+                }
+                "selected" => {
+                    widget = widget.selected(boolean(component, value, name)?);
+                    bindings.push(Binding {
+                        widget: id,
+                        target: BindingTarget::Selected(value.clone()),
+                    });
+                }
+                "disabled" => {
+                    widget = widget.disabled(boolean(component, value, name)?);
+                    bindings.push(Binding {
+                        widget: id,
+                        target: BindingTarget::Disabled(value.clone()),
+                    });
+                }
+                "visible" => {
+                    widget = widget.visible(boolean(component, value, name)?);
+                    bindings.push(Binding {
+                        widget: id,
+                        target: BindingTarget::Visible(value.clone()),
+                    });
+                }
+                "x" => {
+                    x_value = Some(integer(component, value, name)?);
+                    x = Some(value.clone());
+                }
+                "y" => {
+                    y_value = Some(integer(component, value, name)?);
+                    y = Some(value.clone());
+                }
                 _ => {
                     return Err(error_at(
                         value.position,
@@ -131,7 +162,14 @@ fn parameters(element: &Element, component: &mut Component) -> Result<Parameters
             }
         }
     }
-    Ok(parameters)
+    if x.is_some() || y.is_some() {
+        widget = widget.with_offset(x_value.unwrap_or(0), y_value.unwrap_or(0));
+        bindings.push(Binding {
+            widget: id,
+            target: BindingTarget::Offset { x, y },
+        });
+    }
+    Ok(Built { widget, bindings })
 }
 
 fn container(
@@ -141,12 +179,15 @@ fn container(
     theme: Option<&str>,
     component: &mut Component,
     resolved: Resolved,
-) -> Result<Widget, Error> {
+) -> Result<(Widget, Vec<Binding>), Error> {
     let mut children = Vec::with_capacity(element.block.items.len());
+    let mut bindings = Vec::new();
     for item in &element.block.items {
         match item {
             BlockItem::Element(child) => {
-                children.push(build_tree(child, stylesheet, theme, component)?);
+                let child = build_bound_tree(child, stylesheet, theme, component)?;
+                children.push(child.widget);
+                bindings.extend(child.bindings);
             }
             BlockItem::If(_) => {
                 return Err(error_at(element.position, "'if' is not supported yet"));
@@ -162,17 +203,25 @@ fn container(
             }
         }
     }
-    Ok(Widget::view(direction, children)
+    let widget = Widget::view(direction, children)
         .with_layout(resolved.layout)
-        .with_styles(resolved.styles))
+        .with_styles(resolved.styles);
+    Ok((widget, bindings))
 }
 
-fn text(element: &Element, component: &mut Component, resolved: Resolved) -> Result<Widget, Error> {
+fn text(
+    element: &Element,
+    component: &mut Component,
+    resolved: Resolved,
+) -> Result<(Widget, Expr), Error> {
     match element.block.items.as_slice() {
         [BlockItem::Expr(expression)] => match evaluate(component, expression)? {
-            Value::String(content) => Ok(Widget::styled_text(content, resolved.text)
-                .with_layout(resolved.layout)
-                .with_styles(resolved.styles)),
+            Value::String(content) => Ok((
+                Widget::styled_text(content, resolved.text)
+                    .with_layout(resolved.layout)
+                    .with_styles(resolved.styles),
+                expression.clone(),
+            )),
             other => Err(error_at(
                 expression.position,
                 format!("Text content must be a string, got {}", other.type_name()),

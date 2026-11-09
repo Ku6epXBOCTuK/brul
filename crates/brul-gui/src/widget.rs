@@ -247,6 +247,13 @@ impl Widget {
             WidgetData::Text { .. } | WidgetData::Image(_) => &[],
         }
     }
+
+    fn children_mut(&mut self) -> &mut [Self] {
+        match &mut self.data {
+            WidgetData::View { children, .. } => children,
+            WidgetData::Text { .. } | WidgetData::Image(_) => &mut [],
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -350,6 +357,7 @@ pub struct WidgetTree {
     pressed: Vec<WidgetId>,
     dirty: Vec<WidgetId>,
     full_dirty: bool,
+    layout_dirty: bool,
 }
 
 struct Geometry {
@@ -372,6 +380,7 @@ impl WidgetTree {
             pressed: Vec::new(),
             dirty: Vec::new(),
             full_dirty: true,
+            layout_dirty: true,
         }
     }
 
@@ -401,11 +410,27 @@ impl WidgetTree {
         });
         self.snapshot = None;
         self.full_dirty = true;
+        self.layout_dirty = false;
         self.dirty.clear();
         if changed {
             self.clear_interaction();
         }
         Ok(())
+    }
+
+    pub fn relayout(&mut self, engine: &mut TextEngine) -> Result<(), WidgetError> {
+        let Some((viewport, scale)) = self
+            .geometry
+            .as_ref()
+            .map(|geometry| (geometry.viewport, geometry.scale))
+        else {
+            return Ok(());
+        };
+        self.layout(engine, viewport, scale)
+    }
+
+    pub fn layout_dirty(&self) -> bool {
+        self.layout_dirty
     }
 
     pub fn snapshot(&mut self) -> Result<&WidgetSnapshot, WidgetError> {
@@ -456,6 +481,44 @@ impl WidgetTree {
         self.full_dirty = true;
         self.dirty.clear();
         true
+    }
+
+    pub fn set_text(&mut self, id: WidgetId, content: String) -> bool {
+        let Some(widget) = find_widget_mut(&mut self.root, id) else {
+            return false;
+        };
+        let WidgetData::Text {
+            content: current, ..
+        } = &mut widget.data
+        else {
+            return false;
+        };
+        if *current == content {
+            return false;
+        }
+        *current = content;
+        self.invalidate_layout();
+        true
+    }
+
+    pub fn set_offset(&mut self, id: WidgetId, x: i32, y: i32) -> bool {
+        let Some(widget) = find_widget_mut(&mut self.root, id) else {
+            return false;
+        };
+        let offset = Offset { x, y };
+        if widget.offset == Some(offset) {
+            return false;
+        }
+        widget.offset = Some(offset);
+        self.invalidate_layout();
+        true
+    }
+
+    fn invalidate_layout(&mut self) {
+        self.snapshot = None;
+        self.full_dirty = true;
+        self.layout_dirty = true;
+        self.dirty.clear();
     }
 
     pub fn toggle_checked(&mut self, id: WidgetId) -> Option<bool> {
@@ -647,6 +710,18 @@ fn collect_states(widget: &Widget, states: &mut HashMap<WidgetId, WidgetState>) 
     for child in widget.children() {
         collect_states(child, states);
     }
+}
+
+fn find_widget_mut(widget: &mut Widget, id: WidgetId) -> Option<&mut Widget> {
+    if widget.id == id {
+        return Some(widget);
+    }
+    for child in widget.children_mut() {
+        if let Some(found) = find_widget_mut(child, id) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 fn build_layout(

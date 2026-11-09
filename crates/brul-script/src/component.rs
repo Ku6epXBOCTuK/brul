@@ -12,12 +12,24 @@ struct Property {
     value: Signal<Value>,
 }
 
-#[derive(Default)]
 pub struct Component {
     environment: Environment,
     properties: Vec<Property>,
     functions: Vec<Function>,
     host: Option<Box<dyn Host>>,
+    revision: Signal<u64>,
+}
+
+impl Default for Component {
+    fn default() -> Self {
+        Self {
+            environment: Environment::default(),
+            properties: Vec::new(),
+            functions: Vec::new(),
+            host: None,
+            revision: Signal::new(0),
+        }
+    }
 }
 
 impl Component {
@@ -81,7 +93,9 @@ impl Component {
     }
 
     pub fn declare(&mut self, name: &str, value: Value, constant: bool) -> Result<(), Error> {
-        self.environment.declare(name, value, constant)
+        self.environment.declare(name, value, constant)?;
+        self.changed();
+        Ok(())
     }
 
     pub fn declare_property(&mut self, name: &str, value: Value) -> Result<(), Error> {
@@ -92,7 +106,12 @@ impl Component {
             name: name.to_owned(),
             value: Signal::new(value),
         });
+        self.changed();
         Ok(())
+    }
+
+    pub fn track(&self) {
+        let _ = self.revision.get();
     }
 
     pub fn read(&self, name: &str) -> Result<Value, Error> {
@@ -107,13 +126,20 @@ impl Component {
 
     pub fn assign(&mut self, name: &str, value: Value) -> Result<(), Error> {
         if self.environment.contains(name) {
-            return self.environment.assign(name, value);
+            self.environment.assign(name, value)?;
+            self.changed();
+            return Ok(());
         }
         if let Some(property) = self.property(name) {
             property.value.set(value);
+            self.changed();
             return Ok(());
         }
         Err(Error::Undefined(name.to_owned()))
+    }
+
+    fn changed(&self) {
+        self.revision.set(self.revision.get() + 1);
     }
 
     fn property(&self, name: &str) -> Option<&Property> {

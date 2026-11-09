@@ -11,6 +11,9 @@ workspace = true
 [dependencies]
 brul-compiler = { workspace = true }
 brul-gui = { workspace = true }
+brul-reactive = { workspace = true }
+brul-script = { workspace = true }
+brul-syntax = { workspace = true }
 
 [workspace]
 resolver = "3"

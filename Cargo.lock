@@ -197,6 +197,9 @@ version = "0.1.0"
 dependencies = [
  "brul-compiler",
  "brul-gui",
+ "brul-reactive",
+ "brul-script",
+ "brul-syntax",
 ]
 
 [[package]]

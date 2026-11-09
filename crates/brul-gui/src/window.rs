@@ -510,6 +510,11 @@ impl TreeApp {
     }
 
     fn render_frame(&mut self, window: &Arc<dyn Window>) -> Result<(), crate::WidgetError> {
+        if self.tree.borrow().layout_dirty()
+            && let Some(engine) = self.engine.as_mut()
+        {
+            self.tree.borrow_mut().relayout(engine)?;
+        }
         let (dirty, rebuild) = {
             let mut tree = self.tree.borrow_mut();
             (tree.take_dirty(), tree.snapshot_dirty())
