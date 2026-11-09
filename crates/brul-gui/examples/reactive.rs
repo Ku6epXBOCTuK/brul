@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         height: 200,
         header_height: 64,
     };
-    run_tree(config, tree, move |events| {
+    run_tree(config, tree, Vec::new(), move |events| {
         if events
             .iter()
             .any(|event| matches!(event, WidgetEvent::Click(_)))

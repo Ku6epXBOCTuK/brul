@@ -17,6 +17,7 @@ pub struct Component {
     properties: Vec<Property>,
     functions: Vec<Function>,
     host: Option<Box<dyn Host>>,
+    pending_every: Vec<(f64, String)>,
     revision: Signal<u64>,
 }
 
@@ -27,6 +28,7 @@ impl Default for Component {
             properties: Vec::new(),
             functions: Vec::new(),
             host: None,
+            pending_every: Vec::new(),
             revision: Signal::new(0),
         }
     }
@@ -51,8 +53,15 @@ impl Component {
     pub fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
         match &mut self.host {
             Some(host) => host.every(interval_ms, function),
-            None => Err(Error::UnknownFunction("every".to_owned())),
+            None => {
+                self.pending_every.push((interval_ms, function.to_owned()));
+                Ok(())
+            }
         }
+    }
+
+    pub fn take_every(&mut self) -> Vec<(f64, String)> {
+        std::mem::take(&mut self.pending_every)
     }
 
     pub fn define_function(&mut self, function: Function) -> Result<(), Error> {

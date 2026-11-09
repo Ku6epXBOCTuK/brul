@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use brul_compiler::{Binding, BindingTarget, Handler, HandlerEvent, Loaded};
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
@@ -48,6 +49,16 @@ impl Ui {
     ) -> Self {
         let mut component = component;
         let commands = Rc::new(RefCell::new(Vec::new()));
+        for (interval_ms, function) in component.take_every() {
+            if interval_ms.is_finite() && interval_ms > 0.0 {
+                commands.borrow_mut().push(window::WindowCommand::Every {
+                    interval: Duration::from_secs_f64(interval_ms / 1000.0),
+                    function,
+                });
+            } else {
+                eprintln!("every interval must be a positive number");
+            }
+        }
         component.set_host(CommandHost {
             commands: Rc::clone(&commands),
         });
@@ -72,6 +83,16 @@ impl Ui {
 
     pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<window::WindowCommand> {
         for event in events {
+            if let WidgetEvent::Timer(function) = event {
+                if let Err(error) = self
+                    .component
+                    .borrow_mut()
+                    .call_function(function, Vec::new())
+                {
+                    eprintln!("{error}");
+                }
+                continue;
+            }
             let Some((widget, target)) = handler_target(event) else {
                 continue;
             };
@@ -111,6 +132,7 @@ fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent
         WidgetEvent::PointerLeave(id) => Some((Some(*id), HandlerEvent::Leave)),
         WidgetEvent::Key(_) => Some((None, HandlerEvent::Key)),
         WidgetEvent::Drag(_) => None,
+        WidgetEvent::Timer(_) => None,
     }
 }
 
@@ -198,7 +220,8 @@ pub fn run(source: &str, theme: Option<&str>) -> Result<(), Box<dyn std::error::
         ..
     } = brul_compiler::load(source, theme)?;
     let mut ui = Ui::new(component, tree, bindings, handlers);
+    let initial = ui.dispatch(&[]);
     let tree = Rc::clone(&ui.tree);
-    window::run_tree(config, tree, move |events| ui.dispatch(events))?;
+    window::run_tree(config, tree, initial, move |events| ui.dispatch(events))?;
     Ok(())
 }

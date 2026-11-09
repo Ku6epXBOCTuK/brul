@@ -303,3 +303,29 @@ window Demo (title: "Demo") {
         "line 8, column 5: event 'click' is handled twice"
     );
 }
+
+#[test]
+fn every_registers_a_timer_command() {
+    let mut ui = build(
+        r#"
+<script>
+function refresh() { }
+every(1000, refresh);
+</script>
+
+<markup>
+window Demo (title: "Demo") {
+    Text { "timer" }
+}
+</markup>
+"#,
+    );
+
+    assert_eq!(
+        ui.dispatch(&[]),
+        vec![WindowCommand::Every {
+            interval: std::time::Duration::from_millis(1000),
+            function: "refresh".to_owned(),
+        }]
+    );
+}

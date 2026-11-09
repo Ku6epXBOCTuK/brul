@@ -4,6 +4,7 @@ use std::pin::pin;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
+use std::time::{Duration, Instant};
 
 use brul_reactive;
 use winit::application::ApplicationHandler;
@@ -150,22 +151,28 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     result.map_err(|error| WindowError::EventLoop(error.to_string()))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowCommand {
     Exit,
     Drag,
+    Every {
+        interval: Duration,
+        function: String,
+    },
 }
 
 pub fn run_tree(
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
+    initial: Vec<WindowCommand>,
     handler: impl FnMut(&[WidgetEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
-    run_tree_themed(config, move |_| Rc::clone(&tree), handler)
+    run_tree_themed(config, initial, move |_| Rc::clone(&tree), handler)
 }
 
 pub fn run_tree_themed(
     config: WindowConfig,
+    initial: Vec<WindowCommand>,
     mut build: impl FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>> + 'static,
     handler: impl FnMut(&[WidgetEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
@@ -175,7 +182,7 @@ pub fn run_tree_themed(
 
     let error = Rc::new(RefCell::new(None));
     let tree = build(ColorScheme::Dark);
-    let app = TreeApp {
+    let mut app = TreeApp {
         config,
         tree,
         build: Box::new(build),
@@ -185,7 +192,17 @@ pub fn run_tree_themed(
         engine: None,
         frame: None,
         error: Rc::clone(&error),
+        timers: Vec::new(),
     };
+    for command in initial {
+        if let WindowCommand::Every { interval, function } = command {
+            app.timers.push(Timer {
+                next: Instant::now() + interval,
+                interval,
+                function,
+            });
+        }
+    }
     let result = event_loop.run_app(app);
 
     if let Some(error) = error.borrow_mut().take() {
@@ -317,6 +334,12 @@ fn key_code(key: &Key) -> Option<String> {
     Some(named.to_owned())
 }
 
+struct Timer {
+    next: Instant,
+    interval: Duration,
+    function: String,
+}
+
 struct TreeApp {
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
@@ -327,6 +350,7 @@ struct TreeApp {
     engine: Option<TextEngine>,
     frame: Option<Frame>,
     error: Rc<RefCell<Option<WindowError>>>,
+    timers: Vec<Timer>,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -457,12 +481,33 @@ impl ApplicationHandler for TreeApp {
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &dyn ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         brul_reactive::flush();
         if self.tree.borrow().snapshot_dirty()
             && let Some(window) = &self.window
         {
             window.request_redraw();
+        }
+
+        let now = Instant::now();
+        let mut events = Vec::new();
+        for timer in &mut self.timers {
+            if timer.next <= now {
+                events.push(WidgetEvent::Timer(timer.function.clone()));
+                while timer.next <= now {
+                    timer.next += timer.interval;
+                }
+            }
+        }
+        if !events.is_empty()
+            && let Some(window) = self.window.clone()
+        {
+            self.dispatch_events(event_loop, &window, events);
+        }
+
+        match self.timers.iter().map(|timer| timer.next).min() {
+            Some(next) => event_loop.set_control_flow(ControlFlow::WaitUntil(next)),
+            None => event_loop.set_control_flow(ControlFlow::Wait),
         }
     }
 }
@@ -507,6 +552,11 @@ impl TreeApp {
                 WindowCommand::Drag => {
                     let _ = window.drag_window();
                 }
+                WindowCommand::Every { interval, function } => self.timers.push(Timer {
+                    next: Instant::now() + interval,
+                    interval,
+                    function,
+                }),
             }
         }
         brul_reactive::flush();

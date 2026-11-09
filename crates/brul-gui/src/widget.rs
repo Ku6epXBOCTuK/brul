@@ -303,6 +303,7 @@ pub enum WidgetEvent {
     Click(WidgetId),
     Drag(WidgetId),
     Key(String),
+    Timer(String),
 }
 
 #[derive(Clone, Debug, Default)]

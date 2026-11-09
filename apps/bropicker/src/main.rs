@@ -120,6 +120,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             height: 800,
             header_height: 72,
         },
+        Vec::new(),
         build,
         handler,
     )?;
