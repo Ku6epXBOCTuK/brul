@@ -5,7 +5,7 @@ use std::rc::Rc;
 use brul::{Error, Host, Ui, Value};
 use brul_compiler::load_file_with;
 use brul_gui::window::WindowCommand;
-use brul_gui::{Size, TextEngine, WidgetEvent};
+use brul_gui::{Color, Size, TextEngine, WidgetEvent};
 
 struct LaunchRecorder {
     calls: Rc<RefCell<Vec<f64>>>,
@@ -144,7 +144,7 @@ fn clicking_a_row_selects_it_and_launches() {
     let mut rows: Vec<_> = snapshot
         .nodes
         .iter()
-        .filter(|node| node.style.radius == 14)
+        .filter(|node| node.style.radius == 14 && node.height == 72)
         .collect();
     rows.sort_by_key(|node| node.y);
     let row = rows.get(1).expect("two browser rows");
@@ -173,4 +173,78 @@ fn escape_closes_the_picker() {
     let commands = ui.dispatch(&[WidgetEvent::Key("Escape".to_string())]);
 
     assert_eq!(commands, vec![WindowCommand::Exit]);
+}
+
+#[test]
+fn light_theme_paints_the_light_palette() {
+    let dark = load_file_with(picker(), None, &seeds(0.0)).expect("picker loads");
+    let light = load_file_with(picker(), Some("light"), &seeds(0.0)).expect("picker loads");
+
+    let background = |loaded| {
+        let ui = Ui::new(loaded);
+        let mut engine = TextEngine::new();
+        ui.tree
+            .borrow_mut()
+            .layout(
+                &mut engine,
+                Size {
+                    width: 488,
+                    height: 800,
+                },
+                1.0,
+            )
+            .expect("layout");
+        ui.tree
+            .borrow_mut()
+            .snapshot()
+            .expect("snapshot")
+            .nodes
+            .iter()
+            .find(|node| node.style.radius == 22)
+            .expect("root node")
+            .style
+            .background
+    };
+
+    assert_eq!(background(dark), Color::rgb(20, 23, 29));
+    assert_eq!(background(light), Color::rgb(244, 246, 249));
+}
+
+#[test]
+fn rows_and_checkboxes_show_their_states() {
+    let loaded = load_file_with(picker(), None, &seeds(1.0)).expect("picker loads");
+    let ui = Ui::new(loaded);
+    let mut engine = TextEngine::new();
+    ui.tree
+        .borrow_mut()
+        .layout(
+            &mut engine,
+            Size {
+                width: 488,
+                height: 800,
+            },
+            1.0,
+        )
+        .expect("layout");
+    let snapshot = ui.tree.borrow_mut().snapshot().expect("snapshot").clone();
+
+    let mut rows: Vec<_> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.style.radius == 14 && node.height == 72)
+        .collect();
+    rows.sort_by_key(|node| node.y);
+    assert_eq!(rows[0].style.background, Color::rgb(35, 40, 49));
+    assert_eq!(rows[0].style.border, Color::rgb(51, 58, 70));
+    assert_eq!(rows[1].style.background, Color::rgb(45, 58, 78));
+    assert_eq!(rows[1].style.border, Color::rgb(96, 165, 250));
+
+    let checkbox: Vec<_> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.style.radius == 4)
+        .collect();
+    assert_eq!(checkbox.len(), 2);
+    assert_eq!(checkbox[0].style.background, Color::rgb(96, 165, 250));
+    assert_eq!(checkbox[1].style.background, Color::rgb(35, 40, 49));
 }

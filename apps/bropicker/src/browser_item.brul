@@ -30,33 +30,62 @@
 </markup>
 
 <style>
+    theme dark {
+        accent: #60a5fa;
+        accent-text: #0a121e;
+        item: #232831;
+        hover: #2b313c;
+        selected: #2d3a4e;
+        border: #333a46;
+        text: #f0f3f8;
+        muted: #98a2b3;
+    }
+    theme light {
+        accent: #2563eb;
+        accent-text: #ffffff;
+        item: #eef1f6;
+        hover: #e6ebf2;
+        selected: #dbe8fc;
+        border: #d6dce5;
+        text: #171c24;
+        muted: #647080;
+    }
     .item {
-        padding: 12px;
+        width: 100%;
+        height: 72px;
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 10px;
+        padding-bottom: 10px;
         spacing: 12px;
         align-items: center;
-        background: #232831;
-        border: 1px #333a46;
+        background: theme.item;
+        border: 1px theme.border;
         radius: 14px;
     }
-    .item:hover { background: #2b313c; }
-    .item:selected { background: #2d3a4e; border-color: #60a5fa; }
+    .item:hover { background: theme.hover; }
+    .item:pressed { background: theme.selected; border-color: theme.accent; }
+    .item:selected { background: theme.selected; border-color: theme.accent; }
     .icon-text {
         width: 44px;
         height: 44px;
-        color: #0a121e;
+        color: theme.accent-text;
         font-size: 22px;
         font-weight: 600;
-        background: #60a5fa;
+        background: theme.accent;
         radius: 12px;
         text-align: center;
     }
-    .details { spacing: 2px; }
-    .name { color: #f0f3f8; font-size: 15px; font-weight: 600; }
-    .path { color: #98a2b3; font-size: 12px; }
+    .details { stretch: 1; spacing: 2px; }
+    .name { color: theme.text; font-size: 15px; font-weight: 600; }
+    .path { color: theme.muted; font-size: 12px; }
     .badge {
-        padding: 3px;
-        color: #0a121e;
-        background: #60a5fa;
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 3px;
+        padding-bottom: 3px;
+        color: theme.accent-text;
+        background: theme.accent;
         radius: 8px;
         font-size: 11px;
         font-weight: 600;

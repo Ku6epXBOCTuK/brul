@@ -54,16 +54,50 @@
 </markup>
 
 <style>
+    theme dark {
+        background: #14171d;
+        surface: #1c2028;
+        text: #f0f3f8;
+        muted: #98a2b3;
+    }
+    theme light {
+        background: #f4f6f9;
+        surface: #ffffff;
+        text: #171c24;
+        muted: #647080;
+    }
     .root {
         width: 100%;
         height: 100%;
         padding: 16px;
         spacing: 12px;
-        background: #14171d;
+        background: theme.background;
+        radius: 22px;
     }
-    .header { padding: 8px; spacing: 2px; }
-    .text { color: #f0f3f8; font-size: 16px; font-weight: 600; }
-    .muted { color: #98a2b3; font-size: 12px; }
-    .list { spacing: 8px; }
-    .footer { spacing: 24px; padding: 8px; align-items: center; }
+    .header {
+        width: 100%;
+        height: 56px;
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 2px;
+        background: theme.surface;
+        radius: 14px;
+    }
+    .text { color: theme.text; font-size: 16px; font-weight: 600; }
+    .muted { color: theme.muted; font-size: 12px; }
+    .list { width: 100%; stretch: 1; spacing: 8px; }
+    .footer {
+        width: 100%;
+        height: 44px;
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 24px;
+        align-items: center;
+        background: theme.surface;
+        radius: 12px;
+    }
 </style>
