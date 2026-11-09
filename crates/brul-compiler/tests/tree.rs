@@ -273,7 +273,7 @@ fn if_keeps_the_taken_branch() {
     );
     let widget =
         build_tree(&element, &empty_stylesheet(), None, &mut Component::new()).expect("if");
-    assert_eq!(snapshot(widget).nodes.len(), 2);
+    assert_eq!(snapshot(widget).nodes.len(), 3);
 }
 
 #[test]
@@ -290,7 +290,7 @@ fn if_without_a_taken_branch_adds_no_children() {
     );
     let widget =
         build_tree(&element, &empty_stylesheet(), None, &mut Component::new()).expect("if");
-    assert_eq!(snapshot(widget).nodes.len(), 1);
+    assert_eq!(snapshot(widget).nodes.len(), 2);
 }
 
 #[test]
@@ -311,7 +311,7 @@ fn nested_if_inside_else_picks_its_branch() {
     );
     let widget =
         build_tree(&element, &empty_stylesheet(), None, &mut Component::new()).expect("if");
-    assert_eq!(snapshot(widget).nodes.len(), 3);
+    assert_eq!(snapshot(widget).nodes.len(), 5);
 }
 
 #[test]
@@ -344,7 +344,7 @@ fn each_builds_a_row_per_item() {
     );
     let mut component = component(r#"let browsers = [{ name: "A" }, { name: "B" }];"#);
     let widget = build_tree(&element, &empty_stylesheet(), None, &mut component).expect("each");
-    assert_eq!(snapshot(widget).nodes.len(), 3);
+    assert_eq!(snapshot(widget).nodes.len(), 4);
 }
 
 #[test]
@@ -360,7 +360,7 @@ fn each_binds_item_and_index() {
     );
     let mut component = component(r#"let browsers = [{ name: "A" }, { name: "B" }];"#);
     let widget = build_tree(&element, &empty_stylesheet(), None, &mut component).expect("each");
-    assert_eq!(snapshot(widget).nodes.len(), 3);
+    assert_eq!(snapshot(widget).nodes.len(), 4);
 }
 
 #[test]
@@ -376,7 +376,7 @@ fn each_key_is_evaluated_in_row_scope() {
     );
     let mut component = component(r#"let browsers = [{ name: "A" }];"#);
     let widget = build_tree(&element, &empty_stylesheet(), None, &mut component).expect("each");
-    assert_eq!(snapshot(widget).nodes.len(), 2);
+    assert_eq!(snapshot(widget).nodes.len(), 3);
 }
 
 #[test]

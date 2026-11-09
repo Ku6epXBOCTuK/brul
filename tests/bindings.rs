@@ -1,6 +1,6 @@
 use brul::Ui;
 use brul_compiler::load;
-use brul_gui::{Size, TextEngine, WidgetKind};
+use brul_gui::{Size, TextEngine, WidgetId, WidgetKind};
 use brul_script::Value;
 
 const APP: &str = r#"
@@ -21,15 +21,7 @@ window Demo (title: "Demo") {
 
 fn build() -> Ui {
     let loaded = load(APP, None).expect("app loads");
-    Ui::new(
-        loaded.component,
-        loaded.tree,
-        loaded.bindings,
-        loaded.handlers,
-        loaded.root,
-        loaded.stylesheet,
-        loaded.theme,
-    )
+    Ui::new(loaded)
 }
 
 fn layout(ui: &Ui) -> Size {
@@ -111,15 +103,7 @@ window Demo (title: "Demo") {
 </markup>
 "#;
     let loaded = load(source, None).expect("app loads");
-    let ui = Ui::new(
-        loaded.component,
-        loaded.tree,
-        loaded.bindings,
-        loaded.handlers,
-        loaded.root,
-        loaded.stylesheet,
-        loaded.theme,
-    );
+    let ui = Ui::new(loaded);
     layout(&ui);
 
     ui.component
@@ -169,16 +153,8 @@ window Demo (title: "Demo") {
 </markup>
 "#;
     let loaded = load(source, None).expect("app loads");
-    let mut ui = Ui::new(
-        loaded.component,
-        loaded.tree,
-        loaded.bindings,
-        loaded.handlers,
-        loaded.root,
-        loaded.stylesheet,
-        loaded.theme,
-    );
-    assert_eq!(node_count(&ui), 3);
+    let mut ui = Ui::new(loaded);
+    assert_eq!(node_count(&ui), 4);
 
     ui.component
         .borrow_mut()
@@ -186,7 +162,7 @@ window Demo (title: "Demo") {
         .expect("assign");
     let _ = ui.dispatch(&[]);
 
-    assert_eq!(node_count(&ui), 2);
+    assert_eq!(node_count(&ui), 3);
 }
 
 #[test]
@@ -207,16 +183,8 @@ window Demo (title: "Demo") {
 </markup>
 "#;
     let loaded = load(source, None).expect("app loads");
-    let mut ui = Ui::new(
-        loaded.component,
-        loaded.tree,
-        loaded.bindings,
-        loaded.handlers,
-        loaded.root,
-        loaded.stylesheet,
-        loaded.theme,
-    );
-    assert_eq!(node_count(&ui), 3);
+    let mut ui = Ui::new(loaded);
+    assert_eq!(node_count(&ui), 4);
 
     ui.component
         .borrow_mut()
@@ -231,5 +199,54 @@ window Demo (title: "Demo") {
         .expect("assign");
     let _ = ui.dispatch(&[]);
 
-    assert_eq!(node_count(&ui), 4);
+    assert_eq!(node_count(&ui), 5);
+}
+
+fn text_ids(ui: &Ui) -> Vec<WidgetId> {
+    layout(ui);
+    let mut tree = ui.tree.borrow_mut();
+    let snapshot = tree.snapshot().cloned().expect("snapshot");
+    snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.kind == WidgetKind::Text)
+        .map(|node| node.id)
+        .collect()
+}
+
+#[test]
+fn if_change_keeps_widgets_outside_the_branch() {
+    let source = r#"
+<script>
+let show = true;
+</script>
+
+<markup>
+window Demo (title: "Demo") {
+    Column {
+        Text { "stay" }
+        if (show) {
+            Text { "a" }
+        } else {
+            Text { "b" }
+        }
+    }
+}
+</markup>
+"#;
+    let loaded = load(source, None).expect("app loads");
+    let mut ui = Ui::new(loaded);
+    let before = text_ids(&ui);
+    assert_eq!(before.len(), 2);
+
+    ui.component
+        .borrow_mut()
+        .assign("show", Value::Bool(false))
+        .expect("assign");
+    let _ = ui.dispatch(&[]);
+
+    let after = text_ids(&ui);
+    assert_eq!(after.len(), 2);
+    assert!(after.contains(&before[0]));
+    assert!(!after.contains(&before[1]));
 }

@@ -26,15 +26,7 @@ window Demo (title: "Demo") {
 
 fn build(source: &str) -> Ui {
     let loaded = load(source, None).expect("app loads");
-    Ui::new(
-        loaded.component,
-        loaded.tree,
-        loaded.bindings,
-        loaded.handlers,
-        loaded.root,
-        loaded.stylesheet,
-        loaded.theme,
-    )
+    Ui::new(loaded)
 }
 
 fn text_ids(ui: &Ui) -> Vec<WidgetId> {
@@ -357,15 +349,7 @@ window Demo (title: "Demo") {
 </markup>
 "#;
     let loaded = load(source, Some("light")).expect("app loads");
-    let mut ui = Ui::new(
-        loaded.component,
-        loaded.tree,
-        loaded.bindings,
-        loaded.handlers,
-        loaded.root,
-        loaded.stylesheet,
-        loaded.theme,
-    );
+    let mut ui = Ui::new(loaded);
 
     let background = |ui: &Ui| {
         let mut engine = TextEngine::new();

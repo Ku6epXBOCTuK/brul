@@ -1,4 +1,4 @@
-use brul_gui::{Direction, Widget, WidgetId};
+use brul_gui::{Direction, LayoutStyle, Widget, WidgetId};
 use brul_script::{Component, Value, Variable, eval};
 use brul_syntax::ast::{Expr, Position};
 use brul_syntax::error::Error;
@@ -69,11 +69,29 @@ pub enum BindingTarget {
     Offset { x: Option<Expr>, y: Option<Expr> },
 }
 
+#[derive(Debug, Clone)]
+pub struct Structure {
+    pub parent: WidgetId,
+    pub direction: Direction,
+    pub spacing: u32,
+    pub kind: StructureKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum StructureKind {
+    If { block: IfBlock, last: bool },
+    Each { block: EachBlock, last: Vec<Value> },
+}
+
 pub struct Built {
     pub widget: Widget,
     pub bindings: Vec<Binding>,
     pub handlers: Vec<Handler>,
+    pub structures: Vec<Structure>,
 }
+
+type Parts = (Widget, Vec<Binding>, Vec<Handler>, Vec<Structure>);
+type Children = (Vec<Widget>, Vec<Binding>, Vec<Handler>, Vec<Structure>);
 
 pub fn build_tree(
     element: &Element,
@@ -92,7 +110,7 @@ pub fn build_bound_tree(
 ) -> Result<Built, Error> {
     let resolved = resolve(element, stylesheet, theme)?;
 
-    let (widget, bindings, handlers) = match element.name.as_str() {
+    let (widget, bindings, handlers, structures) = match element.name.as_str() {
         "View" | "Row" | "Column" => {
             let direction = if element.name == "Row" {
                 Direction::Row
@@ -108,7 +126,7 @@ pub fn build_bound_tree(
                 target: BindingTarget::Text(expression),
                 scopes: component.build_scopes(),
             };
-            (widget, vec![binding], Vec::new())
+            (widget, vec![binding], Vec::new(), Vec::new())
         }
         "Image" => {
             return Err(error_at(
@@ -127,6 +145,7 @@ pub fn build_bound_tree(
     let mut built = parameters(element, component, widget)?;
     built.bindings.extend(bindings);
     built.handlers.extend(handlers);
+    built.structures.extend(structures);
     Ok(built)
 }
 
@@ -266,6 +285,7 @@ fn parameters(
         widget,
         bindings,
         handlers,
+        structures: Vec::new(),
     })
 }
 
@@ -276,26 +296,30 @@ fn container(
     theme: Option<&str>,
     component: &mut Component,
     resolved: Resolved,
-) -> Result<(Widget, Vec<Binding>, Vec<Handler>), Error> {
+) -> Result<Parts, Error> {
     let built = build_items(
         &element.block.items,
         stylesheet,
         theme,
         component,
         element.position,
+        direction,
+        resolved.layout.spacing,
     )?;
     let mut children = Vec::with_capacity(built.len());
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
+    let mut structures = Vec::new();
     for child in built {
         children.push(child.widget);
         bindings.extend(child.bindings);
         handlers.extend(child.handlers);
+        structures.extend(child.structures);
     }
     let widget = Widget::view(direction, children)
         .with_layout(resolved.layout)
         .with_styles(resolved.styles);
-    Ok((widget, bindings, handlers))
+    Ok((widget, bindings, handlers, structures))
 }
 
 fn build_items(
@@ -304,6 +328,8 @@ fn build_items(
     theme: Option<&str>,
     component: &mut Component,
     position: Position,
+    direction: Direction,
+    spacing: u32,
 ) -> Result<Vec<Built>, Error> {
     let mut built = Vec::new();
     for item in items {
@@ -312,10 +338,34 @@ fn build_items(
                 built.push(build_bound_tree(child, stylesheet, theme, component)?);
             }
             BlockItem::If(block) => {
-                built.extend(build_if(block, stylesheet, theme, component, position)?);
+                let (mut node, last) = build_if(
+                    block, stylesheet, theme, component, position, direction, spacing,
+                )?;
+                node.structures.push(Structure {
+                    parent: node.widget.id(),
+                    direction,
+                    spacing,
+                    kind: StructureKind::If {
+                        block: block.clone(),
+                        last,
+                    },
+                });
+                built.push(node);
             }
             BlockItem::Each(block) => {
-                built.extend(build_each(block, stylesheet, theme, component, position)?);
+                let (mut node, last) = build_each(
+                    block, stylesheet, theme, component, position, direction, spacing,
+                )?;
+                node.structures.push(Structure {
+                    parent: node.widget.id(),
+                    direction,
+                    spacing,
+                    kind: StructureKind::Each {
+                        block: block.clone(),
+                        last,
+                    },
+                });
+                built.push(node);
             }
             BlockItem::Expr(expression) => {
                 return Err(error_at(
@@ -334,7 +384,9 @@ fn build_if(
     theme: Option<&str>,
     component: &mut Component,
     position: Position,
-) -> Result<Vec<Built>, Error> {
+    direction: Direction,
+    spacing: u32,
+) -> Result<(Built, bool), Error> {
     let condition = match evaluate(component, &block.condition)? {
         Value::Bool(condition) => condition,
         other => {
@@ -349,36 +401,46 @@ fn build_if(
     } else {
         block.else_block.as_ref()
     };
-    match branch {
-        Some(branch) => build_items(&branch.items, stylesheet, theme, component, position),
-        None => Ok(Vec::new()),
-    }
+    let (children, bindings, handlers, structures) = match branch {
+        Some(branch) => flatten(build_items(
+            &branch.items,
+            stylesheet,
+            theme,
+            component,
+            position,
+            direction,
+            spacing,
+        )?),
+        None => (Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+    };
+    let mut wrapper = Widget::view(direction, Vec::new()).with_layout(LayoutStyle {
+        spacing,
+        ..Default::default()
+    });
+    wrapper.set_children(children);
+    Ok((
+        Built {
+            widget: wrapper,
+            bindings,
+            handlers,
+            structures,
+        },
+        condition,
+    ))
 }
 
-pub fn watches(element: &Element) -> Vec<Expr> {
-    let mut found = Vec::new();
-    collect_watches(&element.block.items, &mut found);
-    found
-}
-
-fn collect_watches(items: &[BlockItem], found: &mut Vec<Expr>) {
-    for item in items {
-        match item {
-            BlockItem::Element(child) => collect_watches(&child.block.items, found),
-            BlockItem::If(block) => {
-                found.push(block.condition.clone());
-                collect_watches(&block.then_block.items, found);
-                if let Some(otherwise) = &block.else_block {
-                    collect_watches(&otherwise.items, found);
-                }
-            }
-            BlockItem::Each(block) => {
-                found.push(block.collection.clone());
-                collect_watches(&block.block.items, found);
-            }
-            BlockItem::Expr(_) => {}
-        }
+fn flatten(built: Vec<Built>) -> Children {
+    let mut children = Vec::with_capacity(built.len());
+    let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
+    let mut structures = Vec::new();
+    for child in built {
+        children.push(child.widget);
+        bindings.extend(child.bindings);
+        handlers.extend(child.handlers);
+        structures.extend(child.structures);
     }
+    (children, bindings, handlers, structures)
 }
 
 fn build_each(
@@ -387,7 +449,9 @@ fn build_each(
     theme: Option<&str>,
     component: &mut Component,
     position: Position,
-) -> Result<Vec<Built>, Error> {
+    direction: Direction,
+    spacing: u32,
+) -> Result<(Built, Vec<Value>), Error> {
     let items = match evaluate(component, &block.collection)? {
         Value::Array(items) => items,
         other => {
@@ -397,7 +461,8 @@ fn build_each(
             ));
         }
     };
-    let mut built = Vec::new();
+    let last = items.clone();
+    let mut all = Vec::new();
     for (index, item) in items.into_iter().enumerate() {
         let mut variables = vec![Variable {
             name: block.item.clone(),
@@ -412,14 +477,78 @@ fn build_each(
         component.push_build_scope(&variables);
         let row = match &block.key {
             Some(key) => evaluate(component, key).and_then(|_| {
-                build_items(&block.block.items, stylesheet, theme, component, position)
+                build_items(
+                    &block.block.items,
+                    stylesheet,
+                    theme,
+                    component,
+                    position,
+                    direction,
+                    spacing,
+                )
             }),
-            None => build_items(&block.block.items, stylesheet, theme, component, position),
+            None => build_items(
+                &block.block.items,
+                stylesheet,
+                theme,
+                component,
+                position,
+                direction,
+                spacing,
+            ),
         };
         component.pop_build_scope();
-        built.extend(row?);
+        all.extend(row?);
     }
-    Ok(built)
+    let (children, bindings, handlers, structures) = flatten(all);
+    let mut wrapper = Widget::view(direction, Vec::new()).with_layout(LayoutStyle {
+        spacing,
+        ..Default::default()
+    });
+    wrapper.set_children(children);
+    Ok((
+        Built {
+            widget: wrapper,
+            bindings,
+            handlers,
+            structures,
+        },
+        last,
+    ))
+}
+
+pub fn rebuild_structure(
+    structure: &Structure,
+    stylesheet: &Stylesheet,
+    theme: Option<&str>,
+    component: &mut Component,
+) -> Result<(Built, Value), Error> {
+    match &structure.kind {
+        StructureKind::If { block, .. } => {
+            let (built, condition) = build_if(
+                block,
+                stylesheet,
+                theme,
+                component,
+                block.condition.position,
+                structure.direction,
+                structure.spacing,
+            )?;
+            Ok((built, Value::Bool(condition)))
+        }
+        StructureKind::Each { block, .. } => {
+            let (built, items) = build_each(
+                block,
+                stylesheet,
+                theme,
+                component,
+                block.collection.position,
+                structure.direction,
+                structure.spacing,
+            )?;
+            Ok((built, Value::Array(items)))
+        }
+    }
 }
 
 fn text(

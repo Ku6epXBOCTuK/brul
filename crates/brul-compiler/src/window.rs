@@ -10,11 +10,12 @@ use brul_syntax::style::{self, Stylesheet};
 use brul_syntax::uses::{self, Use};
 
 use crate::build_bound_tree;
-use crate::tree::{Binding, Handler, HandlerEvent, script_error};
+use crate::tree::{Binding, Handler, HandlerEvent, Structure, script_error};
 
 pub struct Loaded {
     pub config: WindowConfig,
     pub tree: Widget,
+    pub structures: Vec<Structure>,
     pub bindings: Vec<Binding>,
     pub handlers: Vec<Handler>,
     pub component: Component,
@@ -71,6 +72,7 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
     Ok(Loaded {
         config,
         tree: built.widget,
+        structures: built.structures,
         bindings: built.bindings,
         handlers: built.handlers,
         component,

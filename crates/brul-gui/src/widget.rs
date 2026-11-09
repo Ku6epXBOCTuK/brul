@@ -161,6 +161,39 @@ impl Widget {
         })
     }
 
+    pub fn set_children(&mut self, children: Vec<Self>) {
+        if let WidgetData::View {
+            children: current, ..
+        } = &mut self.data
+        {
+            *current = children;
+        }
+    }
+
+    pub fn into_children(self) -> Vec<Self> {
+        let Widget {
+            id,
+            data,
+            layout,
+            styles,
+            state,
+            offset,
+            draggable,
+        } = self;
+        match data {
+            WidgetData::View { children, .. } => children,
+            data => vec![Widget {
+                id,
+                data,
+                layout,
+                styles,
+                state,
+                offset,
+                draggable,
+            }],
+        }
+    }
+
     pub fn row(children: Vec<Self>) -> Self {
         Self::view(Direction::Row, children)
     }
@@ -395,9 +428,57 @@ impl WidgetTree {
     }
 
     pub fn replace_root(&mut self, root: Widget) {
-        let mut states = HashMap::new();
-        collect_states(&root, &mut states);
         self.root = root;
+        self.refresh();
+    }
+
+    pub fn replace_children(
+        &mut self,
+        parent: WidgetId,
+        start: usize,
+        count: usize,
+        children: Vec<Widget>,
+    ) -> bool {
+        let Some(widget) = find_widget_mut(&mut self.root, parent) else {
+            return false;
+        };
+        let WidgetData::View {
+            children: current, ..
+        } = &mut widget.data
+        else {
+            return false;
+        };
+        if start > current.len() || count > current.len() - start {
+            return false;
+        }
+        current.splice(start..start + count, children);
+        self.refresh();
+        true
+    }
+
+    pub fn replace_all_children(&mut self, parent: WidgetId, children: Vec<Widget>) -> bool {
+        let count = {
+            let Some(widget) = find_widget_mut(&mut self.root, parent) else {
+                return false;
+            };
+            let WidgetData::View { children, .. } = &widget.data else {
+                return false;
+            };
+            children.len()
+        };
+        self.replace_children(parent, 0, count, children)
+    }
+
+    pub fn contains(&self, id: WidgetId) -> bool {
+        fn contains(widget: &Widget, id: WidgetId) -> bool {
+            widget.id == id || widget.children().iter().any(|child| contains(child, id))
+        }
+        contains(&self.root, id)
+    }
+
+    fn refresh(&mut self) {
+        let mut states = HashMap::new();
+        collect_states(&self.root, &mut states);
         self.states = states;
         self.geometry = None;
         self.snapshot = None;

@@ -19,6 +19,35 @@ fn style(background: Color) -> WidgetStyle {
 }
 
 #[test]
+fn replacing_children_keeps_the_other_widgets() {
+    let first = Widget::text("a").with_layout(fixed(40, 20));
+    let first_id = first.id();
+    let second = Widget::text("b").with_layout(fixed(40, 20));
+    let second_id = second.id();
+    let root = Widget::row(vec![first, second]).with_layout(fixed(100, 40));
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+
+    let replacement = Widget::text("c").with_layout(fixed(40, 20));
+    assert!(tree.replace_children(root_id, 0, 1, vec![replacement]));
+    assert!(!tree.replace_children(second_id, 0, 0, Vec::new()));
+
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 100,
+            height: 100,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let snapshot = tree.snapshot().cloned().expect("snapshot");
+    assert!(snapshot.nodes.iter().any(|node| node.id == second_id));
+    assert!(!snapshot.nodes.iter().any(|node| node.id == first_id));
+}
+
+#[test]
 fn draggable_widget_reports_a_drag_on_press() {
     let text = Widget::text("drag")
         .with_layout(fixed(40, 20))

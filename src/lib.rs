@@ -5,9 +5,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use brul_compiler::{
-    Binding, BindingTarget, Handler, HandlerEvent, Loaded, build_bound_tree, watches,
+    Binding, BindingTarget, Handler, HandlerEvent, Loaded, Structure, StructureKind,
+    build_bound_tree, rebuild_structure,
 };
-use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
+use brul_gui::{WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Error, Host, Value, eval};
 use brul_syntax::ast::Expr;
@@ -20,10 +21,11 @@ pub struct Ui {
     handlers: Vec<Handler>,
     window_handlers: Vec<Handler>,
     commands: Rc<RefCell<Vec<window::WindowCommand>>>,
+    bindings: Vec<Binding>,
+    structures: Vec<Structure>,
     root: Element,
     stylesheet: Stylesheet,
     theme: Option<String>,
-    watchers: Vec<(Expr, Value)>,
     scope: EffectScope,
 }
 
@@ -69,15 +71,18 @@ impl Host for CommandHost {
 }
 
 impl Ui {
-    pub fn new(
-        component: Component,
-        widget: Widget,
-        bindings: Vec<Binding>,
-        handlers: Vec<Handler>,
-        root: Element,
-        stylesheet: Stylesheet,
-        theme: Option<String>,
-    ) -> Self {
+    pub fn new(loaded: Loaded) -> Self {
+        let Loaded {
+            component,
+            tree: widget,
+            bindings,
+            handlers,
+            structures,
+            root,
+            stylesheet,
+            theme,
+            ..
+        } = loaded;
         let mut component = component;
         let commands = Rc::new(RefCell::new(Vec::new()));
         for (interval_ms, function) in component.take_every() {
@@ -100,41 +105,32 @@ impl Ui {
             .filter(|handler| handler.widget.is_none())
             .cloned()
             .collect();
-        let mut ui = Self {
+        let ui = Self {
             component,
             tree,
             handlers,
             window_handlers,
             commands,
+            bindings,
+            structures,
             root,
             stylesheet,
             theme,
-            watchers: Vec::new(),
             scope: EffectScope::new(),
         };
-        ui.bind(bindings);
-        ui.reset_watchers();
+        ui.bind(&ui.bindings);
         ui
     }
 
-    fn bind(&self, bindings: Vec<Binding>) {
+    fn bind(&self, bindings: &[Binding]) {
         for binding in bindings {
+            let binding = binding.clone();
             let component = Rc::clone(&self.component);
             let tree = Rc::clone(&self.tree);
             self.scope.run(|| {
                 Effect::new(move || apply(&binding, &component, &tree));
             });
         }
-    }
-
-    fn reset_watchers(&mut self) {
-        self.watchers = watches(&self.root)
-            .into_iter()
-            .filter_map(|expression| {
-                let value = evaluate(&self.component, &expression)?;
-                Some((expression, value))
-            })
-            .collect();
     }
 
     fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
@@ -151,9 +147,10 @@ impl Ui {
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
         self.handlers = handlers;
+        self.bindings = built.bindings;
+        self.structures = built.structures;
         self.scope = EffectScope::new();
-        self.bind(built.bindings);
-        self.reset_watchers();
+        self.bind(&self.bindings);
         Ok(())
     }
 
@@ -167,17 +164,78 @@ impl Ui {
     }
 
     fn poll(&mut self) {
+        let structures = std::mem::take(&mut self.structures);
+        let mut kept = Vec::with_capacity(structures.len());
+        let mut bindings = Vec::new();
+        let mut handlers = Vec::new();
         let mut changed = false;
-        for (expression, last) in &mut self.watchers {
-            if let Some(value) = evaluate(&self.component, expression)
-                && value != *last
-            {
-                *last = value;
-                changed = true;
+        for mut structure in structures {
+            if !self.tree.borrow().contains(structure.parent) {
+                continue;
+            }
+            let differs = match &structure.kind {
+                StructureKind::If { block, last } => {
+                    match evaluate(&self.component, &block.condition) {
+                        Some(Value::Bool(value)) => value != *last,
+                        _ => false,
+                    }
+                }
+                StructureKind::Each { block, last } => {
+                    match evaluate(&self.component, &block.collection) {
+                        Some(Value::Array(items)) => items != *last,
+                        _ => false,
+                    }
+                }
+            };
+            if !differs {
+                kept.push(structure);
+                continue;
+            }
+            let built = {
+                let mut component = self.component.borrow_mut();
+                rebuild_structure(
+                    &structure,
+                    &self.stylesheet,
+                    self.theme.as_deref(),
+                    &mut component,
+                )
+            };
+            match built {
+                Ok((built, last)) => {
+                    let children = built.widget.into_children();
+                    self.tree
+                        .borrow_mut()
+                        .replace_all_children(structure.parent, children);
+                    match (&mut structure.kind, last) {
+                        (StructureKind::If { last, .. }, Value::Bool(value)) => *last = value,
+                        (StructureKind::Each { last, .. }, Value::Array(items)) => *last = items,
+                        _ => {}
+                    }
+                    bindings.extend(built.bindings);
+                    handlers.extend(built.handlers);
+                    kept.extend(built.structures);
+                    kept.push(structure);
+                    changed = true;
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    kept.push(structure);
+                }
             }
         }
-        if changed && let Err(error) = self.rebuild() {
-            eprintln!("{error}");
+        self.structures = kept;
+        if changed {
+            let tree = Rc::clone(&self.tree);
+            self.bindings
+                .retain(|binding| tree.borrow().contains(binding.widget));
+            self.bindings.extend(bindings);
+            self.handlers.retain(|handler| match handler.widget {
+                Some(widget) => tree.borrow().contains(widget),
+                None => true,
+            });
+            self.handlers.extend(handlers);
+            self.scope = EffectScope::new();
+            self.bind(&self.bindings);
         }
     }
 
@@ -327,18 +385,9 @@ fn evaluate(component: &RefCell<Component>, expression: &Expr) -> Option<Value> 
 
 /// Загружает `.brul` и открывает его окно.
 pub fn run(source: &str, theme: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    let Loaded {
-        config,
-        tree,
-        bindings,
-        handlers,
-        component,
-        root,
-        stylesheet,
-        theme,
-        ..
-    } = brul_compiler::load(source, theme)?;
-    let mut ui = Ui::new(component, tree, bindings, handlers, root, stylesheet, theme);
+    let loaded = brul_compiler::load(source, theme)?;
+    let config = loaded.config.clone();
+    let mut ui = Ui::new(loaded);
     let initial = ui.dispatch(&[]);
     let tree = Rc::clone(&ui.tree);
     window::run_tree(config, tree, initial, move |events| ui.dispatch(events))?;
