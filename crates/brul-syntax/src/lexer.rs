@@ -106,186 +106,12 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
     }];
     let mut pos = 0;
     while pos < source.len() {
-        match *frames.last().expect("code frame is always present") {
-            Frame::Template { start } => match template_step(source, pos, start)? {
-                TemplateStep::Interpolation {
-                    chunk_end,
-                    marker_end,
-                } => {
-                    if chunk_end > pos {
-                        tokens.push(Token {
-                            kind: TokenKind::TemplateChunk(source[pos..chunk_end].to_owned()),
-                            span: Span {
-                                start: pos,
-                                end: chunk_end,
-                            },
-                        });
-                    }
-                    tokens.push(Token {
-                        kind: TokenKind::TemplateInterpStart,
-                        span: Span {
-                            start: chunk_end,
-                            end: marker_end,
-                        },
-                    });
-                    pos = marker_end;
-                    frames.push(Frame::Code {
-                        braces: 0,
-                        interpolation: true,
-                    });
-                }
-                TemplateStep::End(end) => {
-                    if end > pos {
-                        tokens.push(Token {
-                            kind: TokenKind::TemplateChunk(source[pos..end].to_owned()),
-                            span: Span { start: pos, end },
-                        });
-                    }
-                    tokens.push(Token {
-                        kind: TokenKind::TemplateEnd,
-                        span: Span {
-                            start: end,
-                            end: end + 1,
-                        },
-                    });
-                    pos = end + 1;
-                    frames.pop();
-                }
-            },
-            Frame::Code { .. } => {
-                let start = pos;
-                let ch = source[pos..].chars().next().unwrap();
-                if ch.is_whitespace() {
-                    pos += ch.len_utf8();
-                    continue;
-                }
-                if source[start..].starts_with("//") {
-                    pos = source[start..]
-                        .find('\n')
-                        .map_or(source.len(), |offset| start + offset);
-                    continue;
-                }
-                if ch.is_ascii_alphabetic() {
-                    pos += ch.len_utf8();
-                    while let Some(next) = source[pos..].chars().next() {
-                        if !(next.is_ascii_alphanumeric() || next == '_') {
-                            break;
-                        }
-                        pos += next.len_utf8();
-                    }
-                    tokens.push(Token {
-                        kind: TokenKind::Ident(source[start..pos].to_owned()),
-                        span: Span { start, end: pos },
-                    });
-                    continue;
-                }
-                if ch.is_ascii_digit() {
-                    pos = digits_end(source, start);
-                    if source[pos..].starts_with('.')
-                        && source[pos + 1..]
-                            .chars()
-                            .next()
-                            .is_some_and(|next| next.is_ascii_digit())
-                    {
-                        pos = digits_end(source, pos + 1);
-                    }
-                    tokens.push(Token {
-                        kind: TokenKind::Number(
-                            source[start..pos]
-                                .parse()
-                                .expect("lexer accepts only numbers"),
-                        ),
-                        span: Span { start, end: pos },
-                    });
-                    continue;
-                }
-                if ch == '"' {
-                    let rest = &source[start + 1..];
-                    let quote = rest.find('"');
-                    let newline = rest.find('\n');
-                    match quote {
-                        Some(offset) if newline.is_none_or(|limit| offset < limit) => {
-                            let value_end = start + 1 + offset;
-                            tokens.push(Token {
-                                kind: TokenKind::String(source[start + 1..value_end].to_owned()),
-                                span: Span {
-                                    start,
-                                    end: value_end + 1,
-                                },
-                            });
-                            pos = value_end + 1;
-                        }
-                        _ => return Err(error(source, start, "unterminated string")),
-                    }
-                    continue;
-                }
-                if ch == '`' {
-                    tokens.push(Token {
-                        kind: TokenKind::TemplateStart,
-                        span: Span {
-                            start,
-                            end: start + 1,
-                        },
-                    });
-                    pos += 1;
-                    frames.push(Frame::Template { start });
-                    continue;
-                }
-                if ch == '{' {
-                    if let Some(Frame::Code { braces, .. }) = frames.last_mut() {
-                        *braces += 1;
-                    }
-                    pos += 1;
-                    tokens.push(Token {
-                        kind: TokenKind::Punct(Punct::LBrace),
-                        span: Span { start, end: pos },
-                    });
-                    continue;
-                }
-                if ch == '}' {
-                    let (kind, pop) = match frames.last_mut() {
-                        Some(Frame::Code {
-                            braces,
-                            interpolation,
-                        }) if *braces > 0 => {
-                            *braces -= 1;
-                            (TokenKind::Punct(Punct::RBrace), false)
-                        }
-                        Some(Frame::Code {
-                            interpolation: true,
-                            ..
-                        }) => (TokenKind::TemplateInterpEnd, true),
-                        _ => (TokenKind::Punct(Punct::RBrace), false),
-                    };
-                    if pop {
-                        frames.pop();
-                    }
-                    pos += 1;
-                    tokens.push(Token {
-                        kind,
-                        span: Span { start, end: pos },
-                    });
-                    continue;
-                }
-                if let Some((punct, len)) = two_char_punct(ch, source[start..].chars().nth(1)) {
-                    pos += len;
-                    tokens.push(Token {
-                        kind: TokenKind::Punct(punct),
-                        span: Span { start, end: pos },
-                    });
-                    continue;
-                }
-                if let Some(punct) = single_punct(ch) {
-                    pos += ch.len_utf8();
-                    tokens.push(Token {
-                        kind: TokenKind::Punct(punct),
-                        span: Span { start, end: pos },
-                    });
-                    continue;
-                }
-                return Err(error(source, start, &format!("unknown character {ch:?}")));
+        pos = match *frames.last().expect("code frame is always present") {
+            Frame::Template { start } => {
+                template_pos(source, pos, start, &mut tokens, &mut frames)?
             }
-        }
+            Frame::Code { .. } => code_pos(source, pos, &mut tokens, &mut frames)?,
+        };
     }
     if let Some(start) = frames.iter().find_map(|frame| match frame {
         Frame::Template { start } => Some(*start),
@@ -303,6 +129,207 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
     Ok(tokens)
 }
 
+fn template_pos(
+    source: &str,
+    pos: usize,
+    start: usize,
+    tokens: &mut Vec<Token>,
+    frames: &mut Vec<Frame>,
+) -> Result<usize, Error> {
+    match template_step(source, pos, start)? {
+        TemplateStep::Interpolation {
+            chunk_end,
+            marker_end,
+        } => {
+            push_chunk(source, pos, chunk_end, tokens);
+            tokens.push(Token {
+                kind: TokenKind::TemplateInterpStart,
+                span: Span {
+                    start: chunk_end,
+                    end: marker_end,
+                },
+            });
+            frames.push(Frame::Code {
+                braces: 0,
+                interpolation: true,
+            });
+            Ok(marker_end)
+        }
+        TemplateStep::End(end) => {
+            push_chunk(source, pos, end, tokens);
+            tokens.push(Token {
+                kind: TokenKind::TemplateEnd,
+                span: Span {
+                    start: end,
+                    end: end + 1,
+                },
+            });
+            frames.pop();
+            Ok(end + 1)
+        }
+    }
+}
+
+fn push_chunk(source: &str, start: usize, end: usize, tokens: &mut Vec<Token>) {
+    if end > start {
+        tokens.push(Token {
+            kind: TokenKind::TemplateChunk(source[start..end].to_owned()),
+            span: Span { start, end },
+        });
+    }
+}
+
+fn code_pos(
+    source: &str,
+    pos: usize,
+    tokens: &mut Vec<Token>,
+    frames: &mut Vec<Frame>,
+) -> Result<usize, Error> {
+    let ch = source[pos..]
+        .chars()
+        .next()
+        .expect("pos is on a char boundary");
+    let start = pos;
+    if ch.is_whitespace() {
+        return Ok(pos + ch.len_utf8());
+    }
+    if source[start..].starts_with("//") {
+        return Ok(source[start..]
+            .find('\n')
+            .map_or(source.len(), |offset| start + offset));
+    }
+    if ch.is_ascii_alphabetic() {
+        let end = ident_end(source, start);
+        tokens.push(Token {
+            kind: TokenKind::Ident(source[start..end].to_owned()),
+            span: Span { start, end },
+        });
+        return Ok(end);
+    }
+    if ch.is_ascii_digit() {
+        let end = number_end(source, start);
+        tokens.push(Token {
+            kind: TokenKind::Number(
+                source[start..end]
+                    .parse()
+                    .expect("lexer accepts only numbers"),
+            ),
+            span: Span { start, end },
+        });
+        return Ok(end);
+    }
+    if ch == '"' {
+        return string_pos(source, start, tokens);
+    }
+    punct_pos(source, start, ch, tokens, frames)
+}
+
+fn ident_end(source: &str, start: usize) -> usize {
+    let mut pos = start;
+    while let Some(next) = source[pos..].chars().next() {
+        if !(next.is_ascii_alphanumeric() || next == '_') {
+            break;
+        }
+        pos += next.len_utf8();
+    }
+    pos
+}
+
+fn number_end(source: &str, start: usize) -> usize {
+    let pos = digits_end(source, start);
+    let fraction = source[pos..]
+        .strip_prefix('.')
+        .and_then(|rest| rest.chars().next())
+        .is_some_and(|next| next.is_ascii_digit());
+    if fraction {
+        digits_end(source, pos + 1)
+    } else {
+        pos
+    }
+}
+
+fn string_pos(source: &str, start: usize, tokens: &mut Vec<Token>) -> Result<usize, Error> {
+    let rest = &source[start + 1..];
+    let quote = rest.find('"');
+    let newline = rest.find('\n');
+    match quote {
+        Some(offset) if newline.is_none_or(|limit| offset < limit) => {
+            let value_end = start + 1 + offset;
+            tokens.push(Token {
+                kind: TokenKind::String(source[start + 1..value_end].to_owned()),
+                span: Span {
+                    start,
+                    end: value_end + 1,
+                },
+            });
+            Ok(value_end + 1)
+        }
+        _ => Err(error(source, start, "unterminated string")),
+    }
+}
+
+fn punct_pos(
+    source: &str,
+    start: usize,
+    ch: char,
+    tokens: &mut Vec<Token>,
+    frames: &mut Vec<Frame>,
+) -> Result<usize, Error> {
+    let (kind, len) = match ch {
+        '`' => {
+            tokens.push(Token {
+                kind: TokenKind::TemplateStart,
+                span: Span {
+                    start,
+                    end: start + 1,
+                },
+            });
+            frames.push(Frame::Template { start });
+            return Ok(start + 1);
+        }
+        '{' => {
+            if let Some(Frame::Code { braces, .. }) = frames.last_mut() {
+                *braces += 1;
+            }
+            (TokenKind::Punct(Punct::LBrace), 1)
+        }
+        '}' => {
+            let (kind, pop) = close_brace(frames);
+            if pop {
+                frames.pop();
+            }
+            (kind, 1)
+        }
+        _ => {
+            let (punct, len) = punct_token(ch, source[start..].chars().nth(1))
+                .ok_or_else(|| error(source, start, &format!("unknown character {ch:?}")))?;
+            (TokenKind::Punct(punct), len)
+        }
+    };
+    tokens.push(Token {
+        kind,
+        span: Span {
+            start,
+            end: start + len,
+        },
+    });
+    Ok(start + len)
+}
+
+fn close_brace(frames: &mut [Frame]) -> (TokenKind, bool) {
+    match frames.last_mut() {
+        Some(Frame::Code { braces, .. }) if *braces > 0 => {
+            *braces -= 1;
+            (TokenKind::Punct(Punct::RBrace), false)
+        }
+        Some(Frame::Code {
+            interpolation: true,
+            ..
+        }) => (TokenKind::TemplateInterpEnd, true),
+        _ => (TokenKind::Punct(Punct::RBrace), false),
+    }
+}
+
 enum TemplateStep {
     Interpolation { chunk_end: usize, marker_end: usize },
     End(usize),
@@ -312,29 +339,28 @@ fn template_step(source: &str, pos: usize, start: usize) -> Result<TemplateStep,
     let rest = &source[pos..];
     let tick = rest.find('`');
     let interpolation = rest.find("${");
-    let boundary = match (tick, interpolation) {
-        (Some(tick), Some(interp)) if interp < tick => Some((interp, true)),
-        (Some(tick), _) => Some((tick, false)),
-        (None, Some(interp)) => Some((interp, true)),
-        (None, None) => None,
-    };
-    match boundary {
-        Some((offset, true)) => {
-            check_chunk(source, pos, &rest[..offset])?;
-            Ok(TemplateStep::Interpolation {
-                chunk_end: pos + offset,
-                marker_end: pos + offset + 2,
-            })
-        }
-        Some((offset, false)) => {
-            check_chunk(source, pos, &rest[..offset])?;
-            Ok(TemplateStep::End(pos + offset))
-        }
-        None => {
+    match (tick, interpolation) {
+        (Some(tick), Some(interp)) if interp < tick => interpolation_step(source, pos, interp),
+        (Some(tick), _) => end_step(source, pos, tick),
+        (None, Some(interp)) => interpolation_step(source, pos, interp),
+        (None, None) => {
             check_chunk(source, pos, rest)?;
             Err(error(source, start, "unterminated template"))
         }
     }
+}
+
+fn interpolation_step(source: &str, pos: usize, offset: usize) -> Result<TemplateStep, Error> {
+    check_chunk(source, pos, &source[pos..pos + offset])?;
+    Ok(TemplateStep::Interpolation {
+        chunk_end: pos + offset,
+        marker_end: pos + offset + 2,
+    })
+}
+
+fn end_step(source: &str, pos: usize, offset: usize) -> Result<TemplateStep, Error> {
+    check_chunk(source, pos, &source[pos..pos + offset])?;
+    Ok(TemplateStep::End(pos + offset))
 }
 
 fn check_chunk(source: &str, start: usize, chunk: &str) -> Result<(), Error> {
@@ -368,43 +394,50 @@ fn digits_end(source: &str, mut pos: usize) -> usize {
     pos
 }
 
-fn two_char_punct(ch: char, next: Option<char>) -> Option<(Punct, usize)> {
-    let punct = match (ch, next?) {
-        ('|', '|') => Punct::Or,
-        ('&', '&') => Punct::And,
-        ('=', '=') => Punct::Eq,
-        ('!', '=') => Punct::NotEq,
-        ('<', '=') => Punct::Le,
-        ('>', '=') => Punct::Ge,
-        ('+', '=') => Punct::PlusAssign,
-        ('-', '=') => Punct::MinusAssign,
-        _ => return None,
-    };
-    Some((punct, 2))
-}
+const TWO_CHAR: &[(char, char, Punct)] = &[
+    ('|', '|', Punct::Or),
+    ('&', '&', Punct::And),
+    ('=', '=', Punct::Eq),
+    ('!', '=', Punct::NotEq),
+    ('<', '=', Punct::Le),
+    ('>', '=', Punct::Ge),
+    ('+', '=', Punct::PlusAssign),
+    ('-', '=', Punct::MinusAssign),
+];
 
-fn single_punct(ch: char) -> Option<Punct> {
-    Some(match ch {
-        '=' => Punct::Assign,
-        '?' => Punct::Question,
-        ':' => Punct::Colon,
-        '<' => Punct::Lt,
-        '>' => Punct::Gt,
-        '+' => Punct::Plus,
-        '-' => Punct::Minus,
-        '*' => Punct::Star,
-        '/' => Punct::Slash,
-        '%' => Punct::Percent,
-        '!' => Punct::Bang,
-        '.' => Punct::Dot,
-        ',' => Punct::Comma,
-        ';' => Punct::Semicolon,
-        '(' => Punct::LParen,
-        ')' => Punct::RParen,
-        '[' => Punct::LBracket,
-        ']' => Punct::RBracket,
-        '{' => Punct::LBrace,
-        '}' => Punct::RBrace,
-        _ => return None,
-    })
+const SINGLE: &[(char, Punct)] = &[
+    ('=', Punct::Assign),
+    ('?', Punct::Question),
+    (':', Punct::Colon),
+    ('<', Punct::Lt),
+    ('>', Punct::Gt),
+    ('+', Punct::Plus),
+    ('-', Punct::Minus),
+    ('*', Punct::Star),
+    ('/', Punct::Slash),
+    ('%', Punct::Percent),
+    ('!', Punct::Bang),
+    ('.', Punct::Dot),
+    (',', Punct::Comma),
+    (';', Punct::Semicolon),
+    ('(', Punct::LParen),
+    (')', Punct::RParen),
+    ('[', Punct::LBracket),
+    (']', Punct::RBracket),
+    ('{', Punct::LBrace),
+    ('}', Punct::RBrace),
+];
+
+fn punct_token(ch: char, next: Option<char>) -> Option<(Punct, usize)> {
+    if let Some((_, _, punct)) = next.and_then(|next| {
+        TWO_CHAR
+            .iter()
+            .find(|(first, second, _)| *first == ch && *second == next)
+    }) {
+        return Some((*punct, 2));
+    }
+    SINGLE
+        .iter()
+        .find(|(single, _)| *single == ch)
+        .map(|(_, punct)| (*punct, 1))
 }
