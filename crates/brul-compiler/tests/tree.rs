@@ -258,20 +258,75 @@ fn handlers_must_resolve_to_script_functions() {
 }
 
 #[test]
-fn if_is_not_supported_yet() {
+fn if_keeps_the_taken_branch() {
     let element = root(
-        r#"
-        window Picker (title: "x") {
-            Column {
-                if (true) { }
+        r#"window Picker (title: "x") {
+    Column {
+        if (true) {
+            Text { "a" }
+        } else {
+            Text { "b" }
+            Text { "c" }
+        }
+    }
+}"#,
+    );
+    let widget =
+        build_tree(&element, &empty_stylesheet(), None, &mut Component::new()).expect("if");
+    assert_eq!(snapshot(widget).nodes.len(), 2);
+}
+
+#[test]
+fn if_without_a_taken_branch_adds_no_children() {
+    let element = root(
+        r#"window Picker (title: "x") {
+    Column {
+        if (false) {
+            Text { "a" }
+            Text { "b" }
+        }
+    }
+}"#,
+    );
+    let widget =
+        build_tree(&element, &empty_stylesheet(), None, &mut Component::new()).expect("if");
+    assert_eq!(snapshot(widget).nodes.len(), 1);
+}
+
+#[test]
+fn nested_if_inside_else_picks_its_branch() {
+    let element = root(
+        r#"window Picker (title: "x") {
+    Column {
+        if (false) {
+            Text { "a" }
+        } else {
+            if (true) {
+                Text { "b" }
+                Text { "c" }
             }
         }
-        "#,
+    }
+}"#,
+    );
+    let widget =
+        build_tree(&element, &empty_stylesheet(), None, &mut Component::new()).expect("if");
+    assert_eq!(snapshot(widget).nodes.len(), 3);
+}
+
+#[test]
+fn if_condition_must_be_bool() {
+    let element = root(
+        r#"window Picker (title: "x") {
+    Column {
+        if (1) { }
+    }
+}"#,
     );
     let error = build_tree(&element, &empty_stylesheet(), None, &mut Component::new())
         .err()
         .expect("if");
 
-    assert_eq!(error.message, "'if' is not supported yet");
+    assert_eq!(error.message, "if condition expects Bool, got Number");
     assert_eq!((error.line, error.column), (3, 13));
 }

@@ -2,7 +2,7 @@ use brul_gui::{Direction, Widget, WidgetId};
 use brul_script::{Component, Value, eval};
 use brul_syntax::ast::{Expr, Position};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, BlockItem, Element};
+use brul_syntax::markup::{Arg, BlockItem, Element, IfBlock};
 use brul_syntax::style::Stylesheet;
 
 use crate::styles::{self, Resolved};
@@ -270,22 +270,45 @@ fn container(
     component: &mut Component,
     resolved: Resolved,
 ) -> Result<(Widget, Vec<Binding>, Vec<Handler>), Error> {
-    let mut children = Vec::with_capacity(element.block.items.len());
+    let built = build_items(
+        &element.block.items,
+        stylesheet,
+        theme,
+        component,
+        element.position,
+    )?;
+    let mut children = Vec::with_capacity(built.len());
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
-    for item in &element.block.items {
+    for child in built {
+        children.push(child.widget);
+        bindings.extend(child.bindings);
+        handlers.extend(child.handlers);
+    }
+    let widget = Widget::view(direction, children)
+        .with_layout(resolved.layout)
+        .with_styles(resolved.styles);
+    Ok((widget, bindings, handlers))
+}
+
+fn build_items(
+    items: &[BlockItem],
+    stylesheet: &Stylesheet,
+    theme: Option<&str>,
+    component: &mut Component,
+    position: Position,
+) -> Result<Vec<Built>, Error> {
+    let mut built = Vec::new();
+    for item in items {
         match item {
             BlockItem::Element(child) => {
-                let child = build_bound_tree(child, stylesheet, theme, component)?;
-                children.push(child.widget);
-                bindings.extend(child.bindings);
-                handlers.extend(child.handlers);
+                built.push(build_bound_tree(child, stylesheet, theme, component)?);
             }
-            BlockItem::If(_) => {
-                return Err(error_at(element.position, "'if' is not supported yet"));
+            BlockItem::If(block) => {
+                built.extend(build_if(block, stylesheet, theme, component, position)?);
             }
             BlockItem::Each(_) => {
-                return Err(error_at(element.position, "'each' is not supported yet"));
+                return Err(error_at(position, "'each' is not supported yet"));
             }
             BlockItem::Expr(expression) => {
                 return Err(error_at(
@@ -295,10 +318,34 @@ fn container(
             }
         }
     }
-    let widget = Widget::view(direction, children)
-        .with_layout(resolved.layout)
-        .with_styles(resolved.styles);
-    Ok((widget, bindings, handlers))
+    Ok(built)
+}
+
+fn build_if(
+    block: &IfBlock,
+    stylesheet: &Stylesheet,
+    theme: Option<&str>,
+    component: &mut Component,
+    position: Position,
+) -> Result<Vec<Built>, Error> {
+    let condition = match evaluate(component, &block.condition)? {
+        Value::Bool(condition) => condition,
+        other => {
+            return Err(error_at(
+                block.condition.position,
+                format!("if condition expects Bool, got {}", other.type_name()),
+            ));
+        }
+    };
+    let branch = if condition {
+        Some(&block.then_block)
+    } else {
+        block.else_block.as_ref()
+    };
+    match branch {
+        Some(branch) => build_items(&branch.items, stylesheet, theme, component, position),
+        None => Ok(Vec::new()),
+    }
 }
 
 fn text(
