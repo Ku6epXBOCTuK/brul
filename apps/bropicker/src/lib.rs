@@ -5,6 +5,7 @@
 //! процесса без shell — в [`launcher`].
 
 pub mod config;
+pub mod generated;
 pub mod launcher;
 
 pub use config::{

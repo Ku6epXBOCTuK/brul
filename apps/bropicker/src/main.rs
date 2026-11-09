@@ -1,11 +1,8 @@
 use std::error::Error;
 
 use bropicker::launcher::Launcher;
-use bropicker::{BrowserEntry, Config, Theme, demo_browsers};
+use bropicker::{BrowserEntry, Config, Theme, demo_browsers, generated};
 use brul::{Host, Value};
-
-#[allow(dead_code)]
-mod generated;
 
 struct LauncherHost {
     browsers: Vec<BrowserEntry>,
@@ -111,16 +108,4 @@ fn entry_value(browser: &BrowserEntry) -> Value {
         ("path".to_string(), Value::String(browser.path.clone())),
         ("isDefault".to_string(), Value::Bool(browser.is_default)),
     ])
-}
-
-#[cfg(test)]
-mod generated_tests {
-    #[test]
-    fn generated_module_matches_the_launch_entry() {
-        type View = fn(Option<&str>, &brul::ComponentHandle) -> Result<brul::Built, String>;
-        let view: View = super::generated::view;
-        let _ = view;
-        let _ = super::generated::window();
-        let _ = super::generated::script();
-    }
 }
