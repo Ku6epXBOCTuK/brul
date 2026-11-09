@@ -40,6 +40,19 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
         props: Vec::new(),
     })
 }
+
+pub fn window() -> brul::WindowConfig {
+    brul::WindowConfig {
+        title: "demo".to_owned(),
+        width: 960,
+        height: 640,
+        ..brul::WindowConfig::default()
+    }
+}
+
+pub fn script() -> Option<brul::script::Program> {
+    None
+}
 "#;
     assert_eq!(emit::module(source).expect("module"), expected);
 }
@@ -106,6 +119,19 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
         props: Vec::new(),
     })
 }
+
+pub fn window() -> brul::WindowConfig {
+    brul::WindowConfig {
+        title: "styled".to_owned(),
+        width: 960,
+        height: 640,
+        ..brul::WindowConfig::default()
+    }
+}
+
+pub fn script() -> Option<brul::script::Program> {
+    None
+}
 "#;
     assert_eq!(emit::module(source).expect("module"), expected);
 }
@@ -167,6 +193,53 @@ window Demo (title: "demo") {
 
 fn emitted(source: &str) -> String {
     emit::expression(&brul_syntax::parser::parse_expression(source).expect("expression parses"))
+}
+
+#[test]
+fn emits_window_config() {
+    let source = r#"<markup>
+window Demo (title: "demo", width: 488, height: 800, frameless: true, transparent: true) {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        "pub fn window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        ..brul::WindowConfig::default()\n    }\n}"
+    ));
+}
+
+#[test]
+fn emits_script_program() {
+    let source = r#"<script>
+    const limit = 2;
+    let count = 0;
+
+    function bump(step) {
+        if (step > limit) {
+            count = limit;
+        } else {
+            count = count + step;
+        }
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains("Some(brul::script::Program {"));
+    assert!(module.contains(
+        r#"brul::script::Statement::Let { constant: true, name: "limit".to_owned(), value: Some("#
+    ));
+    assert!(module.contains(
+        r#"brul::script::Function { name: "bump".to_owned(), params: vec!["step".to_owned()], body: vec![brul::script::Statement::If {"#
+    ));
+    assert!(module.contains("brul::script::Statement::Block(vec![brul::script::Statement::Expr("));
+    assert!(module.contains("brul::ast::ExprKind::Assign {"));
 }
 
 #[test]

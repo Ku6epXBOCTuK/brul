@@ -10,6 +10,7 @@ use crate::error_at;
 use crate::styles;
 
 mod expression;
+mod script;
 mod style;
 
 pub use expression::expression;
@@ -43,7 +44,27 @@ pub fn module(source: &str) -> Result<String, Error> {
     out.push_str("        structures: Vec::new(),\n");
     out.push_str("        props: Vec::new(),\n");
     out.push_str("    })\n}\n");
+    let (config, _) = crate::arguments(&parsed.window)?;
+    out.push('\n');
+    window_config(&mut out, &config);
+    out.push_str(&script::program(parsed.program.as_ref()));
     Ok(out)
+}
+
+fn window_config(out: &mut String, config: &brul_gui::window::WindowConfig) {
+    let _ = write!(
+        out,
+        "pub fn window() -> brul::WindowConfig {{
+    brul::WindowConfig {{
+        title: {:?}.to_owned(),
+        width: {},
+        height: {},
+        ..brul::WindowConfig::default()
+    }}
+}}
+",
+        config.title, config.width, config.height
+    );
 }
 
 fn branch(

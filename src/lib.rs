@@ -16,8 +16,10 @@ pub use brul_compiler::{
     Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, PropBinding, RowInfo, Structure,
     StructureKind,
 };
+pub use brul_gui::window::WindowConfig;
 pub use brul_script::{Error, Host, Value};
 pub use brul_syntax::ast;
+pub use brul_syntax::script;
 
 pub struct Ui {
     pub component: ComponentHandle,
