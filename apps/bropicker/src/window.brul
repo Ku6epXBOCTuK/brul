@@ -19,7 +19,7 @@
             each (browsers as browser) {
                 Text { browser }
             }
-            Badge { }
+            Badge (label: "badge") { }
         }
     }
 </markup>

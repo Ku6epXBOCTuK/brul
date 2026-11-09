@@ -152,16 +152,98 @@ pub struct Built {
 
 pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, String>;
 
-pub fn instance(
-    theme: Option<&str>,
-    view: View,
-    script: Option<&Program>,
-) -> Result<Built, String> {
+pub struct PropArgument {
+    pub name: &'static str,
+    pub ty: PropType,
+    pub expression: Expr,
+}
+
+pub struct Instance<'a> {
+    pub theme: Option<&'a str>,
+    pub view: View,
+    pub script: Option<&'a Program>,
+    pub name: &'static str,
+    pub props: &'a [PropArgument],
+    pub defaults: &'a [PropArgument],
+}
+
+pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Built, String> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
-    if let Some(program) = script {
+    if let Some(program) = instance.script {
         execute_program(&mut component.borrow_mut(), program).map_err(|error| error.reason())?;
     }
-    view(theme, &component)
+    let mut given: Vec<&str> = Vec::new();
+    for argument in instance.props {
+        let value = evaluate_argument(parent, argument)?;
+        assign(&component, argument, value, instance.name)?;
+        given.push(argument.name);
+    }
+    for argument in instance.defaults {
+        if given.contains(&argument.name) {
+            continue;
+        }
+        let value = evaluate_argument(&component, argument)?;
+        assign(&component, argument, value, instance.name)?;
+    }
+    let mut built = (instance.view)(instance.theme, &component)?;
+    let widget = built.widget.id();
+    for argument in instance.props {
+        built.props.push(PropBinding {
+            widget,
+            target: Rc::clone(&component),
+            name: argument.name.to_owned(),
+            ty: argument.ty,
+            expression: argument.expression.clone(),
+            scopes: parent.borrow().build_scopes(),
+            component: Rc::clone(parent),
+        });
+    }
+    Ok(built)
+}
+
+fn evaluate_argument(
+    component: &ComponentHandle,
+    argument: &PropArgument,
+) -> Result<Value, String> {
+    eval(&mut component.borrow_mut(), &argument.expression).map_err(|error| error.reason())
+}
+
+fn assign(
+    component: &ComponentHandle,
+    argument: &PropArgument,
+    value: Value,
+    name: &str,
+) -> Result<(), String> {
+    if !accepts_prop(&value, argument.ty) {
+        return Err(format!(
+            "property '{}' of component '{name}' expects {}, got {}",
+            argument.name,
+            prop_name(argument.ty),
+            value.type_name()
+        ));
+    }
+    component
+        .borrow_mut()
+        .declare_property(argument.name, value)
+        .map_err(|error| error.reason())
+}
+
+pub fn accepts_prop(value: &Value, ty: PropType) -> bool {
+    match ty {
+        PropType::Bool => matches!(value, Value::Bool(_)),
+        PropType::Number => matches!(value, Value::Number(_)),
+        PropType::String => matches!(value, Value::String(_)),
+        PropType::Image => matches!(value, Value::Null),
+    }
+}
+
+pub fn prop_name(ty: PropType) -> &'static str {
+    match ty {
+        PropType::Bool => "Bool",
+        PropType::Number => "Number",
+        PropType::String => "String",
+        PropType::Image => "Image",
+    }
 }
 
 pub struct Bindings {

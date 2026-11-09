@@ -1,5 +1,6 @@
 <markup>
     component Badge {
-        Text { "badge" }
+        prop label: String = "badge"
+        Text { label }
     }
 </markup>

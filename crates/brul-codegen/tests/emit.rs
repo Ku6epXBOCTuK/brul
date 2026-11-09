@@ -481,12 +481,68 @@ fn emits_imported_component() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("pub fn component0_view(theme: Option<&str>"));
     assert!(module.contains("pub fn component0_script() -> Option<brul::script::Program>"));
-    assert!(module.contains(
-        "let built = brul::instance(None, component0_view, component0_script().as_ref())?;"
-    ));
+    assert!(module.contains("let built = brul::instance(component, brul::Instance {"));
     assert!(module.contains("bindings.extend(built.bindings);"));
     assert!(module.contains("props.extend(built.props);"));
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn emits_component_properties() {
+    let dir = scratch(
+        "properties",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    prop label: String = \"badge\"\n    prop size: Number = 10\n    Text { label }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge (label: \"hi\") { }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(module.contains("name: \"Badge\","));
+    assert!(module.contains(
+        "brul::PropArgument { name: \"label\", ty: brul::PropType::String, expression: brul::ast::Expr::new(brul::ast::ExprKind::String(\"hi\".to_owned())"
+    ));
+    assert!(module.contains("brul::PropArgument { name: \"size\", ty: brul::PropType::Number,"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn rejects_component_properties() {
+    let cases = [
+        (
+            "Badge (nope: 1) { }",
+            "component 'Badge' has no property 'nope'",
+        ),
+        (
+            "Badge (label: \"a\", label: \"b\") { }",
+            "property 'label' is given twice",
+        ),
+    ];
+    for (markup, expected) in cases {
+        let dir = scratch(
+            "properties-error",
+            &[
+                (
+                    "badge.brul",
+                    "<markup>\ncomponent Badge {\n    prop label: String = \"badge\"\n    Text { label }\n}\n</markup>\n",
+                ),
+                (
+                    "window.brul",
+                    &format!(
+                        "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {{\n    Column {{\n        {markup}\n    }}\n}}\n</markup>\n"
+                    ),
+                ),
+            ],
+        );
+        let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+        assert_eq!(error.message, expected);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }
 
 #[test]

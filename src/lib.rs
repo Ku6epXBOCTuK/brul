@@ -11,12 +11,13 @@ use brul_script::{Component, eval, execute_program};
 use brul_syntax::ast::Expr;
 
 pub use brul_compiler::{
-    Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, PropBinding, Rebuilt, RowInfo,
-    Structure, View, instance,
+    Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, Instance, PropArgument,
+    PropBinding, Rebuilt, RowInfo, Structure, View, instance,
 };
 pub use brul_gui::window::WindowConfig;
 pub use brul_script::{Error, Host, Value, Variable};
 pub use brul_syntax::ast;
+pub use brul_syntax::markup::PropType;
 pub use brul_syntax::script;
 
 pub struct Ui {

@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use brul_codegen::runtime::{
     Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, PropBinding,
-    Structure,
+    Structure, accepts_prop, prop_name,
 };
 use brul_codegen::{Definition, Registry};
 use brul_gui::{Direction, LayoutStyle, Widget};
@@ -347,24 +347,6 @@ impl Host for EventHost {
     }
 }
 
-fn prop_name(ty: PropType) -> &'static str {
-    match ty {
-        PropType::Bool => "Bool",
-        PropType::Number => "Number",
-        PropType::String => "String",
-        PropType::Image => "Image",
-    }
-}
-
-pub fn accepts_prop(value: &Value, ty: PropType) -> bool {
-    match ty {
-        PropType::Bool => matches!(value, Value::Bool(_)),
-        PropType::Number => matches!(value, Value::Number(_)),
-        PropType::String => matches!(value, Value::String(_)),
-        PropType::Image => matches!(value, Value::Null),
-    }
-}
-
 fn typed(
     value: Value,
     ty: PropType,
@@ -375,16 +357,11 @@ fn typed(
     if accepts_prop(&value, ty) {
         return Ok(value);
     }
-    let expected = match ty {
-        PropType::Bool => "Bool",
-        PropType::Number => "Number",
-        PropType::String => "String",
-        PropType::Image => "Image",
-    };
     Err(error_at(
         position,
         format!(
-            "property '{name}' of component '{component}' expects {expected}, got {}",
+            "property '{name}' of component '{component}' expects {}, got {}",
+            prop_name(ty),
             value.type_name()
         ),
     ))
