@@ -15,6 +15,12 @@ members = ["crates/*", "apps/*"]
 [workspace.lints.clippy]
 non_ascii_literal = "deny"
 
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [workspace.dependencies]
 brul-gui = { path = 'crates\brul-gui' }
 brul-reactive = { path = 'crates\brul-reactive' }
