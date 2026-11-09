@@ -155,6 +155,9 @@
   `Structure` в `brul-codegen`, `brul-compiler` ре-экспортирует.
 - [x] 3.5.10.2b.1 — эмиссия выражений: `brul::ast::Expr` в сгенерированном коде,
   все виды AST.
+- [x] 3.5.10.2b.1a — `emit` разложен по файлам: `emit/mod.rs` (обход разметки),
+  `emit/style.rs` (значения `brul_gui` в литералы), `emit/expression.rs` (AST
+  выражений); поведение не менялось.
 - [ ] 3.5.10.2b.2 — `view` отдаёт `Built`: `Text` и параметры
   (`checked`/`selected`/`disabled`/`visible`/`x`/`y`) с привязками.
 - [ ] 3.5.10.3 — bootstrap: аргументы `window` → `WindowConfig`, seeds, запуск.
