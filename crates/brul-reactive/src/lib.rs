@@ -111,3 +111,9 @@ pub use effect::{Effect, batch, flush, untrack};
 pub use memo::Memo;
 pub use scope::EffectScope;
 pub use signal::Signal;
+
+/// Число узлов арены, которые ещё не удалены. Диагностика для тестов: удалённые
+/// слоты остаются в арене, поэтому память по этому счётчику не считается.
+pub fn live_nodes() -> usize {
+    graph::live_nodes()
+}

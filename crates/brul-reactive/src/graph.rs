@@ -23,6 +23,7 @@ struct Node {
 struct Arena {
     nodes: Vec<Node>,
     queue: VecDeque<u32>,
+    live: usize,
 }
 
 thread_local! {
@@ -44,8 +45,13 @@ pub(crate) fn create(kind: Kind, payload: Rc<dyn Any>) -> u32 {
             disposed: false,
             payload: Some(payload),
         });
+        arena.live += 1;
         id
     })
+}
+
+pub(crate) fn live_nodes() -> usize {
+    ARENA.with(|arena| arena.borrow().live)
 }
 
 pub(crate) fn payload<T: 'static>(id: u32) -> Rc<T> {
@@ -214,5 +220,6 @@ pub(crate) fn dispose(id: u32) {
                 .subscribers
                 .retain(|subscriber| *subscriber != id);
         }
+        arena.live -= 1;
     });
 }
