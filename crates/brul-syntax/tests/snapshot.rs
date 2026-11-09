@@ -166,3 +166,19 @@ fn literals_survive_without_themes() {
 
     assert!(matches!(snapshot.get("border"), Some(Value::Border(_))));
 }
+
+#[test]
+fn snapshot_errors_render_distinct_messages() {
+    let errors = [
+        SnapshotError::UnknownTheme(String::from("dark")),
+        SnapshotError::UnknownThemeKey(String::from("dark")),
+        SnapshotError::NotAColor(String::from("dark")),
+    ];
+
+    let mut messages: Vec<String> = errors.iter().map(|error| error.to_string()).collect();
+
+    assert!(messages.iter().all(|message| message.contains("dark")));
+    messages.sort();
+    messages.dedup();
+    assert_eq!(messages.len(), errors.len());
+}

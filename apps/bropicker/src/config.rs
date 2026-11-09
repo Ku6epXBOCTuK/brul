@@ -174,12 +174,15 @@ impl Config {
     }
 
     pub fn load_default() -> Result<Self, ConfigError> {
-        let path = default_path();
-        match std::fs::read_to_string(&path) {
-            Ok(source) => Self::parse_at(&source, Some(&path)),
+        Self::load_or_default(&default_path())
+    }
+
+    fn load_or_default(path: &Path) -> Result<Self, ConfigError> {
+        match std::fs::read_to_string(path) {
+            Ok(source) => Self::parse_at(&source, Some(path)),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
             Err(error) => Err(ConfigError::Read {
-                path,
+                path: path.to_path_buf(),
                 message: error.to_string(),
             }),
         }
@@ -274,10 +277,17 @@ impl Config {
 }
 
 pub fn default_path() -> PathBuf {
-    if let Ok(path) = std::env::var("BP_CONFIG") {
+    path_from(
+        std::env::var("BP_CONFIG").ok().as_deref(),
+        std::env::var("APPDATA").ok().as_deref(),
+    )
+}
+
+fn path_from(override_path: Option<&str>, appdata: Option<&str>) -> PathBuf {
+    if let Some(path) = override_path {
         return PathBuf::from(path);
     }
-    if let Ok(appdata) = std::env::var("APPDATA") {
+    if let Some(appdata) = appdata {
         return PathBuf::from(appdata).join("bropicker").join("config.toml");
     }
     PathBuf::from("config.toml")
@@ -297,4 +307,65 @@ pub fn domain_of(url: &str) -> String {
     let host = host.trim_end_matches('.').to_lowercase();
 
     host.strip_prefix("www.").unwrap_or(&host).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_file(name: &str) -> PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_nanos())
+            .unwrap_or_default();
+        std::env::temp_dir().join(format!("bropicker-{name}-{unique}.toml"))
+    }
+
+    #[test]
+    fn default_path_prefers_the_override() {
+        assert_eq!(
+            path_from(Some("picked.toml"), Some("roaming")),
+            PathBuf::from("picked.toml")
+        );
+    }
+
+    #[test]
+    fn default_path_uses_appdata_without_an_override() {
+        assert_eq!(
+            path_from(None, Some("roaming")),
+            PathBuf::from("roaming")
+                .join("bropicker")
+                .join("config.toml")
+        );
+    }
+
+    #[test]
+    fn default_path_falls_back_to_the_current_directory() {
+        assert_eq!(path_from(None, None), PathBuf::from("config.toml"));
+    }
+
+    #[test]
+    fn missing_file_loads_the_default_config() {
+        let config = Config::load_or_default(&temp_file("missing")).expect("default config");
+
+        assert_eq!(config, Config::default());
+    }
+
+    #[test]
+    fn existing_file_is_parsed_on_load() {
+        let path = temp_file("present");
+        std::fs::write(&path, "theme = \"light\"\n").expect("write config");
+        let config = Config::load_or_default(&path).expect("parsed config");
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(config.theme, Theme::Light);
+    }
+
+    #[test]
+    fn unreadable_path_is_reported_as_a_read_error() {
+        assert!(matches!(
+            Config::load_or_default(Path::new("config\0.toml")),
+            Err(ConfigError::Read { .. })
+        ));
+    }
 }

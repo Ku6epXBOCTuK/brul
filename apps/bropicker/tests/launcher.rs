@@ -159,3 +159,19 @@ fn launcher_rejects_empty_path_and_url() {
         Err(LaunchError::EmptyUrl)
     );
 }
+
+#[test]
+fn launch_errors_render_distinct_messages() {
+    let errors = [
+        LaunchError::EmptyPath,
+        LaunchError::EmptyUrl,
+        LaunchError::Spawn(String::from("boom")),
+    ];
+
+    let mut messages: Vec<String> = errors.iter().map(|error| error.to_string()).collect();
+
+    assert!(messages.iter().all(|message| !message.is_empty()));
+    messages.sort();
+    messages.dedup();
+    assert_eq!(messages.len(), errors.len());
+}

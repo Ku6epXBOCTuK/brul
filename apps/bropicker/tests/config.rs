@@ -257,3 +257,29 @@ fn missing_file_is_an_error_for_explicit_load() {
 
     assert!(matches!(Config::load(path), Err(ConfigError::Read { .. })));
 }
+
+#[test]
+fn config_errors_render_distinct_messages() {
+    let errors = [
+        ConfigError::Read {
+            path: PathBuf::from("a.toml"),
+            message: String::from("denied"),
+        },
+        ConfigError::Parse {
+            path: Some(PathBuf::from("b.toml")),
+            message: String::from("bad"),
+        },
+        ConfigError::Parse {
+            path: None,
+            message: String::from("bad"),
+        },
+        ConfigError::Invalid(String::from("empty")),
+    ];
+
+    let mut messages: Vec<String> = errors.iter().map(|error| error.to_string()).collect();
+
+    assert!(messages.iter().all(|message| !message.is_empty()));
+    messages.sort();
+    messages.dedup();
+    assert_eq!(messages.len(), errors.len());
+}

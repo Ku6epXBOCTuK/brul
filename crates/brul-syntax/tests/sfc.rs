@@ -90,3 +90,27 @@ fn text_outside_blocks_is_syntax_error() {
     let error = parse("<markup></markup>\nstray\n").unwrap_err();
     assert!(matches!(error, Error::Syntax { line: 2, .. }), "{error:?}");
 }
+
+#[test]
+fn errors_render_distinct_messages() {
+    let errors = [
+        Error::Syntax {
+            message: String::from("unexpected"),
+            line: 2,
+            column: 3,
+        },
+        Error::Duplicate {
+            name: "style",
+            line: 2,
+            column: 3,
+        },
+        Error::MissingMarkup,
+    ];
+
+    let mut messages: Vec<String> = errors.iter().map(|error| error.to_string()).collect();
+
+    assert!(messages.iter().all(|message| !message.is_empty()));
+    messages.sort();
+    messages.dedup();
+    assert_eq!(messages.len(), errors.len());
+}
