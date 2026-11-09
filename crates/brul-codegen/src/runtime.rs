@@ -1,13 +1,91 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_gui::{Widget, WidgetId, WidgetTree};
+use brul_gui::{Direction, Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Value, eval};
+use brul_script::{Component, Value, Variable, eval};
 use brul_syntax::ast::Expr;
+use brul_syntax::markup::{EachBlock, IfBlock, PropType};
+use brul_syntax::style::Stylesheet;
+
+use crate::{Import, Registry};
+
+pub type ComponentHandle = Rc<RefCell<Component>>;
 
 #[derive(Clone)]
-pub enum Target {
+pub struct Context {
+    pub registry: Rc<Registry>,
+    pub imports: Vec<Import>,
+    pub stylesheet: Rc<Stylesheet>,
+}
+
+#[derive(Clone)]
+pub struct Binding {
+    pub widget: WidgetId,
+    pub target: BindingTarget,
+    pub scopes: Vec<Vec<Variable>>,
+    pub component: ComponentHandle,
+}
+
+#[derive(Clone)]
+pub struct PropBinding {
+    pub widget: WidgetId,
+    pub target: ComponentHandle,
+    pub name: String,
+    pub ty: PropType,
+    pub expression: Expr,
+    pub scopes: Vec<Vec<Variable>>,
+    pub component: ComponentHandle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandlerEvent {
+    Click,
+    Press,
+    Release,
+    Enter,
+    Leave,
+    Drag,
+    Key,
+}
+
+impl HandlerEvent {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Click => "click",
+            Self::Press => "press",
+            Self::Release => "release",
+            Self::Enter => "enter",
+            Self::Leave => "leave",
+            Self::Drag => "drag",
+            Self::Key => "key",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "click" => Some(Self::Click),
+            "press" => Some(Self::Press),
+            "release" => Some(Self::Release),
+            "enter" => Some(Self::Enter),
+            "leave" => Some(Self::Leave),
+            "drag" => Some(Self::Drag),
+            "key" => Some(Self::Key),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Handler {
+    pub widget: Option<WidgetId>,
+    pub event: HandlerEvent,
+    pub function: String,
+    pub component: ComponentHandle,
+}
+
+#[derive(Debug, Clone)]
+pub enum BindingTarget {
     Text(Expr),
     Checked(Expr),
     Selected(Expr),
@@ -17,14 +95,42 @@ pub enum Target {
 }
 
 #[derive(Clone)]
-pub struct Binding {
-    pub widget: WidgetId,
-    pub target: Target,
+pub struct Structure {
+    pub parent: WidgetId,
+    pub direction: Direction,
+    pub spacing: u32,
+    pub kind: StructureKind,
+    pub component: ComponentHandle,
+    pub context: Context,
+}
+
+#[derive(Debug, Clone)]
+pub struct RowInfo {
+    pub key: Option<Value>,
+    pub item: Value,
+    pub start: usize,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub enum StructureKind {
+    If {
+        block: IfBlock,
+        last: bool,
+    },
+    Each {
+        block: EachBlock,
+        last: Vec<Value>,
+        rows: Vec<RowInfo>,
+    },
 }
 
 pub struct Built {
     pub widget: Widget,
     pub bindings: Vec<Binding>,
+    pub handlers: Vec<Handler>,
+    pub structures: Vec<Structure>,
+    pub props: Vec<PropBinding>,
 }
 
 pub struct Bindings {
@@ -32,61 +138,60 @@ pub struct Bindings {
 }
 
 impl Bindings {
-    pub fn new(
-        bindings: &[Binding],
-        component: &Rc<RefCell<Component>>,
-        tree: &Rc<RefCell<WidgetTree>>,
-    ) -> Self {
+    pub fn new(bindings: &[Binding], tree: &Rc<RefCell<WidgetTree>>) -> Self {
         let scope = EffectScope::new();
         for binding in bindings {
             let binding = binding.clone();
-            let component = Rc::clone(component);
             let tree = Rc::clone(tree);
             scope.run(|| {
-                Effect::new(move || apply(&binding, &component, &tree));
+                Effect::new(move || apply(&binding, &tree));
             });
         }
         Self { _scope: scope }
     }
 }
 
-fn apply(binding: &Binding, component: &RefCell<Component>, tree: &RefCell<WidgetTree>) {
+fn apply(binding: &Binding, tree: &RefCell<WidgetTree>) {
+    let component = Rc::clone(&binding.component);
     component.borrow().track();
+    let count = binding.scopes.len();
+    component.borrow_mut().push_binding_scopes(&binding.scopes);
     match &binding.target {
-        Target::Text(expression) => {
+        BindingTarget::Text(expression) => {
             if let Ok(Value::String(content)) = eval(&mut component.borrow_mut(), expression) {
                 tree.borrow_mut().set_text(binding.widget, content);
             }
         }
-        Target::Checked(expression) => {
+        BindingTarget::Checked(expression) => {
             if let Ok(Value::Bool(value)) = eval(&mut component.borrow_mut(), expression) {
                 tree.borrow_mut().set_checked(binding.widget, value);
             }
         }
-        Target::Selected(expression) => {
+        BindingTarget::Selected(expression) => {
             if let Ok(Value::Bool(value)) = eval(&mut component.borrow_mut(), expression) {
                 tree.borrow_mut().set_selected(binding.widget, value);
             }
         }
-        Target::Disabled(expression) => {
+        BindingTarget::Disabled(expression) => {
             if let Ok(Value::Bool(value)) = eval(&mut component.borrow_mut(), expression) {
                 tree.borrow_mut().set_disabled(binding.widget, value);
             }
         }
-        Target::Visible(expression) => {
+        BindingTarget::Visible(expression) => {
             if let Ok(Value::Bool(value)) = eval(&mut component.borrow_mut(), expression) {
                 tree.borrow_mut().set_visible(binding.widget, value);
             }
         }
-        Target::Offset { x, y } => {
+        BindingTarget::Offset { x, y } => {
             if let (Some(x), Some(y)) = (
-                offset_value(component, x.as_ref()),
-                offset_value(component, y.as_ref()),
+                offset_value(&component, x.as_ref()),
+                offset_value(&component, y.as_ref()),
             ) {
                 tree.borrow_mut().set_offset(binding.widget, x, y);
             }
         }
     }
+    component.borrow_mut().pop_binding_scopes(count);
 }
 
 pub fn text(component: &mut Component, expression: &Expr) -> Result<String, String> {
@@ -165,10 +270,12 @@ mod tests {
         let component = Rc::new(RefCell::new(component));
         let bindings = [Binding {
             widget: id,
-            target: Target::Text(ident("name")),
+            target: BindingTarget::Text(ident("name")),
+            scopes: Vec::new(),
+            component: Rc::clone(&component),
         }];
 
-        let _bindings = Bindings::new(&bindings, &component, &tree);
+        let _bindings = Bindings::new(&bindings, &tree);
         assert!(!tree.borrow_mut().set_text(id, "hello".to_owned()));
 
         component

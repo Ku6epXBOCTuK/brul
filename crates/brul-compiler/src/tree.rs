@@ -1,8 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_codegen::{Definition, Import, Registry};
-use brul_gui::{Direction, LayoutStyle, Widget, WidgetId};
+use brul_codegen::runtime::{
+    Binding, BindingTarget, Built, ComponentHandle, Context, Handler, HandlerEvent, PropBinding,
+    RowInfo, Structure, StructureKind,
+};
+use brul_codegen::{Definition, Registry};
+use brul_gui::{Direction, LayoutStyle, Widget};
 use brul_script::{Component, Error as ScriptError, Host, Value, Variable, eval, execute_program};
 use brul_syntax::ast::{Expr, Position};
 use brul_syntax::error::Error;
@@ -10,129 +14,6 @@ use brul_syntax::markup::{Arg, BlockItem, EachBlock, Element, IfBlock, Member, P
 use brul_syntax::style::Stylesheet;
 
 use brul_codegen::styles::{self, Resolved};
-
-pub type ComponentHandle = Rc<RefCell<Component>>;
-
-#[derive(Clone)]
-pub struct Context {
-    pub registry: Rc<Registry>,
-    pub imports: Vec<Import>,
-    pub stylesheet: Rc<Stylesheet>,
-}
-
-#[derive(Clone)]
-pub struct Binding {
-    pub widget: WidgetId,
-    pub target: BindingTarget,
-    pub scopes: Vec<Vec<Variable>>,
-    pub component: ComponentHandle,
-}
-
-#[derive(Clone)]
-pub struct PropBinding {
-    pub widget: WidgetId,
-    pub target: ComponentHandle,
-    pub name: String,
-    pub ty: PropType,
-    pub expression: Expr,
-    pub scopes: Vec<Vec<Variable>>,
-    pub component: ComponentHandle,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HandlerEvent {
-    Click,
-    Press,
-    Release,
-    Enter,
-    Leave,
-    Drag,
-    Key,
-}
-
-impl HandlerEvent {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Click => "click",
-            Self::Press => "press",
-            Self::Release => "release",
-            Self::Enter => "enter",
-            Self::Leave => "leave",
-            Self::Drag => "drag",
-            Self::Key => "key",
-        }
-    }
-
-    pub(crate) fn parse(name: &str) -> Option<Self> {
-        match name {
-            "click" => Some(Self::Click),
-            "press" => Some(Self::Press),
-            "release" => Some(Self::Release),
-            "enter" => Some(Self::Enter),
-            "leave" => Some(Self::Leave),
-            "drag" => Some(Self::Drag),
-            "key" => Some(Self::Key),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Handler {
-    pub widget: Option<WidgetId>,
-    pub event: HandlerEvent,
-    pub function: String,
-    pub component: ComponentHandle,
-}
-
-#[derive(Debug, Clone)]
-pub enum BindingTarget {
-    Text(Expr),
-    Checked(Expr),
-    Selected(Expr),
-    Disabled(Expr),
-    Visible(Expr),
-    Offset { x: Option<Expr>, y: Option<Expr> },
-}
-
-#[derive(Clone)]
-pub struct Structure {
-    pub parent: WidgetId,
-    pub direction: Direction,
-    pub spacing: u32,
-    pub kind: StructureKind,
-    pub component: ComponentHandle,
-    pub context: Context,
-}
-
-#[derive(Debug, Clone)]
-pub struct RowInfo {
-    pub key: Option<Value>,
-    pub item: Value,
-    pub start: usize,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone)]
-pub enum StructureKind {
-    If {
-        block: IfBlock,
-        last: bool,
-    },
-    Each {
-        block: EachBlock,
-        last: Vec<Value>,
-        rows: Vec<RowInfo>,
-    },
-}
-
-pub struct Built {
-    pub widget: Widget,
-    pub bindings: Vec<Binding>,
-    pub handlers: Vec<Handler>,
-    pub structures: Vec<Structure>,
-    pub props: Vec<PropBinding>,
-}
 
 type Parts = (
     Widget,

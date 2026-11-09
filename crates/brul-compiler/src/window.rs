@@ -3,6 +3,9 @@ use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 
+use brul_codegen::runtime::{
+    Binding, ComponentHandle, Context, Handler, HandlerEvent, PropBinding, Structure,
+};
 use brul_codegen::{Registry, error_at};
 use brul_gui::Widget;
 use brul_gui::window::WindowConfig;
@@ -12,9 +15,7 @@ use brul_syntax::markup::{Element, Window};
 use brul_syntax::script::Program;
 
 use crate::build_bound_tree;
-use crate::tree::{
-    Binding, ComponentHandle, Context, Handler, HandlerEvent, PropBinding, Structure, script_error,
-};
+use crate::tree::script_error;
 
 pub struct Loaded {
     pub config: WindowConfig,
