@@ -208,7 +208,8 @@ fn tree_applies_classes_to_the_root_widget() {
         .expect("window has a root element");
     let sheet =
         stylesheet(".panel { width: 200px; height: 100px; padding: 5px; background: #334455; }");
-    let widget = build_tree(element, &sheet, None).expect("tree builds");
+    let widget =
+        build_tree(element, &sheet, None, &mut brul_script::Component::new()).expect("tree builds");
     let mut tree = WidgetTree::new(widget);
     let mut engine = TextEngine::new();
     tree.layout(

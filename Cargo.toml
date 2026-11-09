@@ -29,6 +29,7 @@ debug = false
 brul-compiler = { path = 'crates\brul-compiler' }
 brul-gui = { path = 'crates\brul-gui' }
 brul-reactive = { path = 'crates\brul-reactive' }
+brul-script = { path = 'crates\brul-script' }
 brul-syntax = { path = 'crates\brul-syntax' }
 cosmic-text = "0.19.0"
 criterion = { version = "0.8.2", default-features = false }

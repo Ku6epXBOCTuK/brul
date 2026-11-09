@@ -1,5 +1,6 @@
 use brul_compiler::load;
 use brul_gui::{Color, Size, TextEngine, WidgetTree};
+use brul_script::Value;
 use brul_syntax::error::Error;
 
 fn snapshot(
@@ -72,6 +73,31 @@ fn script_block_is_parsed_into_a_program() {
 
     assert_eq!(program.functions.len(), 1);
     assert_eq!(program.functions[0].name, "launch");
+}
+
+#[test]
+fn script_runs_once_at_load() {
+    let loaded = load(PICKER, None).expect("app loads");
+
+    assert_eq!(loaded.component.read("count"), Ok(Value::Number(0.0)));
+}
+
+#[test]
+fn script_execution_error_keeps_its_position() {
+    let error = failure(
+        r#"
+<script>
+let value = 1 / 0;
+</script>
+
+<markup>
+window Picker (title: "x") { Column { } }
+</markup>
+"#,
+    );
+
+    assert_eq!(error.message, "division by zero");
+    assert_eq!((error.line, error.column), (3, 13));
 }
 
 #[test]

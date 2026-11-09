@@ -1,5 +1,6 @@
 use brul_gui::Widget;
 use brul_gui::window::WindowConfig;
+use brul_script::{Component, execute_program};
 use brul_syntax::ast::{Expr, ExprKind, Position};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{self, Arg, Declaration, Element, Member, Window};
@@ -9,10 +10,12 @@ use brul_syntax::style::{self, Stylesheet};
 use brul_syntax::uses::{self, Use};
 
 use crate::build_tree;
+use crate::tree::script_error;
 
 pub struct Loaded {
     pub config: WindowConfig,
     pub tree: Widget,
+    pub component: Component,
     pub uses: Vec<Use>,
     pub program: Option<Program>,
 }
@@ -50,13 +53,19 @@ pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
         None => None,
     };
 
+    let mut component = Component::new();
+    if let Some(program) = &program {
+        execute_program(&mut component, program).map_err(script_error)?;
+    }
+
     let root = root(&window)?;
     let config = config(&window)?;
-    let tree = build_tree(root, &stylesheet, theme)?;
+    let tree = build_tree(root, &stylesheet, theme, &mut component)?;
 
     Ok(Loaded {
         config,
         tree,
+        component,
         uses,
         program,
     })

@@ -115,6 +115,13 @@ impl Error {
             _ => None,
         }
     }
+
+    pub fn reason(&self) -> String {
+        match self {
+            Error::At(_, error) => error.reason(),
+            error => error.to_string(),
+        }
+    }
 }
 
 impl std::error::Error for Error {}

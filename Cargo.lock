@@ -204,6 +204,7 @@ name = "brul-compiler"
 version = "0.1.0"
 dependencies = [
  "brul-gui",
+ "brul-script",
  "brul-syntax",
 ]
 
