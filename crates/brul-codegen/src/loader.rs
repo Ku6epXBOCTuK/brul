@@ -11,7 +11,7 @@ use brul_syntax::sfc;
 use brul_syntax::style::{self, Stylesheet};
 use brul_syntax::uses::{self, Use};
 
-use crate::window::{error_at, padded, sfc_error};
+use crate::{error_at, padded, sfc_error};
 
 pub struct Definition {
     pub name: String,

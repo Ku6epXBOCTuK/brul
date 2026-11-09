@@ -29,6 +29,7 @@ debug = "line-tables-only"
 debug = false
 
 [workspace.dependencies]
+brul-codegen = { path = 'crates\brul-codegen' }
 brul-compiler = { path = 'crates\brul-compiler' }
 brul-gui = { path = 'crates\brul-gui' }
 brul-reactive = { path = 'crates\brul-reactive' }
@@ -43,3 +44,4 @@ serde = "1.0.228"
 toml = "1.1.4"
 wgpu = "30.0.1"
 winit = "=0.31.0-beta.4"
+brul = { path = "" }

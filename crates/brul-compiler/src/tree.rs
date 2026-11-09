@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use brul_codegen::{Definition, Import, Registry};
 use brul_gui::{Direction, LayoutStyle, Widget, WidgetId};
 use brul_script::{Component, Error as ScriptError, Host, Value, Variable, eval, execute_program};
 use brul_syntax::ast::{Expr, Position};
@@ -8,7 +9,6 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, BlockItem, EachBlock, Element, IfBlock, Member, PropType};
 use brul_syntax::style::Stylesheet;
 
-use crate::loader::{Definition, Import, Registry};
 use crate::styles::{self, Resolved};
 
 pub type ComponentHandle = Rc<RefCell<Component>>;

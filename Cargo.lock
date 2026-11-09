@@ -205,9 +205,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "brul-codegen"
+version = "0.1.0"
+dependencies = [
+ "brul-gui",
+ "brul-syntax",
+]
+
+[[package]]
 name = "brul-compiler"
 version = "0.1.0"
 dependencies = [
+ "brul-codegen",
  "brul-gui",
  "brul-script",
  "brul-syntax",

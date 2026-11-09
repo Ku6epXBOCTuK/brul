@@ -3,19 +3,15 @@ use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 
+use brul_codegen::{Registry, error_at};
 use brul_gui::Widget;
 use brul_gui::window::WindowConfig;
 use brul_script::{Component, Value, execute_program};
-use brul_syntax::ast::{Expr, ExprKind, Position};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{self, Arg, Declaration, Element, Member, Window};
-use brul_syntax::script::{self, Program};
-use brul_syntax::sfc;
-use brul_syntax::style::{self, Stylesheet};
-use brul_syntax::uses::{self, Use};
+use brul_syntax::markup::{Element, Window};
+use brul_syntax::script::Program;
 
 use crate::build_bound_tree;
-use crate::loader::{self, Registry};
 use crate::tree::{
     Binding, ComponentHandle, Context, Handler, HandlerEvent, PropBinding, Structure, script_error,
 };
@@ -28,7 +24,7 @@ pub struct Loaded {
     pub props: Vec<PropBinding>,
     pub handlers: Vec<Handler>,
     pub component: ComponentHandle,
-    pub uses: Vec<Use>,
+    pub uses: Vec<brul_syntax::uses::Use>,
     pub registry: Rc<Registry>,
     pub context: Context,
     pub program: Option<Program>,
@@ -72,43 +68,16 @@ fn load_from(
     theme: Option<&str>,
     seeds: &[(&str, Value)],
 ) -> Result<Loaded, Error> {
-    let sfc = sfc::parse(source).map_err(sfc_error)?;
-    let markup = markup::parse_file(&padded(source, sfc.markup))?;
-    let window = markup
-        .declarations
-        .into_iter()
-        .find_map(|declaration| match declaration {
-            Declaration::Window(window) => Some(window),
-            Declaration::Component(_) => None,
-        })
-        .ok_or_else(|| {
-            error_at(
-                Position { line: 1, column: 1 },
-                "missing window declaration",
-            )
-        })?;
-
-    let stylesheet = Rc::new(match sfc.style {
-        Some(block) => style::parse_file(&padded(source, block))?,
-        None => Stylesheet {
-            themes: Vec::new(),
-            rules: Vec::new(),
-        },
-    });
-    let uses = match sfc.uses {
-        Some(block) => uses::parse(&padded(source, block))?,
-        None => Vec::new(),
-    };
-    let registry = Rc::new(loader::resolve(&uses, base)?);
+    let parsed = brul_codegen::parse_source(source)?;
+    let stylesheet = Rc::new(parsed.stylesheet);
+    let uses = parsed.uses;
+    let registry = Rc::new(brul_codegen::resolve(&uses, base)?);
     let context = Context {
         registry: Rc::clone(&registry),
         imports: registry.imports.clone(),
         stylesheet: Rc::clone(&stylesheet),
     };
-    let program = match sfc.script {
-        Some(block) => Some(script::parse(&padded(source, block))?),
-        None => None,
-    };
+    let program = parsed.program;
 
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
     for (name, value) in seeds {
@@ -121,8 +90,8 @@ fn load_from(
         execute_program(&mut component.borrow_mut(), program).map_err(script_error)?;
     }
 
-    let root = root(&window)?.to_owned();
-    let (config, window_handlers) = config(&window, &component)?;
+    let root = brul_codegen::root(&parsed.window)?.to_owned();
+    let (config, window_handlers) = arguments(&parsed.window, &component)?;
     let mut built = build_bound_tree(&root, &component, &context, theme)?;
     built.handlers.extend(window_handlers);
 
@@ -143,157 +112,43 @@ fn load_from(
     })
 }
 
-fn config(
+fn arguments(
     window: &Window,
     component: &ComponentHandle,
 ) -> Result<(WindowConfig, Vec<Handler>), Error> {
-    let mut config = WindowConfig::default();
+    let (config, raw) = brul_codegen::arguments(window)?;
     let mut handlers = Vec::new();
-    for arg in &window.args {
-        match arg {
-            Arg::Named { name, value } => match name.as_str() {
-                "title" => config.title = string(value, "title")?,
-                "width" => config.width = size(value, "width")?,
-                "height" => config.height = size(value, "height")?,
-                "frameless" => flag(value, "frameless")?,
-                "transparent" => flag(value, "transparent")?,
-                _ => {
-                    return Err(error_at(
-                        value.position,
-                        format!("unknown window argument '{name}'"),
-                    ));
-                }
-            },
-            Arg::Handler { event, handler } => {
-                let Some(parsed) = HandlerEvent::parse(event) else {
-                    return Err(error_at(
-                        window.position,
-                        format!("event '{event}' is not supported yet"),
-                    ));
-                };
-                if parsed != HandlerEvent::Key {
-                    return Err(error_at(
-                        window.position,
-                        format!("window event '{}' is not supported yet", parsed.name()),
-                    ));
-                }
-                if handlers.iter().any(|item: &Handler| item.event == parsed) {
-                    return Err(error_at(
-                        window.position,
-                        format!("event '{}' is handled twice", parsed.name()),
-                    ));
-                }
-                if !component.borrow().has_function(handler) {
-                    return Err(error_at(
-                        window.position,
-                        format!("function '{handler}' is not defined"),
-                    ));
-                }
-                handlers.push(Handler {
-                    widget: None,
-                    event: parsed,
-                    function: handler.clone(),
-                    component: Rc::clone(component),
-                });
-            }
-            Arg::Class(_) => {
-                return Err(error_at(window.position, "window arguments must be named"));
-            }
+    for item in raw {
+        let Some(parsed) = HandlerEvent::parse(&item.event) else {
+            return Err(error_at(
+                item.position,
+                format!("event '{}' is not supported yet", item.event),
+            ));
+        };
+        if parsed != HandlerEvent::Key {
+            return Err(error_at(
+                item.position,
+                format!("window event '{}' is not supported yet", parsed.name()),
+            ));
         }
+        if handlers.iter().any(|other: &Handler| other.event == parsed) {
+            return Err(error_at(
+                item.position,
+                format!("event '{}' is handled twice", parsed.name()),
+            ));
+        }
+        if !component.borrow().has_function(&item.function) {
+            return Err(error_at(
+                item.position,
+                format!("function '{}' is not defined", item.function),
+            ));
+        }
+        handlers.push(Handler {
+            widget: None,
+            event: parsed,
+            function: item.function,
+            component: Rc::clone(component),
+        });
     }
     Ok((config, handlers))
-}
-
-fn root(window: &Window) -> Result<&Element, Error> {
-    let mut roots = window.members.iter().filter_map(|member| match member {
-        Member::Element(element) => Some(element),
-        Member::Prop(_) | Member::Event(_) => None,
-    });
-    let root = roots
-        .next()
-        .ok_or_else(|| error_at(window.position, "window has no root element"))?;
-    if roots.next().is_some() {
-        return Err(error_at(
-            window.position,
-            "window has more than one root element",
-        ));
-    }
-    Ok(root)
-}
-
-fn string(value: &Expr, name: &str) -> Result<String, Error> {
-    match &value.kind {
-        ExprKind::String(text) => Ok(text.clone()),
-        _ => Err(error_at(
-            value.position,
-            format!("window argument '{name}' must be a string"),
-        )),
-    }
-}
-
-fn size(value: &Expr, name: &str) -> Result<u32, Error> {
-    match &value.kind {
-        ExprKind::Number(number)
-            if number.is_finite()
-                && *number > 0.0
-                && number.fract() == 0.0
-                && *number <= f64::from(u32::MAX) =>
-        {
-            Ok(*number as u32)
-        }
-        _ => Err(error_at(
-            value.position,
-            format!("window argument '{name}' must be a positive integer"),
-        )),
-    }
-}
-
-fn flag(value: &Expr, name: &str) -> Result<(), Error> {
-    match &value.kind {
-        ExprKind::Bool(true) => Ok(()),
-        ExprKind::Bool(false) => Err(error_at(value.position, format!("window is always {name}"))),
-        _ => Err(error_at(
-            value.position,
-            format!("window argument '{name}' must be a bool"),
-        )),
-    }
-}
-
-pub(crate) fn padded(source: &str, block: sfc::Block<'_>) -> String {
-    let mut text = String::with_capacity(block.offset + block.content.len());
-    for character in source[..block.offset].chars() {
-        text.push(if character == '\n' { '\n' } else { ' ' });
-    }
-    text.push_str(block.content);
-    text
-}
-
-pub(crate) fn sfc_error(error: sfc::Error) -> Error {
-    match error {
-        sfc::Error::Syntax {
-            message,
-            line,
-            column,
-        } => Error {
-            message,
-            line,
-            column,
-        },
-        sfc::Error::Duplicate { name, line, column } => Error {
-            message: format!("duplicate <{name}> block"),
-            line,
-            column,
-        },
-        sfc::Error::MissingMarkup => {
-            error_at(Position { line: 1, column: 1 }, "missing <markup> block")
-        }
-    }
-}
-
-pub(crate) fn error_at(position: Position, message: impl Into<String>) -> Error {
-    Error {
-        message: message.into(),
-        line: position.line,
-        column: position.column,
-    }
 }
