@@ -138,3 +138,24 @@ fn a_variable_is_not_visible_in_its_own_initializer() {
 fn a_declaration_without_an_initializer_resolves() {
     accepts("let value;\nvalue = 1;", &[]);
 }
+
+#[test]
+fn every_expression_kind_visits_its_children() {
+    for source in [
+        "let x = missing.field;",
+        "let x = -missing;",
+        "let x = missing[0];",
+        "let x = missing + 1;",
+        "let x = missing ? 1 : 2;",
+        "let x = missing = 1;",
+        "let x = [missing];",
+        "let x = { key: missing };",
+        "let x = `${missing}`;",
+    ] {
+        let error = failure(source, &[]);
+        assert_eq!(
+            error.message, "variable 'missing' is not defined",
+            "{source}"
+        );
+    }
+}

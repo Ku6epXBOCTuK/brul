@@ -65,129 +65,153 @@ fn check_statements<'a>(statements: &'a [Statement], names: &mut Names<'a>) -> R
 
 fn check_statement<'a>(statement: &'a Statement, names: &mut Names<'a>) -> Result<(), Error> {
     match statement {
-        Statement::Let { name, value, .. } => {
-            if let Some(value) = value {
-                check_expression(value, names)?;
-            }
-            names.variables.push(name.as_str());
-            Ok(())
-        }
+        Statement::Let { name, value, .. } => check_let(name, value.as_ref(), names),
         Statement::Expr(expression) => check_expression(expression, names),
         Statement::Block(statements) => check_statements(statements, names),
         Statement::If {
             condition,
             then_branch,
             else_branch,
-        } => {
-            check_expression(condition, names)?;
-            check_statements(then_branch, names)?;
-            if let Some(else_branch) = else_branch {
-                check_statement(else_branch, names)?;
-            }
-            Ok(())
-        }
+        } => check_if(condition, then_branch, else_branch.as_deref(), names),
     }
+}
+
+fn check_let<'a>(
+    name: &'a str,
+    value: Option<&'a Expr>,
+    names: &mut Names<'a>,
+) -> Result<(), Error> {
+    if let Some(value) = value {
+        check_expression(value, names)?;
+    }
+    names.variables.push(name);
+    Ok(())
+}
+
+fn check_if<'a>(
+    condition: &'a Expr,
+    then_branch: &'a [Statement],
+    else_branch: Option<&'a Statement>,
+    names: &mut Names<'a>,
+) -> Result<(), Error> {
+    check_expression(condition, names)?;
+    check_statements(then_branch, names)?;
+    if let Some(else_branch) = else_branch {
+        check_statement(else_branch, names)?;
+    }
+    Ok(())
 }
 
 fn check_expression(expression: &Expr, names: &Names<'_>) -> Result<(), Error> {
     match &expression.kind {
         ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) | ExprKind::Null => Ok(()),
         ExprKind::Ident(name) => check_variable(name, expression.position, names),
-        ExprKind::Field { target, .. } => check_expression(target, names),
-        ExprKind::Index { target, index } => {
-            check_expression(target, names)?;
-            check_expression(index, names)
-        }
-        ExprKind::Call { target, args } => {
-            match &target.kind {
-                ExprKind::Ident(name) if !names.has_function(name) => {
-                    return Err(undefined_function(name, target.position));
-                }
-                ExprKind::Ident(_) => {}
-                _ => check_expression(target, names)?,
-            }
-            for (index, argument) in args.iter().enumerate() {
-                if index == 1
-                    && matches!(&target.kind, ExprKind::Ident(name) if name == "every")
-                    && let ExprKind::Ident(function) = &argument.kind
-                {
-                    if !names.has_function(function) {
-                        return Err(undefined_function(function, argument.position));
-                    }
-                    continue;
-                }
-                check_expression(argument, names)?;
-            }
-            Ok(())
-        }
-        ExprKind::Assign { target, value, .. } => {
-            check_target(target, names)?;
-            check_expression(value, names)
-        }
-        ExprKind::Unary { operand, .. } => check_expression(operand, names),
-        ExprKind::Binary { left, right, .. } => {
-            check_expression(left, names)?;
-            check_expression(right, names)
-        }
+        ExprKind::Call { target, args } => check_call(target, args, names),
+        _ => check_children(expression, names),
+    }
+}
+
+fn check_children(expression: &Expr, names: &Names<'_>) -> Result<(), Error> {
+    for child in children(&expression.kind) {
+        check_expression(child, names)?;
+    }
+    Ok(())
+}
+
+fn children(kind: &ExprKind) -> Vec<&Expr> {
+    match kind {
+        ExprKind::Number(_)
+        | ExprKind::String(_)
+        | ExprKind::Bool(_)
+        | ExprKind::Null
+        | ExprKind::Ident(_)
+        | ExprKind::Call { .. } => Vec::new(),
+        ExprKind::Field { target, .. }
+        | ExprKind::Unary {
+            operand: target, ..
+        } => vec![target],
+        ExprKind::Index { target, index }
+        | ExprKind::Binary {
+            left: target,
+            right: index,
+            ..
+        } => vec![target, index],
         ExprKind::Ternary {
             condition,
             then_branch,
             else_branch,
-        } => {
-            check_expression(condition, names)?;
-            check_expression(then_branch, names)?;
-            check_expression(else_branch, names)
-        }
-        ExprKind::Array(items) => {
-            for item in items {
-                check_expression(item, names)?;
-            }
-            Ok(())
-        }
-        ExprKind::Object(fields) => {
-            for (_, value) in fields {
-                check_expression(value, names)?;
-            }
-            Ok(())
-        }
-        ExprKind::Template(parts) => {
-            for part in parts {
-                if let TemplatePart::Expr(expression) = part {
-                    check_expression(expression, names)?;
-                }
-            }
-            Ok(())
-        }
+        } => vec![condition, then_branch, else_branch],
+        ExprKind::Assign { target, value, .. } => vec![target, value],
+        ExprKind::Array(items) => items.iter().collect(),
+        ExprKind::Object(fields) => fields.iter().map(|(_, value)| value).collect(),
+        ExprKind::Template(parts) => parts.iter().filter_map(template_expression).collect(),
     }
 }
 
-fn check_target(target: &Expr, names: &Names<'_>) -> Result<(), Error> {
+fn template_expression(part: &TemplatePart) -> Option<&Expr> {
+    match part {
+        TemplatePart::Expr(expression) => Some(expression),
+        TemplatePart::Text(_) => None,
+    }
+}
+
+fn check_call(target: &Expr, args: &[Expr], names: &Names<'_>) -> Result<(), Error> {
+    check_callee(target, names)?;
+    check_arguments(target, args, names)
+}
+
+fn check_callee(target: &Expr, names: &Names<'_>) -> Result<(), Error> {
     match &target.kind {
-        ExprKind::Ident(name) => check_variable(name, target.position, names),
-        ExprKind::Field { target, .. } => check_expression(target, names),
-        ExprKind::Index { target, index } => {
-            check_expression(target, names)?;
-            check_expression(index, names)
+        ExprKind::Ident(name) if !names.has_function(name) => {
+            Err(undefined("function", name, target.position))
         }
+        ExprKind::Ident(_) => Ok(()),
         _ => check_expression(target, names),
     }
+}
+
+fn check_arguments(target: &Expr, args: &[Expr], names: &Names<'_>) -> Result<(), Error> {
+    let every = is_every(target);
+    for (index, argument) in args.iter().enumerate() {
+        check_argument(every && index == 1, argument, names)?;
+    }
+    Ok(())
+}
+
+fn check_argument(
+    function_position: bool,
+    argument: &Expr,
+    names: &Names<'_>,
+) -> Result<(), Error> {
+    if function_position && let ExprKind::Ident(name) = &argument.kind {
+        return check_function(name, argument.position, names);
+    }
+    check_expression(argument, names)
+}
+
+fn is_every(target: &Expr) -> bool {
+    matches!(&target.kind, ExprKind::Ident(name) if name == "every")
 }
 
 fn check_variable(name: &str, position: Position, names: &Names<'_>) -> Result<(), Error> {
     if names.has_variable(name) {
         Ok(())
     } else {
-        Err(Error {
-            message: format!("variable '{name}' is not defined"),
-            line: position.line,
-            column: position.column,
-        })
+        Err(undefined("variable", name, position))
     }
 }
 
-fn undefined_function(name: &str, position: Position) -> Error {
+fn check_function(name: &str, position: Position, names: &Names<'_>) -> Result<(), Error> {
+    if names.has_function(name) {
+        Ok(())
+    } else {
+        Err(undefined("function", name, position))
+    }
+}
+
+fn undefined(what: &str, name: &str, position: Position) -> Error {
     Error {
-        message: format!("function '{name}' is not defined"),
+        message: format!("{what} '{name}' is not defined"),
         line: position.line,
         column: position.column,
     }

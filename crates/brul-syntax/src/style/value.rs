@@ -20,40 +20,54 @@ pub enum Type {
 impl Type {
     pub fn parse(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
         match self {
+            Type::Number | Type::Px | Type::Length => self.number_value(cursor, name),
+            Type::Color | Type::Paint | Type::Border => self.paint_value(cursor, name),
             Type::ThemeKey => theme_key(cursor, name),
+            Type::String => string(cursor, name).map(Value::String),
+            Type::Keywords(names) => keyword(cursor, name, names),
+            Type::NumberRange(min, max) => number_in(
+                cursor,
+                format!("expected number from {min} to {max} for '{name}'"),
+                |value| (min..=max).contains(&value),
+            ),
+            Type::NumberIn(values) => number_in(
+                cursor,
+                format!("expected one of {} for '{name}'", list(values)),
+                |value| values.contains(&value),
+            ),
+        }
+    }
+
+    fn number_value(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+        match self {
             Type::Number => number(cursor, &expected(name, "number")).map(Value::Number),
             Type::Px => px(cursor, name).map(Value::Px),
             Type::Length => length(cursor, name),
+            _ => unreachable!("parse sends only number types here"),
+        }
+    }
+
+    fn paint_value(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+        match self {
             Type::Color => color(cursor, name).map(Value::Color),
             Type::Paint => paint(cursor, name),
             Type::Border => border(cursor, name),
-            Type::String => string(cursor, name).map(Value::String),
-            Type::Keywords(names) => keyword(cursor, name, names),
-            Type::NumberRange(min, max) => {
-                let at = cursor.value_start();
-                let message = format!("expected number from {min} to {max} for '{name}'");
-                let value = cursor
-                    .number_literal()
-                    .map_err(|_| Error::at(cursor.source(), at, message.as_str()))?;
-                if (min..=max).contains(&value) {
-                    Ok(Value::Number(value))
-                } else {
-                    Err(Error::at(cursor.source(), at, message))
-                }
-            }
-            Type::NumberIn(values) => {
-                let at = cursor.value_start();
-                let message = format!("expected one of {} for '{name}'", list(values));
-                let value = cursor
-                    .number_literal()
-                    .map_err(|_| Error::at(cursor.source(), at, message.as_str()))?;
-                if values.contains(&value) {
-                    Ok(Value::Number(value))
-                } else {
-                    Err(Error::at(cursor.source(), at, message))
-                }
-            }
+            _ => unreachable!("parse sends only paint types here"),
         }
+    }
+}
+
+fn number_in(
+    cursor: &mut Cursor,
+    message: String,
+    accept: impl Fn(f64) -> bool,
+) -> Result<Value, Error> {
+    let at = cursor.value_start();
+    let value = number(cursor, &message)?;
+    if accept(value) {
+        Ok(Value::Number(value))
+    } else {
+        Err(Error::at(cursor.source(), at, &message))
     }
 }
 
