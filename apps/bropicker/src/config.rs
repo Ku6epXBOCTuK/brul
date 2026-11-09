@@ -60,6 +60,25 @@ pub struct BrowserEntry {
     pub is_default: bool,
 }
 
+pub fn demo_browsers() -> Vec<BrowserEntry> {
+    [
+        ("Firefox", "firefox", true),
+        ("Chrome", "chrome", false),
+        ("Brave", "brave", false),
+        ("Edge", "msedge", false),
+    ]
+    .into_iter()
+    .map(|(name, path, is_default)| BrowserEntry {
+        name: name.to_string(),
+        path: path.to_string(),
+        flags: String::new(),
+        icon: String::new(),
+        emoji: String::new(),
+        is_default,
+    })
+    .collect()
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct Settings {

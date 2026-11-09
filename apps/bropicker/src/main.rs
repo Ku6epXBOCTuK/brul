@@ -2,8 +2,7 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use bropicker::launcher::Launcher;
-use bropicker::ui::demo_browsers;
-use bropicker::{BrowserEntry, Config, Theme};
+use bropicker::{BrowserEntry, Config, Theme, demo_browsers};
 use brul::{Host, Value};
 
 struct LauncherHost {
@@ -75,12 +74,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         ("alwaysAsk", Value::Bool(config.settings.always_ask)),
     ];
     let theme = match config.theme {
-        Theme::Light => "light",
-        Theme::Dark | Theme::System => "dark",
+        Theme::Light => Some("light"),
+        Theme::Dark => Some("dark"),
+        Theme::System => None,
     };
     let host = LauncherHost { browsers, url };
 
-    brul::run_file_with(picker(), Some(theme), &seeds, Some(Box::new(host)))?;
+    brul::run_file_with(picker(), theme, &seeds, Some(Box::new(host)))?;
 
     Ok(())
 }

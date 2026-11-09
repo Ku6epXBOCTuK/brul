@@ -189,6 +189,9 @@ impl Ui {
     }
 
     fn set_theme(&mut self, theme: &str) -> Result<(), brul_syntax::error::Error> {
+        if self.theme.as_deref() == Some(theme) {
+            return Ok(());
+        }
         let previous = self.theme.replace(theme.to_owned());
         if let Err(error) = self.rebuild() {
             self.theme = previous;
@@ -529,9 +532,54 @@ pub fn run_file_with(
 
 fn open(loaded: Loaded, host: Option<Box<dyn Host>>) -> Result<(), Box<dyn std::error::Error>> {
     let config = loaded.config.clone();
-    let mut ui = Ui::with_host(loaded, host);
-    let initial = ui.dispatch(&[]);
-    let tree = Rc::clone(&ui.tree);
-    window::run_tree(config, tree, initial, move |events| ui.dispatch(events))?;
+    let fixed = loaded.theme.clone();
+    let ui = Rc::new(RefCell::new(Ui::with_host(loaded, host)));
+    let initial = ui.borrow_mut().dispatch(&[]);
+    let builder = Rc::clone(&ui);
+    let handler = Rc::clone(&ui);
+    window::run_tree_themed(
+        config,
+        initial,
+        move |scheme| {
+            let mut ui = builder.borrow_mut();
+            if let Err(error) = ui.set_theme(scheme_theme(fixed.as_deref(), scheme))
+                && !error.message.contains("unknown theme")
+            {
+                eprintln!("{error}");
+            }
+            Rc::clone(&ui.tree)
+        },
+        move |events| handler.borrow_mut().dispatch(events),
+    )?;
     Ok(())
+}
+
+fn scheme_theme(fixed: Option<&str>, scheme: window::ColorScheme) -> &str {
+    fixed.unwrap_or(match scheme {
+        window::ColorScheme::Light => "light",
+        window::ColorScheme::Dark => "dark",
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_theme_ignores_the_color_scheme() {
+        assert_eq!(
+            scheme_theme(Some("dark"), window::ColorScheme::Light),
+            "dark"
+        );
+        assert_eq!(
+            scheme_theme(Some("light"), window::ColorScheme::Dark),
+            "light"
+        );
+    }
+
+    #[test]
+    fn system_theme_follows_the_color_scheme() {
+        assert_eq!(scheme_theme(None, window::ColorScheme::Light), "light");
+        assert_eq!(scheme_theme(None, window::ColorScheme::Dark), "dark");
+    }
 }

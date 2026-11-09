@@ -6,11 +6,10 @@
 
 pub mod config;
 pub mod launcher;
-pub mod ui;
 
 pub use config::{
     BrowserEntry, Config, ConfigError, Resolution, ResolveSource, Settings, Theme, default_path,
-    domain_of,
+    demo_browsers, domain_of,
 };
 pub use launcher::{
     CommandSpec, LaunchError, Launcher, Runner, SystemRunner, command_for, split_flags,
