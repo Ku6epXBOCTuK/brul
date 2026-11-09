@@ -1,6 +1,7 @@
 //! Фасад BRUL: запуск приложения, корни окон, общий контекст.
 
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -11,9 +12,11 @@ use brul_compiler::{
 };
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Error, Host, Value, eval};
+use brul_script::{Component, eval};
 use brul_syntax::ast::Expr;
 use brul_syntax::markup::Element;
+
+pub use brul_script::{Error, Host, Value};
 
 pub struct Ui {
     pub component: ComponentHandle,
@@ -32,6 +35,7 @@ pub struct Ui {
 
 struct CommandHost {
     commands: Rc<RefCell<Vec<window::WindowCommand>>>,
+    app: Option<Box<dyn Host>>,
 }
 
 impl Host for CommandHost {
@@ -58,7 +62,7 @@ impl Host for CommandHost {
         let command = match name {
             "exit" => window::WindowCommand::Exit,
             "dragWindow" => window::WindowCommand::Drag,
-            _ => return Err(Error::UnknownFunction(name.to_owned())),
+            _ => return self.delegate(name, arguments),
         };
         if !arguments.is_empty() {
             return Err(Error::Arity {
@@ -69,10 +73,30 @@ impl Host for CommandHost {
         self.commands.borrow_mut().push(command);
         Ok(Value::Null)
     }
+
+    fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
+        match &mut self.app {
+            Some(host) => host.every(interval_ms, function),
+            None => Err(Error::Unsupported("every")),
+        }
+    }
+}
+
+impl CommandHost {
+    fn delegate(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
+        match &mut self.app {
+            Some(host) => host.call(name, arguments),
+            None => Err(Error::UnknownFunction(name.to_owned())),
+        }
+    }
 }
 
 impl Ui {
     pub fn new(loaded: Loaded) -> Self {
+        Self::with_host(loaded, None)
+    }
+
+    pub fn with_host(loaded: Loaded, host: Option<Box<dyn Host>>) -> Self {
         let Loaded {
             component,
             tree: widget,
@@ -98,6 +122,7 @@ impl Ui {
         }
         component.borrow_mut().set_host(CommandHost {
             commands: Rc::clone(&commands),
+            app: host,
         });
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         let window_handlers = handlers
@@ -472,9 +497,39 @@ fn evaluate(component: &RefCell<Component>, expression: &Expr) -> Option<Value> 
 
 /// Загружает `.brul` и открывает его окно.
 pub fn run(source: &str, theme: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    let loaded = brul_compiler::load(source, theme)?;
+    run_with(source, theme, &[], None)
+}
+
+pub fn run_with(
+    source: &str,
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+    host: Option<Box<dyn Host>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let loaded = brul_compiler::load_with(source, theme, seeds)?;
+    open(loaded, host)
+}
+
+pub fn run_file(
+    path: impl AsRef<Path>,
+    theme: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    run_file_with(path, theme, &[], None)
+}
+
+pub fn run_file_with(
+    path: impl AsRef<Path>,
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+    host: Option<Box<dyn Host>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let loaded = brul_compiler::load_file_with(path, theme, seeds)?;
+    open(loaded, host)
+}
+
+fn open(loaded: Loaded, host: Option<Box<dyn Host>>) -> Result<(), Box<dyn std::error::Error>> {
     let config = loaded.config.clone();
-    let mut ui = Ui::new(loaded);
+    let mut ui = Ui::with_host(loaded, host);
     let initial = ui.dispatch(&[]);
     let tree = Rc::clone(&ui.tree);
     window::run_tree(config, tree, initial, move |events| ui.dispatch(events))?;

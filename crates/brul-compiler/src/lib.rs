@@ -11,4 +11,4 @@ pub use tree::{
     RowInfo, Structure, StructureKind, accepts_prop, build_bound_tree, build_tree,
     rebuild_structure,
 };
-pub use window::{Loaded, load, load_file};
+pub use window::{Loaded, load, load_file, load_file_with, load_with};

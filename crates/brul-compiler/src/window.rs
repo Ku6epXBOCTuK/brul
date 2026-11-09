@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use brul_gui::Widget;
 use brul_gui::window::WindowConfig;
-use brul_script::{Component, execute_program};
+use brul_script::{Component, Value, execute_program};
 use brul_syntax::ast::{Expr, ExprKind, Position};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{self, Arg, Declaration, Element, Member, Window};
@@ -37,20 +37,41 @@ pub struct Loaded {
 }
 
 pub fn load(source: &str, theme: Option<&str>) -> Result<Loaded, Error> {
-    load_from(source, None, theme)
+    load_with(source, theme, &[])
+}
+
+pub fn load_with(
+    source: &str,
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+) -> Result<Loaded, Error> {
+    load_from(source, None, theme, seeds)
 }
 
 pub fn load_file(path: impl AsRef<Path>, theme: Option<&str>) -> Result<Loaded, Error> {
+    load_file_with(path, theme, &[])
+}
+
+pub fn load_file_with(
+    path: impl AsRef<Path>,
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+) -> Result<Loaded, Error> {
     let path = path.as_ref();
     let source = fs::read_to_string(path).map_err(|error| Error {
         message: format!("cannot read '{}': {error}", path.display()),
         line: 1,
         column: 1,
     })?;
-    load_from(&source, path.parent(), theme)
+    load_from(&source, path.parent(), theme, seeds)
 }
 
-fn load_from(source: &str, base: Option<&Path>, theme: Option<&str>) -> Result<Loaded, Error> {
+fn load_from(
+    source: &str,
+    base: Option<&Path>,
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+) -> Result<Loaded, Error> {
     let sfc = sfc::parse(source).map_err(sfc_error)?;
     let markup = markup::parse_file(&padded(source, sfc.markup))?;
     let window = markup
@@ -90,6 +111,12 @@ fn load_from(source: &str, base: Option<&Path>, theme: Option<&str>) -> Result<L
     };
 
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    for (name, value) in seeds {
+        component
+            .borrow_mut()
+            .declare(name, value.clone(), true)
+            .map_err(script_error)?;
+    }
     if let Some(program) = &program {
         execute_program(&mut component.borrow_mut(), program).map_err(script_error)?;
     }
