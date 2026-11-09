@@ -1,0 +1,69 @@
+<script>
+    let selectedIndex = selected;
+    let rememberChoice = remember;
+    let alwaysAskChoice = alwaysAsk;
+
+    function launch(i) {
+        selectedIndex = i;
+        launchBrowser(i);
+    }
+
+    function toggleRemember() {
+        rememberChoice = !rememberChoice;
+    }
+
+    function toggleAlwaysAsk() {
+        alwaysAskChoice = !alwaysAskChoice;
+    }
+
+    function handleKey(ev) {
+        if (ev.code == "Escape") {
+            exit();
+        }
+    }
+</script>
+
+<use>
+    import BrowserItem from "./browser_item";
+    import CheckRow from "./check_row";
+</use>
+
+<markup>
+    window Picker (title: "bropicker", width: 488, height: 800, on key: handleKey) {
+        Column (root) {
+            Column (header, on drag: dragWindow) {
+                Text (muted) { "bropicker" }
+                Text (text) { url }
+            }
+            Column (list) {
+                each (browsers as browser, index (browser.name)) {
+                    BrowserItem (index: index, icon: browser.icon, name: browser.name,
+                                path: browser.path, isDefault: browser.isDefault,
+                                selected: index == selectedIndex,
+                                on clicked: launch) { }
+                }
+            }
+            Row (footer) {
+                CheckRow (label: "Remember choice", checked: rememberChoice,
+                        on toggled: toggleRemember) { }
+                CheckRow (label: "Always ask", checked: alwaysAskChoice,
+                        on toggled: toggleAlwaysAsk) { }
+            }
+        }
+    }
+</markup>
+
+<style>
+    .root {
+        width: 100%;
+        height: 100%;
+        padding: 16px;
+        spacing: 12px;
+        background: #14171d;
+    }
+    .header { padding: 8px; spacing: 2px; }
+    .text { color: #f0f3f8; font-size: 16px; font-weight: 600; }
+    .muted { color: #98a2b3; font-size: 12px; }
+    .list { spacing: 8px; }
+    .footer { spacing: 24px; padding: 8px; align-items: center; }
+</style>

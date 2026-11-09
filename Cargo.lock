@@ -186,6 +186,8 @@ dependencies = [
 name = "bropicker"
 version = "0.1.0"
 dependencies = [
+ "brul",
+ "brul-compiler",
  "brul-gui",
  "serde",
  "toml",

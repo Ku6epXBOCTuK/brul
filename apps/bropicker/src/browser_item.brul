@@ -1,0 +1,64 @@
+<script>
+    function choose() {
+        clicked(index);
+    }
+</script>
+
+<markup>
+    component BrowserItem {
+        prop index: Number = 0
+        prop icon: String = ""
+        prop name: String = ""
+        prop path: String = ""
+        prop isDefault: Bool = false
+        prop selected: Bool = false
+        event clicked(i: Number)
+
+        View (item, on click: choose, selected: selected) {
+            Row {
+                Text (icon-text) { icon }
+                Column (details) {
+                    Text (name) { name }
+                    Text (path) { path }
+                }
+                if (isDefault) {
+                    Text (badge) { "default" }
+                }
+            }
+        }
+    }
+</markup>
+
+<style>
+    .item {
+        padding: 12px;
+        spacing: 12px;
+        align-items: center;
+        background: #232831;
+        border: 1px #333a46;
+        radius: 14px;
+    }
+    .item:hover { background: #2b313c; }
+    .item:selected { background: #2d3a4e; border-color: #60a5fa; }
+    .icon-text {
+        width: 44px;
+        height: 44px;
+        color: #0a121e;
+        font-size: 22px;
+        font-weight: 600;
+        background: #60a5fa;
+        radius: 12px;
+        text-align: center;
+    }
+    .details { spacing: 2px; }
+    .name { color: #f0f3f8; font-size: 15px; font-weight: 600; }
+    .path { color: #98a2b3; font-size: 12px; }
+    .badge {
+        padding: 3px;
+        color: #0a121e;
+        background: #60a5fa;
+        radius: 8px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+</style>

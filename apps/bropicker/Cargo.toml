@@ -9,6 +9,10 @@ repository = "https://github.com/Ku6epXBOCTuK/brul"
 workspace = true
 
 [dependencies]
+brul = { path = "../.." }
 brul-gui = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true }
+
+[dev-dependencies]
+brul-compiler = { workspace = true }
