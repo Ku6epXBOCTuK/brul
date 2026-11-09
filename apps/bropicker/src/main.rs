@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::path::PathBuf;
 
 use bropicker::launcher::Launcher;
 use bropicker::{BrowserEntry, Config, Theme, demo_browsers};
@@ -83,15 +82,16 @@ fn run() -> Result<(), Box<dyn Error>> {
     };
     let host = LauncherHost { browsers, url };
 
-    brul::run_file_with(picker(), theme, &seeds, Some(Box::new(host)))?;
+    brul::run_generated(
+        generated::window(),
+        generated::script(),
+        generated::view,
+        theme,
+        &seeds,
+        Some(Box::new(host)),
+    )?;
 
     Ok(())
-}
-
-fn picker() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("picker.brul")
 }
 
 fn entry_value(browser: &BrowserEntry) -> Value {

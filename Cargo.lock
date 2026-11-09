@@ -188,7 +188,6 @@ version = "0.1.0"
 dependencies = [
  "brul",
  "brul-codegen",
- "brul-compiler",
  "brul-gui",
  "serde",
  "toml",

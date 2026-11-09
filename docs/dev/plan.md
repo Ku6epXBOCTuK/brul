@@ -166,7 +166,7 @@ bropicker сломан с 3.5.11.2a до 3.6.2. PNG/tint и градиент о�
   компоненте, окно запускается через фасад без интерпретатора.
 - [x] 3.5.11.1 — события: `click`/`press`/`release`/`enter`/`leave`, клавиши,
   drag: `Handler` в `Built`, проверки как у интерпретатора.
-- [ ] 3.5.11.2a — интерпретатор из фасада вон: `Source::Elements`,
+- [x] 3.5.11.2a — интерпретатор из фасада вон: `Source::Elements`,
   `with_host(Loaded)`, `run*`/`load*`, `open` удаляются, `bropicker` идёт на
   `run_generated` и показывает пустое окно. `brul-compiler` остаётся в workspace
   только как эталон.

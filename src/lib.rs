@@ -1,16 +1,14 @@
 //! Фасад BRUL: запуск приложения, корни окон, общий контекст.
 
 use std::cell::RefCell;
-use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
 
-use brul_compiler::{Context, Handler, Loaded, accepts_prop, build_bound_tree, rebuild_structure};
-use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
+use brul_compiler::{Handler, accepts_prop};
+use brul_gui::{WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, eval, execute_program};
 use brul_syntax::ast::Expr;
-use brul_syntax::markup::Element;
 
 pub use brul_compiler::{
     Binding, BindingTarget, Built, ComponentHandle, HandlerEvent, PropBinding, RowInfo, Structure,
@@ -29,15 +27,9 @@ pub struct Ui {
     commands: Rc<RefCell<Vec<window::WindowCommand>>>,
     bindings: Vec<Binding>,
     props: Vec<PropBinding>,
-    structures: Vec<Structure>,
-    source: Source,
+    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
     theme: Option<String>,
     scope: EffectScope,
-}
-
-enum Source {
-    Elements(Element, Context),
-    Generated(fn(Option<&str>, &ComponentHandle) -> Result<Built, String>),
 }
 
 struct CommandHost {
@@ -99,42 +91,10 @@ impl CommandHost {
 }
 
 impl Ui {
-    pub fn new(loaded: Loaded) -> Self {
-        Self::with_host(loaded, None)
-    }
-
-    pub fn with_host(loaded: Loaded, host: Option<Box<dyn Host>>) -> Self {
-        let Loaded {
-            component,
-            tree,
-            bindings,
-            props,
-            handlers,
-            structures,
-            root,
-            context,
-            theme,
-            ..
-        } = loaded;
-        Self::assemble(
-            component,
-            Built {
-                widget: tree,
-                bindings,
-                handlers,
-                structures,
-                props,
-            },
-            Source::Elements(root, context),
-            theme,
-            host,
-        )
-    }
-
     fn assemble(
         component: ComponentHandle,
         built: Built,
-        source: Source,
+        view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
         theme: Option<String>,
         host: Option<Box<dyn Host>>,
     ) -> Self {
@@ -143,7 +103,7 @@ impl Ui {
             bindings,
             handlers,
             props,
-            structures,
+            ..
         } = built;
         let commands = Rc::new(RefCell::new(Vec::new()));
         for (interval_ms, function) in component.borrow_mut().take_every() {
@@ -174,8 +134,7 @@ impl Ui {
             commands,
             bindings,
             props,
-            structures,
-            source,
+            view,
             theme,
             scope: EffectScope::new(),
         };
@@ -204,27 +163,19 @@ impl Ui {
     }
 
     fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
-        let built = match &self.source {
-            Source::Elements(root, context) => {
-                build_bound_tree(root, &self.component, context, self.theme.as_deref())?
+        let built = (self.view)(self.theme.as_deref(), &self.component).map_err(|message| {
+            brul_syntax::error::Error {
+                message,
+                line: 1,
+                column: 1,
             }
-            Source::Generated(view) => {
-                view(self.theme.as_deref(), &self.component).map_err(|message| {
-                    brul_syntax::error::Error {
-                        message,
-                        line: 1,
-                        column: 1,
-                    }
-                })?
-            }
-        };
+        })?;
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
         self.handlers = handlers;
         self.bindings = built.bindings;
         self.props = built.props;
-        self.structures = built.structures;
         self.scope = EffectScope::new();
         self.bind(&self.bindings);
         self.bind_props(&self.props);
@@ -241,95 +192,6 @@ impl Ui {
             return Err(error);
         }
         Ok(())
-    }
-
-    fn poll(&mut self) {
-        let structures = std::mem::take(&mut self.structures);
-        let mut kept = Vec::with_capacity(structures.len());
-        let mut bindings = Vec::new();
-        let mut props = Vec::new();
-        let mut handlers = Vec::new();
-        let mut changed = false;
-        for mut structure in structures {
-            if !self.tree.borrow().contains(structure.parent) {
-                continue;
-            }
-            let differs = match &structure.kind {
-                StructureKind::If { block, last } => {
-                    match evaluate(&structure.component, &block.condition) {
-                        Some(Value::Bool(value)) => value != *last,
-                        _ => false,
-                    }
-                }
-                StructureKind::Each { block, last, .. } => {
-                    match evaluate(&structure.component, &block.collection) {
-                        Some(Value::Array(items)) => items != *last,
-                        _ => false,
-                    }
-                }
-            };
-            if !differs {
-                kept.push(structure);
-                continue;
-            }
-            let built = rebuild_structure(&structure, self.theme.as_deref());
-            match built {
-                Ok((built, last, new_rows)) => {
-                    let Built {
-                        widget,
-                        bindings: added_bindings,
-                        handlers: added_handlers,
-                        structures: added_structures,
-                        props: added_props,
-                    } = built;
-                    let children = match &structure.kind {
-                        StructureKind::Each { rows, .. } => {
-                            reconcile_each(&self.tree, structure.parent, rows, widget, &new_rows)
-                        }
-                        _ => widget.into_children(),
-                    };
-                    self.tree
-                        .borrow_mut()
-                        .replace_all_children(structure.parent, children);
-                    match (&mut structure.kind, last) {
-                        (StructureKind::If { last, .. }, Value::Bool(value)) => *last = value,
-                        (StructureKind::Each { last, rows, .. }, Value::Array(items)) => {
-                            *last = items;
-                            *rows = new_rows;
-                        }
-                        _ => {}
-                    }
-                    bindings.extend(added_bindings);
-                    props.extend(added_props);
-                    handlers.extend(added_handlers);
-                    kept.extend(added_structures);
-                    kept.push(structure);
-                    changed = true;
-                }
-                Err(error) => {
-                    eprintln!("{error}");
-                    kept.push(structure);
-                }
-            }
-        }
-        self.structures = kept;
-        if changed {
-            let tree = Rc::clone(&self.tree);
-            self.bindings.extend(bindings);
-            self.bindings
-                .retain(|binding| tree.borrow().contains(binding.widget));
-            self.props.extend(props);
-            self.props
-                .retain(|prop| tree.borrow().contains(prop.widget));
-            self.handlers.extend(handlers);
-            self.handlers.retain(|handler| match handler.widget {
-                Some(widget) => tree.borrow().contains(widget),
-                None => true,
-            });
-            self.scope = EffectScope::new();
-            self.bind(&self.bindings);
-            self.bind_props(&self.props);
-        }
     }
 
     pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<window::WindowCommand> {
@@ -379,62 +241,8 @@ impl Ui {
                 command => output.push(command),
             }
         }
-        self.poll();
         output
     }
-}
-
-fn reconcile_each(
-    tree: &RefCell<WidgetTree>,
-    parent: WidgetId,
-    old_rows: &[RowInfo],
-    new_widget: Widget,
-    new_rows: &[RowInfo],
-) -> Vec<Widget> {
-    let Some(old_children) = tree.borrow_mut().take_children(parent) else {
-        return new_widget.into_children();
-    };
-    let mut remaining = old_children;
-    let mut old_widgets = Vec::with_capacity(old_rows.len());
-    for row in old_rows {
-        let take = row.count.min(remaining.len());
-        old_widgets.push(remaining.drain(..take).collect::<Vec<_>>());
-    }
-
-    let mut remaining = new_widget.into_children();
-    let mut new_widgets = Vec::with_capacity(new_rows.len());
-    for row in new_rows {
-        let take = row.count.min(remaining.len());
-        new_widgets.push(remaining.drain(..take).collect::<Vec<_>>());
-    }
-
-    let mut used = vec![false; old_widgets.len()];
-    let mut children = Vec::new();
-    for (index, row) in new_rows.iter().enumerate() {
-        let mut reused = None;
-        if let Some(key) = &row.key {
-            for (other, old) in old_rows.iter().enumerate() {
-                if !used[other] && old.key.as_ref() == Some(key) && old.item == row.item {
-                    reused = Some(other);
-                    break;
-                }
-            }
-        } else if let Some(old) = old_rows.get(index)
-            && !used[index]
-            && old.key.is_none()
-            && old.item == row.item
-        {
-            reused = Some(index);
-        }
-        match reused {
-            Some(other) => {
-                used[other] = true;
-                children.append(&mut old_widgets[other]);
-            }
-            None => children.append(&mut new_widgets[index]),
-        }
-    }
-    children
 }
 
 fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent)> {
@@ -541,38 +349,6 @@ fn evaluate(component: &RefCell<Component>, expression: &Expr) -> Option<Value> 
     eval(&mut component.borrow_mut(), expression).ok()
 }
 
-/// Загружает `.brul` и открывает его окно.
-pub fn run(source: &str, theme: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-    run_with(source, theme, &[], None)
-}
-
-pub fn run_with(
-    source: &str,
-    theme: Option<&str>,
-    seeds: &[(&str, Value)],
-    host: Option<Box<dyn Host>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let loaded = brul_compiler::load_with(source, theme, seeds)?;
-    open(loaded, host)
-}
-
-pub fn run_file(
-    path: impl AsRef<Path>,
-    theme: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    run_file_with(path, theme, &[], None)
-}
-
-pub fn run_file_with(
-    path: impl AsRef<Path>,
-    theme: Option<&str>,
-    seeds: &[(&str, Value)],
-    host: Option<Box<dyn Host>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let loaded = brul_compiler::load_file_with(path, theme, seeds)?;
-    open(loaded, host)
-}
-
 /// Запускает окно по модулю, сгенерированному из `.brul`.
 pub fn run_generated(
     config: WindowConfig,
@@ -583,13 +359,7 @@ pub fn run_generated(
     host: Option<Box<dyn Host>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (component, built) = generated_built(view, theme, seeds, script.as_ref())?;
-    let ui = Ui::assemble(
-        component,
-        built,
-        Source::Generated(view),
-        theme.map(str::to_owned),
-        host,
-    );
+    let ui = Ui::assemble(component, built, view, theme.map(str::to_owned), host);
     run_ui(config, theme.map(str::to_owned), ui)
 }
 
@@ -608,13 +378,6 @@ fn generated_built(
     }
     let built = view(theme, &component).map_err(std::io::Error::other)?;
     Ok((component, built))
-}
-
-fn open(loaded: Loaded, host: Option<Box<dyn Host>>) -> Result<(), Box<dyn std::error::Error>> {
-    let config = loaded.config.clone();
-    let theme = loaded.theme.clone();
-    let ui = Ui::with_host(loaded, host);
-    run_ui(config, theme, ui)
 }
 
 fn run_ui(
@@ -653,6 +416,7 @@ fn scheme_theme(fixed: Option<&str>, scheme: window::ColorScheme) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use brul_gui::Widget;
     use brul_syntax::ast::{ExprKind, Position};
 
     fn generated_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
@@ -687,13 +451,7 @@ mod tests {
         let id = built.widget.id();
         (
             id,
-            Ui::assemble(
-                component,
-                built,
-                Source::Generated(generated_view),
-                None,
-                None,
-            ),
+            Ui::assemble(component, built, generated_view, None, None),
         )
     }
 
