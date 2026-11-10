@@ -5,7 +5,6 @@ use std::time::Duration;
 use brul_codegen::runtime::{self, accepts_prop};
 use brul_gui::{WidgetEvent, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_syntax::ast::Expr;
 use brul_window::WindowCommand;
 
 use crate::each::reconcile_each;
@@ -392,18 +391,14 @@ pub(crate) fn apply_prop(prop: &PropBinding) {
     prop.component
         .borrow_mut()
         .push_binding_scopes(&prop.scopes);
-    if let Some(value) = evaluate(&prop.component, &prop.expression)
+    let value = (prop.expression)(&mut prop.component.borrow_mut()).ok();
+    if let Some(value) = value
         && accepts_prop(&value, prop.ty)
         && let Err(error) = prop.target.borrow_mut().assign_property(&prop.name, value)
     {
         eprintln!("{error}");
     }
     prop.component.borrow_mut().pop_binding_scopes(count);
-}
-
-/// Оценивает выражение в контексте компонента.
-pub fn evaluate(component: &ComponentHandle, expression: &Expr) -> Option<Value> {
-    runtime::evaluate(&mut component.borrow_mut(), expression).ok()
 }
 
 #[cfg(test)]
@@ -414,16 +409,12 @@ mod tests {
     use std::rc::Rc;
 
     use brul_gui::{Direction, Size, TextEngine, Widget};
-    use brul_syntax::ast::{AssignOp, ExprKind, Position};
+    use brul_syntax::ast::{AssignOp, Expr, ExprKind, Position};
     use brul_syntax::markup::PropType;
     use brul_window::WindowCommand;
 
     use crate::run::generated_built;
     use crate::{Binding, BindingTarget, Component, HandlerEvent, script};
-
-    fn ident(name: &str) -> Expr {
-        Expr::new(ExprKind::Ident(name.to_owned()), Position::default())
-    }
 
     macro_rules! read {
         ($name:literal) => {{
@@ -448,7 +439,9 @@ mod tests {
             return Err("unknown theme".to_owned());
         }
         let mut widget = Widget::view(Direction::Column, Vec::new());
-        let flag = evaluate(component, &ident("shown")).and_then(|value| value.as_flag());
+        let flag = shown(&mut component.borrow_mut())
+            .ok()
+            .and_then(|value| value.as_flag());
         if flag.unwrap_or(false) {
             widget.set_children(vec![Widget::text("shown")]);
         }
@@ -629,7 +622,7 @@ mod tests {
         target: &ComponentHandle,
         name: &str,
         ty: PropType,
-        expression: Expr,
+        expression: brul_codegen::runtime::Expression,
     ) -> PropBinding {
         PropBinding {
             widget: Widget::text("").id(),
@@ -659,7 +652,7 @@ mod tests {
             &target,
             "accent",
             PropType::String,
-            ident("colour"),
+            read!("colour"),
         ));
         assert_eq!(
             target.borrow().read("accent").expect("read back"),
@@ -676,7 +669,7 @@ mod tests {
             &target,
             "accent",
             PropType::Bool,
-            ident("colour"),
+            read!("colour"),
         ));
         assert_eq!(
             target.borrow().read("accent").expect("read back"),
@@ -693,7 +686,7 @@ mod tests {
             &target,
             "missing",
             PropType::String,
-            ident("colour"),
+            read!("colour"),
         ));
         assert!(target.borrow().read("missing").is_err());
     }

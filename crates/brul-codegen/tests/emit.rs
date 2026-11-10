@@ -601,7 +601,7 @@ fn emits_component_properties() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("name: \"Badge\","));
     assert!(module.contains(
-        "brul::PropArgument { name: \"label\", ty: brul::PropType::String, expression: brul::ast::Expr::new(brul::ast::ExprKind::String(\"hi\".to_owned())"
+        "brul::PropArgument { name: \"label\", ty: brul::PropType::String, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = brul::Value::String(\"hi\".to_owned()); Ok(value) }"
     ));
     assert!(module.contains("brul::PropArgument { name: \"size\", ty: brul::PropType::Number,"));
     std::fs::remove_dir_all(&dir).unwrap();

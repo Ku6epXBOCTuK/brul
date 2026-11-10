@@ -13,6 +13,13 @@ pub fn expression(expression: &Expr) -> String {
     )
 }
 
+pub fn closure(value: &Expr) -> String {
+    format!(
+        "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ let value = {}; Ok(value) }}",
+        operation(value)
+    )
+}
+
 enum Category {
     Leaf,
     Composite,

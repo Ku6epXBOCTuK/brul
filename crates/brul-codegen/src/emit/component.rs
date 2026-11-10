@@ -240,7 +240,7 @@ fn arguments(out: &mut String, field: &str, arguments: &[(&str, PropType, &Expr)
         let _ = writeln!(
             out,
             "{inner}        brul::PropArgument {{ name: {name:?}, ty: brul::PropType::{ty:?}, expression: {} }},",
-            expression(value)
+            expression::closure(value)
         );
     }
     let _ = writeln!(out, "{inner}    ],");

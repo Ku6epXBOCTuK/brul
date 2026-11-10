@@ -3,8 +3,7 @@ use std::rc::Rc;
 
 use brul_gui::{Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Error as ScriptError, Host, Value, Variable, eval, execute_program};
-use brul_syntax::ast::Expr;
+use brul_script::{Component, Error as ScriptError, Host, Value, Variable, execute_program};
 use brul_syntax::markup::PropType;
 use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
@@ -45,7 +44,7 @@ pub struct PropBinding {
     pub target: ComponentHandle,
     pub name: String,
     pub ty: PropType,
-    pub expression: Expr,
+    pub expression: Expression,
     pub scopes: Vec<Vec<Variable>>,
     pub component: ComponentHandle,
 }
@@ -160,7 +159,7 @@ pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, String>;
 pub struct PropArgument {
     pub name: &'static str,
     pub ty: PropType,
-    pub expression: Expr,
+    pub expression: Expression,
 }
 
 pub struct Instance<'a> {
@@ -289,7 +288,7 @@ fn bind(
             target: Rc::clone(component),
             name: argument.name.to_owned(),
             ty: argument.ty,
-            expression: argument.expression.clone(),
+            expression: argument.expression,
             scopes: parent.borrow().build_scopes(),
             component: Rc::clone(parent),
         });
@@ -300,7 +299,7 @@ fn evaluate_argument(
     component: &ComponentHandle,
     argument: &PropArgument,
 ) -> Result<Value, String> {
-    eval(&mut component.borrow_mut(), &argument.expression).map_err(|error| error.reason())
+    (argument.expression)(&mut component.borrow_mut()).map_err(|error| error.reason())
 }
 
 fn assign(
@@ -472,10 +471,6 @@ pub fn offset(
         .ok_or_else(|| format!("parameter '{name}' expects a Number"))
 }
 
-pub fn evaluate(component: &mut Component, expression: &Expr) -> Result<Value, String> {
-    eval(component, expression).map_err(|error| error.reason())
-}
-
 fn offset_value(component: &RefCell<Component>, expression: Option<Expression>) -> Option<i32> {
     let Some(expression) = expression else {
         return Some(0);
@@ -486,7 +481,7 @@ fn offset_value(component: &RefCell<Component>, expression: Option<Expression>) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use brul_syntax::ast::{BinaryOp, ExprKind, Position};
+    use brul_syntax::ast::{BinaryOp, Expr, ExprKind, Position};
     use brul_syntax::script::{Function, Statement};
 
     macro_rules! expr {
