@@ -63,7 +63,11 @@ fn eval_call(component: &mut Component, target: &Expr, arguments: &[Expr]) -> Re
     for argument in arguments {
         values.push(eval(component, argument)?);
     }
-    match name.as_str() {
+    call(component, name, values)
+}
+
+pub fn call(component: &mut Component, name: &str, values: Vec<Value>) -> Result<Value, Error> {
+    match name {
         "String" => call_string(values),
         "Number" => call_number(values),
         "len" => call_len(values),
@@ -187,7 +191,7 @@ fn assign_to(component: &mut Component, target: &Expr, value: Value) -> Result<(
     }
 }
 
-fn read_field(target: &Value, name: &str) -> Result<Value, Error> {
+pub fn read_field(target: &Value, name: &str) -> Result<Value, Error> {
     match target {
         Value::Object(fields) => fields
             .iter()
@@ -198,7 +202,7 @@ fn read_field(target: &Value, name: &str) -> Result<Value, Error> {
     }
 }
 
-fn assign_field(target: &mut Value, name: &str, value: Value) -> Result<(), Error> {
+pub fn assign_field(target: &mut Value, name: &str, value: Value) -> Result<(), Error> {
     match target {
         Value::Object(fields) => match fields.iter_mut().find(|(field, _)| field == name) {
             Some((_, field)) => {
@@ -211,7 +215,7 @@ fn assign_field(target: &mut Value, name: &str, value: Value) -> Result<(), Erro
     }
 }
 
-fn read_index(target: &Value, index: &Value) -> Result<Value, Error> {
+pub fn read_index(target: &Value, index: &Value) -> Result<Value, Error> {
     match target {
         Value::Array(items) => {
             let Value::Number(_) = index else {
@@ -234,7 +238,7 @@ fn read_index(target: &Value, index: &Value) -> Result<Value, Error> {
     }
 }
 
-fn assign_index(target: &mut Value, index: &Value, value: Value) -> Result<(), Error> {
+pub fn assign_index(target: &mut Value, index: &Value, value: Value) -> Result<(), Error> {
     match target {
         Value::Array(items) => {
             let Value::Number(_) = index else {
@@ -275,22 +279,33 @@ fn array_index(length: usize, index: &Value) -> Result<usize, Error> {
 }
 
 fn eval_template(component: &mut Component, parts: &[TemplatePart]) -> Result<Value, Error> {
-    let mut text = String::new();
+    let mut values = Vec::with_capacity(parts.len());
     for part in parts {
-        match part {
-            TemplatePart::Text(chunk) => text.push_str(chunk),
-            TemplatePart::Expr(expression) => match eval(component, expression)? {
-                Value::String(chunk) => text.push_str(&chunk),
-                Value::Number(number) => text.push_str(&number.to_string()),
-                other => return Err(expected("${}", "String or Number", &other)),
-            },
+        values.push(match part {
+            TemplatePart::Text(chunk) => Value::String(chunk.clone()),
+            TemplatePart::Expr(expression) => eval(component, expression)?,
+        });
+    }
+    Ok(Value::String(template(values)?))
+}
+
+pub fn template(values: Vec<Value>) -> Result<String, Error> {
+    let mut text = String::new();
+    for value in values {
+        match value {
+            Value::String(chunk) => text.push_str(&chunk),
+            Value::Number(number) => text.push_str(&number.to_string()),
+            other => return Err(expected("${}", "String or Number", &other)),
         }
     }
-    Ok(Value::String(text))
+    Ok(text)
 }
 
 fn eval_unary(component: &mut Component, op: UnaryOp, operand: &Expr) -> Result<Value, Error> {
-    let value = eval(component, operand)?;
+    apply_unary(op, eval(component, operand)?)
+}
+
+pub fn apply_unary(op: UnaryOp, value: Value) -> Result<Value, Error> {
     match (op, value) {
         (UnaryOp::Not, Value::Bool(value)) => Ok(Value::Bool(!value)),
         (UnaryOp::Neg, Value::Number(value)) => Ok(Value::Number(-value)),
@@ -310,7 +325,7 @@ fn eval_binary(
     apply_binary(op, left, right)
 }
 
-fn apply_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Error> {
+pub fn apply_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Error> {
     match op {
         BinaryOp::Add => add_or_concatenate(left, right),
         BinaryOp::Sub => arithmetic(op, left, right, |left, right| left - right),
@@ -453,6 +468,36 @@ mod tests {
 
     fn ident() -> Expr {
         Expr::new(ExprKind::Ident("x".to_owned()), POSITION)
+    }
+
+    #[test]
+    fn the_public_operations_match_the_interpreter() {
+        assert_eq!(
+            read_field(
+                &Value::Object(vec![("a".to_owned(), Value::Number(1.0))]),
+                "a"
+            ),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            read_index(&Value::Array(vec![Value::Bool(true)]), &Value::Number(0.0)),
+            Ok(Value::Bool(true))
+        );
+        assert_eq!(
+            apply_binary(BinaryOp::Add, Value::Number(1.0), Value::Number(2.0)),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            apply_unary(UnaryOp::Neg, Value::Number(2.0)),
+            Ok(Value::Number(-2.0))
+        );
+        assert_eq!(
+            template(vec![Value::String("a".to_owned()), Value::Number(2.0)]),
+            Ok("a2".to_owned())
+        );
+        let mut object = Value::Object(vec![("a".to_owned(), Value::Null)]);
+        assert_eq!(assign_field(&mut object, "a", Value::Bool(true)), Ok(()));
+        assert_eq!(read_field(&object, "a"), Ok(Value::Bool(true)));
     }
 
     #[test]
