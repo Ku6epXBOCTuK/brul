@@ -530,6 +530,7 @@ pub struct WidgetTree {
     root: Slot,
     geometry: Option<Geometry>,
     snapshot: Option<WidgetSnapshot>,
+    texts: HashMap<WidgetId, ShapedText>,
     hovered: Vec<Slot>,
     pressed: Vec<Slot>,
     dirty: HashSet<WidgetId>,
@@ -541,7 +542,13 @@ struct Geometry {
     viewport: Size,
     scale: f32,
     boxes: Vec<LayoutBox>,
-    texts: HashMap<WidgetId, TextVariants>,
+}
+
+struct ShapedText {
+    content: String,
+    width: Option<u32>,
+    scale: f32,
+    variants: TextVariants,
 }
 
 #[derive(Clone, Debug)]
@@ -607,6 +614,7 @@ impl WidgetTree {
             root: Slot(0),
             geometry: None,
             snapshot: None,
+            texts: HashMap::new(),
             hovered: Vec::new(),
             pressed: Vec::new(),
             dirty: HashSet::new(),
@@ -808,7 +816,6 @@ impl WidgetTree {
             return Err(WidgetError::InvalidScale);
         }
 
-        let mut texts = HashMap::new();
         let mut order = Vec::new();
         let node = build_layout(
             &self.nodes,
@@ -816,9 +823,10 @@ impl WidgetTree {
             engine,
             Some(viewport.width),
             scale,
-            &mut texts,
+            &mut self.texts,
             &mut order,
         )?;
+        self.texts.retain(|id, _| self.index.contains_key(id));
         let placed = layout::layout(&node, viewport)?;
         let mut boxes = vec![LayoutBox::default(); self.nodes.len()];
         let mut cursor = 0;
@@ -832,7 +840,6 @@ impl WidgetTree {
             viewport,
             scale,
             boxes,
-            texts,
         });
         self.snapshot = None;
         self.full_dirty = true;
@@ -862,7 +869,7 @@ impl WidgetTree {
     pub fn snapshot(&mut self) -> Result<&WidgetSnapshot, WidgetError> {
         if self.snapshot.is_none() {
             let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
-            let snapshot = build_snapshot(&self.nodes, self.root, geometry);
+            let snapshot = build_snapshot(&self.nodes, self.root, geometry, &self.texts);
             self.snapshot = Some(snapshot);
         }
         Ok(self.snapshot.as_ref().expect("snapshot built"))
@@ -1145,7 +1152,7 @@ fn build_layout(
     engine: &mut TextEngine,
     available_width: Option<u32>,
     scale: f32,
-    texts: &mut HashMap<WidgetId, TextVariants>,
+    texts: &mut HashMap<WidgetId, ShapedText>,
     order: &mut Vec<Slot>,
 ) -> Result<LayoutNode, WidgetError> {
     let node = &tree[slot.index()];
@@ -1176,19 +1183,38 @@ fn build_layout(
         }
         NodeData::Text { content, styles } => {
             let max_width = content_width.map(|width| width as f32 / scale);
-            let mut variants =
-                TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
-            for state in StyleState::ALL {
-                let Some(style) = styles.state(state) else {
-                    continue;
-                };
-                if style == styles.base() {
-                    continue;
+            let cached = texts.get(&node.id).filter(|cached| {
+                cached.width == content_width && cached.scale == scale && cached.content == *content
+            });
+            if cached.is_none() {
+                let mut variants =
+                    TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
+                for state in StyleState::ALL {
+                    let Some(style) = styles.state(state) else {
+                        continue;
+                    };
+                    if style == styles.base() {
+                        continue;
+                    }
+                    variants =
+                        variants.with(state, engine.layout(content, style, max_width, scale)?);
                 }
-                variants = variants.with(state, engine.layout(content, style, max_width, scale)?);
+                texts.insert(
+                    node.id,
+                    ShapedText {
+                        content: content.clone(),
+                        width: content_width,
+                        scale,
+                        variants,
+                    },
+                );
             }
-            let size = variants.base.size;
-            texts.insert(node.id, variants);
+            let size = texts
+                .get(&node.id)
+                .expect("shaped text cached")
+                .variants
+                .base
+                .size;
             LayoutNode::leaf(size.width, size.height)
         }
         NodeData::Image(texture) => LayoutNode::leaf(texture.width(), texture.height()),
@@ -1216,9 +1242,14 @@ fn flatten_boxes(boxed: &LayoutBox, order: &[Slot], cursor: &mut usize, boxes: &
     }
 }
 
-fn build_snapshot(tree: &[Node], root: Slot, geometry: &Geometry) -> WidgetSnapshot {
+fn build_snapshot(
+    tree: &[Node],
+    root: Slot,
+    geometry: &Geometry,
+    texts: &HashMap<WidgetId, ShapedText>,
+) -> WidgetSnapshot {
     let mut nodes = Vec::new();
-    snapshot_widget(tree, root, &geometry.boxes, &geometry.texts, &mut nodes);
+    snapshot_widget(tree, root, &geometry.boxes, texts, &mut nodes);
     let root_box = &geometry.boxes[root.index()];
     WidgetSnapshot {
         size: Size {
@@ -1233,7 +1264,7 @@ fn snapshot_widget(
     tree: &[Node],
     slot: Slot,
     boxes: &[LayoutBox],
-    texts: &HashMap<WidgetId, TextVariants>,
+    texts: &HashMap<WidgetId, ShapedText>,
     nodes: &mut Vec<WidgetSnapshotNode>,
 ) {
     let node = &tree[slot.index()];
@@ -1262,7 +1293,7 @@ fn snapshot_widget(
     let text = match &node.data {
         NodeData::Text { .. } => texts
             .get(&node.id)
-            .map(|variants| variants.resolve(node.state)),
+            .map(|cached| cached.variants.resolve(node.state)),
         _ => None,
     };
     let texture = match &node.data {
