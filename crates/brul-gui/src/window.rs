@@ -156,7 +156,7 @@ pub fn run_tree_themed(
         build: Box::new(build),
         handler: Box::new(handler),
         window: None,
-        gpu: None,
+        renderer: None,
         engine: None,
         frame: None,
         error: Rc::clone(&error),
@@ -301,11 +301,12 @@ fn wakeup(timers: &[Timer]) -> ControlFlow {
     }
 }
 
-trait Surface {
+pub(crate) trait Surface {
     fn scale_factor(&self) -> f64;
     fn drag(&self);
     fn redraw(&self);
     fn size(&self) -> (u32, u32);
+    fn pre_present_notify(&self);
 }
 
 impl Surface for Arc<dyn Window> {
@@ -325,6 +326,25 @@ impl Surface for Arc<dyn Window> {
         let size = self.as_ref().surface_size();
         (size.width, size.height)
     }
+
+    fn pre_present_notify(&self) {
+        self.as_ref().pre_present_notify();
+    }
+}
+
+trait Renderer {
+    fn resize(&mut self, width: u32, height: u32);
+    fn present(&mut self, surface: &dyn Surface, frame: &Frame);
+}
+
+impl Renderer for Gpu {
+    fn resize(&mut self, width: u32, height: u32) {
+        Gpu::resize(self, width, height);
+    }
+
+    fn present(&mut self, surface: &dyn Surface, frame: &Frame) {
+        self.present_frame(surface, frame);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -339,7 +359,7 @@ struct TreeApp {
     build: TreeBuilder,
     handler: EventHandler,
     window: Option<Arc<dyn Window>>,
-    gpu: Option<Gpu>,
+    renderer: Option<Box<dyn Renderer>>,
     engine: Option<TextEngine>,
     frame: Option<Frame>,
     error: Rc<RefCell<Option<WindowError>>>,
@@ -384,7 +404,7 @@ impl ApplicationHandler for TreeApp {
         }
 
         self.window = Some(Arc::clone(&window));
-        self.gpu = Some(gpu);
+        self.renderer = Some(Box::new(gpu));
         self.engine = Some(engine);
         self.frame = Some(Frame::new(size.width.max(1), size.height.max(1)));
         window.set_visible(true);
@@ -559,8 +579,8 @@ impl TreeApp {
         if width == 0 || height == 0 {
             return Step::Continue;
         }
-        if let Some(gpu) = self.gpu.as_mut() {
-            gpu.resize(width, height);
+        if let Some(renderer) = self.renderer.as_mut() {
+            renderer.resize(width, height);
         }
         let layout = match self.engine.as_mut() {
             Some(engine) => self.tree.borrow_mut().layout(
@@ -582,15 +602,15 @@ impl TreeApp {
         Step::Continue
     }
 
-    fn render(&mut self, event_loop: &dyn ActiveEventLoop, window: &Arc<dyn Window>) {
+    fn render(&mut self, event_loop: &dyn ActiveEventLoop, surface: &dyn Surface) {
         brul_reactive::flush();
-        if let Err(error) = self.render_frame(window) {
+        if let Err(error) = self.render_frame(surface) {
             let step = self.fail(WindowError::stage("widgets", error));
             self.finish(event_loop, step);
         }
     }
 
-    fn render_frame(&mut self, window: &Arc<dyn Window>) -> Result<(), crate::WidgetError> {
+    fn render_frame(&mut self, surface: &dyn Surface) -> Result<(), crate::WidgetError> {
         if self.tree.borrow().layout_dirty()
             && let Some(engine) = self.engine.as_mut()
         {
@@ -600,7 +620,7 @@ impl TreeApp {
             let mut tree = self.tree.borrow_mut();
             (tree.take_dirty(), tree.snapshot_dirty())
         };
-        let Some(gpu) = self.gpu.as_mut() else {
+        let Some(renderer) = self.renderer.as_mut() else {
             return Ok(());
         };
         let Some(frame) = self.frame.as_mut() else {
@@ -616,7 +636,7 @@ impl TreeApp {
             frame.paint(snapshot, engine.atlas(), &dirty);
         }
 
-        gpu.present_frame(window, frame);
+        renderer.present(surface, frame);
         Ok(())
     }
 }
@@ -693,8 +713,10 @@ mod tests {
     use super::ColorScheme;
     use super::WindowCommand;
     use super::{
-        EventHandler, Input, Step, Surface, Timer, TreeApp, WindowConfig, WindowError, due, wakeup,
+        EventHandler, Input, Renderer, Step, Surface, Timer, TreeApp, WindowConfig, WindowError,
+        due, wakeup,
     };
+    use crate::paint::Frame;
     use crate::widget::{Widget, WidgetEvent, WidgetTree};
     use crate::{Size, TextEngine, WidgetError};
 
@@ -732,6 +754,36 @@ mod tests {
         fn size(&self) -> (u32, u32) {
             self.size
         }
+
+        fn pre_present_notify(&self) {}
+    }
+
+    struct FakeRenderer {
+        calls: Rc<RefCell<Vec<String>>>,
+    }
+
+    impl FakeRenderer {
+        fn new() -> (Self, Rc<RefCell<Vec<String>>>) {
+            let calls = Rc::new(RefCell::new(Vec::new()));
+            (
+                Self {
+                    calls: Rc::clone(&calls),
+                },
+                calls,
+            )
+        }
+    }
+
+    impl Renderer for FakeRenderer {
+        fn resize(&mut self, width: u32, height: u32) {
+            self.calls
+                .borrow_mut()
+                .push(format!("resize {width}x{height}"));
+        }
+
+        fn present(&mut self, _surface: &dyn Surface, _frame: &Frame) {
+            self.calls.borrow_mut().push("present".to_owned());
+        }
     }
 
     fn tree_app(handler: EventHandler) -> TreeApp {
@@ -741,7 +793,7 @@ mod tests {
             build: Box::new(|_| Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))),
             handler,
             window: None,
-            gpu: None,
+            renderer: None,
             engine: None,
             frame: None,
             error: Rc::new(RefCell::new(None)),
@@ -1042,5 +1094,49 @@ mod tests {
         let step = app.dispatch(&surface, Err(WidgetError::NoLayout));
         assert_eq!(step, Step::Exit);
         assert!(app.error.borrow().is_some());
+    }
+
+    #[test]
+    fn a_resize_reaches_the_renderer() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+        let (renderer, calls) = FakeRenderer::new();
+        app.renderer = Some(Box::new(renderer));
+
+        assert_eq!(app.resize(&surface, 4, 5), Step::Continue);
+        assert_eq!(calls.borrow().as_slice(), ["resize 4x5"]);
+    }
+
+    #[test]
+    fn a_frame_without_a_renderer_is_skipped() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+
+        assert!(app.render_frame(&surface).is_ok());
+    }
+
+    #[test]
+    fn a_frame_is_painted_and_presented() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+        let (renderer, calls) = FakeRenderer::new();
+        app.renderer = Some(Box::new(renderer));
+        let mut engine = TextEngine::new();
+        app.tree
+            .borrow_mut()
+            .layout(
+                &mut engine,
+                Size {
+                    width: 8,
+                    height: 6,
+                },
+                1.0,
+            )
+            .expect("layout");
+        app.engine = Some(engine);
+        app.frame = Some(Frame::new(8, 6));
+
+        assert!(app.render_frame(&surface).is_ok());
+        assert_eq!(calls.borrow().as_slice(), ["present"]);
     }
 }

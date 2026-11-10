@@ -195,7 +195,7 @@ impl Gpu {
         ));
     }
 
-    pub(crate) fn present_frame(&mut self, window: &Arc<dyn Window>, frame: &Frame) {
+    pub(crate) fn present_frame(&mut self, surface: &dyn crate::window::Surface, frame: &Frame) {
         let width = frame.width().max(1);
         let height = frame.height().max(1);
         self.ensure_blit(width, height);
@@ -226,7 +226,7 @@ impl Gpu {
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface.configure(&self.device, &self.config);
-                window.request_redraw();
+                surface.redraw();
                 return;
             }
             _ => return,
@@ -262,7 +262,7 @@ impl Gpu {
         }
 
         self.queue.submit(Some(encoder.finish()));
-        window.pre_present_notify();
+        surface.pre_present_notify();
         self.queue.present(surface_frame);
     }
 }
