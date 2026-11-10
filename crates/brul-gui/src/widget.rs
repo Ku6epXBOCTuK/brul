@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -482,6 +482,15 @@ impl From<TextError> for WidgetError {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+struct Slot(u32);
+
+impl Slot {
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 struct Node {
     id: WidgetId,
     data: NodeData,
@@ -490,7 +499,7 @@ struct Node {
     state: WidgetState,
     offset: Option<Offset>,
     draggable: bool,
-    children: Vec<u32>,
+    children: Vec<Slot>,
 }
 
 enum NodeData {
@@ -516,14 +525,14 @@ impl Node {
 
 pub struct WidgetTree {
     nodes: Vec<Node>,
-    index: HashMap<WidgetId, u32>,
-    free: Vec<u32>,
-    root: u32,
+    index: HashMap<WidgetId, Slot>,
+    free: Vec<Slot>,
+    root: Slot,
     geometry: Option<Geometry>,
     snapshot: Option<WidgetSnapshot>,
-    hovered: Vec<WidgetId>,
-    pressed: Vec<WidgetId>,
-    dirty: Vec<WidgetId>,
+    hovered: Vec<Slot>,
+    pressed: Vec<Slot>,
+    dirty: HashSet<WidgetId>,
     full_dirty: bool,
     layout_dirty: bool,
 }
@@ -595,12 +604,12 @@ impl WidgetTree {
             nodes: Vec::new(),
             index: HashMap::new(),
             free: Vec::new(),
-            root: 0,
+            root: Slot(0),
             geometry: None,
             snapshot: None,
             hovered: Vec::new(),
             pressed: Vec::new(),
-            dirty: Vec::new(),
+            dirty: HashSet::new(),
             full_dirty: true,
             layout_dirty: true,
         };
@@ -608,7 +617,7 @@ impl WidgetTree {
         tree
     }
 
-    fn insert(&mut self, widget: Widget) -> u32 {
+    fn insert(&mut self, widget: Widget) -> Slot {
         let Widget {
             id,
             data,
@@ -644,25 +653,25 @@ impl WidgetTree {
         };
         let slot = match self.free.pop() {
             Some(slot) => {
-                self.nodes[slot as usize] = node;
+                self.nodes[slot.index()] = node;
                 slot
             }
             None => {
                 self.nodes.push(node);
-                (self.nodes.len() - 1) as u32
+                Slot((self.nodes.len() - 1) as u32)
             }
         };
         self.index.insert(id, slot);
         slot
     }
 
-    fn extract(&mut self, slot: u32) -> Widget {
-        let children = std::mem::take(&mut self.nodes[slot as usize].children);
+    fn extract(&mut self, slot: Slot) -> Widget {
+        let children = std::mem::take(&mut self.nodes[slot.index()].children);
         let children = children
             .into_iter()
             .map(|child| self.extract(child))
             .collect();
-        let node = &mut self.nodes[slot as usize];
+        let node = &mut self.nodes[slot.index()];
         let data = match &mut node.data {
             NodeData::View { direction } => WidgetData::View {
                 direction: *direction,
@@ -688,22 +697,22 @@ impl WidgetTree {
         widget
     }
 
-    fn remove(&mut self, slot: u32) {
-        let children = std::mem::take(&mut self.nodes[slot as usize].children);
+    fn remove(&mut self, slot: Slot) {
+        let children = std::mem::take(&mut self.nodes[slot.index()].children);
         for child in children {
             self.remove(child);
         }
-        self.index.remove(&self.nodes[slot as usize].id);
+        self.index.remove(&self.nodes[slot.index()].id);
         self.free.push(slot);
     }
 
     fn node(&self, id: WidgetId) -> Option<&Node> {
-        self.index.get(&id).map(|slot| &self.nodes[*slot as usize])
+        self.index.get(&id).map(|slot| &self.nodes[slot.index()])
     }
 
     fn node_mut(&mut self, id: WidgetId) -> Option<&mut Node> {
         let slot = *self.index.get(&id)?;
-        Some(&mut self.nodes[slot as usize])
+        Some(&mut self.nodes[slot.index()])
     }
 
     pub fn replace_root(&mut self, root: Widget) {
@@ -725,15 +734,15 @@ impl WidgetTree {
         let Some(slot) = self.index.get(&parent).copied() else {
             return false;
         };
-        if !matches!(self.nodes[slot as usize].data, NodeData::View { .. }) {
+        if !matches!(self.nodes[slot.index()].data, NodeData::View { .. }) {
             return false;
         }
-        let current = self.nodes[slot as usize].children.len();
+        let current = self.nodes[slot.index()].children.len();
         if start > current || count > current - start {
             return false;
         }
         self.clear_interaction();
-        let removed: Vec<u32> = self.nodes[slot as usize]
+        let removed: Vec<Slot> = self.nodes[slot.index()]
             .children
             .splice(start..start + count, [])
             .collect();
@@ -744,7 +753,7 @@ impl WidgetTree {
         for child in children {
             inserted.push(self.insert(child));
         }
-        self.nodes[slot as usize]
+        self.nodes[slot.index()]
             .children
             .splice(start..start, inserted);
         self.invalidate();
@@ -755,20 +764,20 @@ impl WidgetTree {
         let Some(slot) = self.index.get(&parent).copied() else {
             return false;
         };
-        if !matches!(self.nodes[slot as usize].data, NodeData::View { .. }) {
+        if !matches!(self.nodes[slot.index()].data, NodeData::View { .. }) {
             return false;
         }
-        let count = self.nodes[slot as usize].children.len();
+        let count = self.nodes[slot.index()].children.len();
         self.replace_children(parent, 0, count, children)
     }
 
     pub fn take_children(&mut self, parent: WidgetId) -> Option<Vec<Widget>> {
         let slot = *self.index.get(&parent)?;
-        if !matches!(self.nodes[slot as usize].data, NodeData::View { .. }) {
+        if !matches!(self.nodes[slot.index()].data, NodeData::View { .. }) {
             return None;
         }
         self.clear_interaction();
-        let children = std::mem::take(&mut self.nodes[slot as usize].children);
+        let children = std::mem::take(&mut self.nodes[slot.index()].children);
         let children = children
             .into_iter()
             .map(|child| self.extract(child))
@@ -863,9 +872,10 @@ impl WidgetTree {
         Dirty {
             full,
             ids: if full {
+                self.dirty.clear();
                 Vec::new()
             } else {
-                std::mem::take(&mut self.dirty)
+                self.dirty.drain().collect()
             },
         }
     }
@@ -945,7 +955,10 @@ impl WidgetTree {
     }
 
     pub fn hit(&self, x: i32, y: i32) -> Result<Option<WidgetId>, WidgetError> {
-        Ok(self.hit_path(x, y)?.last().copied())
+        Ok(self
+            .hit_path(x, y)?
+            .last()
+            .map(|slot| self.nodes[slot.index()].id))
     }
 
     pub fn pointer_moved(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {
@@ -956,18 +969,18 @@ impl WidgetTree {
         }
 
         let mut events = Vec::new();
-        let leaving: Vec<WidgetId> = self.hovered[common..].iter().rev().copied().collect();
-        for id in leaving {
-            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
-                state.hovered = false;
-            }
+        let leaving: Vec<Slot> = self.hovered[common..].iter().rev().copied().collect();
+        for slot in leaving {
+            let node = &mut self.nodes[slot.index()];
+            node.state.hovered = false;
+            let id = node.id;
             self.mark_dirty(id);
             events.push(WidgetEvent::PointerLeave(id));
         }
-        for &id in &path[common..] {
-            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
-                state.hovered = true;
-            }
+        for &slot in &path[common..] {
+            let node = &mut self.nodes[slot.index()];
+            node.state.hovered = true;
+            let id = node.id;
             self.mark_dirty(id);
             events.push(WidgetEvent::PointerEnter(id));
         }
@@ -981,13 +994,14 @@ impl WidgetTree {
         self.set_pressed(false);
 
         let mut events = Vec::with_capacity(path.len());
-        for &id in path.iter().rev() {
-            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
-                state.pressed = true;
-            }
+        for &slot in path.iter().rev() {
+            let node = &mut self.nodes[slot.index()];
+            node.state.pressed = true;
+            let id = node.id;
+            let draggable = node.draggable;
             self.mark_dirty(id);
             events.push(WidgetEvent::Press(id));
-            if self.node(id).is_some_and(|node| node.draggable) {
+            if draggable {
                 events.push(WidgetEvent::Drag(id));
             }
         }
@@ -1003,16 +1017,16 @@ impl WidgetTree {
         let pressed = std::mem::take(&mut self.pressed);
 
         let mut events = Vec::new();
-        for &id in pressed.iter().rev() {
-            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
-                state.pressed = false;
-            }
+        for &slot in pressed.iter().rev() {
+            let node = &mut self.nodes[slot.index()];
+            node.state.pressed = false;
+            let id = node.id;
             self.mark_dirty(id);
             events.push(WidgetEvent::Release(id));
         }
         if !pressed.is_empty() && pressed.last() == path.last() {
-            for &id in path.iter().rev() {
-                events.push(WidgetEvent::Click(id));
+            for &slot in path.iter().rev() {
+                events.push(WidgetEvent::Click(self.nodes[slot.index()].id));
             }
         }
         if !pressed.is_empty() {
@@ -1026,17 +1040,17 @@ impl WidgetTree {
         let pressed = std::mem::take(&mut self.pressed);
         let mut events = Vec::with_capacity(hovered.len() + pressed.len());
 
-        for &id in hovered.iter().rev() {
-            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
-                state.hovered = false;
-            }
+        for slot in hovered.iter().rev() {
+            let node = &mut self.nodes[slot.index()];
+            node.state.hovered = false;
+            let id = node.id;
             self.mark_dirty(id);
             events.push(WidgetEvent::PointerLeave(id));
         }
-        for &id in pressed.iter().rev() {
-            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
-                state.pressed = false;
-            }
+        for slot in pressed.iter().rev() {
+            let node = &mut self.nodes[slot.index()];
+            node.state.pressed = false;
+            let id = node.id;
             self.mark_dirty(id);
             events.push(WidgetEvent::Release(id));
         }
@@ -1064,21 +1078,21 @@ impl WidgetTree {
     }
 
     fn mark_dirty(&mut self, id: WidgetId) {
-        if !self.full_dirty && !self.dirty.contains(&id) {
-            self.dirty.push(id);
+        if !self.full_dirty {
+            self.dirty.insert(id);
         }
     }
 
     fn clear_interaction(&mut self) {
         let hovered = std::mem::take(&mut self.hovered);
         let pressed = std::mem::take(&mut self.pressed);
-        for id in hovered {
-            if let Some(node) = self.node_mut(id) {
+        for slot in hovered {
+            if let Some(node) = self.nodes.get_mut(slot.index()) {
                 node.state.hovered = false;
             }
         }
-        for id in pressed {
-            if let Some(node) = self.node_mut(id) {
+        for slot in pressed {
+            if let Some(node) = self.nodes.get_mut(slot.index()) {
                 node.state.pressed = false;
             }
         }
@@ -1086,35 +1100,35 @@ impl WidgetTree {
 
     fn set_pressed(&mut self, pressed: bool) {
         let had_pressed = !self.pressed.is_empty();
-        let ids = std::mem::take(&mut self.pressed);
-        for id in &ids {
-            if let Some(state) = self.node_mut(*id).map(|node| &mut node.state) {
-                state.pressed = pressed;
-            }
-            self.mark_dirty(*id);
+        let slots = std::mem::take(&mut self.pressed);
+        for &slot in &slots {
+            let node = &mut self.nodes[slot.index()];
+            node.state.pressed = pressed;
+            let id = node.id;
+            self.mark_dirty(id);
         }
         if had_pressed {
             self.snapshot = None;
         }
     }
 
-    fn hit_path(&self, x: i32, y: i32) -> Result<Vec<WidgetId>, WidgetError> {
+    fn hit_path(&self, x: i32, y: i32) -> Result<Vec<Slot>, WidgetError> {
         let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
         let mut path = Vec::new();
         collect_hit(&self.nodes, self.root, &geometry.layout, x, y, &mut path);
         Ok(path)
     }
 
-    fn active_path(&self, path: &[WidgetId]) -> Vec<WidgetId> {
+    fn active_path(&self, path: &[Slot]) -> Vec<Slot> {
         let mut active = Vec::with_capacity(path.len());
-        for &id in path {
-            let Some(state) = self.node(id).map(|node| &node.state) else {
+        for &slot in path {
+            let Some(node) = self.nodes.get(slot.index()) else {
                 break;
             };
-            if state.disabled || !state.visible {
+            if node.state.disabled || !node.state.visible {
                 break;
             }
-            active.push(id);
+            active.push(slot);
         }
         active
     }
@@ -1122,13 +1136,13 @@ impl WidgetTree {
 
 fn build_layout(
     tree: &[Node],
-    slot: u32,
+    slot: Slot,
     engine: &mut TextEngine,
     available_width: Option<u32>,
     scale: f32,
     texts: &mut HashMap<WidgetId, TextVariants>,
 ) -> Result<LayoutNode, WidgetError> {
-    let node = &tree[slot as usize];
+    let node = &tree[slot.index()];
     let resolved = layout::resolve(node.layout.width, available_width)?;
     let content_width = resolved
         .map(|width| width.saturating_sub(layout::inset_x(&node.layout)))
@@ -1179,7 +1193,7 @@ fn build_layout(
     })
 }
 
-fn build_snapshot(tree: &[Node], root: u32, geometry: &Geometry) -> WidgetSnapshot {
+fn build_snapshot(tree: &[Node], root: Slot, geometry: &Geometry) -> WidgetSnapshot {
     let mut nodes = Vec::new();
     snapshot_widget(tree, root, &geometry.layout, &geometry.texts, &mut nodes);
     WidgetSnapshot {
@@ -1193,12 +1207,12 @@ fn build_snapshot(tree: &[Node], root: u32, geometry: &Geometry) -> WidgetSnapsh
 
 fn snapshot_widget(
     tree: &[Node],
-    slot: u32,
+    slot: Slot,
     layout_box: &LayoutBox,
     texts: &HashMap<WidgetId, TextVariants>,
     nodes: &mut Vec<WidgetSnapshotNode>,
 ) {
-    let node = &tree[slot as usize];
+    let node = &tree[slot.index()];
     if !node.state.visible {
         return;
     }
@@ -1256,18 +1270,18 @@ fn snapshot_widget(
 
 fn collect_hit(
     tree: &[Node],
-    slot: u32,
+    slot: Slot,
     layout_box: &LayoutBox,
     x: i32,
     y: i32,
-    path: &mut Vec<WidgetId>,
+    path: &mut Vec<Slot>,
 ) -> bool {
-    let node = &tree[slot as usize];
+    let node = &tree[slot.index()];
     if !node.state.visible || !contains(layout_box, x, y) {
         return false;
     }
 
-    path.push(node.id);
+    path.push(slot);
     for (&child, child_box) in node.children.iter().zip(&layout_box.children).rev() {
         if collect_hit(tree, child, child_box, x, y, path) {
             return true;
@@ -1285,7 +1299,7 @@ fn contains(layout_box: &LayoutBox, x: i32, y: i32) -> bool {
         && i64::from(y) < bottom
 }
 
-fn common_prefix(left: &[WidgetId], right: &[WidgetId]) -> usize {
+fn common_prefix(left: &[Slot], right: &[Slot]) -> usize {
     left.iter()
         .zip(right)
         .take_while(|(left, right)| left == right)
