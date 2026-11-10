@@ -165,12 +165,11 @@ impl Gpu {
     }
 
     pub(crate) fn resize(&mut self, width: u32, height: u32) {
-        if width == 0 || height == 0 {
+        let Some((width, height)) =
+            size_change((self.config.width, self.config.height), width, height)
+        else {
             return;
-        }
-        if self.config.width == width && self.config.height == height {
-            return;
-        }
+        };
 
         self.config.width = width;
         self.config.height = height;
@@ -314,6 +313,13 @@ impl BlitTarget {
     }
 }
 
+fn size_change(current: (u32, u32), width: u32, height: u32) -> Option<(u32, u32)> {
+    if width == 0 || height == 0 {
+        return None;
+    }
+    (current != (width, height)).then_some((width, height))
+}
+
 fn alpha_mode(capabilities: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
     for mode in [
         wgpu::CompositeAlphaMode::PreMultiplied,
@@ -359,6 +365,19 @@ mod tests {
             alpha_modes,
             usages: TextureUsages::RENDER_ATTACHMENT,
         }
+    }
+
+    #[test]
+    fn a_size_change_needs_a_size_that_differs() {
+        assert_eq!(size_change((8, 6), 8, 6), None);
+        assert_eq!(size_change((8, 6), 9, 6), Some((9, 6)));
+        assert_eq!(size_change((8, 6), 8, 7), Some((8, 7)));
+    }
+
+    #[test]
+    fn an_empty_size_is_not_a_size_change() {
+        assert_eq!(size_change((8, 6), 0, 6), None);
+        assert_eq!(size_change((8, 6), 8, 0), None);
     }
 
     #[test]
