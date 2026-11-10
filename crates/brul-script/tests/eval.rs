@@ -68,6 +68,7 @@ fn equality_is_strict() {
 fn ordering_compares_numbers() {
     assert_eq!(evaluate("2 < 3"), Ok(Value::Bool(true)));
     assert_eq!(evaluate("3 >= 3"), Ok(Value::Bool(true)));
+    assert_eq!(evaluate("2 <= 3"), Ok(Value::Bool(true)));
     assert_eq!(
         failure("\"a\" < \"b\""),
         Error::Mismatch {

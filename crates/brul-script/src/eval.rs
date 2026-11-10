@@ -312,14 +312,7 @@ fn eval_binary(
 
 fn apply_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Error> {
     match op {
-        BinaryOp::Add => match (left, right) {
-            (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
-            (Value::String(mut left), Value::String(right)) => {
-                left.push_str(&right);
-                Ok(Value::String(left))
-            }
-            (left, right) => Err(mismatch(op, &left, &right)),
-        },
+        BinaryOp::Add => add_or_concatenate(left, right),
         BinaryOp::Sub => arithmetic(op, left, right, |left, right| left - right),
         BinaryOp::Mul => arithmetic(op, left, right, |left, right| left * right),
         BinaryOp::Div => arithmetic(op, left, right, |left, right| left / right),
@@ -332,6 +325,17 @@ fn apply_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Error>
         BinaryOp::Ge => comparison(op, left, right, |left, right| left >= right),
         BinaryOp::And => logic(op, left, right, |left, right| left && right),
         BinaryOp::Or => logic(op, left, right, |left, right| left || right),
+    }
+}
+
+fn add_or_concatenate(left: Value, right: Value) -> Result<Value, Error> {
+    match (left, right) {
+        (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
+        (Value::String(mut left), Value::String(right)) => {
+            left.push_str(&right);
+            Ok(Value::String(left))
+        }
+        (left, right) => Err(mismatch(BinaryOp::Add, &left, &right)),
     }
 }
 
@@ -436,5 +440,110 @@ fn expression_name(expression: &Expr) -> &'static str {
         | ExprKind::Unary { .. }
         | ExprKind::Binary { .. }
         | ExprKind::Ternary { .. } => "expression",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use brul_syntax::ast::Position;
+
+    use super::*;
+
+    const POSITION: Position = Position { line: 1, column: 1 };
+
+    fn ident() -> Expr {
+        Expr::new(ExprKind::Ident("x".to_owned()), POSITION)
+    }
+
+    #[test]
+    fn op_name_spells_every_operator() {
+        let named = [
+            (BinaryOp::Add, "+"),
+            (BinaryOp::Sub, "-"),
+            (BinaryOp::Mul, "*"),
+            (BinaryOp::Div, "/"),
+            (BinaryOp::Rem, "%"),
+            (BinaryOp::Eq, "=="),
+            (BinaryOp::NotEq, "!="),
+            (BinaryOp::Lt, "<"),
+            (BinaryOp::Gt, ">"),
+            (BinaryOp::Le, "<="),
+            (BinaryOp::Ge, ">="),
+            (BinaryOp::And, "&&"),
+            (BinaryOp::Or, "||"),
+        ];
+        for (op, name) in named {
+            assert_eq!(op_name(op), name);
+        }
+    }
+
+    #[test]
+    fn expression_name_spells_every_kind() {
+        let target = || Box::new(ident());
+        let named = [
+            (ExprKind::Ident("x".to_owned()), "identifier"),
+            (
+                ExprKind::Field {
+                    target: target(),
+                    name: "x".to_owned(),
+                },
+                "field access",
+            ),
+            (
+                ExprKind::Index {
+                    target: target(),
+                    index: target(),
+                },
+                "index access",
+            ),
+            (
+                ExprKind::Call {
+                    target: target(),
+                    args: Vec::new(),
+                },
+                "call",
+            ),
+            (
+                ExprKind::Assign {
+                    target: target(),
+                    op: AssignOp::Set,
+                    value: target(),
+                },
+                "assignment",
+            ),
+            (ExprKind::Array(Vec::new()), "array literal"),
+            (ExprKind::Object(Vec::new()), "object literal"),
+            (ExprKind::Template(Vec::new()), "template string"),
+            (ExprKind::Number(1.0), "expression"),
+            (ExprKind::String(String::new()), "expression"),
+            (ExprKind::Bool(true), "expression"),
+            (ExprKind::Null, "expression"),
+            (
+                ExprKind::Unary {
+                    op: UnaryOp::Not,
+                    operand: target(),
+                },
+                "expression",
+            ),
+            (
+                ExprKind::Binary {
+                    op: BinaryOp::Add,
+                    left: target(),
+                    right: target(),
+                },
+                "expression",
+            ),
+            (
+                ExprKind::Ternary {
+                    condition: target(),
+                    then_branch: target(),
+                    else_branch: target(),
+                },
+                "expression",
+            ),
+        ];
+        for (kind, name) in named {
+            assert_eq!(expression_name(&Expr::new(kind, POSITION)), name);
+        }
     }
 }
