@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -100,7 +100,7 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let error = Rc::new(RefCell::new(None));
+    let error = Rc::new(Cell::new(None));
     let app = App {
         config,
         window: None,
@@ -109,7 +109,7 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     };
     let result = event_loop.run_app(app);
 
-    if let Some(error) = error.borrow_mut().take() {
+    if let Some(error) = error.take() {
         return Err(error);
     }
     result.map_err(|error| WindowError::stage("event loop", error))
@@ -145,7 +145,7 @@ pub fn run_tree_themed(
     let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let error = Rc::new(RefCell::new(None));
+    let error = Rc::new(Cell::new(None));
     let tree = build(ColorScheme::Dark);
     let app = crate::tree::tree_app(
         config,
@@ -157,7 +157,7 @@ pub fn run_tree_themed(
     );
     let result = event_loop.run_app(app);
 
-    if let Some(error) = error.borrow_mut().take() {
+    if let Some(error) = error.take() {
         return Err(error);
     }
     result.map_err(|error| WindowError::stage("event loop", error))
@@ -188,7 +188,7 @@ struct App {
     config: WindowConfig,
     window: Option<Arc<dyn Window>>,
     gpu: Option<Gpu>,
-    error: Rc<RefCell<Option<WindowError>>>,
+    error: Rc<Cell<Option<WindowError>>>,
 }
 
 impl ApplicationHandler for App {
@@ -247,7 +247,7 @@ impl ApplicationHandler for App {
 
 impl App {
     fn fail(&mut self, event_loop: &dyn ActiveEventLoop, error: WindowError) {
-        *self.error.borrow_mut() = Some(error);
+        self.error.set(Some(error));
         event_loop.exit();
     }
 

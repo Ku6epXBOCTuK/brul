@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -69,7 +69,7 @@ pub(crate) struct TreeApp {
     renderer: Option<Box<dyn Renderer>>,
     engine: Option<TextEngine>,
     frame: Option<Frame>,
-    error: Rc<RefCell<Option<WindowError>>>,
+    error: Rc<Cell<Option<WindowError>>>,
     pub(crate) timers: Vec<Timer>,
 }
 
@@ -170,7 +170,7 @@ pub(crate) fn tree_app(
     tree: Rc<RefCell<WidgetTree>>,
     build: TreeBuilder,
     handler: EventHandler,
-    error: Rc<RefCell<Option<WindowError>>>,
+    error: Rc<Cell<Option<WindowError>>>,
     initial: Vec<WindowCommand>,
 ) -> TreeApp {
     let mut app = TreeApp {
@@ -255,7 +255,7 @@ impl TreeApp {
     }
 
     fn fail(&mut self, error: WindowError) -> Step {
-        *self.error.borrow_mut() = Some(error);
+        self.error.set(Some(error));
         Step::Exit
     }
 
@@ -463,7 +463,7 @@ mod tests {
             Rc::new(RefCell::new(WidgetTree::new(Widget::text("")))),
             Box::new(|_| Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))),
             handler,
-            Rc::new(RefCell::new(None)),
+            Rc::new(Cell::new(None)),
             Vec::new(),
         )
     }
@@ -475,7 +475,7 @@ mod tests {
             Rc::new(RefCell::new(WidgetTree::new(Widget::text("")))),
             Box::new(|_| Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))),
             commands(Vec::new()),
-            Rc::new(RefCell::new(None)),
+            Rc::new(Cell::new(None)),
             vec![
                 WindowCommand::Exit,
                 WindowCommand::Every {
@@ -648,7 +648,7 @@ mod tests {
 
         assert_eq!(app.resize(&surface, 4, 5), Step::Exit);
         assert_eq!(surface.redraws.get(), 0);
-        assert!(app.error.borrow().is_some());
+        assert!(app.error.take().is_some());
     }
     #[test]
     fn a_key_reaches_the_tree_and_escape_leaves() {
@@ -723,7 +723,7 @@ mod tests {
 
         let step = app.dispatch(&surface, Err(WidgetError::NoLayout));
         assert_eq!(step, Step::Exit);
-        assert!(app.error.borrow().is_some());
+        assert!(app.error.take().is_some());
     }
 
     #[test]
