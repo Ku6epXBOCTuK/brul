@@ -18,19 +18,13 @@ pub fn resolve(
     let base = snapshot(stylesheet, classes, None, theme)?;
     let (layout, base_style, text) = base_styles(&base)?;
     let mut styles = StyleSet::new(base_style);
-    for state in [
-        State::Hover,
-        State::Pressed,
-        State::Checked,
-        State::Selected,
-        State::Disabled,
-    ] {
-        let state_snapshot = snapshot(stylesheet, classes, Some(state), theme)?;
+    for state in StyleState::ALL {
+        let state_snapshot = snapshot(stylesheet, classes, Some(syntax_state(state)), theme)?;
         if state_snapshot == base {
             continue;
         }
         let style = state_style(&state_snapshot, base_style)?;
-        styles = styles.with(style_state(state), style);
+        styles = styles.with(state, style);
     }
     Ok(Resolved {
         layout,
@@ -225,12 +219,12 @@ fn px(value: f64) -> u32 {
     value.max(0.0).round() as u32
 }
 
-fn style_state(state: State) -> StyleState {
+fn syntax_state(state: StyleState) -> State {
     match state {
-        State::Hover => StyleState::Hovered,
-        State::Pressed => StyleState::Pressed,
-        State::Checked => StyleState::Checked,
-        State::Selected => StyleState::Selected,
-        State::Disabled => StyleState::Disabled,
+        StyleState::Hovered => State::Hover,
+        StyleState::Pressed => State::Pressed,
+        StyleState::Checked => State::Checked,
+        StyleState::Selected => State::Selected,
+        StyleState::Disabled => State::Disabled,
     }
 }

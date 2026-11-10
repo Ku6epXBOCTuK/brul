@@ -77,6 +77,41 @@ pub enum StyleState {
     Disabled,
 }
 
+impl StyleState {
+    pub const ALL: [StyleState; 5] = [
+        StyleState::Hovered,
+        StyleState::Pressed,
+        StyleState::Checked,
+        StyleState::Selected,
+        StyleState::Disabled,
+    ];
+
+    pub fn flags(self) -> WidgetState {
+        match self {
+            StyleState::Hovered => WidgetState {
+                hovered: true,
+                ..WidgetState::default()
+            },
+            StyleState::Pressed => WidgetState {
+                pressed: true,
+                ..WidgetState::default()
+            },
+            StyleState::Checked => WidgetState {
+                checked: true,
+                ..WidgetState::default()
+            },
+            StyleState::Selected => WidgetState {
+                selected: true,
+                ..WidgetState::default()
+            },
+            StyleState::Disabled => WidgetState {
+                disabled: true,
+                ..WidgetState::default()
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct StyleSet {
     base: WidgetStyle,

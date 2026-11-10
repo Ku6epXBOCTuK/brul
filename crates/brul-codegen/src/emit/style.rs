@@ -1,5 +1,5 @@
 use brul_gui::{
-    Align, Color, Dimension, Justify, LayoutStyle, StyleSet, TextAlign, TextStyle, WidgetState,
+    Align, Color, Dimension, Justify, LayoutStyle, StyleSet, StyleState, TextAlign, TextStyle,
     WidgetStyle,
 };
 
@@ -44,47 +44,11 @@ pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
 pub(super) fn style_set(set: StyleSet) -> Option<String> {
     let base = set.base();
     let mut states = Vec::new();
-    for (name, state) in [
-        (
-            "Hovered",
-            WidgetState {
-                hovered: true,
-                ..WidgetState::default()
-            },
-        ),
-        (
-            "Pressed",
-            WidgetState {
-                pressed: true,
-                ..WidgetState::default()
-            },
-        ),
-        (
-            "Checked",
-            WidgetState {
-                checked: true,
-                ..WidgetState::default()
-            },
-        ),
-        (
-            "Selected",
-            WidgetState {
-                selected: true,
-                ..WidgetState::default()
-            },
-        ),
-        (
-            "Disabled",
-            WidgetState {
-                disabled: true,
-                ..WidgetState::default()
-            },
-        ),
-    ] {
-        let style = set.resolve(state);
+    for state in StyleState::ALL {
+        let style = set.resolve(state.flags());
         if style != base {
             states.push(format!(
-                ".with(brul_gui::StyleState::{name}, {})",
+                ".with(brul_gui::StyleState::{state:?}, {})",
                 widget_style(style)
             ));
         }
