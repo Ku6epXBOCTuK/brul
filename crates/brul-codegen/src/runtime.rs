@@ -23,7 +23,7 @@ pub struct Context {
 pub struct Binding {
     pub widget: WidgetId,
     pub target: BindingTarget,
-    pub scopes: Vec<Vec<Variable>>,
+    pub scopes: Rc<[Vec<Variable>]>,
     pub component: ComponentHandle,
 }
 
@@ -45,7 +45,7 @@ pub struct PropBinding {
     pub name: String,
     pub ty: PropType,
     pub expression: Expression,
-    pub scopes: Vec<Vec<Variable>>,
+    pub scopes: Rc<[Vec<Variable>]>,
     pub component: ComponentHandle,
 }
 
@@ -518,7 +518,7 @@ mod tests {
         let bindings = [Binding {
             widget: id,
             target: BindingTarget::Text(expr!("name")),
-            scopes: Vec::new(),
+            scopes: Vec::new().into(),
             component: Rc::clone(&component),
         }];
 
@@ -565,7 +565,7 @@ mod tests {
         let bindings = [Binding {
             widget: id,
             target: BindingTarget::Text(reentrant),
-            scopes: Vec::new(),
+            scopes: Vec::new().into(),
             component: Rc::clone(&handle),
         }];
         let _bindings = Bindings::new(&bindings, &tree);
@@ -810,7 +810,7 @@ mod tests {
             .map(|(index, target)| Binding {
                 widget: ids[index],
                 target,
-                scopes: Vec::new(),
+                scopes: Vec::new().into(),
                 component: Rc::clone(&component),
             })
             .collect();
@@ -853,13 +853,13 @@ mod tests {
             Binding {
                 widget: ids[0],
                 target: BindingTarget::Text(expr!("title")),
-                scopes: Vec::new(),
+                scopes: Vec::new().into(),
                 component: Rc::clone(&component),
             },
             Binding {
                 widget: ids[1],
                 target: BindingTarget::Checked(expr!("on")),
-                scopes: Vec::new(),
+                scopes: Vec::new().into(),
                 component: Rc::clone(&component),
             },
         ];

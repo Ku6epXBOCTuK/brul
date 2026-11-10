@@ -16,6 +16,13 @@ brul-script = { workspace = true }
 brul-syntax = { workspace = true }
 brul-window = { workspace = true }
 
+[dev-dependencies]
+criterion = { workspace = true, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "each"
+harness = false
+
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*"]

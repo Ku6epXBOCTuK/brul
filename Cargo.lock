@@ -203,6 +203,7 @@ dependencies = [
  "brul-script",
  "brul-syntax",
  "brul-window",
+ "criterion",
 ]
 
 [[package]]

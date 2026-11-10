@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_reactive::{Effect, flush};
-use brul_script::{Component, Error, Value, eval};
+use brul_script::{Component, Error, Value, Variable, eval};
 use brul_syntax::parser::parse_expression;
 
 fn evaluate(component: &mut Component, source: &str) -> Result<Value, Error> {
@@ -146,6 +146,34 @@ fn evaluation_resolves_identifiers() {
         evaluate(&mut component, "label + \"s\""),
         Ok(Value::String("itemss".to_owned()))
     );
+}
+
+#[test]
+fn build_scopes_share_their_snapshot_until_the_stack_changes() {
+    let mut component = Component::new();
+    component.push_build_scope(&[Variable {
+        name: "item",
+        value: Value::Number(1.0),
+    }]);
+
+    let first = component.build_scopes();
+    let second = component.build_scopes();
+    assert!(Rc::ptr_eq(&first, &second));
+    assert_eq!(first.len(), 1);
+
+    component.push_build_scope(&[Variable {
+        name: "row",
+        value: Value::Number(2.0),
+    }]);
+    let deeper = component.build_scopes();
+    assert!(!Rc::ptr_eq(&first, &deeper));
+    assert_eq!(deeper.len(), 2);
+
+    component.pop_build_scope();
+    component.pop_build_scope();
+    let empty = component.build_scopes();
+    assert!(empty.is_empty());
+    assert!(!Rc::ptr_eq(&deeper, &empty));
 }
 
 #[test]

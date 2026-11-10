@@ -636,7 +636,7 @@ mod tests {
             name: name.to_owned(),
             ty,
             expression,
-            scopes: Vec::new(),
+            scopes: Vec::new().into(),
             component: Rc::clone(component),
         }
     }

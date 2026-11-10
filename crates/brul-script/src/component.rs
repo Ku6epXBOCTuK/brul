@@ -1,3 +1,6 @@
+use std::cell::OnceCell;
+use std::rc::Rc;
+
 use brul_reactive::Signal;
 use brul_syntax::script::Function;
 
@@ -25,6 +28,7 @@ pub struct Component {
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
     build_scopes: Vec<Vec<Variable>>,
+    scopes_snapshot: OnceCell<Rc<[Vec<Variable>]>>,
     revision: Signal<u64>,
 }
 
@@ -37,6 +41,7 @@ impl Default for Component {
             host: None,
             pending_every: Vec::new(),
             build_scopes: Vec::new(),
+            scopes_snapshot: OnceCell::new(),
             revision: Signal::new(0),
         }
     }
@@ -80,15 +85,20 @@ impl Component {
                 .declare(variable.name, variable.value.clone(), false);
         }
         self.build_scopes.push(variables.to_vec());
+        self.scopes_snapshot.take();
     }
 
     pub fn pop_build_scope(&mut self) {
         self.environment.pop_frame();
         self.build_scopes.pop();
+        self.scopes_snapshot.take();
     }
 
-    pub fn build_scopes(&self) -> Vec<Vec<Variable>> {
-        self.build_scopes.clone()
+    pub fn build_scopes(&self) -> Rc<[Vec<Variable>]> {
+        Rc::clone(
+            self.scopes_snapshot
+                .get_or_init(|| Rc::from(self.build_scopes.clone())),
+        )
     }
 
     pub fn push_binding_scopes(&mut self, scopes: &[Vec<Variable>]) {
