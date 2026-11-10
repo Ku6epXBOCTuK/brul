@@ -318,7 +318,7 @@ impl Bindings {
     }
 }
 
-fn apply(binding: &Binding, tree: &RefCell<WidgetTree>) {
+pub fn apply(binding: &Binding, tree: &RefCell<WidgetTree>) {
     let component = Rc::clone(&binding.component);
     component.borrow().track();
     let count = binding.scopes.len();
@@ -365,26 +365,25 @@ fn write_target(binding: &Binding, component: &RefCell<Component>, tree: &RefCel
 }
 
 fn string(component: &RefCell<Component>, expression: &Expr) -> Option<String> {
-    match eval(&mut component.borrow_mut(), expression) {
-        Ok(Value::String(content)) => Some(content),
-        _ => None,
-    }
+    eval(&mut component.borrow_mut(), expression)
+        .ok()?
+        .as_text()
+        .map(str::to_owned)
 }
 
 fn flag(component: &RefCell<Component>, expression: &Expr) -> Option<bool> {
-    match eval(&mut component.borrow_mut(), expression) {
-        Ok(Value::Bool(value)) => Some(value),
-        _ => None,
-    }
+    eval(&mut component.borrow_mut(), expression)
+        .ok()?
+        .as_flag()
 }
 
-fn set_text(tree: &RefCell<WidgetTree>, widget: WidgetId, value: Option<String>) {
+pub fn set_text(tree: &RefCell<WidgetTree>, widget: WidgetId, value: Option<String>) {
     if let Some(value) = value {
         tree.borrow_mut().set_text(widget, value);
     }
 }
 
-fn set_flag(
+pub fn set_flag(
     tree: &RefCell<WidgetTree>,
     widget: WidgetId,
     value: Option<bool>,
@@ -395,30 +394,25 @@ fn set_flag(
     }
 }
 
-fn set_offset(tree: &RefCell<WidgetTree>, widget: WidgetId, x: Option<i32>, y: Option<i32>) {
+pub fn set_offset(tree: &RefCell<WidgetTree>, widget: WidgetId, x: Option<i32>, y: Option<i32>) {
     if let (Some(x), Some(y)) = (x, y) {
         tree.borrow_mut().set_offset(widget, x, y);
     }
 }
 
 pub fn text(component: &mut Component, expression: &Expr) -> Result<String, String> {
-    match evaluate(component, expression)? {
-        Value::String(content) => Ok(content),
-        other => Err(format!(
-            "Text content expects String, got {}",
-            other.type_name()
-        )),
-    }
+    let value = evaluate(component, expression)?;
+    value
+        .as_text()
+        .map(str::to_owned)
+        .ok_or_else(|| format!("Text content expects String, got {}", value.type_name()))
 }
 
 pub fn boolean(component: &mut Component, expression: &Expr, name: &str) -> Result<bool, String> {
-    match evaluate(component, expression)? {
-        Value::Bool(value) => Ok(value),
-        other => Err(format!(
-            "parameter '{name}' expects Bool, got {}",
-            other.type_name()
-        )),
-    }
+    let value = evaluate(component, expression)?;
+    value
+        .as_flag()
+        .ok_or_else(|| format!("parameter '{name}' expects Bool, got {}", value.type_name()))
 }
 
 pub fn offset(
@@ -429,13 +423,13 @@ pub fn offset(
     let Some(expression) = expression else {
         return Ok(0);
     };
-    match evaluate(component, expression)? {
-        Value::Number(value) if is_offset(value) => Ok(value as i32),
-        _ => Err(format!("parameter '{name}' expects an integer Number")),
-    }
+    let value = evaluate(component, expression)?;
+    value
+        .as_pixels()
+        .ok_or_else(|| format!("parameter '{name}' expects a Number"))
 }
 
-fn evaluate(component: &mut Component, expression: &Expr) -> Result<Value, String> {
+pub fn evaluate(component: &mut Component, expression: &Expr) -> Result<Value, String> {
     eval(component, expression).map_err(|error| error.reason())
 }
 
@@ -443,17 +437,9 @@ fn offset_value(component: &RefCell<Component>, expression: Option<&Expr>) -> Op
     let Some(expression) = expression else {
         return Some(0);
     };
-    match eval(&mut component.borrow_mut(), expression).ok()? {
-        Value::Number(value) if is_offset(value) => Some(value as i32),
-        _ => None,
-    }
-}
-
-fn is_offset(value: f64) -> bool {
-    value.is_finite()
-        && value.fract() == 0.0
-        && value >= f64::from(i32::MIN)
-        && value <= f64::from(i32::MAX)
+    eval(&mut component.borrow_mut(), expression)
+        .ok()?
+        .as_pixels()
 }
 
 #[cfg(test)]
@@ -532,46 +518,36 @@ mod tests {
     }
 
     #[test]
-    fn offset_takes_integers_and_rejects_the_rest() {
+    fn offset_rounds_fractions_and_rejects_the_rest() {
         let name = "x";
         let mut component = declared(name, Value::Number(-7.0));
         assert_eq!(offset(&mut component, Some(&ident(name)), name), Ok(-7));
 
-        for value in [2.5, f64::NAN, f64::from(i32::MAX) + 1.0] {
+        let mut component = declared(name, Value::Number(2.5));
+        assert_eq!(offset(&mut component, Some(&ident(name)), name), Ok(3));
+
+        for value in [f64::NAN, f64::from(i32::MAX) + 1.0] {
             let mut component = declared(name, Value::Number(value));
             assert!(offset(&mut component, Some(&ident(name)), name).is_err());
         }
     }
 
     #[test]
-    fn an_offset_binding_silently_ignores_what_it_cannot_place() {
+    fn an_offset_binding_rounds_and_ignores_what_it_has_no_number_for() {
         let none = RefCell::new(Component::new());
         assert_eq!(offset_value(&none, None), Some(0));
 
         let fractional = RefCell::new(declared("x", Value::Number(1.5)));
-        assert_eq!(offset_value(&fractional, Some(&ident("x"))), None);
+        assert_eq!(offset_value(&fractional, Some(&ident("x"))), Some(2));
 
         let missing = RefCell::new(Component::new());
         assert_eq!(offset_value(&missing, Some(&ident("x"))), None);
 
+        let text = RefCell::new(declared("x", Value::String("4".to_owned())));
+        assert_eq!(offset_value(&text, Some(&ident("x"))), None);
+
         let whole = RefCell::new(declared("x", Value::Number(4.0)));
         assert_eq!(offset_value(&whole, Some(&ident("x"))), Some(4));
-    }
-
-    #[test]
-    fn is_offset_accepts_exactly_the_i32_range() {
-        for value in [0.0, -3.0, f64::from(i32::MIN), f64::from(i32::MAX)] {
-            assert!(is_offset(value), "{value}");
-        }
-        for value in [
-            1.5,
-            f64::NAN,
-            f64::INFINITY,
-            f64::from(i32::MIN) - 1.0,
-            f64::from(i32::MAX) + 1.0,
-        ] {
-            assert!(!is_offset(value), "{value}");
-        }
     }
 
     #[test]

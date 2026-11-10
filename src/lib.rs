@@ -4,10 +4,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
-use brul_codegen::runtime::accepts_prop;
+use brul_codegen::runtime::{self, accepts_prop};
 use brul_gui::{Widget, WidgetEvent, WidgetId, WidgetTree, window};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::eval;
 use brul_syntax::ast::Expr;
 
 pub use brul_codegen::runtime::{
@@ -156,7 +155,7 @@ impl Ui {
             let binding = binding.clone();
             let tree = Rc::clone(&self.tree);
             self.scope.run(|| {
-                Effect::new(move || apply(&binding, &binding.component, &tree));
+                Effect::new(move || runtime::apply(&binding, &tree));
             });
         }
     }
@@ -440,74 +439,6 @@ fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, HandlerEvent
     }
 }
 
-fn apply(binding: &Binding, component: &ComponentHandle, tree: &RefCell<WidgetTree>) {
-    component.borrow().track();
-    let count = binding.scopes.len();
-    component.borrow_mut().push_binding_scopes(&binding.scopes);
-    write_target(binding, component, tree);
-    component.borrow_mut().pop_binding_scopes(count);
-}
-
-fn write_target(binding: &Binding, component: &ComponentHandle, tree: &RefCell<WidgetTree>) {
-    let widget = binding.widget;
-    match &binding.target {
-        BindingTarget::Text(expression) => set_text(tree, widget, text(component, expression)),
-        BindingTarget::Checked(expression) => set_flag(
-            tree,
-            widget,
-            boolean(component, expression),
-            WidgetTree::set_checked,
-        ),
-        BindingTarget::Selected(expression) => set_flag(
-            tree,
-            widget,
-            boolean(component, expression),
-            WidgetTree::set_selected,
-        ),
-        BindingTarget::Disabled(expression) => set_flag(
-            tree,
-            widget,
-            boolean(component, expression),
-            WidgetTree::set_disabled,
-        ),
-        BindingTarget::Visible(expression) => set_flag(
-            tree,
-            widget,
-            boolean(component, expression),
-            WidgetTree::set_visible,
-        ),
-        BindingTarget::Offset { x, y } => set_offset(
-            tree,
-            widget,
-            offset(component, x.as_ref()),
-            offset(component, y.as_ref()),
-        ),
-    }
-}
-
-fn set_text(tree: &RefCell<WidgetTree>, widget: WidgetId, value: Option<String>) {
-    if let Some(value) = value {
-        tree.borrow_mut().set_text(widget, value);
-    }
-}
-
-fn set_flag(
-    tree: &RefCell<WidgetTree>,
-    widget: WidgetId,
-    value: Option<bool>,
-    set: fn(&mut WidgetTree, WidgetId, bool) -> bool,
-) {
-    if let Some(value) = value {
-        set(&mut tree.borrow_mut(), widget, value);
-    }
-}
-
-fn set_offset(tree: &RefCell<WidgetTree>, widget: WidgetId, x: Option<i32>, y: Option<i32>) {
-    if let (Some(x), Some(y)) = (x, y) {
-        tree.borrow_mut().set_offset(widget, x, y);
-    }
-}
-
 fn apply_prop(prop: &PropBinding) {
     prop.component.borrow().track();
     let count = prop.scopes.len();
@@ -523,40 +454,9 @@ fn apply_prop(prop: &PropBinding) {
     prop.component.borrow_mut().pop_binding_scopes(count);
 }
 
-fn text(component: &ComponentHandle, expression: &Expr) -> Option<String> {
-    match evaluate(component, expression)? {
-        Value::String(content) => Some(content),
-        _ => None,
-    }
-}
-
-fn boolean(component: &ComponentHandle, expression: &Expr) -> Option<bool> {
-    match evaluate(component, expression)? {
-        Value::Bool(value) => Some(value),
-        _ => None,
-    }
-}
-
-fn offset(component: &ComponentHandle, expression: Option<&Expr>) -> Option<i32> {
-    let Some(expression) = expression else {
-        return Some(0);
-    };
-    match evaluate(component, expression)? {
-        Value::Number(value)
-            if value.is_finite()
-                && value.fract() == 0.0
-                && value >= f64::from(i32::MIN)
-                && value <= f64::from(i32::MAX) =>
-        {
-            Some(value as i32)
-        }
-        _ => None,
-    }
-}
-
 /// Оценивает выражение в контексте компонента.
 pub fn evaluate(component: &ComponentHandle, expression: &Expr) -> Option<Value> {
-    eval(&mut component.borrow_mut(), expression).ok()
+    runtime::evaluate(&mut component.borrow_mut(), expression).ok()
 }
 
 /// Запускает окно по модулю, сгенерированному из `.brul`.
@@ -720,9 +620,8 @@ mod tests {
 
     fn shown(component: &ComponentHandle) -> Option<Value> {
         component.borrow().track();
-        Some(Value::Bool(
-            boolean(component, &ident("shown")).unwrap_or(false),
-        ))
+        let flag = evaluate(component, &ident("shown")).and_then(|value| value.as_flag());
+        Some(Value::Bool(flag.unwrap_or(false)))
     }
 
     fn rebuild_shown(
@@ -733,7 +632,8 @@ mod tests {
             return Err("unknown theme".to_owned());
         }
         let mut widget = Widget::view(Direction::Column, Vec::new());
-        if boolean(component, &ident("shown")).unwrap_or(false) {
+        let flag = evaluate(component, &ident("shown")).and_then(|value| value.as_flag());
+        if flag.unwrap_or(false) {
             widget.set_children(vec![Widget::text("shown")]);
         }
         Ok((
@@ -937,33 +837,6 @@ mod tests {
         assert!(target.borrow().read("missing").is_err());
     }
 
-    #[test]
-    fn an_absent_offset_is_zero() {
-        let component = Component::new();
-        assert_eq!(offset(&Rc::new(RefCell::new(component)), None), Some(0));
-    }
-
-    #[test]
-    fn an_offset_needs_a_whole_number_in_range() {
-        let mut component = Component::new();
-        for (name, value) in [
-            ("whole", Value::Number(4.0)),
-            ("fraction", Value::Number(2.5)),
-            ("nan", Value::Number(f64::NAN)),
-            ("huge", Value::Number(3_000_000_000.0)),
-            ("text", Value::String("4".to_owned())),
-        ] {
-            component.declare(name, value, false).expect("declared");
-        }
-        let component = Rc::new(RefCell::new(component));
-        assert_eq!(offset(&component, Some(&ident("whole"))), Some(4));
-        assert_eq!(offset(&component, Some(&ident("fraction"))), None);
-        assert_eq!(offset(&component, Some(&ident("nan"))), None);
-        assert_eq!(offset(&component, Some(&ident("huge"))), None);
-        assert_eq!(offset(&component, Some(&ident("text"))), None);
-        assert_eq!(offset(&component, Some(&ident("missing"))), None);
-    }
-
     fn command_host(
         app: Option<Box<dyn Host>>,
     ) -> (CommandHost, Rc<RefCell<Vec<window::WindowCommand>>>) {
@@ -1119,7 +992,7 @@ mod tests {
         let ids: Vec<WidgetId> = widgets.iter().map(Widget::id).collect();
         let tree = RefCell::new(WidgetTree::new(Widget::view(Direction::Column, widgets)));
         for (index, target) in targets.into_iter().enumerate() {
-            apply(&binding(&component, ids[index], target), &component, &tree);
+            runtime::apply(&binding(&component, ids[index], target), &tree);
         }
         (ids, tree)
     }
