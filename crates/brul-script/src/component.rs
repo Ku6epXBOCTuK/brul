@@ -14,7 +14,7 @@ struct Property {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
-    pub name: String,
+    pub name: &'static str,
     pub value: Value,
 }
 
@@ -77,7 +77,7 @@ impl Component {
         for variable in variables {
             let _ = self
                 .environment
-                .declare(&variable.name, variable.value.clone(), false);
+                .declare(variable.name, variable.value.clone(), false);
         }
         self.build_scopes.push(variables.to_vec());
     }
@@ -97,7 +97,7 @@ impl Component {
             for variable in scope {
                 let _ = self
                     .environment
-                    .declare(&variable.name, variable.value.clone(), false);
+                    .declare(variable.name, variable.value.clone(), false);
             }
         }
     }

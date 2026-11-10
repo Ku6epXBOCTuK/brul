@@ -319,9 +319,9 @@ window Demo (title: "demo") {
         )
     );
     assert!(module.contains("component.borrow_mut().push_build_scope(&["));
-    assert!(module.contains(r#"brul::Variable { name: "item".to_owned(), value: item.clone() },"#));
+    assert!(module.contains(r#"brul::Variable { name: "item", value: item.clone() },"#));
     assert!(module.contains(
-        r#"brul::Variable { name: "position".to_owned(), value: brul::Value::Number(position as f64) },"#
+        r#"brul::Variable { name: "position", value: brul::Value::Number(position as f64) },"#
     ));
     assert!(module.contains("let key = structure0_key(&mut component.borrow_mut()).ok();"));
     assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count });"));

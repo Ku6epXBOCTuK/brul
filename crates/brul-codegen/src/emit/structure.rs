@@ -185,13 +185,13 @@ fn each_arm(
     out.push_str("        component.borrow_mut().push_build_scope(&[\n");
     let _ = writeln!(
         out,
-        "            brul::Variable {{ name: {:?}.to_owned(), value: item.clone() }},",
+        "            brul::Variable {{ name: {:?}, value: item.clone() }},",
         block.item
     );
     if let Some(index_name) = &block.index {
         let _ = writeln!(
             out,
-            "            brul::Variable {{ name: {index_name:?}.to_owned(), value: brul::Value::Number(position as f64) }},"
+            "            brul::Variable {{ name: {index_name:?}, value: brul::Value::Number(position as f64) }},"
         );
     }
     out.push_str("        ]);\n");
