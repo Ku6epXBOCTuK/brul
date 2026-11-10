@@ -1,1 +1,1 @@
-allow = ["*::fmt", "evaluate"]
+allow = ["*::fmt", "eval_expression"]
