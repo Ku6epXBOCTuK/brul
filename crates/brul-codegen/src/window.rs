@@ -101,3 +101,17 @@ fn flag(value: &Expr, name: &str) -> Result<(), Error> {
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apply_rejects_an_unknown_argument() {
+        let mut config = WindowConfig::default();
+        let value = Expr::new(ExprKind::Number(1.0), Position { line: 1, column: 1 });
+        let error = apply(&mut config, "bogus", &value).unwrap_err();
+        assert_eq!(error.message, "unknown window argument 'bogus'");
+        assert_eq!((error.line, error.column), (1, 1));
+    }
+}

@@ -224,4 +224,42 @@ mod tests {
         assert_eq!(error.message, MESSAGE);
         assert_eq!((error.line, error.column), (1, 1));
     }
+
+    #[test]
+    fn parse_rejects_a_file_without_a_component() {
+        let source = r#"
+<markup>
+window Picker (title: "x") {
+    Column (root) { Text (text) { "hi" } }
+}
+</markup>
+"#;
+        let error = parse(source, Path::new("window.brul"))
+            .err()
+            .expect("a file without a component must not parse");
+        assert!(
+            error.message.contains("file has no component declaration"),
+            "{}",
+            error.message
+        );
+        assert!(error.message.contains("window.brul"));
+    }
+
+    #[test]
+    fn parse_keeps_the_uses_of_a_use_block() {
+        let source = r#"
+<use>
+    import Card from "./card";
+</use>
+
+<markup>
+component Screen {
+    Text (text) { "hi" }
+}
+</markup>
+"#;
+        let parsed = parse(source, Path::new("screen.brul")).unwrap();
+        assert_eq!(parsed.uses.len(), 1);
+        assert_eq!(parsed.uses[0].name, "Card");
+    }
 }
