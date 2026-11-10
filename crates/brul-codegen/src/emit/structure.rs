@@ -4,18 +4,15 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{EachBlock, IfBlock};
 
 use super::Emit;
+use super::Frame;
 use super::expression;
 use super::items;
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn structure_if(
     out: &mut String,
     block: &IfBlock,
     emit: &mut Emit<'_>,
-    direction: &str,
-    spacing: u32,
-    theme_expression: &str,
-    depth: usize,
+    frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
     let index = *emit.next_structure;
@@ -24,30 +21,18 @@ pub(super) fn structure_if(
     emit.functions.push(dispatcher(index, emit));
     let themes = themes(emit);
     for (position, theme) in themes.iter().enumerate() {
-        let arm = rebuild_arm(
-            index,
-            position,
-            theme.as_deref(),
-            block,
-            emit,
-            direction,
-            spacing,
-        )?;
+        let arm = rebuild_arm(index, position, theme.as_deref(), block, emit, frame)?;
         emit.functions.push(arm);
     }
-    inline(out, index, false, theme_expression, depth, counter);
+    inline(out, index, false, frame, counter);
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn structure_each(
     out: &mut String,
     block: &EachBlock,
     emit: &mut Emit<'_>,
-    direction: &str,
-    spacing: u32,
-    theme_expression: &str,
-    depth: usize,
+    frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
     let index = *emit.next_structure;
@@ -57,18 +42,10 @@ pub(super) fn structure_each(
     emit.functions.push(dispatcher(index, emit));
     let themes = themes(emit);
     for (position, theme) in themes.iter().enumerate() {
-        let arm = each_arm(
-            index,
-            position,
-            theme.as_deref(),
-            block,
-            emit,
-            direction,
-            spacing,
-        )?;
+        let arm = each_arm(index, position, theme.as_deref(), block, emit, frame)?;
         emit.functions.push(arm);
     }
-    inline(out, index, true, theme_expression, depth, counter);
+    inline(out, index, true, frame, counter);
     Ok(())
 }
 
@@ -116,16 +93,10 @@ fn themes(emit: &Emit<'_>) -> Vec<Option<String>> {
         .collect()
 }
 
-fn inline(
-    out: &mut String,
-    index: usize,
-    each: bool,
-    theme_expression: &str,
-    depth: usize,
-    counter: &mut usize,
-) {
-    let pad = "    ".repeat(depth);
-    let inner = "    ".repeat(depth + 1);
+fn inline(out: &mut String, index: usize, each: bool, frame: Frame<'_>, counter: &mut usize) {
+    let pad = "    ".repeat(frame.depth());
+    let inner = "    ".repeat(frame.depth() + 1);
+    let theme_expression = frame.theme_expression();
     let name = format!("widget{}", *counter);
     *counter += 1;
     let _ = writeln!(out, "{pad}{{");
@@ -152,9 +123,9 @@ fn rebuild_arm(
     theme: Option<&str>,
     block: &IfBlock,
     emit: &mut Emit<'_>,
-    direction: &str,
-    spacing: u32,
+    frame: Frame<'_>,
 ) -> Result<String, Error> {
+    let arm = arm_frame(theme, frame);
     let mut out = arm_header(index, position);
     let _ = writeln!(
         out,
@@ -163,29 +134,11 @@ fn rebuild_arm(
     );
     out.push_str("        Some(brul::Value::Bool(true)) => vec![\n");
     let mut counter = 0;
-    items(
-        &mut out,
-        &block.then_block,
-        emit,
-        theme,
-        direction,
-        spacing,
-        3,
-        &mut counter,
-    )?;
+    items(&mut out, &block.then_block, emit, arm, &mut counter)?;
     out.push_str("        ],\n");
     out.push_str("        Some(brul::Value::Bool(false)) => vec![\n");
     if let Some(else_block) = &block.else_block {
-        items(
-            &mut out,
-            else_block,
-            emit,
-            theme,
-            direction,
-            spacing,
-            3,
-            &mut counter,
-        )?;
+        items(&mut out, else_block, emit, arm, &mut counter)?;
     }
     out.push_str("        ],\n");
     out.push_str(
@@ -193,7 +146,7 @@ fn rebuild_arm(
     );
     out.push_str("        None => return Err(\"if condition failed to evaluate\".to_owned()),\n");
     out.push_str("    };\n");
-    widget(&mut out, direction, spacing);
+    widget(&mut out, arm);
     Ok(out)
 }
 
@@ -203,9 +156,9 @@ fn each_arm(
     theme: Option<&str>,
     block: &EachBlock,
     emit: &mut Emit<'_>,
-    direction: &str,
-    spacing: u32,
+    frame: Frame<'_>,
 ) -> Result<String, Error> {
+    let arm = arm_frame(theme, frame);
     let mut out = arm_header(index, position);
     out.push_str("    let mut children = Vec::new();\n");
     let _ = writeln!(
@@ -247,24 +200,19 @@ fn each_arm(
     if !block.block.items.is_empty() {
         out.push_str("        children.extend([\n");
         let mut counter = 0;
-        items(
-            &mut out,
-            &block.block,
-            emit,
-            theme,
-            direction,
-            spacing,
-            3,
-            &mut counter,
-        )?;
+        items(&mut out, &block.block, emit, arm, &mut counter)?;
         out.push_str("        ]);\n");
     }
     out.push_str("        let count = children.len() - start;\n");
     out.push_str("        component.borrow_mut().pop_build_scope();\n");
     out.push_str("        rows.push(brul::RowInfo { key, item, start, count });\n");
     out.push_str("    }\n");
-    widget(&mut out, direction, spacing);
+    widget(&mut out, arm);
     Ok(out)
+}
+
+fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
+    Frame::root(theme, 3).inside(frame.direction(), frame.spacing())
 }
 
 fn arm_header(index: usize, position: usize) -> String {
@@ -280,7 +228,9 @@ fn structure{index}_rebuild_{position}(component: &brul::ComponentHandle) -> bru
     )
 }
 
-fn widget(out: &mut String, direction: &str, spacing: u32) {
+fn widget(out: &mut String, frame: Frame<'_>) {
+    let direction = frame.direction();
+    let spacing = frame.spacing();
     let _ = writeln!(
         out,
         "    let widget = brul_gui::Widget::view(brul_gui::Direction::{direction}, children)\n        .with_layout(brul_gui::LayoutStyle {{ spacing: {spacing}, ..Default::default() }});"

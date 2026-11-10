@@ -9,6 +9,7 @@ use crate::error_at;
 use crate::styles;
 
 use super::Emit;
+use super::Frame;
 use super::style::{layout, style_set, text_style};
 use super::{component, events, expression, structure};
 use crate::runtime::HandlerEvent;
@@ -17,8 +18,7 @@ pub(super) fn widget(
     out: &mut String,
     element: &Element,
     emit: &mut Emit<'_>,
-    theme: Option<&str>,
-    depth: usize,
+    frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
     if let Some(index) = emit
@@ -26,18 +26,18 @@ pub(super) fn widget(
         .iter()
         .position(|import| import.name == element.name)
     {
-        return component::component(out, element, index, emit, theme, depth, counter);
+        return component::component(out, element, index, emit, frame, counter);
     }
-    let resolved = styles::resolve(emit.stylesheet, &classes(element), theme)
+    let resolved = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
         .map_err(|message| error_at(element.position, message))?;
     let events = events::widget(element, emit.program)?;
     let name = format!("widget{}", *counter);
     *counter += 1;
-    let pad = "    ".repeat(depth);
-    let inner = "    ".repeat(depth + 1);
+    let pad = "    ".repeat(frame.depth());
+    let inner = "    ".repeat(frame.depth() + 1);
     let _ = writeln!(out, "{pad}{{");
     let _ = write!(out, "{inner}let {name} = ");
-    let text = kind(out, element, &resolved, emit, theme, depth, counter)?;
+    let text = kind(out, element, &resolved, emit, frame, counter)?;
     modifiers(out, &resolved, events.drag, &inner);
     out.push_str(";\n");
     text_binding(out, text, &name, &inner);
@@ -64,13 +64,12 @@ fn kind(
     element: &Element,
     resolved: &styles::Resolved,
     emit: &mut Emit<'_>,
-    theme: Option<&str>,
-    depth: usize,
+    frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<Option<Expr>, Error> {
     match element.name.as_str() {
         "View" | "Row" | "Column" => {
-            container(out, element, resolved, emit, theme, depth, counter)?;
+            container(out, element, resolved, emit, frame, counter)?;
             Ok(None)
         }
         "Text" => text_widget(out, element, resolved.text.clone()),
@@ -86,8 +85,7 @@ fn container(
     element: &Element,
     resolved: &styles::Resolved,
     emit: &mut Emit<'_>,
-    theme: Option<&str>,
-    depth: usize,
+    frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
     let row = element.name == "Row";
@@ -98,17 +96,9 @@ fn container(
     }
     let direction = if row { "Row" } else { "Column" };
     let _ = writeln!(out, "brul_gui::Widget::{call}(vec![");
-    items(
-        out,
-        &element.block,
-        emit,
-        theme,
-        direction,
-        resolved.layout.spacing,
-        depth + 2,
-        counter,
-    )?;
-    let inner = "    ".repeat(depth + 1);
+    let children = frame.deeper(2).inside(direction, resolved.layout.spacing);
+    items(out, &element.block, emit, children, counter)?;
+    let inner = "    ".repeat(frame.depth() + 1);
     let _ = write!(out, "{inner}])");
     Ok(())
 }
@@ -151,51 +141,25 @@ fn handler_bindings(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn items(
     out: &mut String,
     block: &Block,
     emit: &mut Emit<'_>,
-    theme: Option<&str>,
-    direction: &str,
-    spacing: u32,
-    depth: usize,
+    frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let theme_expression = match theme {
-        Some(name) => format!("Some({name:?})"),
-        None => "None".to_owned(),
-    };
     for item in &block.items {
         match item {
             BlockItem::Element(child) => {
-                widget(out, child, emit, theme, depth, counter)?;
+                widget(out, child, emit, frame, counter)?;
                 out.push_str(",\n");
             }
             BlockItem::If(structure) => {
-                structure::structure_if(
-                    out,
-                    structure,
-                    emit,
-                    direction,
-                    spacing,
-                    &theme_expression,
-                    depth,
-                    counter,
-                )?;
+                structure::structure_if(out, structure, emit, frame, counter)?;
                 out.push_str(",\n");
             }
             BlockItem::Each(structure) => {
-                structure::structure_each(
-                    out,
-                    structure,
-                    emit,
-                    direction,
-                    spacing,
-                    &theme_expression,
-                    depth,
-                    counter,
-                )?;
+                structure::structure_each(out, structure, emit, frame, counter)?;
                 out.push_str(",\n");
             }
             BlockItem::Expr(expression) => {

@@ -8,19 +8,25 @@ use crate::error_at;
 use crate::loader::Definition;
 
 use super::Emit;
+use super::Frame;
 use super::{events, expression};
 
 type Props<'a> = Vec<(&'a str, PropType, &'a Expr)>;
 type Events<'a> = Vec<(&'a str, &'a str, Vec<PropType>)>;
 
-#[allow(clippy::too_many_arguments)]
+struct Call<'a> {
+    name: &'a str,
+    props: Props<'a>,
+    defaults: Props<'a>,
+    events: Events<'a>,
+}
+
 pub(super) fn component(
     out: &mut String,
     element: &Element,
     index: usize,
     emit: &mut Emit<'_>,
-    theme: Option<&str>,
-    depth: usize,
+    frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
     let definition = &emit.registry.definitions[index];
@@ -29,7 +35,16 @@ pub(super) fn component(
     let (props, events) = collect(element, definition, name, emit)?;
     let defaults = defaults(element, definition, name, &props)?;
     write(
-        out, index, name, theme, depth, counter, &props, &defaults, &events,
+        out,
+        index,
+        Call {
+            name,
+            props,
+            defaults,
+            events,
+        },
+        frame,
+        counter,
     );
     Ok(())
 }
@@ -171,26 +186,18 @@ fn defaults<'a>(
     Ok(defaults)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn write(
-    out: &mut String,
-    index: usize,
-    name: &str,
-    theme: Option<&str>,
-    depth: usize,
-    counter: &mut usize,
-    props: &Props<'_>,
-    defaults: &Props<'_>,
-    events: &Events<'_>,
-) {
+fn write(out: &mut String, index: usize, call: Call<'_>, frame: Frame<'_>, counter: &mut usize) {
+    let Call {
+        name,
+        props,
+        defaults,
+        events,
+    } = call;
     let widget = format!("widget{}", *counter);
     *counter += 1;
-    let pad = "    ".repeat(depth);
-    let inner = "    ".repeat(depth + 1);
-    let theme = match theme {
-        Some(theme) => format!("Some({theme:?})"),
-        None => "None".to_owned(),
-    };
+    let pad = "    ".repeat(frame.depth());
+    let inner = "    ".repeat(frame.depth() + 1);
+    let theme = frame.theme_expression();
     let _ = writeln!(out, "{pad}{{");
     let _ = writeln!(
         out,
@@ -203,10 +210,10 @@ fn write(
         "{inner}    script: component{index}_script().as_ref(),"
     );
     let _ = writeln!(out, "{inner}    name: {name:?},");
-    arguments(out, "props", props, &inner);
-    arguments(out, "defaults", defaults, &inner);
+    arguments(out, "props", &props, &inner);
+    arguments(out, "defaults", &defaults, &inner);
     let _ = writeln!(out, "{inner}    events: &[");
-    for (event, handler, params) in events {
+    for (event, handler, params) in &events {
         let params = params
             .iter()
             .map(|ty| format!("brul::PropType::{ty:?}"))

@@ -6,6 +6,7 @@ use brul_syntax::markup::Element;
 use crate::runtime::HandlerEvent;
 
 use super::Emit;
+use super::Frame;
 use super::element::widget;
 
 pub(super) fn view(
@@ -62,7 +63,7 @@ fn branch(
 ) -> Result<(), Error> {
     let mut counter = 0;
     let _ = writeln!(out, "        {pattern} => {{");
-    widget(out, root, emit, theme, 3, &mut counter)?;
+    widget(out, root, emit, Frame::root(theme, 3), &mut counter)?;
     out.push_str("\n        }\n");
     Ok(())
 }
