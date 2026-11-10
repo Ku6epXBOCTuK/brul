@@ -1,6 +1,6 @@
+use crate::cursor::Cursor;
 use crate::error::Error;
 use crate::style::ast::{ClassRule, Property, State, Stylesheet, Theme, ThemeEntry, Value};
-use crate::style::cursor::Cursor;
 use crate::style::properties::Kind;
 use crate::style::validate::{self, PropertyAt, RuleAt, ThemeAt, ThemeKeyAt};
 use crate::style::value::Type;

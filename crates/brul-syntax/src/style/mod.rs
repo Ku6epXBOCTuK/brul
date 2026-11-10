@@ -1,5 +1,4 @@
 mod ast;
-mod cursor;
 mod parser;
 mod properties;
 mod rule;

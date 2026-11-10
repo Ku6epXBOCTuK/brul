@@ -18,6 +18,10 @@ impl<'a> Cursor<'a> {
         self.pos
     }
 
+    pub fn set_pos(&mut self, pos: usize) {
+        self.pos = pos;
+    }
+
     pub fn value_start(&mut self) -> usize {
         self.skip_trivia();
         self.pos
@@ -65,10 +69,7 @@ impl<'a> Cursor<'a> {
             Some(ch) if ch.is_ascii_alphabetic() => self.bump(),
             _ => return Err(self.error("expected name")),
         }
-        while self
-            .peek()
-            .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '-')
-        {
+        while self.peek().is_some_and(is_ident_char) {
             self.bump();
         }
         Ok(self.source[start..self.pos].to_owned())
@@ -130,13 +131,21 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn error(&self, message: impl Into<String>) -> Error {
-        Error::at(self.source, self.pos, message)
+        self.error_at(self.pos, message)
+    }
+
+    pub fn error_at(&self, pos: usize, message: impl Into<String>) -> Error {
+        Error::at(self.source, pos, message)
     }
 
     fn is_ident_char(&self, offset: usize) -> bool {
         self.source[self.pos + offset..]
             .chars()
             .next()
-            .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+            .is_some_and(is_ident_char)
     }
+}
+
+fn is_ident_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'
 }

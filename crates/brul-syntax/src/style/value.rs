@@ -1,6 +1,6 @@
+use crate::cursor::Cursor;
 use crate::error::Error;
 use crate::style::ast::{Border, BorderColor, Color, Gradient, Value};
-use crate::style::cursor::Cursor;
 
 #[derive(Clone, Copy)]
 pub enum Type {

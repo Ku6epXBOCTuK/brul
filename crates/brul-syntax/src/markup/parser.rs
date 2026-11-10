@@ -1,4 +1,5 @@
 use crate::ast::Position;
+use crate::cursor::Cursor;
 use crate::error::Error;
 use crate::lexer::Span;
 use crate::markup::ast::{
@@ -7,36 +8,36 @@ use crate::markup::ast::{
 };
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
-    let mut parser = Parser { source, pos: 0 };
+    let mut cursor = Cursor::new(source);
     let mut declarations = Vec::new();
     loop {
-        parser.skip_trivia();
-        if parser.peek().is_none() {
+        cursor.skip_trivia();
+        if cursor.peek().is_none() {
             break;
         }
-        declarations.push(parser.declaration()?);
+        declarations.push(cursor.declaration()?);
     }
     Ok(File { declarations })
 }
 
-struct Parser<'a> {
-    source: &'a str,
-    pos: usize,
+fn position(cursor: &Cursor<'_>, pos: usize) -> Position {
+    let (line, column) = Span {
+        start: pos,
+        end: pos,
+    }
+    .line_col(cursor.source());
+    Position { line, column }
 }
 
-impl Parser<'_> {
+impl Cursor<'_> {
     fn declaration(&mut self) -> Result<Declaration, Error> {
         self.skip_trivia();
-        let start = self.pos;
+        let start = self.pos();
         let keyword = self.ident()?;
         match keyword.as_str() {
             "component" => self.component(),
             "window" => self.window(),
-            _ => Err(Error::at(
-                self.source,
-                start,
-                "expected 'component' or 'window'",
-            )),
+            _ => Err(self.error_at(start, "expected 'component' or 'window'")),
         }
     }
 
@@ -47,7 +48,7 @@ impl Parser<'_> {
     }
 
     fn window(&mut self) -> Result<Declaration, Error> {
-        let start = self.pos;
+        let start = self.pos();
         let name = self.ident()?;
         let args = self.arg_list()?;
         let members = self.members()?;
@@ -55,7 +56,7 @@ impl Parser<'_> {
             name,
             args,
             members,
-            position: self.position(start),
+            position: position(self, start),
         }))
     }
 
@@ -77,7 +78,7 @@ impl Parser<'_> {
 
     fn member(&mut self) -> Result<Member, Error> {
         self.skip_trivia();
-        let start = self.pos;
+        let start = self.pos();
         let name = self.ident()?;
         match name.as_str() {
             "prop" => self.prop(),
@@ -102,14 +103,14 @@ impl Parser<'_> {
             name,
             args,
             block,
-            position: self.position(start),
+            position: position(self, start),
         })
     }
 
     fn leaf_block(&mut self, name: &str) -> Result<Block, Error> {
         self.expect('{')?;
-        let (expr, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
-        self.pos = end;
+        let (expr, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
+        self.set_pos(end);
         self.skip_trivia();
         if self.peek() == Some('{') {
             return Err(self.error(format!(
@@ -152,8 +153,8 @@ impl Parser<'_> {
         self.skip_trivia();
         if self.peek() == Some(':') {
             self.bump();
-            let (value, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
-            self.pos = end;
+            let (value, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
+            self.set_pos(end);
             return Ok(Arg::Named { name, value });
         }
         Ok(Arg::Class(name))
@@ -176,7 +177,7 @@ impl Parser<'_> {
     }
 
     fn block_item(&mut self) -> Result<BlockItem, Error> {
-        let start = self.pos;
+        let start = self.pos();
         let name = self.ident()?;
         match name.as_str() {
             "if" => self.if_block().map(BlockItem::If),
@@ -187,12 +188,12 @@ impl Parser<'_> {
 
     fn each_block(&mut self) -> Result<EachBlock, Error> {
         self.expect('(')?;
-        let (collection, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
-        self.pos = end;
+        let (collection, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
+        self.set_pos(end);
         self.skip_trivia();
-        let start = self.pos;
+        let start = self.pos();
         if self.ident()? != "as" {
-            return Err(Error::at(self.source, start, "expected 'as'"));
+            return Err(self.error_at(start, "expected 'as'"));
         }
         let item = self.ident()?;
         self.skip_trivia();
@@ -205,8 +206,8 @@ impl Parser<'_> {
         self.skip_trivia();
         let key = if self.peek() == Some('(') {
             self.bump();
-            let (key, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
-            self.pos = end;
+            let (key, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
+            self.set_pos(end);
             self.expect(')')?;
             Some(key)
         } else {
@@ -225,12 +226,11 @@ impl Parser<'_> {
 
     fn if_block(&mut self) -> Result<IfBlock, Error> {
         self.expect('(')?;
-        let (condition, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
-        self.pos = end;
+        let (condition, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
+        self.set_pos(end);
         self.expect(')')?;
         let then_block = self.block()?;
-        let else_block = if self.keyword("else") {
-            self.pos += "else".len();
+        let else_block = if self.eat_keyword("else") {
             Some(self.block()?)
         } else {
             None
@@ -249,8 +249,8 @@ impl Parser<'_> {
         self.skip_trivia();
         let default = if self.peek() == Some('=') {
             self.bump();
-            let (expr, end) = crate::parser::parse_expression_at(self.source, self.pos)?;
-            self.pos = end;
+            let (expr, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
+            self.set_pos(end);
             Some(expr)
         } else {
             None
@@ -290,90 +290,14 @@ impl Parser<'_> {
 
     fn prop_type(&mut self) -> Result<PropType, Error> {
         self.skip_trivia();
-        let start = self.pos;
+        let start = self.pos();
         let name = self.ident()?;
         match name.as_str() {
             "Bool" => Ok(PropType::Bool),
             "Number" => Ok(PropType::Number),
             "String" => Ok(PropType::String),
             "Image" => Ok(PropType::Image),
-            _ => Err(Error::at(self.source, start, "expected property type")),
+            _ => Err(self.error_at(start, "expected property type")),
         }
-    }
-
-    fn expect(&mut self, ch: char) -> Result<(), Error> {
-        self.skip_trivia();
-        if self.peek() == Some(ch) {
-            self.bump();
-            Ok(())
-        } else {
-            Err(self.error(format!("expected '{ch}'")))
-        }
-    }
-
-    fn ident(&mut self) -> Result<String, Error> {
-        self.skip_trivia();
-        let start = self.pos;
-        match self.peek() {
-            Some(ch) if ch.is_ascii_alphabetic() => self.bump(),
-            _ => return Err(self.error("expected name")),
-        }
-        while let Some(ch) = self.peek() {
-            if !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '_') {
-                break;
-            }
-            self.bump();
-        }
-        Ok(self.source[start..self.pos].to_owned())
-    }
-
-    fn keyword(&mut self, word: &str) -> bool {
-        self.skip_trivia();
-        let rest = &self.source[self.pos..];
-        if !rest.starts_with(word) {
-            return false;
-        }
-        rest[word.len()..]
-            .chars()
-            .next()
-            .is_none_or(|ch| !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'))
-    }
-
-    fn skip_trivia(&mut self) {
-        loop {
-            let Some(ch) = self.peek() else { return };
-            if ch.is_whitespace() {
-                self.bump();
-            } else if self.source[self.pos..].starts_with("//") {
-                self.pos = self.source[self.pos..]
-                    .find('\n')
-                    .map_or(self.source.len(), |offset| self.pos + offset);
-            } else {
-                return;
-            }
-        }
-    }
-
-    fn peek(&self) -> Option<char> {
-        self.source[self.pos..].chars().next()
-    }
-
-    fn bump(&mut self) {
-        if let Some(ch) = self.peek() {
-            self.pos += ch.len_utf8();
-        }
-    }
-
-    fn position(&self, pos: usize) -> Position {
-        let (line, column) = Span {
-            start: pos,
-            end: pos,
-        }
-        .line_col(self.source);
-        Position { line, column }
-    }
-
-    fn error(&self, message: impl Into<String>) -> Error {
-        Error::at(self.source, self.pos, message)
     }
 }
