@@ -3,9 +3,9 @@ ComponentDecl = "component" Ident "{" { Member } "}" ;
 WindowDecl    = "window" Ident "(" ArgList ")" "{" { Member } "}" ;
 
 Member        = PropDecl | EventDecl | Element ;
-PropDecl      = "prop" Ident ":" PropType [ "=" Script.Expr ] ;
+PropDecl      = "prop" Ident ":" PropType [ "=" Script.Expr ] ";" ;
 PropType      = "Bool" | "Number" | "String" | "Image" ;
-EventDecl     = "event" Ident [ "(" [ EventParamList ] ")" ] ;
+EventDecl     = "event" Ident [ "(" [ EventParamList ] ")" ] ";" ;
 EventParamList= EventParam { "," EventParam } ;
 EventParam    = Ident ":" PropType ;
 

@@ -590,7 +590,7 @@ fn emits_component_properties() {
         &[
             (
                 "badge.brul",
-                "<markup>\ncomponent Badge {\n    prop label: String = \"badge\"\n    prop size: Number = 10\n    Text { label }\n}\n</markup>\n",
+                "<markup>\ncomponent Badge {\n    prop label: String = \"badge\";\n    prop size: Number = 10;\n    Text { label }\n}\n</markup>\n",
             ),
             (
                 "window.brul",
@@ -625,7 +625,7 @@ fn rejects_component_properties() {
             &[
                 (
                     "badge.brul",
-                    "<markup>\ncomponent Badge {\n    prop label: String = \"badge\"\n    Text { label }\n}\n</markup>\n",
+                    "<markup>\ncomponent Badge {\n    prop label: String = \"badge\";\n    Text { label }\n}\n</markup>\n",
                 ),
                 (
                     "window.brul",
@@ -648,7 +648,7 @@ fn emits_component_events() {
         &[
             (
                 "badge.brul",
-                "<markup>\ncomponent Badge {\n    event clicked(i: Number)\n    Text { \"badge\" }\n}\n</markup>\n",
+                "<markup>\ncomponent Badge {\n    event clicked(i: Number);\n    Text { \"badge\" }\n}\n</markup>\n",
             ),
             (
                 "window.brul",
@@ -681,7 +681,7 @@ fn rejects_component_events() {
             &[
                 (
                     "badge.brul",
-                    "<markup>\ncomponent Badge {\n    event clicked(i: Number)\n    Text { \"badge\" }\n}\n</markup>\n",
+                    "<markup>\ncomponent Badge {\n    event clicked(i: Number);\n    Text { \"badge\" }\n}\n</markup>\n",
                 ),
                 (
                     "window.brul",

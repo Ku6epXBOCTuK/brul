@@ -7,9 +7,9 @@
 
 <markup>
     component CheckRow {
-        prop label: String = ""
-        prop checked: Bool = false
-        event toggled()
+        prop label: String = "";
+        prop checked: Bool = false;
+        event toggled();
 
         Row (check-row, on click: toggle) {
             View (checkbox, checked: checked) { }

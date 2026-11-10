@@ -6,13 +6,13 @@
 
 <markup>
     component BrowserItem {
-        prop index: Number = 0
-        prop icon: String = ""
-        prop name: String = ""
-        prop path: String = ""
-        prop isDefault: Bool = false
-        prop selected: Bool = false
-        event clicked(i: Number)
+        prop index: Number = 0;
+        prop icon: String = "";
+        prop name: String = "";
+        prop path: String = "";
+        prop isDefault: Bool = false;
+        prop selected: Bool = false;
+        event clicked(i: Number);
 
         View (item, on click: choose, selected: selected) {
             Row {

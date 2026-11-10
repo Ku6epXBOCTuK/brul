@@ -1,6 +1,6 @@
 # Язык разметки
 
-Статус: draft. Канон языка: парсер и кодеген проверяются на этой спеке, примеры
+Статус: stable. Канон языка: парсер и кодеген проверяются на этой спеке, примеры
 в конце — фикстуры тестов.
 
 Принципы — [architecture.md §Решения](../dev/architecture.md#решения).
@@ -20,8 +20,9 @@ View (item-panel, selected: selected, on click: panelClicked) {
 - в скобках: голые идентификаторы = **классы стилей**, `имя: выражение` =
   **параметры**, `on событие: функция` = **обработчик** (только по ссылке, без
   инлайн-тел);
-- в фигурных скобках: только структура — дочерние элементы, `if`/`each`; у
-  листовых виджетов (`Text`) — одно выражение-содержимое.
+- в фигурных скобках: структура — дочерние элементы, `if`/`each`; у листовых
+  виджетов (`Text`) — одно выражение-содержимое. Блок `component` — известное
+  исключение: в нём рядом со структурой объявляются `prop` и `event`.
 
 Внешний вид задаётся классами в стилях ([style.md](style.md)), а не
 инлайн-параметрами. Параметры в скобках — только поведение и данные.
@@ -111,10 +112,10 @@ View (checkbox, checked: checked, on click: toggle) { }
 - имя обязано резолвиться в функцию скрипт-блока этого компонента или во
   встроенную функцию — иначе ошибка компиляции с позицией;
 - один обработчик на событие; дубликат — ошибка;
-- аргументы события передаются функции параметрами: `event clicked(i: Number)` →
-  `function launch(i) { ... }`;
+- аргументы события передаются функции параметрами: `event clicked(i: Number);`
+  → `function launch(i) { ... }`;
 - инлайн-тела (`on click { ... }`) в MVP **запрещены**: поведение живёт в
-  скрипте, разметка — только структура
+  скрипте, разметка — только структура и объявления компонента
   ([причина](../dev/architecture.md#ограничения-dsl)).
 
 ### Параметры
@@ -133,10 +134,12 @@ View (checkbox, checked: checked, on click: toggle) { }
 ### Свойства и события компонента
 
 ```brul
-prop checked: Bool = false      // тип обязателен (нужен кодегену для сигнала)
-event clicked(i: Number)        // событие с типизированными аргументами
+prop checked: Bool = false;     // тип обязателен (нужен кодегену для сигнала)
+event clicked(i: Number);       // событие с типизированными аргументами
 ```
 
+- Декларация `prop` или `event` заканчивается `;`; пропуск — ошибка с позицией.
+- Объявления стоят в блоке `component` рядом со структурой, порядок не важен.
 - Значение по умолчанию обязательно для `Bool`/`Number`/`String`; `Image` — по
   умолчанию пустой (`= null`).
 - Присваивание свойству из обработчика — запись в сигнал.
@@ -168,9 +171,7 @@ event clicked(i: Number)        // событие с типизированны�
 </script>
 ```
 
-- `<use>` — зависимости файла: имя → путь к `.brul`-файлу компонента. Форма
-  одна: `import Name from "./path";` (грамматика — `Use`). Имена доступны
-  разметке как компоненты; инструкцией скрипта импорт не является.
+- `<use>` — зависимости файла: грамматика и семантика — в [use.md](use.md).
 - Инстанцирование: `BrowserItem (index: 0, name: "Chrome") { }` — компоненты в
   MVP **без детей** (слоты отложены).
 
@@ -240,9 +241,9 @@ function toggle() {
 
 ```brul
 component CheckRow {
-    prop label: String = ""
-    prop checked: Bool = false
-    event toggled()
+    prop label: String = "";
+    prop checked: Bool = false;
+    event toggled();
 
     Row (check-row) {
         View (checkbox, checked: checked, on click: toggle) { }
@@ -265,13 +266,13 @@ function itemClicked() {
 
 ```brul
 component BrowserItem {
-    prop index: Number = 0
-    prop icon: Image = null
-    prop emoji: String = ""
-    prop name: String = ""
-    prop isDefault: Bool = false
-    prop selected: Bool = false
-    event clicked(i: Number)
+    prop index: Number = 0;
+    prop icon: Image = null;
+    prop emoji: String = "";
+    prop name: String = "";
+    prop isDefault: Bool = false;
+    prop selected: Bool = false;
+    event clicked(i: Number);
 
     View (browser-item) {
         View (item-panel, selected: selected, on click: itemClicked) {
@@ -306,7 +307,7 @@ component BrowserItem {
 
 ```brul
 component Header {
-    prop url: String = ""
+    prop url: String = "";
 
     Column (header, on drag: dragWindow) {
 

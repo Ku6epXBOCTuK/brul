@@ -255,6 +255,7 @@ impl Cursor<'_> {
         } else {
             None
         };
+        self.expect(';')?;
         Ok(Member::Prop(Prop { name, ty, default }))
     }
 
@@ -285,6 +286,7 @@ impl Cursor<'_> {
                 }
             }
         }
+        self.expect(';')?;
         Ok(Member::Event(Event { name, params }))
     }
 

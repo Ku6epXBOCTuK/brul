@@ -5,9 +5,9 @@
 
 <markup>
 component CheckRow {
-    prop label: String = ""
-    prop checked: Bool = false
-    event toggled()
+    prop label: String = "";
+    prop checked: Bool = false;
+    event toggled();
 
     Row (check-row) {
         View (checkbox, checked: checked, on click: toggle) { }
@@ -16,13 +16,13 @@ component CheckRow {
 }
 
 component BrowserItem {
-    prop index: Number = 0
-    prop icon: Image = empty
-    prop emoji: String = ""
-    prop name: String = ""
-    prop isDefault: Bool = false
-    prop selected: Bool = false
-    event clicked(i: Number)
+    prop index: Number = 0;
+    prop icon: Image = empty;
+    prop emoji: String = "";
+    prop name: String = "";
+    prop isDefault: Bool = false;
+    prop selected: Bool = false;
+    event clicked(i: Number);
 
     View (browser-item) {
         View (item-panel, selected: selected, on click: itemClicked) {

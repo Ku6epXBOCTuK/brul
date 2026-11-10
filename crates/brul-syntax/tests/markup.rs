@@ -104,11 +104,11 @@ fn arg_errors_point_at_the_source() {
 #[test]
 fn props_with_types_and_defaults_parse() {
     let source = r#"component CheckRow {
-        prop label: String = ""
-        prop checked: Bool = false
-        prop count: Number = 0
-        prop icon: Image = null
-        prop plain: Bool
+        prop label: String = "";
+        prop checked: Bool = false;
+        prop count: Number = 0;
+        prop icon: Image = null;
+        prop plain: Bool;
     }"#;
     let file = parse_file(source).unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
@@ -148,7 +148,7 @@ fn props_with_types_and_defaults_parse() {
 
 #[test]
 fn event_without_parentheses_takes_no_params() {
-    let file = parse_file("component A { event clicked }").unwrap();
+    let file = parse_file("component A { event clicked; }").unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
         panic!("expected a component");
     };
@@ -163,7 +163,7 @@ fn event_without_parentheses_takes_no_params() {
 
 #[test]
 fn events_parse_params() {
-    let source = "component A { event clicked(i: Number) event toggled() event moved(x: Number, y: Number) }";
+    let source = "component A { event clicked(i: Number); event toggled(); event moved(x: Number, y: Number); }";
     let file = parse_file(source).unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
         panic!("expected a component");
@@ -294,24 +294,32 @@ fn element_errors_point_at_the_source() {
 
 #[test]
 fn member_errors_point_at_the_source() {
-    let error = parse_file("component A { prop x: Text = 0 }").unwrap_err();
+    let error = parse_file("component A { prop x: Text = 0; }").unwrap_err();
     assert_eq!(error.message, "expected property type");
     assert_eq!((error.line, error.column), (1, 23));
 
-    let error = parse_file("component A { prop x Bool }").unwrap_err();
+    let error = parse_file("component A { prop x Bool; }").unwrap_err();
     assert_eq!(error.message, "expected ':'");
     assert_eq!((error.line, error.column), (1, 22));
 
-    let error = parse_file("component A { event clicked(i) }").unwrap_err();
+    let error = parse_file("component A { event clicked(i); }").unwrap_err();
     assert_eq!(error.message, "expected ':'");
     assert_eq!((error.line, error.column), (1, 30));
 
-    let error = parse_file("component A { event clicked(i: Number j: Number) }").unwrap_err();
+    let error = parse_file("component A { event clicked(i: Number j: Number); }").unwrap_err();
     assert_eq!(error.message, "expected ',' or ')'");
 
-    let error = parse_file("component A { prop x: Bool = }").unwrap_err();
+    let error = parse_file("component A { prop x: Bool = ; }").unwrap_err();
     assert_eq!(error.message, "expected expression");
     assert_eq!((error.line, error.column), (1, 30));
+
+    let error = parse_file("component A { prop x: Bool }").unwrap_err();
+    assert_eq!(error.message, "expected ';'");
+    assert_eq!((error.line, error.column), (1, 28));
+
+    let error = parse_file("component A { event clicked }").unwrap_err();
+    assert_eq!(error.message, "expected ';'");
+    assert_eq!((error.line, error.column), (1, 29));
 }
 
 #[test]
