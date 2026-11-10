@@ -1,7 +1,7 @@
 use brul_gui::{
     Color, Dimension, LayoutStyle, Padding, Size, StyleSet, StyleState, TextAlign, TextEngine,
-    TextStyle, TextStyleSet, Texture, Widget, WidgetError, WidgetEvent, WidgetState, WidgetStyle,
-    WidgetTree,
+    TextStyle, TextStyleSet, Texture, Widget, WidgetError, WidgetEvent, WidgetId, WidgetState,
+    WidgetStyle, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -418,6 +418,96 @@ fn invisible_widget_is_not_hit_or_snapshotted() {
 
     assert_eq!(tree.hit(5, 5).expect("hit"), Some(root_id));
     assert!(tree.snapshot().expect("snapshot").node(child_id).is_none());
+}
+
+#[test]
+fn relayout_moves_an_untouched_branch_by_the_size_of_a_dirty_sibling() {
+    let header = Widget::text("one two three four");
+    let header_id = header.id();
+    let inner = Widget::text("ok");
+    let inner_id = inner.id();
+    let body = Widget::column(vec![inner]).with_layout(fixed(40, 10));
+    let body_id = body.id();
+    let root = Widget::column(vec![header, body]).with_layout(LayoutStyle {
+        width: Dimension::Px(40),
+        ..LayoutStyle::default()
+    });
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 40,
+        height: 200,
+    };
+
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    let before = tree.snapshot().cloned().expect("snapshot");
+    let header_before = before.node(header_id).expect("header").clone();
+    let body_before = before.node(body_id).expect("body").clone();
+    let inner_before = before.node(inner_id).expect("inner").clone();
+    assert!(header_before.height > 20);
+
+    assert!(tree.set_text(header_id, "one".to_string()));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let after = tree.snapshot().cloned().expect("snapshot");
+    let header_after = after.node(header_id).expect("header");
+    let body_after = after.node(body_id).expect("body");
+    let inner_after = after.node(inner_id).expect("inner");
+    let shift = header_after.height as i32 - header_before.height as i32;
+    assert!(shift < 0);
+
+    assert_eq!(body_after.x, body_before.x);
+    assert_eq!(body_after.y, body_before.y + shift);
+    assert_eq!(body_after.width, body_before.width);
+    assert_eq!(body_after.height, body_before.height);
+    assert_eq!(inner_after.y, inner_before.y + shift);
+    assert_eq!(inner_after.x, inner_before.x);
+}
+
+#[test]
+fn a_stretched_branch_is_laid_out_again_when_its_sibling_shrinks() {
+    fn build(left: &str) -> (WidgetTree, WidgetId, WidgetId, WidgetId) {
+        let left_widget = Widget::text(left);
+        let left_id = left_widget.id();
+        let inner = Widget::text("ok");
+        let inner_id = inner.id();
+        let right = Widget::column(vec![inner]).with_layout(LayoutStyle {
+            stretch: 1.0,
+            ..LayoutStyle::default()
+        });
+        let right_id = right.id();
+        let root = Widget::column(vec![
+            Widget::row(vec![left_widget, right]).with_layout(fixed(100, 40)),
+        ]);
+        (WidgetTree::new(root), left_id, right_id, inner_id)
+    }
+
+    let (mut tree, left_id, right_id, inner_id) = build("aaaa");
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 100,
+        height: 40,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    let before = tree.snapshot().cloned().expect("snapshot");
+    let right_before = before.node(right_id).expect("right").width;
+
+    assert!(tree.set_text(left_id, "a".to_string()));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let after = tree.snapshot().cloned().expect("snapshot");
+    let right_after = after.node(right_id).expect("right").clone();
+    assert!(right_after.width > right_before);
+
+    let (mut fresh, _, fresh_right_id, fresh_inner_id) = build("a");
+    fresh.layout(&mut engine, viewport, 1.0).expect("layout");
+    let expected = fresh.snapshot().cloned().expect("snapshot");
+    let expected_right = expected.node(fresh_right_id).expect("right");
+    let inner = after.node(inner_id).expect("inner");
+    let expected_inner = expected.node(fresh_inner_id).expect("inner");
+
+    assert_eq!(right_after.width, expected_right.width);
+    assert_eq!(right_after.height, expected_right.height);
+    assert_eq!(inner.x, expected_inner.x);
+    assert_eq!(inner.width, expected_inner.width);
 }
 
 #[test]

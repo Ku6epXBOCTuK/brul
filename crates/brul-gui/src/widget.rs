@@ -482,7 +482,7 @@ impl From<TextError> for WidgetError {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 struct Slot(u32);
 
 impl Slot {
@@ -534,6 +534,7 @@ pub struct WidgetTree {
     hovered: Vec<Slot>,
     pressed: Vec<Slot>,
     dirty: HashSet<WidgetId>,
+    stale: HashSet<Slot>,
     full_dirty: bool,
     layout_dirty: bool,
 }
@@ -618,6 +619,7 @@ impl WidgetTree {
             hovered: Vec::new(),
             pressed: Vec::new(),
             dirty: HashSet::new(),
+            stale: HashSet::new(),
             full_dirty: true,
             layout_dirty: true,
         };
@@ -670,6 +672,7 @@ impl WidgetTree {
             }
         };
         self.index.insert(id, slot);
+        self.stale.insert(slot);
         slot
     }
 
@@ -727,6 +730,8 @@ impl WidgetTree {
         self.nodes.clear();
         self.index.clear();
         self.free.clear();
+        self.stale.clear();
+        self.geometry = None;
         self.clear_interaction();
         self.root = self.insert(root);
         self.invalidate();
@@ -764,6 +769,7 @@ impl WidgetTree {
         self.nodes[slot.index()]
             .children
             .splice(start..start, inserted);
+        self.stale.insert(slot);
         self.invalidate();
         true
     }
@@ -790,6 +796,7 @@ impl WidgetTree {
             .into_iter()
             .map(|child| self.extract(child))
             .collect();
+        self.stale.insert(slot);
         self.invalidate();
         Some(children)
     }
@@ -799,7 +806,6 @@ impl WidgetTree {
     }
 
     fn invalidate(&mut self) {
-        self.geometry = None;
         self.snapshot = None;
         self.dirty.clear();
         self.full_dirty = true;
@@ -816,39 +822,82 @@ impl WidgetTree {
             return Err(WidgetError::InvalidScale);
         }
 
-        let mut order = Vec::new();
-        let node = build_layout(
-            &self.nodes,
-            self.root,
-            engine,
-            Some(viewport.width),
-            scale,
-            &mut self.texts,
-            &mut order,
-        )?;
-        self.texts.retain(|id, _| self.index.contains_key(id));
-        let placed = layout::layout(&node, viewport)?;
-        let mut boxes = vec![LayoutBox::default(); self.nodes.len()];
-        let mut cursor = 0;
-        flatten_boxes(&placed, &order, &mut cursor, &mut boxes);
-        let changed = self
+        let reuse = self
             .geometry
             .as_ref()
-            .is_none_or(|geometry| geometry.viewport != viewport || geometry.scale != scale);
+            .is_some_and(|geometry| geometry.viewport == viewport && geometry.scale == scale);
+        let frame_changed = !reuse;
+        if self.layout_pass(engine, viewport, scale, reuse, frame_changed)? {
+            self.layout_pass(engine, viewport, scale, false, frame_changed)?;
+        }
+        Ok(())
+    }
+
+    fn layout_pass(
+        &mut self,
+        engine: &mut TextEngine,
+        viewport: Size,
+        scale: f32,
+        reuse: bool,
+        frame_changed: bool,
+    ) -> Result<bool, WidgetError> {
+        let previous = self.geometry.take();
+        let mut boxes = previous.map(|geometry| geometry.boxes).unwrap_or_default();
+        boxes.resize(self.nodes.len(), LayoutBox::default());
+
+        let (node, order, frozen) = {
+            let mut pass = Pass {
+                tree: &self.nodes,
+                engine,
+                texts: &mut self.texts,
+                scale,
+                cached: reuse.then_some(&boxes),
+                blocked: dirty_subtrees(&self.nodes, self.root, &self.stale),
+                order: Vec::with_capacity(self.nodes.len()),
+                frozen: Vec::new(),
+            };
+            let node = pass.build(self.root, Some(viewport.width))?;
+            (node, pass.order, pass.frozen)
+        };
+        self.texts.retain(|id, _| self.index.contains_key(id));
+
+        let placed = layout::layout(&node, viewport)?;
+        let mut cursor = 0;
+        flatten_boxes(&placed, &order, &mut cursor, &mut boxes);
+
+        let resized = frozen.iter().any(|(slot, cached)| {
+            let placed = &boxes[slot.index()];
+            placed.x != cached.x
+                || placed.y != cached.y
+                || placed.width != cached.width
+                || placed.height != cached.height
+        });
+        if resized {
+            return Ok(true);
+        }
+        for (slot, cached) in frozen {
+            let placed = &boxes[slot.index()];
+            let dx = placed.x - cached.x;
+            let dy = placed.y - cached.y;
+            if dx != 0 || dy != 0 {
+                move_children(&self.nodes, slot, dx, dy, &mut boxes);
+            }
+        }
 
         self.geometry = Some(Geometry {
             viewport,
             scale,
             boxes,
         });
+        self.stale.clear();
         self.snapshot = None;
         self.full_dirty = true;
         self.layout_dirty = false;
         self.dirty.clear();
-        if changed {
+        if frame_changed {
             self.clear_interaction();
         }
-        Ok(())
+        Ok(false)
     }
 
     pub fn relayout(&mut self, engine: &mut TextEngine) -> Result<(), WidgetError> {
@@ -918,12 +967,12 @@ impl WidgetTree {
     }
 
     pub fn set_text(&mut self, id: WidgetId, content: String) -> bool {
-        let Some(node) = self.node_mut(id) else {
+        let Some(&slot) = self.index.get(&id) else {
             return false;
         };
         let NodeData::Text {
             content: current, ..
-        } = &mut node.data
+        } = &mut self.nodes[slot.index()].data
         else {
             return false;
         };
@@ -931,19 +980,21 @@ impl WidgetTree {
             return false;
         }
         *current = content;
+        self.stale.insert(slot);
         self.invalidate_layout();
         true
     }
 
     pub fn set_offset(&mut self, id: WidgetId, x: i32, y: i32) -> bool {
-        let Some(node) = self.node_mut(id) else {
+        let Some(&slot) = self.index.get(&id) else {
             return false;
         };
         let offset = Offset { x, y };
-        if node.offset == Some(offset) {
+        if self.nodes[slot.index()].offset == Some(offset) {
             return false;
         }
-        node.offset = Some(offset);
+        self.nodes[slot.index()].offset = Some(offset);
+        self.stale.insert(slot);
         self.invalidate_layout();
         true
     }
@@ -1146,85 +1197,136 @@ impl WidgetTree {
     }
 }
 
-fn build_layout(
-    tree: &[Node],
-    slot: Slot,
-    engine: &mut TextEngine,
-    available_width: Option<u32>,
+struct Pass<'a> {
+    tree: &'a [Node],
+    engine: &'a mut TextEngine,
+    texts: &'a mut HashMap<WidgetId, ShapedText>,
     scale: f32,
-    texts: &mut HashMap<WidgetId, ShapedText>,
-    order: &mut Vec<Slot>,
-) -> Result<LayoutNode, WidgetError> {
-    let node = &tree[slot.index()];
-    order.push(slot);
-    let resolved = layout::resolve(node.layout.width, available_width)?;
-    let content_width = resolved
-        .map(|width| width.saturating_sub(layout::inset_x(&node.layout)))
-        .or(available_width);
+    cached: Option<&'a [LayoutBox]>,
+    blocked: Vec<bool>,
+    order: Vec<Slot>,
+    frozen: Vec<(Slot, LayoutBox)>,
+}
 
-    let layout_node = match &node.data {
-        NodeData::View { direction } => {
-            let mut children = Vec::with_capacity(node.children.len());
-            for &child in &node.children {
-                children.push(build_layout(
-                    tree,
-                    child,
-                    engine,
-                    content_width,
-                    scale,
-                    texts,
-                    order,
-                )?);
-            }
-            match direction {
-                Direction::Row => LayoutNode::row(children),
-                Direction::Column => LayoutNode::column(children),
+fn dirty_subtrees(tree: &[Node], root: Slot, stale: &HashSet<Slot>) -> Vec<bool> {
+    fn walk(tree: &[Node], slot: Slot, stale: &HashSet<Slot>, blocked: &mut [bool]) -> bool {
+        let node = &tree[slot.index()];
+        let mut dirty = stale.contains(&slot);
+        for &child in &node.children {
+            dirty |= walk(tree, child, stale, blocked);
+        }
+        blocked[slot.index()] = dirty;
+        dirty
+    }
+    let mut blocked = vec![false; tree.len()];
+    walk(tree, root, stale, &mut blocked);
+    blocked
+}
+
+fn move_children(tree: &[Node], slot: Slot, dx: i32, dy: i32, boxes: &mut [LayoutBox]) {
+    for &child in &tree[slot.index()].children {
+        let placed = &mut boxes[child.index()];
+        placed.x = placed.x.saturating_add(dx);
+        placed.y = placed.y.saturating_add(dy);
+        move_children(tree, child, dx, dy, boxes);
+    }
+}
+
+impl Pass<'_> {
+    fn build(
+        &mut self,
+        slot: Slot,
+        available_width: Option<u32>,
+    ) -> Result<LayoutNode, WidgetError> {
+        let node = &self.tree[slot.index()];
+        self.order.push(slot);
+        if let (Some(cached), false) = (self.cached, self.blocked[slot.index()]) {
+            if let Some(previous) = cached.get(slot.index()) {
+                let size = Size {
+                    width: previous.width.saturating_sub(layout::inset_x(&node.layout)),
+                    height: previous
+                        .height
+                        .saturating_sub(layout::inset_y(&node.layout)),
+                };
+                self.frozen.push((slot, previous.clone()));
+                let layout_node = LayoutNode::leaf(size.width, size.height).with_style(node.layout);
+                return Ok(match node.offset {
+                    Some(offset) => layout_node.with_offset(offset.x, offset.y),
+                    None => layout_node,
+                });
             }
         }
-        NodeData::Text { content, styles } => {
-            let max_width = content_width.map(|width| width as f32 / scale);
-            let cached = texts.get(&node.id).filter(|cached| {
-                cached.width == content_width && cached.scale == scale && cached.content == *content
-            });
-            if cached.is_none() {
-                let mut variants =
-                    TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
-                for state in StyleState::ALL {
-                    let Some(style) = styles.state(state) else {
-                        continue;
-                    };
-                    if style == styles.base() {
-                        continue;
-                    }
-                    variants =
-                        variants.with(state, engine.layout(content, style, max_width, scale)?);
+
+        let resolved = layout::resolve(node.layout.width, available_width)?;
+        let content_width = resolved
+            .map(|width| width.saturating_sub(layout::inset_x(&node.layout)))
+            .or(available_width);
+
+        let layout_node = match &node.data {
+            NodeData::View { direction } => {
+                let mut children = Vec::with_capacity(node.children.len());
+                for &child in &node.children {
+                    children.push(self.build(child, content_width)?);
                 }
-                texts.insert(
-                    node.id,
-                    ShapedText {
-                        content: content.clone(),
-                        width: content_width,
-                        scale,
-                        variants,
-                    },
-                );
+                match direction {
+                    Direction::Row => LayoutNode::row(children),
+                    Direction::Column => LayoutNode::column(children),
+                }
             }
-            let size = texts
-                .get(&node.id)
-                .expect("shaped text cached")
-                .variants
-                .base
-                .size;
-            LayoutNode::leaf(size.width, size.height)
-        }
-        NodeData::Image(texture) => LayoutNode::leaf(texture.width(), texture.height()),
-    };
+            NodeData::Text { content, styles } => {
+                let max_width = content_width.map(|width| width as f32 / self.scale);
+                let cached = self.texts.get(&node.id).filter(|cached| {
+                    cached.width == content_width
+                        && cached.scale == self.scale
+                        && cached.content == *content
+                });
+                if cached.is_none() {
+                    let mut variants = TextVariants::new(self.engine.layout(
+                        content,
+                        styles.base(),
+                        max_width,
+                        self.scale,
+                    )?);
+                    for state in StyleState::ALL {
+                        let Some(style) = styles.state(state) else {
+                            continue;
+                        };
+                        if style == styles.base() {
+                            continue;
+                        }
+                        variants = variants.with(
+                            state,
+                            self.engine.layout(content, style, max_width, self.scale)?,
+                        );
+                    }
+                    self.texts.insert(
+                        node.id,
+                        ShapedText {
+                            content: content.clone(),
+                            width: content_width,
+                            scale: self.scale,
+                            variants,
+                        },
+                    );
+                }
+                let size = self
+                    .texts
+                    .get(&node.id)
+                    .expect("shaped text cached")
+                    .variants
+                    .base
+                    .size;
+                LayoutNode::leaf(size.width, size.height)
+            }
+            NodeData::Image(texture) => LayoutNode::leaf(texture.width(), texture.height()),
+        };
 
-    let layout_node = layout_node.with_style(node.layout);
-    Ok(match node.offset {
-        Some(offset) => layout_node.with_offset(offset.x, offset.y),
-        None => layout_node,
-    })
+        let layout_node = layout_node.with_style(node.layout);
+        Ok(match node.offset {
+            Some(offset) => layout_node.with_offset(offset.x, offset.y),
+            None => layout_node,
+        })
+    }
 }
 
 fn flatten_boxes(boxed: &LayoutBox, order: &[Slot], cursor: &mut usize, boxes: &mut [LayoutBox]) {
