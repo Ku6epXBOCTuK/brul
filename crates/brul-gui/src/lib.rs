@@ -128,8 +128,10 @@ mod input;
 mod layout;
 mod paint;
 mod rect;
+mod surface;
 mod text;
 mod texture;
+mod tree;
 mod widget;
 pub mod window;
 

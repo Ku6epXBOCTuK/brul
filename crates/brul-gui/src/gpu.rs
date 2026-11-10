@@ -194,7 +194,7 @@ impl Gpu {
         ));
     }
 
-    pub(crate) fn present_frame(&mut self, surface: &dyn crate::window::Surface, frame: &Frame) {
+    pub(crate) fn present_frame(&mut self, surface: &dyn crate::surface::Surface, frame: &Frame) {
         let width = frame.width().max(1);
         let height = frame.height().max(1);
         self.ensure_blit(width, height);
