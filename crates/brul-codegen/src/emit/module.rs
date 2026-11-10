@@ -10,7 +10,7 @@ use crate::Definition;
 use crate::error_at;
 
 use super::Emit;
-use super::{events, script, view};
+use super::{events, names, script, view};
 
 pub fn module(source: &str) -> Result<String, Error> {
     module_at(source, None)
@@ -30,6 +30,7 @@ pub fn module_file(path: &Path) -> Result<String, Error> {
 fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
     let parsed = crate::parse_source(source)?;
     let registry = crate::resolve(&parsed.uses, base)?;
+    let names = names::table(&parsed, &registry.definitions);
     let (config, window_handlers) = crate::arguments(&parsed.window)?;
     let window_handlers = events::window(&window_handlers, parsed.program.as_ref())?;
     let root = crate::root(&parsed.window)?;
@@ -82,6 +83,7 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
     out.push('\n');
     window_config(&mut out, &config);
     out.push_str(&script::program("script", parsed.program.as_ref()));
+    out.push_str(&names::output(&names));
     Ok(out)
 }
 

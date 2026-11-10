@@ -56,6 +56,10 @@ pub fn window() -> brul::WindowConfig {
 pub fn script() -> Option<brul::script::Program> {
     None
 }
+
+pub fn names() -> &'static [&'static str] {
+    &[]
+}
 "#;
     assert_eq!(emit::module(source).expect("module"), expected);
 }
@@ -137,6 +141,10 @@ pub fn window() -> brul::WindowConfig {
 
 pub fn script() -> Option<brul::script::Program> {
     None
+}
+
+pub fn names() -> &'static [&'static str] {
+    &[]
 }
 "#;
     assert_eq!(emit::module(source).expect("module"), expected);
@@ -757,4 +765,30 @@ fn rejects_component_children() {
     let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
     assert_eq!(error.message, "component 'Badge' does not accept children");
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn emits_names_in_first_appearance_order() {
+    let source = r#"<script>
+    let selected = 0;
+    function bump(step) {
+        selected = selected + step;
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        each (browsers as browser, index (browser.name)) {
+            Text { browser.name }
+        }
+        Text { selected }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        "pub fn names() -> &'static [&'static str] {\n    &[\"browsers\", \"browser\", \"index\", \"selected\", \"step\"]\n}"
+    ));
 }

@@ -8,6 +8,7 @@ mod element;
 mod events;
 mod expression;
 mod module;
+mod names;
 mod script;
 mod structure;
 mod style;
