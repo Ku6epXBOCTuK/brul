@@ -2,7 +2,8 @@
 
 Снимок одной машины, а не критерий приёмки: сравнивать можно только прогоны на
 той же машине и toolchain. Сценарии и код — в
-`crates/brul-reactive/benches/reactive.rs`; контракт ядра — в
+`crates/brul-reactive/benches/reactive.rs`, `benches/each.rs` и
+`benches/read.rs`; контракт ядра — в
 [architecture.md](architecture.md#реактивное-ядро).
 
 ## Снимок 2026-11-07
@@ -31,6 +32,29 @@
 memo из одного сигнала и общий join, `many_subscribers` — столько эффектов на
 одном сигнале, `batched_writes` — батч из стольких записей и один эффект,
 читающий их все.
+
+## Снимок 2026-11-11 — чтение переменной и пропса
+
+- CPU: Intel Core i7-8700K, 6 ядер / 12 потоков.
+- ОС: Windows 10 Home, 10.0.19045, x86_64.
+- Toolchain: `nightly-2026-10-15`, rustc 1.101.0-nightly (7df81381d 2026-10-14).
+- Команда: `cargo bench -p brul --bench read`.
+- Режим Criterion: 50 сэмплов, прогрев 1 с, измерение 3 с.
+
+| Сценарий               |   Время |
+| ---------------------- | ------: |
+| read/property_string   |  105 ns |
+| read/property_scalar   | 28.9 ns |
+| read/variable_in_frame | 17.2 ns |
+| binding/props_read     | 1.25 µs |
+| binding/frame_only     |  892 ns |
+
+`read/property_string` и `read/property_scalar` — чтение пропса без переменной в
+окружении, `read/variable_in_frame` — переменная в кадре биндинга,
+`binding/props_read` — кадр из двух переменных и три чтения пропсов внутри него,
+`binding/frame_only` — только кадр, контроль шума. До правки BRUL-222 чтение
+пропса стоило 203 ns и 103 ns: промах в окружении собирал `Error::Undefined` с
+копией имени, который тут же выбрасывался.
 
 ## Как обновлять
 

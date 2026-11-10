@@ -48,17 +48,16 @@ impl Environment {
             || self.bindings.iter().any(|binding| binding.name == name)
     }
 
-    pub fn get(&self, name: &str) -> Result<&Value, Error> {
+    pub fn get(&self, name: &str) -> Option<&Value> {
         for frame in self.frames.iter().rev() {
             if let Some(binding) = frame.iter().find(|binding| binding.name == name) {
-                return Ok(&binding.value);
+                return Some(&binding.value);
             }
         }
         self.bindings
             .iter()
             .find(|binding| binding.name == name)
             .map(|binding| &binding.value)
-            .ok_or_else(|| Error::Undefined(name.to_owned()))
     }
 
     pub fn assign(&mut self, name: &str, value: Value) -> Result<(), Error> {

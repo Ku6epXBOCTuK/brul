@@ -17,20 +17,17 @@ fn declares_and_reads_variables() {
     environment
         .declare("url", Value::String("about:blank".to_owned()), false)
         .unwrap();
-    assert_eq!(environment.get("selectedIndex"), Ok(&Value::Number(0.0)));
+    assert_eq!(environment.get("selectedIndex"), Some(&Value::Number(0.0)));
     assert_eq!(
         environment.get("url"),
-        Ok(&Value::String("about:blank".to_owned()))
+        Some(&Value::String("about:blank".to_owned()))
     );
 }
 
 #[test]
 fn unknown_variable_is_undefined() {
     let environment = Environment::new();
-    assert_eq!(
-        environment.get("missing"),
-        Err(Error::Undefined("missing".to_owned()))
-    );
+    assert_eq!(environment.get("missing"), None);
     assert_eq!(
         Error::Undefined("missing".to_owned()).to_string(),
         "variable 'missing' is not defined"
@@ -44,7 +41,7 @@ fn mutable_variable_takes_a_new_value() {
         .declare("count", Value::Number(1.0), false)
         .unwrap();
     environment.assign("count", Value::Number(2.0)).unwrap();
-    assert_eq!(environment.get("count"), Ok(&Value::Number(2.0)));
+    assert_eq!(environment.get("count"), Some(&Value::Number(2.0)));
 }
 
 #[test]
@@ -57,7 +54,7 @@ fn constant_rejects_assignment() {
         environment.assign("limit", Value::Number(11.0)),
         Err(Error::Constant("limit".to_owned()))
     );
-    assert_eq!(environment.get("limit"), Ok(&Value::Number(10.0)));
+    assert_eq!(environment.get("limit"), Some(&Value::Number(10.0)));
 }
 
 #[test]
@@ -86,5 +83,5 @@ fn null_round_trips() {
     let mut environment = Environment::new();
     environment.declare("selected", Value::Null, false).unwrap();
     environment.assign("selected", Value::Bool(true)).unwrap();
-    assert_eq!(environment.get("selected"), Ok(&Value::Bool(true)));
+    assert_eq!(environment.get("selected"), Some(&Value::Bool(true)));
 }

@@ -178,7 +178,7 @@ impl Component {
     }
 
     pub fn read(&self, name: &str) -> Result<Value, Error> {
-        if let Ok(value) = self.environment.get(name) {
+        if let Some(value) = self.environment.get(name) {
             return Ok(value.clone());
         }
         if let Some(property) = self.property(name) {
