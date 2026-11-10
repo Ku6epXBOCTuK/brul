@@ -1,6 +1,6 @@
 use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, StyleSet, StyleState, TextAlign, TextStyle,
-    WidgetStyle,
+    VerticalAlign, WidgetStyle,
 };
 
 pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
@@ -81,6 +81,7 @@ fn widget_style(style: WidgetStyle) -> String {
         radius,
         tint,
         opacity,
+        vertical_align: vertical_align_value,
     } = style;
     let default = WidgetStyle::default();
     let mut fields = Vec::new();
@@ -104,6 +105,12 @@ fn widget_style(style: WidgetStyle) -> String {
     }
     if opacity != default.opacity {
         fields.push(format!("opacity: {opacity:?}f32"));
+    }
+    if vertical_align_value != default.vertical_align {
+        fields.push(format!(
+            "vertical_align: {}",
+            vertical_align(vertical_align_value)
+        ));
     }
     if fields.is_empty() {
         "brul_gui::WidgetStyle::default()".to_owned()
@@ -180,6 +187,14 @@ fn text_align(value: TextAlign) -> String {
         TextAlign::Left => "brul_gui::TextAlign::Left".to_owned(),
         TextAlign::Center => "brul_gui::TextAlign::Center".to_owned(),
         TextAlign::Right => "brul_gui::TextAlign::Right".to_owned(),
+    }
+}
+
+fn vertical_align(value: VerticalAlign) -> String {
+    match value {
+        VerticalAlign::Top => "brul_gui::VerticalAlign::Top".to_owned(),
+        VerticalAlign::Center => "brul_gui::VerticalAlign::Center".to_owned(),
+        VerticalAlign::Bottom => "brul_gui::VerticalAlign::Bottom".to_owned(),
     }
 }
 

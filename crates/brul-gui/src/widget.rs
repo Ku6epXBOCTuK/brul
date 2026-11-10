@@ -7,7 +7,7 @@ use crate::Color;
 use crate::layout::{
     self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, Size,
 };
-use crate::text::{TextEngine, TextError, TextLayout, TextStyle};
+use crate::text::{TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
 use crate::texture::Texture;
 
 static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
@@ -53,6 +53,7 @@ pub struct WidgetStyle {
     pub radius: u32,
     pub tint: Option<Color>,
     pub opacity: f32,
+    pub vertical_align: VerticalAlign,
 }
 
 impl Default for WidgetStyle {
@@ -64,6 +65,7 @@ impl Default for WidgetStyle {
             radius: 0,
             tint: None,
             opacity: 1.0,
+            vertical_align: VerticalAlign::Top,
         }
     }
 }

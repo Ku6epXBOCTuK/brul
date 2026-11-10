@@ -1,6 +1,6 @@
 use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, Padding, StyleSet, StyleState, TextStyle,
-    WidgetStyle,
+    VerticalAlign, WidgetStyle,
 };
 use brul_syntax::style::{Kind, Property, Side, Snapshot, State, Stylesheet, Value};
 
@@ -95,7 +95,7 @@ fn apply(
         }
         Kind::FontFamily => text.family = Some(string(value, kind)?.to_owned()),
         Kind::TextAlign => text.align = text_align(keyword(value, kind)?),
-        Kind::VerticalAlign => {}
+        Kind::VerticalAlign => style.vertical_align = vertical_align(keyword(value, kind)?),
         Kind::FontWeight => text.weight = number(value, kind)? as u16,
     }
     Ok(())
@@ -133,6 +133,14 @@ fn text_align(value: &str) -> brul_gui::TextAlign {
         "center" => brul_gui::TextAlign::Center,
         "right" => brul_gui::TextAlign::Right,
         _ => brul_gui::TextAlign::Left,
+    }
+}
+
+fn vertical_align(value: &str) -> VerticalAlign {
+    match value {
+        "center" => VerticalAlign::Center,
+        "bottom" => VerticalAlign::Bottom,
+        _ => VerticalAlign::Top,
     }
 }
 

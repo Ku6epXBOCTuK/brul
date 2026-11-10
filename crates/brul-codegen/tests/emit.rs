@@ -158,6 +158,26 @@ window Demo (title: "demo") {
 }
 
 #[test]
+fn emits_vertical_alignment_for_a_text_state() {
+    let source = r#"<style>
+.a { width: 20px; height: 20px; vertical-align: top; }
+.a:hover { vertical-align: center; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    Text (a) { "hi" }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(
+        module.contains("vertical_align: brul_gui::VerticalAlign::Center"),
+        "{module}"
+    );
+}
+
+#[test]
 fn emits_parameter_bindings() {
     let source = r#"<markup>
 window Demo (title: "demo") {

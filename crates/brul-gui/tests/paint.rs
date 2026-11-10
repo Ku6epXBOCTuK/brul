@@ -1,6 +1,6 @@
 use brul_gui::{
     Color, Dimension, Dirty, Frame, LayoutStyle, Size, StyleSet, StyleState, TextEngine, Texture,
-    Widget, WidgetStyle, WidgetTree,
+    VerticalAlign, Widget, WidgetStyle, WidgetTree,
 };
 
 fn view(color: Color, width: u32, height: u32) -> Widget {
@@ -237,4 +237,83 @@ fn full_repaint_replaces_previous_pixels() {
     frame.paint(snapshot, engine.atlas(), &Dirty::all());
 
     assert_eq!(pixel(&frame, 0, 0), [0, 0, 255, 255]);
+}
+
+fn aligned_text(vertical_align: VerticalAlign) -> Widget {
+    Widget::text("A")
+        .with_layout(LayoutStyle {
+            width: Dimension::Px(40),
+            height: Dimension::Px(40),
+            ..LayoutStyle::default()
+        })
+        .with_styles(StyleSet::new(WidgetStyle {
+            text: Color::rgb(255, 0, 0),
+            vertical_align,
+            ..WidgetStyle::default()
+        }))
+}
+
+fn first_ink_row(widget: Widget) -> u32 {
+    let mut engine = TextEngine::new();
+    let mut tree = WidgetTree::new(widget);
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 40,
+            height: 40,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let mut frame = Frame::new(40, 40);
+    frame.paint(snapshot, engine.atlas(), &Dirty::all());
+
+    (0..frame.height())
+        .find(|y| (0..frame.width()).any(|x| pixel(&frame, x, *y)[3] > 0))
+        .expect("text left no ink")
+}
+
+#[test]
+fn vertical_alignment_moves_the_text_block() {
+    let top = first_ink_row(aligned_text(VerticalAlign::Top));
+    let center = first_ink_row(aligned_text(VerticalAlign::Center));
+    let bottom = first_ink_row(aligned_text(VerticalAlign::Bottom));
+
+    assert!(top + 8 < center, "top {top}, center {center}");
+    assert!(center + 8 < bottom, "center {center}, bottom {bottom}");
+}
+
+#[test]
+fn text_does_not_paint_outside_its_box() {
+    let text = Widget::text("one two three four five six").with_layout(LayoutStyle {
+        width: Dimension::Px(24),
+        height: Dimension::Px(20),
+        ..LayoutStyle::default()
+    });
+    let root = Widget::column(vec![text]).with_layout(LayoutStyle {
+        width: Dimension::Px(40),
+        height: Dimension::Px(60),
+        ..LayoutStyle::default()
+    });
+    let mut engine = TextEngine::new();
+    let mut tree = WidgetTree::new(root);
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 40,
+            height: 60,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let mut frame = Frame::new(40, 60);
+    frame.paint(snapshot, engine.atlas(), &Dirty::all());
+
+    let inked_inside = (0..20u32).any(|y| (0..frame.width()).any(|x| pixel(&frame, x, y)[3] > 0));
+    let inked_below =
+        (20..frame.height()).any(|y| (0..frame.width()).any(|x| pixel(&frame, x, y)[3] > 0));
+    assert!(inked_inside, "no ink inside the box");
+    assert!(!inked_below, "text painted below its box");
 }

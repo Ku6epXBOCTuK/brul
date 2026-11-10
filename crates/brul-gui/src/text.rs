@@ -50,6 +50,25 @@ impl TextAlign {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum VerticalAlign {
+    #[default]
+    Top,
+    Center,
+    Bottom,
+}
+
+impl VerticalAlign {
+    pub(crate) fn offset(self, container: u32, content: u32) -> u32 {
+        let free = container.saturating_sub(content);
+        match self {
+            Self::Top => 0,
+            Self::Center => free / 2,
+            Self::Bottom => free,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TextSize {
     pub width: u32,
     pub height: u32,

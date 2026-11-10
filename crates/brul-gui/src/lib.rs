@@ -121,7 +121,9 @@ pub use layout::{
 };
 pub use paint::Frame;
 pub use rect::{Rect, RectSample};
-pub use text::{PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize, TextStyle};
+pub use text::{
+    PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize, TextStyle, VerticalAlign,
+};
 pub use texture::{Texture, TextureError};
 pub use widget::{
     Dirty, StyleSet, StyleState, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind,

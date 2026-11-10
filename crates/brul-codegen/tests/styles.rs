@@ -102,3 +102,22 @@ fn font_covers_size_family_weight_and_alignment() {
     assert_eq!(resolved.text.weight, 600);
     assert_eq!(resolved.text.align, brul_gui::TextAlign::Center);
 }
+
+#[test]
+fn vertical_alignment_reaches_the_base_and_the_state() {
+    let resolved = resolved(
+        ".a { width: 20px; height: 20px; vertical-align: bottom; } .a:hover { vertical-align: center; }",
+    );
+
+    assert_eq!(
+        resolved.styles.base().vertical_align,
+        brul_gui::VerticalAlign::Bottom
+    );
+    assert_eq!(
+        resolved
+            .styles
+            .resolve(brul_gui::StyleState::Hovered.flags())
+            .vertical_align,
+        brul_gui::VerticalAlign::Center
+    );
+}

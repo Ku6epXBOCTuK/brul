@@ -128,11 +128,21 @@ impl Frame {
         opacity: f32,
         clip: Clip,
     ) {
+        let Some(clip) = node_clip(node, clip) else {
+            return;
+        };
         let color = node.style.text;
+        let offset = node
+            .style
+            .vertical_align
+            .offset(node.content_height, text.size.height) as i32;
         for glyph in &text.glyphs {
             let slot = glyph.slot;
             let origin_x = node.content_x.saturating_add(glyph.x);
-            let origin_y = node.content_y.saturating_add(glyph.y);
+            let origin_y = node
+                .content_y
+                .saturating_add(glyph.y)
+                .saturating_add(offset);
             for row in 0..slot.height {
                 for column in 0..slot.width {
                     let x = origin_x.saturating_add(column as i32);
