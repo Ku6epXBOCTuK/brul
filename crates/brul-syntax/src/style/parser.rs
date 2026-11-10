@@ -1,8 +1,8 @@
 use crate::error::Error;
-use crate::style::ast::{ClassRule, Property, State, Stylesheet, Theme, Value};
+use crate::style::ast::{ClassRule, Property, State, Stylesheet, Theme, ThemeEntry, Value};
 use crate::style::cursor::Cursor;
-use crate::style::properties;
-use crate::style::validate::{self, PropertyAt, RuleAt, ThemeAt};
+use crate::style::properties::Kind;
+use crate::style::validate::{self, PropertyAt, RuleAt, ThemeAt, ThemeKeyAt};
 use crate::style::value::Type;
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
@@ -127,13 +127,14 @@ impl<'a> Parser<'a> {
     fn property(&mut self) -> Result<(Property, PropertyAt), Error> {
         let at = self.cursor.value_start();
         let name = self.cursor.ident()?;
-        let spec = properties::get(&name).ok_or_else(|| {
+        let kind = Kind::from_name(&name).ok_or_else(|| {
             Error::at(
                 self.cursor.source(),
                 at,
                 format!("unknown property '{name}'"),
             )
         })?;
+        let spec = kind.spec();
         self.cursor.expect(':')?;
         let value = if spec.theme_type().is_some() && self.cursor.eat_keyword("theme") {
             self.cursor.expect('.')?;
@@ -142,27 +143,21 @@ impl<'a> Parser<'a> {
             spec.ty.parse(&mut self.cursor, &name)?
         };
         self.cursor.expect(';')?;
-        Ok((
-            Property {
-                name: spec.name.to_owned(),
-                value,
-            },
-            PropertyAt { name, at },
-        ))
+        Ok((Property { kind, value }, PropertyAt { at }))
     }
 
-    fn theme_property(&mut self) -> Result<(Property, PropertyAt), Error> {
+    fn theme_property(&mut self) -> Result<(ThemeEntry, ThemeKeyAt), Error> {
         let at = self.cursor.value_start();
-        let name = self.cursor.ident()?;
+        let key = self.cursor.ident()?;
         self.cursor.expect(':')?;
-        let value = Type::ThemeKey.parse(&mut self.cursor, &name)?;
+        let value = Type::ThemeKey.parse(&mut self.cursor, &key)?;
         self.cursor.expect(';')?;
         Ok((
-            Property {
-                name: name.clone(),
+            ThemeEntry {
+                key: key.clone(),
                 value,
             },
-            PropertyAt { name, at },
+            ThemeKeyAt { key, at },
         ))
     }
 }

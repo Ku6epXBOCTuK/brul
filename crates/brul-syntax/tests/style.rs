@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    Border, BorderColor, ClassRule, Color, Gradient, Property, State, Stylesheet, Theme, Value,
-    parse_file,
+    Border, BorderColor, ClassRule, Color, Gradient, Kind, Property, State, Stylesheet, Theme,
+    ThemeEntry, Value, parse_file,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -28,7 +28,14 @@ fn state_rule(class: &str, state: State) -> ClassRule {
 
 fn property(name: &str, value: Value) -> Property {
     Property {
-        name: name.to_owned(),
+        kind: Kind::from_name(name).expect("known property"),
+        value,
+    }
+}
+
+fn entry(key: &str, value: Value) -> ThemeEntry {
+    ThemeEntry {
+        key: key.to_owned(),
         value,
     }
 }
@@ -161,17 +168,17 @@ theme dark {
                 Theme {
                     name: "light".to_owned(),
                     properties: vec![
-                        property("accent", accent.clone()),
-                        property("radius", Value::Px(12.0)),
-                        property("text-main", Value::Color(Color::rgb(0x0f, 0x17, 0x2a))),
+                        entry("accent", accent.clone()),
+                        entry("radius", Value::Px(12.0)),
+                        entry("text-main", Value::Color(Color::rgb(0x0f, 0x17, 0x2a))),
                     ],
                 },
                 Theme {
                     name: "dark".to_owned(),
                     properties: vec![
-                        property("accent", accent),
-                        property("radius", Value::Px(12.0)),
-                        property("text-main", Value::Color(Color::rgb(0x0f, 0x17, 0x2a))),
+                        entry("accent", accent),
+                        entry("radius", Value::Px(12.0)),
+                        entry("text-main", Value::Color(Color::rgb(0x0f, 0x17, 0x2a))),
                     ],
                 },
             ],
@@ -192,8 +199,8 @@ fn theme_keys_take_keyword_colors() {
     assert_eq!(
         parse_file(source).unwrap().themes[0].properties,
         vec![
-            property("accent", Value::Color(Color::WHITE)),
-            property("shade", Value::Color(Color::TRANSPARENT)),
+            entry("accent", Value::Color(Color::WHITE)),
+            entry("shade", Value::Color(Color::TRANSPARENT)),
         ]
     );
 }

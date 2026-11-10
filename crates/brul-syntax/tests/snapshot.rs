@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    Border, BorderColor, ClassRule, Color, Property, SnapshotError, State, Stylesheet, Theme,
-    Value, parse_file,
+    Border, BorderColor, ClassRule, Color, Kind, Property, SnapshotError, State, Stylesheet, Theme,
+    ThemeEntry, Value, parse_file,
 };
 
 fn gray(value: u8) -> Value {
@@ -13,9 +13,9 @@ fn classes_merge_left_to_right() {
         .expect("sheet");
     let snapshot = sheet.snapshot(&["a", "b"], None, None).expect("snapshot");
 
-    assert_eq!(snapshot.get("width"), Some(&Value::Px(8.0)));
-    assert_eq!(snapshot.get("color"), Some(&gray(0x11)));
-    assert_eq!(snapshot.get("padding"), Some(&Value::Px(2.0)));
+    assert_eq!(snapshot.get(Kind::Width), Some(&Value::Px(8.0)));
+    assert_eq!(snapshot.get(Kind::Color), Some(&gray(0x11)));
+    assert_eq!(snapshot.get(Kind::Padding), Some(&Value::Px(2.0)));
 }
 
 #[test]
@@ -26,7 +26,7 @@ fn property_order_follows_first_definition() {
     let names: Vec<&str> = snapshot
         .properties()
         .iter()
-        .map(|property| property.name.as_str())
+        .map(|property| property.kind.name())
         .collect();
 
     assert_eq!(names, ["width", "color"]);
@@ -42,8 +42,8 @@ fn state_overrides_are_applied_on_top_of_the_base() {
         .snapshot(&["a", "b"], Some(State::Hover), None)
         .expect("snapshot");
 
-    assert_eq!(snapshot.get("color"), Some(&gray(0x22)));
-    assert_eq!(snapshot.get("width"), Some(&Value::Px(4.0)));
+    assert_eq!(snapshot.get(Kind::Color), Some(&gray(0x22)));
+    assert_eq!(snapshot.get(Kind::Width), Some(&Value::Px(4.0)));
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn inactive_states_are_ignored() {
         .snapshot(&["a"], Some(State::Hover), None)
         .expect("snapshot");
 
-    assert_eq!(snapshot.get("color"), Some(&gray(0x11)));
+    assert_eq!(snapshot.get(Kind::Color), Some(&gray(0x11)));
 }
 
 #[test]
@@ -66,8 +66,8 @@ fn theme_refs_resolve_to_the_selected_theme() {
     let light = sheet.snapshot(&["a"], None, Some("light")).expect("light");
     let dark = sheet.snapshot(&["a"], None, Some("dark")).expect("dark");
 
-    assert_eq!(light.get("color"), Some(&gray(0x11)));
-    assert_eq!(dark.get("color"), Some(&gray(0x22)));
+    assert_eq!(light.get(Kind::Color), Some(&gray(0x11)));
+    assert_eq!(dark.get(Kind::Color), Some(&gray(0x22)));
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn default_theme_is_the_first_one() {
     .expect("sheet");
     let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
 
-    assert_eq!(snapshot.get("color"), Some(&gray(0x22)));
+    assert_eq!(snapshot.get(Kind::Color), Some(&gray(0x22)));
 }
 
 #[test]
@@ -93,8 +93,8 @@ fn unknown_theme_and_key_are_errors() {
     let sheet = Stylesheet {
         themes: vec![Theme {
             name: "light".to_string(),
-            properties: vec![Property {
-                name: "accent".to_string(),
+            properties: vec![ThemeEntry {
+                key: "accent".to_string(),
                 value: gray(0x11),
             }],
         }],
@@ -102,7 +102,7 @@ fn unknown_theme_and_key_are_errors() {
             class: "a".to_string(),
             state: None,
             properties: vec![Property {
-                name: "color".to_string(),
+                kind: Kind::Color,
                 value: Value::ThemeRef("muted".to_string()),
             }],
         }],
@@ -122,7 +122,7 @@ fn border_theme_refs_resolve_to_a_color() {
     let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
 
     assert_eq!(
-        snapshot.get("border"),
+        snapshot.get(Kind::Border),
         Some(&Value::Border(Border {
             width: 2.0,
             color: BorderColor::Color(Color::rgb(0x11, 0x11, 0x11)),
@@ -135,8 +135,8 @@ fn border_theme_ref_to_a_non_color_is_an_error() {
     let sheet = Stylesheet {
         themes: vec![Theme {
             name: "light".to_string(),
-            properties: vec![Property {
-                name: "radius".to_string(),
+            properties: vec![ThemeEntry {
+                key: "radius".to_string(),
                 value: Value::Px(4.0),
             }],
         }],
@@ -144,7 +144,7 @@ fn border_theme_ref_to_a_non_color_is_an_error() {
             class: "a".to_string(),
             state: None,
             properties: vec![Property {
-                name: "border".to_string(),
+                kind: Kind::Border,
                 value: Value::Border(Border {
                     width: 2.0,
                     color: BorderColor::ThemeRef("radius".to_string()),
@@ -164,7 +164,7 @@ fn literals_survive_without_themes() {
     let sheet = parse_file(".a { border: 2px #111111; }").expect("sheet");
     let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
 
-    assert!(matches!(snapshot.get("border"), Some(Value::Border(_))));
+    assert!(matches!(snapshot.get(Kind::Border), Some(Value::Border(_))));
 }
 
 #[test]

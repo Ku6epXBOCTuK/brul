@@ -1,3 +1,5 @@
+use crate::style::properties::Kind;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stylesheet {
     pub themes: Vec<Theme>,
@@ -7,7 +9,13 @@ pub struct Stylesheet {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
     pub name: String,
-    pub properties: Vec<Property>,
+    pub properties: Vec<ThemeEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ThemeEntry {
+    pub key: String,
+    pub value: Value,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,7 +48,7 @@ impl State {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Property {
-    pub name: String,
+    pub kind: Kind,
     pub value: Value,
 }
 

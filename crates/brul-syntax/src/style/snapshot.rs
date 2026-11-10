@@ -1,6 +1,7 @@
 use std::fmt;
 
 use crate::style::ast::{Border, BorderColor, Property, State, Stylesheet, Theme, Value};
+use crate::style::properties::Kind;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Snapshot {
@@ -8,10 +9,10 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    pub fn get(&self, name: &str) -> Option<&Value> {
+    pub fn get(&self, kind: Kind) -> Option<&Value> {
         self.properties
             .iter()
-            .find(|property| property.name == name)
+            .find(|property| property.kind == kind)
             .map(|property| &property.value)
     }
 
@@ -29,11 +30,11 @@ impl Snapshot {
             match self
                 .properties
                 .iter_mut()
-                .find(|existing| existing.name == property.name)
+                .find(|existing| existing.kind == property.kind)
             {
                 Some(existing) => existing.value = value,
                 None => self.properties.push(Property {
-                    name: property.name.clone(),
+                    kind: property.kind,
                     value,
                 }),
             }
@@ -102,13 +103,8 @@ impl Stylesheet {
 
 fn theme_value<'a>(theme: Option<&'a Theme>, key: &str) -> Result<&'a Value, SnapshotError> {
     theme
-        .and_then(|theme| {
-            theme
-                .properties
-                .iter()
-                .find(|property| property.name == key)
-        })
-        .map(|property| &property.value)
+        .and_then(|theme| theme.properties.iter().find(|entry| entry.key == key))
+        .map(|entry| &entry.value)
         .ok_or_else(|| SnapshotError::UnknownThemeKey(key.to_string()))
 }
 

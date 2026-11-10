@@ -1,9 +1,8 @@
 use crate::error::Error;
-use crate::style::ast::{BorderColor, ClassRule, Theme, Value};
-use crate::style::properties::{self, StatePolicy, ThemeType};
+use crate::style::ast::{BorderColor, ClassRule, Theme, ThemeEntry, Value};
+use crate::style::properties::{Kind, StatePolicy, ThemeType};
 
 pub struct PropertyAt {
-    pub name: String,
     pub at: usize,
 }
 
@@ -12,9 +11,14 @@ pub struct RuleAt {
     pub properties: Vec<PropertyAt>,
 }
 
+pub struct ThemeKeyAt {
+    pub key: String,
+    pub at: usize,
+}
+
 pub struct ThemeAt {
     pub name_at: usize,
-    pub properties: Vec<PropertyAt>,
+    pub properties: Vec<ThemeKeyAt>,
 }
 
 pub fn themes(source: &str, themes: &[Theme], positions: &[ThemeAt]) -> Result<(), Error> {
@@ -26,11 +30,11 @@ pub fn themes(source: &str, themes: &[Theme], positions: &[ThemeAt]) -> Result<(
                 format!("duplicate theme '{}'", theme.name),
             ));
         }
-        if let Some(property) = duplicate_key(position) {
+        if let Some(key) = duplicate_key(position) {
             return Err(Error::at(
                 source,
-                property.at,
-                format!("duplicate theme key '{}'", property.name),
+                key.at,
+                format!("duplicate theme key '{}'", key.key),
             ));
         }
     }
@@ -38,29 +42,22 @@ pub fn themes(source: &str, themes: &[Theme], positions: &[ThemeAt]) -> Result<(
         return Ok(());
     };
     for (theme, position) in themes.iter().zip(positions).skip(1) {
-        for (property_at, property) in position.properties.iter().zip(&theme.properties) {
-            match first
-                .properties
-                .iter()
-                .find(|item| item.name == property_at.name)
-            {
+        for (key_at, entry) in position.properties.iter().zip(&theme.properties) {
+            match find_key(first, &key_at.key) {
                 None => {
                     return Err(Error::at(
                         source,
-                        property_at.at,
-                        format!(
-                            "theme '{}' has unknown key '{}'",
-                            theme.name, property_at.name
-                        ),
+                        key_at.at,
+                        format!("theme '{}' has unknown key '{}'", theme.name, key_at.key),
                     ));
                 }
-                Some(base) if key_type(&base.value) != key_type(&property.value) => {
+                Some(base) if key_type(&base.value) != key_type(&entry.value) => {
                     return Err(Error::at(
                         source,
-                        property_at.at,
+                        key_at.at,
                         format!(
                             "theme '{}' has a different type for '{}'",
-                            theme.name, property_at.name
+                            theme.name, key_at.key
                         ),
                     ));
                 }
@@ -68,15 +65,11 @@ pub fn themes(source: &str, themes: &[Theme], positions: &[ThemeAt]) -> Result<(
             }
         }
         for base in &first.properties {
-            if !position
-                .properties
-                .iter()
-                .any(|property| property.name == base.name)
-            {
+            if find_key(theme, &base.key).is_none() {
                 return Err(Error::at(
                     source,
                     position.name_at,
-                    format!("theme '{}' is missing key '{}'", theme.name, base.name),
+                    format!("theme '{}' is missing key '{}'", theme.name, base.key),
                 ));
             }
         }
@@ -97,12 +90,10 @@ pub fn refs(
         for (property, at) in rule.properties.iter().zip(&position.properties) {
             match &property.value {
                 Value::ThemeRef(key) => {
-                    let spec = properties::get(&property.name)
-                        .expect("the parser rejects unknown properties");
-                    let Some(expected) = spec.theme_type() else {
+                    let Some(expected) = property.kind.theme_type() else {
                         continue;
                     };
-                    check(source, declared, key, expected, &property.name, at.at)?;
+                    check(source, declared, key, expected, property.kind, at.at)?;
                 }
                 Value::Border(border) => {
                     if let BorderColor::ThemeRef(key) = &border.color {
@@ -111,7 +102,7 @@ pub fn refs(
                             declared,
                             key,
                             ThemeType::Color,
-                            &property.name,
+                            property.kind,
                             at.at,
                         )?;
                     }
@@ -143,14 +134,16 @@ pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result
                 ),
             ));
         }
-        for property in &position.properties {
-            let spec = properties::get(&property.name).expect("parsed property is in the table");
-            match spec.in_state {
+        for (property, at) in rule.properties.iter().zip(&position.properties) {
+            match property.kind.in_state() {
                 StatePolicy::Forbidden => {
                     return Err(Error::at(
                         source,
-                        property.at,
-                        format!("property '{}' cannot change in a state", property.name),
+                        at.at,
+                        format!(
+                            "property '{}' cannot change in a state",
+                            property.kind.name()
+                        ),
                     ));
                 }
                 StatePolicy::Visual => {}
@@ -158,13 +151,13 @@ pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result
                     let fixed = rules.iter().any(|base| {
                         base.state.is_none()
                             && base.class == rule.class
-                            && base.properties.iter().any(|item| item.name == "width")
-                            && base.properties.iter().any(|item| item.name == "height")
+                            && base.properties.iter().any(|item| item.kind == Kind::Width)
+                            && base.properties.iter().any(|item| item.kind == Kind::Height)
                     });
                     if !fixed {
                         return Err(Error::at(
                             source,
-                            property.at,
+                            at.at,
                             "font-weight in a state needs width and height in the base class",
                         ));
                     }
@@ -175,27 +168,27 @@ pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result
     Ok(())
 }
 
+fn find_key<'a>(theme: &'a Theme, key: &str) -> Option<&'a ThemeEntry> {
+    theme.properties.iter().find(|entry| entry.key == key)
+}
+
 fn check(
     source: &str,
     declared: &Theme,
     key: &str,
     expected: ThemeType,
-    property: &str,
+    property: Kind,
     at: usize,
 ) -> Result<(), Error> {
-    let actual = declared
-        .properties
-        .iter()
-        .find(|item| item.name == key)
-        .and_then(|item| key_type(&item.value));
-    match actual {
+    match find_key(declared, key).and_then(|entry| key_type(&entry.value)) {
         None => Err(Error::at(source, at, format!("unknown theme key '{key}'"))),
         Some(actual) if actual != expected => Err(Error::at(
             source,
             at,
             format!(
-                "theme key '{key}' is {}, but '{property}' expects {}",
+                "theme key '{key}' is {}, but '{}' expects {}",
                 actual.name(),
+                property.name(),
                 expected.name()
             ),
         )),
@@ -203,16 +196,16 @@ fn check(
     }
 }
 
-fn duplicate_key(position: &ThemeAt) -> Option<&PropertyAt> {
+fn duplicate_key(position: &ThemeAt) -> Option<&ThemeKeyAt> {
     position
         .properties
         .iter()
         .enumerate()
-        .find_map(|(index, property)| {
+        .find_map(|(index, key)| {
             position.properties[..index]
                 .iter()
-                .any(|other| other.name == property.name)
-                .then_some(property)
+                .any(|other| other.key == key.key)
+                .then_some(key)
         })
 }
 

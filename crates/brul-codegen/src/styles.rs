@@ -2,7 +2,7 @@ use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, Padding, StyleSet, StyleState, TextStyle,
     WidgetStyle,
 };
-use brul_syntax::style::{BorderColor, Property, Snapshot, State, Stylesheet, Value};
+use brul_syntax::style::{BorderColor, Kind, Property, Snapshot, State, Stylesheet, Value};
 
 pub struct Resolved {
     pub layout: LayoutStyle,
@@ -16,8 +16,7 @@ pub fn resolve(
     theme: Option<&str>,
 ) -> Result<Resolved, String> {
     let base = snapshot(stylesheet, classes, None, theme)?;
-    let layout = layout(&base)?;
-    let base_style = widget_style(&base, WidgetStyle::default())?;
+    let (layout, base_style, text) = base_styles(&base)?;
     let mut styles = StyleSet::new(base_style);
     for state in [
         State::Hover,
@@ -30,13 +29,13 @@ pub fn resolve(
         if state_snapshot == base {
             continue;
         }
-        let style = widget_style(&state_snapshot, base_style)?;
+        let style = state_style(&state_snapshot, base_style)?;
         styles = styles.with(style_state(state), style);
     }
     Ok(Resolved {
         layout,
         styles,
-        text: text_style(&base)?,
+        text,
     })
 }
 
@@ -51,65 +50,72 @@ fn snapshot(
         .map_err(|error| error.to_string())
 }
 
-fn layout(snapshot: &Snapshot) -> Result<LayoutStyle, String> {
+fn base_styles(snapshot: &Snapshot) -> Result<(LayoutStyle, WidgetStyle, TextStyle), String> {
     let mut layout = LayoutStyle::default();
+    let mut style = WidgetStyle::default();
+    let mut text = TextStyle::default();
     for property in snapshot.properties() {
-        match property.name.as_str() {
-            "width" | "height" | "stretch" => size(&mut layout, property)?,
-            "padding" | "padding-left" | "padding-right" | "padding-top" | "padding-bottom"
-            | "spacing" => padding(&mut layout, property)?,
-            "border" | "border-width" => border(&mut layout, property)?,
-            _ => alignment(&mut layout, property),
+        apply(property, &mut layout, &mut style, &mut text)?;
+    }
+    Ok((layout, style, text))
+}
+
+fn state_style(snapshot: &Snapshot, value: WidgetStyle) -> Result<WidgetStyle, String> {
+    let mut layout = LayoutStyle::default();
+    let mut style = value;
+    let mut text = TextStyle::default();
+    for property in snapshot.properties() {
+        apply(property, &mut layout, &mut style, &mut text)?;
+    }
+    Ok(style)
+}
+
+fn apply(
+    property: &Property,
+    layout: &mut LayoutStyle,
+    style: &mut WidgetStyle,
+    text: &mut TextStyle,
+) -> Result<(), String> {
+    let value = &property.value;
+    let kind = property.kind;
+    match kind {
+        Kind::Width => layout.width = dimension(value, kind)?,
+        Kind::Height => layout.height = dimension(value, kind)?,
+        Kind::Stretch => layout.stretch = number(value, kind)? as f32,
+        Kind::Padding => layout.padding = Padding::all(px_value(value, kind)?),
+        Kind::PaddingLeft => layout.padding.left = px_value(value, kind)?,
+        Kind::PaddingRight => layout.padding.right = px_value(value, kind)?,
+        Kind::PaddingTop => layout.padding.top = px_value(value, kind)?,
+        Kind::PaddingBottom => layout.padding.bottom = px_value(value, kind)?,
+        Kind::Spacing => layout.spacing = px_value(value, kind)?,
+        Kind::BorderWidth => layout.border_width = px_value(value, kind)?,
+        Kind::Border => {
+            let border = border(value, kind)?;
+            layout.border_width = px(border.width);
+            style.border = border_color(&border.color);
         }
-    }
-    Ok(layout)
-}
-
-fn size(layout: &mut LayoutStyle, property: &Property) -> Result<(), String> {
-    match (property.name.as_str(), &property.value) {
-        ("width", value) => layout.width = dimension(value, "width")?,
-        ("height", value) => layout.height = dimension(value, "height")?,
-        ("stretch", value) => layout.stretch = number(value, "stretch")? as f32,
-        _ => {}
-    }
-    Ok(())
-}
-
-fn padding(layout: &mut LayoutStyle, property: &Property) -> Result<(), String> {
-    match (property.name.as_str(), &property.value) {
-        ("padding", Value::Px(value)) => layout.padding = Padding::all(px(*value)),
-        ("padding-left", Value::Px(value)) => layout.padding.left = px(*value),
-        ("padding-right", Value::Px(value)) => layout.padding.right = px(*value),
-        ("padding-top", Value::Px(value)) => layout.padding.top = px(*value),
-        ("padding-bottom", Value::Px(value)) => layout.padding.bottom = px(*value),
-        ("spacing", Value::Px(value)) => layout.spacing = px(*value),
-        _ => {}
+        Kind::JustifyContent => layout.justify = justify(keyword(value, kind)?),
+        Kind::AlignItems => layout.align = align(keyword(value, kind)?),
+        Kind::Background => style.background = background(value)?,
+        Kind::BorderColor => style.border = paint(value, kind)?,
+        Kind::Color => style.text = paint(value, kind)?,
+        Kind::Tint => style.tint = Some(paint(value, kind)?),
+        Kind::Radius => style.radius = px_value(value, kind)?,
+        Kind::Opacity => style.opacity = number(value, kind)? as f32,
+        Kind::FontSize => {
+            text.font_size = px_value(value, kind)? as f32;
+            text.line_height = text.font_size * 1.2;
+        }
+        Kind::FontFamily => text.family = Some(string(value, kind)?.to_owned()),
+        Kind::TextAlign => text.align = text_align(keyword(value, kind)?),
+        Kind::VerticalAlign => {}
+        Kind::FontWeight => text.weight = number(value, kind)? as u16,
     }
     Ok(())
 }
 
-fn border(layout: &mut LayoutStyle, property: &Property) -> Result<(), String> {
-    match (property.name.as_str(), &property.value) {
-        ("border", Value::Border(border)) => layout.border_width = px(border.width),
-        ("border-width", Value::Px(value)) => layout.border_width = px(*value),
-        _ => {}
-    }
-    Ok(())
-}
-
-fn alignment(layout: &mut LayoutStyle, property: &Property) {
-    if property.name == "justify-content" {
-        layout.justify = justify(&property.value);
-    } else {
-        layout.align = align(&property.value);
-    }
-}
-
-fn justify(value: &Value) -> Justify {
-    let Value::Keyword(value) = value else {
-        return Justify::Start;
-    };
-    match value.as_str() {
+fn justify(value: &str) -> Justify {
+    match value {
         "center" => Justify::Center,
         "end" => Justify::End,
         "space-between" => Justify::SpaceBetween,
@@ -117,70 +123,13 @@ fn justify(value: &Value) -> Justify {
     }
 }
 
-fn align(value: &Value) -> Align {
-    let Value::Keyword(value) = value else {
-        return Align::Start;
-    };
-    match value.as_str() {
+fn align(value: &str) -> Align {
+    match value {
         "center" => Align::Center,
         "end" => Align::End,
         "stretch" => Align::Stretch,
         _ => Align::Start,
     }
-}
-
-fn widget_style(snapshot: &Snapshot, mut style: WidgetStyle) -> Result<WidgetStyle, String> {
-    for property in snapshot.properties() {
-        paint(&mut style, property)?;
-        shape(&mut style, property)?;
-    }
-    Ok(style)
-}
-
-fn paint(style: &mut WidgetStyle, property: &Property) -> Result<(), String> {
-    match (property.name.as_str(), &property.value) {
-        ("background", Value::Color(value)) => style.background = color(*value),
-        ("background", Value::Gradient(_)) => {
-            return Err("gradient is not supported yet".to_owned());
-        }
-        ("border", Value::Border(border)) => style.border = border_color(&border.color),
-        ("border-color", Value::Color(value)) => style.border = color(*value),
-        ("color", Value::Color(value)) => style.text = color(*value),
-        ("tint", Value::Color(value)) => style.tint = Some(color(*value)),
-        _ => {}
-    }
-    Ok(())
-}
-
-fn shape(style: &mut WidgetStyle, property: &Property) -> Result<(), String> {
-    match (property.name.as_str(), &property.value) {
-        ("radius", Value::Px(value)) => style.radius = px(*value),
-        ("opacity", value) => style.opacity = number(value, "opacity")? as f32,
-        _ => {}
-    }
-    Ok(())
-}
-
-fn text_style(snapshot: &Snapshot) -> Result<TextStyle, String> {
-    let mut style = TextStyle::default();
-    for property in snapshot.properties() {
-        font(&mut style, property)?;
-    }
-    Ok(style)
-}
-
-fn font(style: &mut TextStyle, property: &Property) -> Result<(), String> {
-    match (property.name.as_str(), &property.value) {
-        ("font-size", Value::Px(value)) => {
-            style.font_size = *value as f32;
-            style.line_height = style.font_size * 1.2;
-        }
-        ("font-family", Value::String(value)) => style.family = Some(value.clone()),
-        ("font-weight", value) => style.weight = number(value, "font-weight")? as u16,
-        ("text-align", Value::Keyword(value)) => style.align = text_align(value),
-        _ => {}
-    }
-    Ok(())
 }
 
 fn text_align(value: &str) -> brul_gui::TextAlign {
@@ -191,19 +140,66 @@ fn text_align(value: &str) -> brul_gui::TextAlign {
     }
 }
 
-fn dimension(value: &Value, property: &str) -> Result<Dimension, String> {
+fn background(value: &Value) -> Result<Color, String> {
     match value {
-        Value::Px(value) => Ok(Dimension::Px(px(*value))),
-        Value::Percent(value) => Ok(Dimension::Percent(*value as f32)),
-        _ => Err(format!("expected px or % for '{property}'")),
+        Value::Color(value) => Ok(color(*value)),
+        Value::Gradient(_) => Err("gradient is not supported yet".to_owned()),
+        _ => Err("expected a color or a gradient for 'background'".to_owned()),
     }
 }
 
-fn number(value: &Value, property: &str) -> Result<f64, String> {
+fn border(value: &Value, kind: Kind) -> Result<&brul_syntax::style::Border, String> {
+    match value {
+        Value::Border(value) => Ok(value),
+        _ => Err(expected(kind, "a border")),
+    }
+}
+
+fn dimension(value: &Value, kind: Kind) -> Result<Dimension, String> {
+    match value {
+        Value::Px(value) => Ok(Dimension::Px(px(*value))),
+        Value::Percent(value) => Ok(Dimension::Percent(*value as f32)),
+        _ => Err(expected(kind, "px or %")),
+    }
+}
+
+fn number(value: &Value, kind: Kind) -> Result<f64, String> {
     match value {
         Value::Number(value) => Ok(*value),
-        _ => Err(format!("expected number for '{property}'")),
+        _ => Err(expected(kind, "a number")),
     }
+}
+
+fn px_value(value: &Value, kind: Kind) -> Result<u32, String> {
+    match value {
+        Value::Px(value) => Ok(px(*value)),
+        _ => Err(expected(kind, "px")),
+    }
+}
+
+fn keyword(value: &Value, kind: Kind) -> Result<&str, String> {
+    match value {
+        Value::Keyword(value) => Ok(value),
+        _ => Err(expected(kind, "a keyword")),
+    }
+}
+
+fn string(value: &Value, kind: Kind) -> Result<&str, String> {
+    match value {
+        Value::String(value) => Ok(value),
+        _ => Err(expected(kind, "a string")),
+    }
+}
+
+fn paint(value: &Value, kind: Kind) -> Result<Color, String> {
+    match value {
+        Value::Color(value) => Ok(color(*value)),
+        _ => Err(expected(kind, "a color")),
+    }
+}
+
+fn expected(kind: Kind, ty: &str) -> String {
+    format!("expected {ty} for '{}'", kind.name())
 }
 
 fn border_color(value: &BorderColor) -> Color {
