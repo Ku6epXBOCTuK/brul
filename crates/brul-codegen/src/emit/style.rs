@@ -4,34 +4,44 @@ use brul_gui::{
 };
 
 pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
+    let LayoutStyle {
+        width,
+        height,
+        padding,
+        border_width,
+        spacing,
+        stretch,
+        justify: justify_value,
+        align: align_value,
+    } = layout;
     let default = LayoutStyle::default();
     let mut fields = Vec::new();
-    if layout.width != default.width {
-        fields.push(format!("width: {}", dimension(layout.width)));
+    if width != default.width {
+        fields.push(format!("width: {}", dimension(width)));
     }
-    if layout.height != default.height {
-        fields.push(format!("height: {}", dimension(layout.height)));
+    if height != default.height {
+        fields.push(format!("height: {}", dimension(height)));
     }
-    if layout.padding != default.padding {
+    if padding != default.padding {
         fields.push(format!(
             "padding: brul_gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }}",
-            layout.padding.left, layout.padding.top, layout.padding.right, layout.padding.bottom
+            padding.left, padding.top, padding.right, padding.bottom
         ));
     }
-    if layout.border_width != default.border_width {
-        fields.push(format!("border_width: {}", layout.border_width));
+    if border_width != default.border_width {
+        fields.push(format!("border_width: {border_width}"));
     }
-    if layout.spacing != default.spacing {
-        fields.push(format!("spacing: {}", layout.spacing));
+    if spacing != default.spacing {
+        fields.push(format!("spacing: {spacing}"));
     }
-    if layout.stretch != default.stretch {
-        fields.push(format!("stretch: {:?}f32", layout.stretch));
+    if stretch != default.stretch {
+        fields.push(format!("stretch: {stretch:?}f32"));
     }
-    if layout.justify != default.justify {
-        fields.push(format!("justify: {}", justify(layout.justify)));
+    if justify_value != default.justify {
+        fields.push(format!("justify: {}", justify(justify_value)));
     }
-    if layout.align != default.align {
-        fields.push(format!("align: {}", align(layout.align)));
+    if align_value != default.align {
+        fields.push(format!("align: {}", align(align_value)));
     }
     (!fields.is_empty()).then(|| {
         format!(
@@ -64,28 +74,36 @@ pub(super) fn style_set(set: StyleSet) -> Option<String> {
 }
 
 fn widget_style(style: WidgetStyle) -> String {
+    let WidgetStyle {
+        background,
+        border,
+        text,
+        radius,
+        tint,
+        opacity,
+    } = style;
     let default = WidgetStyle::default();
     let mut fields = Vec::new();
-    if style.background != default.background {
-        fields.push(format!("background: {}", color(style.background)));
+    if background != default.background {
+        fields.push(format!("background: {}", color(background)));
     }
-    if style.border != default.border {
-        fields.push(format!("border: {}", color(style.border)));
+    if border != default.border {
+        fields.push(format!("border: {}", color(border)));
     }
-    if style.text != default.text {
-        fields.push(format!("text: {}", color(style.text)));
+    if text != default.text {
+        fields.push(format!("text: {}", color(text)));
     }
-    if style.radius != default.radius {
-        fields.push(format!("radius: {}", style.radius));
+    if radius != default.radius {
+        fields.push(format!("radius: {radius}"));
     }
-    if style.tint != default.tint {
+    if tint != default.tint {
         fields.push(format!(
             "tint: Some({})",
-            color(style.tint.unwrap_or(Color::TRANSPARENT))
+            color(tint.unwrap_or(Color::TRANSPARENT))
         ));
     }
-    if style.opacity != default.opacity {
-        fields.push(format!("opacity: {:?}f32", style.opacity));
+    if opacity != default.opacity {
+        fields.push(format!("opacity: {opacity:?}f32"));
     }
     if fields.is_empty() {
         "brul_gui::WidgetStyle::default()".to_owned()
@@ -98,23 +116,30 @@ fn widget_style(style: WidgetStyle) -> String {
 }
 
 pub(super) fn text_style(style: TextStyle) -> Option<String> {
+    let TextStyle {
+        family,
+        font_size,
+        line_height,
+        weight,
+        align: align_value,
+    } = style;
     let default = TextStyle::default();
     let mut fields = Vec::new();
-    if style.family != default.family {
-        let family = style.family.as_deref().unwrap_or_default();
+    if family != default.family {
+        let family = family.as_deref().unwrap_or_default();
         fields.push(format!("family: Some({family:?}.to_owned())"));
     }
-    if style.font_size != default.font_size {
-        fields.push(format!("font_size: {:?}f32", style.font_size));
+    if font_size != default.font_size {
+        fields.push(format!("font_size: {font_size:?}f32"));
     }
-    if style.line_height != default.line_height {
-        fields.push(format!("line_height: {:?}f32", style.line_height));
+    if line_height != default.line_height {
+        fields.push(format!("line_height: {line_height:?}f32"));
     }
-    if style.weight != default.weight {
-        fields.push(format!("weight: {}", style.weight));
+    if weight != default.weight {
+        fields.push(format!("weight: {weight}"));
     }
-    if style.align != default.align {
-        fields.push(format!("align: {}", text_align(style.align)));
+    if align_value != default.align {
+        fields.push(format!("align: {}", text_align(align_value)));
     }
     (!fields.is_empty()).then(|| {
         format!(
