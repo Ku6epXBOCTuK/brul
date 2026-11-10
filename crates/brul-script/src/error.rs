@@ -32,6 +32,7 @@ pub enum Error {
     },
     MissingField(String),
     UnknownFunction(String),
+    Reentrant(String),
     Arity {
         name: String,
         expected: &'static str,
@@ -90,6 +91,12 @@ impl fmt::Display for Error {
             }
             Error::MissingField(name) => write!(f, "object has no field '{name}'"),
             Error::UnknownFunction(name) => write!(f, "function '{name}' is not defined"),
+            Error::Reentrant(name) => {
+                write!(
+                    f,
+                    "event '{name}' cannot run while its component is evaluating"
+                )
+            }
             Error::Arity { name, expected } => {
                 write!(f, "function '{name}' expects {expected} argument")
             }

@@ -204,10 +204,10 @@ impl Host for EventHost {
                 });
             }
         }
-        let component = Rc::clone(&event.component);
-        component
-            .borrow_mut()
-            .call_function(event.function, arguments.to_vec())
+        let Ok(mut component) = event.component.try_borrow_mut() else {
+            return Err(ScriptError::Reentrant(event.name.to_owned()));
+        };
+        component.call_function(event.function, arguments.to_vec())
     }
 }
 
@@ -529,6 +529,45 @@ mod tests {
             .unwrap();
         brul_reactive::flush();
         assert!(!tree.borrow_mut().set_text(id, "bye".to_owned()));
+    }
+
+    fn reentrant(component: &mut Component) -> Result<Value, ScriptError> {
+        component.call("go", &[])
+    }
+
+    #[test]
+    fn an_event_that_reenters_a_busy_component_reports_an_error() {
+        let handle = Rc::new(RefCell::new(Component::new()));
+        handle
+            .borrow_mut()
+            .define_function(Function {
+                name: "read".to_owned(),
+                params: Vec::new(),
+                body: Vec::new(),
+            })
+            .unwrap();
+        handle.borrow_mut().set_host(EventHost {
+            events: vec![ComponentEvent {
+                name: "go",
+                function: "read",
+                params: &[],
+                component: Rc::clone(&handle),
+            }],
+        });
+        let error = reentrant(&mut handle.borrow_mut()).unwrap_err();
+        assert!(matches!(error, ScriptError::Reentrant(name) if name == "go"));
+
+        let widget = Widget::text("");
+        let id = widget.id();
+        let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
+        let bindings = [Binding {
+            widget: id,
+            target: BindingTarget::Text(reentrant),
+            scopes: Vec::new(),
+            component: Rc::clone(&handle),
+        }];
+        let _bindings = Bindings::new(&bindings, &tree);
+        assert!(!tree.borrow_mut().set_text(id, String::new()));
     }
 
     #[test]
