@@ -540,7 +540,7 @@ pub struct WidgetTree {
 struct Geometry {
     viewport: Size,
     scale: f32,
-    layout: LayoutBox,
+    boxes: Vec<LayoutBox>,
     texts: HashMap<WidgetId, TextVariants>,
 }
 
@@ -809,6 +809,7 @@ impl WidgetTree {
         }
 
         let mut texts = HashMap::new();
+        let mut order = Vec::new();
         let node = build_layout(
             &self.nodes,
             self.root,
@@ -816,8 +817,12 @@ impl WidgetTree {
             Some(viewport.width),
             scale,
             &mut texts,
+            &mut order,
         )?;
         let placed = layout::layout(&node, viewport)?;
+        let mut boxes = vec![LayoutBox::default(); self.nodes.len()];
+        let mut cursor = 0;
+        flatten_boxes(&placed, &order, &mut cursor, &mut boxes);
         let changed = self
             .geometry
             .as_ref()
@@ -826,7 +831,7 @@ impl WidgetTree {
         self.geometry = Some(Geometry {
             viewport,
             scale,
-            layout: placed,
+            boxes,
             texts,
         });
         self.snapshot = None;
@@ -1115,7 +1120,7 @@ impl WidgetTree {
     fn hit_path(&self, x: i32, y: i32) -> Result<Vec<Slot>, WidgetError> {
         let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
         let mut path = Vec::new();
-        collect_hit(&self.nodes, self.root, &geometry.layout, x, y, &mut path);
+        collect_hit(&self.nodes, self.root, &geometry.boxes, x, y, &mut path);
         Ok(path)
     }
 
@@ -1141,8 +1146,10 @@ fn build_layout(
     available_width: Option<u32>,
     scale: f32,
     texts: &mut HashMap<WidgetId, TextVariants>,
+    order: &mut Vec<Slot>,
 ) -> Result<LayoutNode, WidgetError> {
     let node = &tree[slot.index()];
+    order.push(slot);
     let resolved = layout::resolve(node.layout.width, available_width)?;
     let content_width = resolved
         .map(|width| width.saturating_sub(layout::inset_x(&node.layout)))
@@ -1159,6 +1166,7 @@ fn build_layout(
                     content_width,
                     scale,
                     texts,
+                    order,
                 )?);
             }
             match direction {
@@ -1193,13 +1201,29 @@ fn build_layout(
     })
 }
 
+fn flatten_boxes(boxed: &LayoutBox, order: &[Slot], cursor: &mut usize, boxes: &mut [LayoutBox]) {
+    let slot = order[*cursor];
+    *cursor += 1;
+    boxes[slot.index()] = LayoutBox {
+        x: boxed.x,
+        y: boxed.y,
+        width: boxed.width,
+        height: boxed.height,
+        children: Vec::new(),
+    };
+    for child in &boxed.children {
+        flatten_boxes(child, order, cursor, boxes);
+    }
+}
+
 fn build_snapshot(tree: &[Node], root: Slot, geometry: &Geometry) -> WidgetSnapshot {
     let mut nodes = Vec::new();
-    snapshot_widget(tree, root, &geometry.layout, &geometry.texts, &mut nodes);
+    snapshot_widget(tree, root, &geometry.boxes, &geometry.texts, &mut nodes);
+    let root_box = &geometry.boxes[root.index()];
     WidgetSnapshot {
         size: Size {
-            width: geometry.layout.width,
-            height: geometry.layout.height,
+            width: root_box.width,
+            height: root_box.height,
         },
         nodes,
     }
@@ -1208,7 +1232,7 @@ fn build_snapshot(tree: &[Node], root: Slot, geometry: &Geometry) -> WidgetSnaps
 fn snapshot_widget(
     tree: &[Node],
     slot: Slot,
-    layout_box: &LayoutBox,
+    boxes: &[LayoutBox],
     texts: &HashMap<WidgetId, TextVariants>,
     nodes: &mut Vec<WidgetSnapshotNode>,
 ) {
@@ -1217,6 +1241,7 @@ fn snapshot_widget(
         return;
     }
 
+    let layout_box = &boxes[slot.index()];
     let style = node.styles.resolve(node.state);
     let content_x = layout_box.x.saturating_add(
         node.layout
@@ -1263,27 +1288,27 @@ fn snapshot_widget(
         texture,
     });
 
-    for (&child, child_box) in node.children.iter().zip(&layout_box.children) {
-        snapshot_widget(tree, child, child_box, texts, nodes);
+    for &child in &node.children {
+        snapshot_widget(tree, child, boxes, texts, nodes);
     }
 }
 
 fn collect_hit(
     tree: &[Node],
     slot: Slot,
-    layout_box: &LayoutBox,
+    boxes: &[LayoutBox],
     x: i32,
     y: i32,
     path: &mut Vec<Slot>,
 ) -> bool {
     let node = &tree[slot.index()];
-    if !node.state.visible || !contains(layout_box, x, y) {
+    if !node.state.visible || !contains(&boxes[slot.index()], x, y) {
         return false;
     }
 
     path.push(slot);
-    for (&child, child_box) in node.children.iter().zip(&layout_box.children).rev() {
-        if collect_hit(tree, child, child_box, x, y, path) {
+    for &child in node.children.iter().rev() {
+        if collect_hit(tree, child, boxes, x, y, path) {
             return true;
         }
     }
