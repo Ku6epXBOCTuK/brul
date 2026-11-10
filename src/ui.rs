@@ -159,7 +159,10 @@ impl Ui {
             let tree = Rc::clone(&self.tree);
             let scope = self.scope.child();
             scope.run(|| {
-                Effect::new(move || runtime::apply(&binding, &mut tree.borrow_mut()));
+                Effect::new(move || {
+                    let pending = runtime::evaluate(&binding);
+                    runtime::write(pending, binding.widget, &mut tree.borrow_mut());
+                });
             });
             self.bindings.push(Owned {
                 widget,
@@ -857,7 +860,9 @@ mod tests {
         let ids: Vec<WidgetId> = widgets.iter().map(Widget::id).collect();
         let mut tree = WidgetTree::new(Widget::view(Direction::Column, widgets));
         for (index, target) in targets.into_iter().enumerate() {
-            runtime::apply(&binding(&component, ids[index], target), &mut tree);
+            let binding = binding(&component, ids[index], target);
+            let pending = runtime::evaluate(&binding);
+            runtime::write(pending, binding.widget, &mut tree);
         }
         (ids, tree)
     }

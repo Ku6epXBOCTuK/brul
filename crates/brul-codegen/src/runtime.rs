@@ -351,58 +351,55 @@ impl Bindings {
             let binding = binding.clone();
             let tree = Rc::clone(tree);
             scope.run(|| {
-                Effect::new(move || apply(&binding, &mut tree.borrow_mut()));
+                Effect::new(move || {
+                    let pending = evaluate(&binding);
+                    write(pending, binding.widget, &mut tree.borrow_mut());
+                });
             });
         }
         Self { _scope: scope }
     }
 }
 
-pub fn apply(binding: &Binding, tree: &mut WidgetTree) {
+pub enum Write {
+    Text(Option<String>),
+    Checked(Option<bool>),
+    Selected(Option<bool>),
+    Disabled(Option<bool>),
+    Visible(Option<bool>),
+    Offset(Option<i32>, Option<i32>),
+}
+
+pub fn evaluate(binding: &Binding) -> Write {
     binding.component.borrow().track();
     let count = binding.scopes.len();
     binding
         .component
         .borrow_mut()
         .push_binding_scopes(&binding.scopes);
-    write_target(binding, &binding.component, tree);
+    let component = &binding.component;
+    let write = match &binding.target {
+        BindingTarget::Text(expression) => Write::Text(string(component, *expression)),
+        BindingTarget::Checked(expression) => Write::Checked(flag(component, *expression)),
+        BindingTarget::Selected(expression) => Write::Selected(flag(component, *expression)),
+        BindingTarget::Disabled(expression) => Write::Disabled(flag(component, *expression)),
+        BindingTarget::Visible(expression) => Write::Visible(flag(component, *expression)),
+        BindingTarget::Offset { x, y } => {
+            Write::Offset(offset_value(component, *x), offset_value(component, *y))
+        }
+    };
     binding.component.borrow_mut().pop_binding_scopes(count);
+    write
 }
 
-fn write_target(binding: &Binding, component: &RefCell<Component>, tree: &mut WidgetTree) {
-    let widget = binding.widget;
-    match &binding.target {
-        BindingTarget::Text(expression) => set_text(tree, widget, string(component, *expression)),
-        BindingTarget::Checked(expression) => set_flag(
-            tree,
-            widget,
-            flag(component, *expression),
-            WidgetTree::set_checked,
-        ),
-        BindingTarget::Selected(expression) => set_flag(
-            tree,
-            widget,
-            flag(component, *expression),
-            WidgetTree::set_selected,
-        ),
-        BindingTarget::Disabled(expression) => set_flag(
-            tree,
-            widget,
-            flag(component, *expression),
-            WidgetTree::set_disabled,
-        ),
-        BindingTarget::Visible(expression) => set_flag(
-            tree,
-            widget,
-            flag(component, *expression),
-            WidgetTree::set_visible,
-        ),
-        BindingTarget::Offset { x, y } => set_offset(
-            tree,
-            widget,
-            offset_value(component, *x),
-            offset_value(component, *y),
-        ),
+pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {
+    match write {
+        Write::Text(value) => set_text(tree, widget, value),
+        Write::Checked(value) => set_flag(tree, widget, value, WidgetTree::set_checked),
+        Write::Selected(value) => set_flag(tree, widget, value, WidgetTree::set_selected),
+        Write::Disabled(value) => set_flag(tree, widget, value, WidgetTree::set_disabled),
+        Write::Visible(value) => set_flag(tree, widget, value, WidgetTree::set_visible),
+        Write::Offset(x, y) => set_offset(tree, widget, x, y),
     }
 }
 
@@ -485,6 +482,7 @@ mod tests {
     use super::*;
     use brul_syntax::ast::{BinaryOp, Expr, ExprKind, Position};
     use brul_syntax::script::{Function, Statement};
+    use std::cell::Cell;
 
     macro_rules! expr {
         ($name:literal) => {{
@@ -535,6 +533,45 @@ mod tests {
 
     fn reentrant(component: &mut Component) -> Result<Value, ScriptError> {
         component.call("go", &[])
+    }
+
+    struct TreeProbe {
+        tree: Rc<RefCell<WidgetTree>>,
+        free: Rc<Cell<bool>>,
+    }
+
+    impl Host for TreeProbe {
+        fn call(&mut self, _name: &str, _arguments: &[Value]) -> Result<Value, ScriptError> {
+            self.free.set(self.tree.try_borrow_mut().is_ok());
+            Ok(Value::Bool(self.free.get()))
+        }
+    }
+
+    fn probe(component: &mut Component) -> Result<Value, ScriptError> {
+        component.call("probe", &[])
+    }
+
+    #[test]
+    fn a_binding_expression_reaches_the_tree_while_it_runs() {
+        let widget = Widget::text("");
+        let id = widget.id();
+        let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
+        let free = Rc::new(Cell::new(false));
+        let handle = Rc::new(RefCell::new(Component::new()));
+        handle.borrow_mut().set_host(TreeProbe {
+            tree: Rc::clone(&tree),
+            free: Rc::clone(&free),
+        });
+        let bindings = [Binding {
+            widget: id,
+            target: BindingTarget::Visible(probe),
+            scopes: Vec::new().into(),
+            component: Rc::clone(&handle),
+        }];
+
+        let _bindings = Bindings::new(&bindings, &tree);
+        assert!(free.get());
+        assert!(!tree.borrow_mut().set_visible(id, true));
     }
 
     #[test]
