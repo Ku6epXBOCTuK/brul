@@ -112,14 +112,19 @@ impl Handler {
     }
 }
 
+pub type Expression = fn(&mut Component) -> Result<Value, ScriptError>;
+
 #[derive(Debug, Clone)]
 pub enum BindingTarget {
-    Text(Expr),
-    Checked(Expr),
-    Selected(Expr),
-    Disabled(Expr),
-    Visible(Expr),
-    Offset { x: Option<Expr>, y: Option<Expr> },
+    Text(Expression),
+    Checked(Expression),
+    Selected(Expression),
+    Disabled(Expression),
+    Visible(Expression),
+    Offset {
+        x: Option<Expression>,
+        y: Option<Expression>,
+    },
 }
 
 pub type StructureValue = fn(&ComponentHandle) -> Option<Value>;
@@ -366,51 +371,49 @@ pub fn apply(binding: &Binding, tree: &RefCell<WidgetTree>) {
 fn write_target(binding: &Binding, component: &RefCell<Component>, tree: &RefCell<WidgetTree>) {
     let widget = binding.widget;
     match &binding.target {
-        BindingTarget::Text(expression) => set_text(tree, widget, string(component, expression)),
+        BindingTarget::Text(expression) => set_text(tree, widget, string(component, *expression)),
         BindingTarget::Checked(expression) => set_flag(
             tree,
             widget,
-            flag(component, expression),
+            flag(component, *expression),
             WidgetTree::set_checked,
         ),
         BindingTarget::Selected(expression) => set_flag(
             tree,
             widget,
-            flag(component, expression),
+            flag(component, *expression),
             WidgetTree::set_selected,
         ),
         BindingTarget::Disabled(expression) => set_flag(
             tree,
             widget,
-            flag(component, expression),
+            flag(component, *expression),
             WidgetTree::set_disabled,
         ),
         BindingTarget::Visible(expression) => set_flag(
             tree,
             widget,
-            flag(component, expression),
+            flag(component, *expression),
             WidgetTree::set_visible,
         ),
         BindingTarget::Offset { x, y } => set_offset(
             tree,
             widget,
-            offset_value(component, x.as_ref()),
-            offset_value(component, y.as_ref()),
+            offset_value(component, *x),
+            offset_value(component, *y),
         ),
     }
 }
 
-fn string(component: &RefCell<Component>, expression: &Expr) -> Option<String> {
-    eval(&mut component.borrow_mut(), expression)
+fn string(component: &RefCell<Component>, expression: Expression) -> Option<String> {
+    expression(&mut component.borrow_mut())
         .ok()?
         .as_text()
         .map(str::to_owned)
 }
 
-fn flag(component: &RefCell<Component>, expression: &Expr) -> Option<bool> {
-    eval(&mut component.borrow_mut(), expression)
-        .ok()?
-        .as_flag()
+fn flag(component: &RefCell<Component>, expression: Expression) -> Option<bool> {
+    expression(&mut component.borrow_mut()).ok()?.as_flag()
 }
 
 pub fn set_text(tree: &RefCell<WidgetTree>, widget: WidgetId, value: Option<String>) {
@@ -436,16 +439,20 @@ pub fn set_offset(tree: &RefCell<WidgetTree>, widget: WidgetId, x: Option<i32>, 
     }
 }
 
-pub fn text(component: &mut Component, expression: &Expr) -> Result<String, String> {
-    let value = evaluate(component, expression)?;
+pub fn text(component: &mut Component, expression: Expression) -> Result<String, String> {
+    let value = expression(component).map_err(|error| error.reason())?;
     value
         .as_text()
         .map(str::to_owned)
         .ok_or_else(|| format!("Text content expects String, got {}", value.type_name()))
 }
 
-pub fn boolean(component: &mut Component, expression: &Expr, name: &str) -> Result<bool, String> {
-    let value = evaluate(component, expression)?;
+pub fn boolean(
+    component: &mut Component,
+    expression: Expression,
+    name: &str,
+) -> Result<bool, String> {
+    let value = expression(component).map_err(|error| error.reason())?;
     value
         .as_flag()
         .ok_or_else(|| format!("parameter '{name}' expects Bool, got {}", value.type_name()))
@@ -453,13 +460,13 @@ pub fn boolean(component: &mut Component, expression: &Expr, name: &str) -> Resu
 
 pub fn offset(
     component: &mut Component,
-    expression: Option<&Expr>,
+    expression: Option<Expression>,
     name: &str,
 ) -> Result<i32, String> {
     let Some(expression) = expression else {
         return Ok(0);
     };
-    let value = evaluate(component, expression)?;
+    let value = expression(component).map_err(|error| error.reason())?;
     value
         .as_pixels()
         .ok_or_else(|| format!("parameter '{name}' expects a Number"))
@@ -469,13 +476,11 @@ pub fn evaluate(component: &mut Component, expression: &Expr) -> Result<Value, S
     eval(component, expression).map_err(|error| error.reason())
 }
 
-fn offset_value(component: &RefCell<Component>, expression: Option<&Expr>) -> Option<i32> {
+fn offset_value(component: &RefCell<Component>, expression: Option<Expression>) -> Option<i32> {
     let Some(expression) = expression else {
         return Some(0);
     };
-    eval(&mut component.borrow_mut(), expression)
-        .ok()?
-        .as_pixels()
+    expression(&mut component.borrow_mut()).ok()?.as_pixels()
 }
 
 #[cfg(test)]
@@ -484,8 +489,13 @@ mod tests {
     use brul_syntax::ast::{BinaryOp, ExprKind, Position};
     use brul_syntax::script::{Function, Statement};
 
-    fn ident(name: &str) -> Expr {
-        Expr::new(ExprKind::Ident(name.to_owned()), Position::default())
+    macro_rules! expr {
+        ($name:literal) => {{
+            fn read(component: &mut Component) -> Result<Value, ScriptError> {
+                component.read($name)
+            }
+            read
+        }};
     }
 
     fn number(value: f64) -> Expr {
@@ -510,7 +520,7 @@ mod tests {
         let component = Rc::new(RefCell::new(component));
         let bindings = [Binding {
             widget: id,
-            target: BindingTarget::Text(ident("name")),
+            target: BindingTarget::Text(expr!("name")),
             scopes: Vec::new(),
             component: Rc::clone(&component),
         }];
@@ -529,10 +539,10 @@ mod tests {
     #[test]
     fn text_returns_the_string_and_names_the_actual_type() {
         let mut component = declared("name", Value::String("hello".to_owned()));
-        assert_eq!(text(&mut component, &ident("name")), Ok("hello".to_owned()));
+        assert_eq!(text(&mut component, expr!("name")), Ok("hello".to_owned()));
 
         let mut component = declared("name", Value::Number(3.0));
-        let error = text(&mut component, &ident("name")).unwrap_err();
+        let error = text(&mut component, expr!("name")).unwrap_err();
         assert!(error.contains(Value::Number(3.0).type_name()));
     }
 
@@ -540,10 +550,10 @@ mod tests {
     fn boolean_returns_the_flag_and_names_the_parameter() {
         let name = "visible";
         let mut component = declared(name, Value::Bool(true));
-        assert_eq!(boolean(&mut component, &ident(name), name), Ok(true));
+        assert_eq!(boolean(&mut component, expr!("visible"), name), Ok(true));
 
         let mut component = declared(name, Value::String("yes".to_owned()));
-        let error = boolean(&mut component, &ident(name), name).unwrap_err();
+        let error = boolean(&mut component, expr!("visible"), name).unwrap_err();
         assert!(error.contains(name));
     }
 
@@ -557,14 +567,14 @@ mod tests {
     fn offset_rounds_fractions_and_rejects_the_rest() {
         let name = "x";
         let mut component = declared(name, Value::Number(-7.0));
-        assert_eq!(offset(&mut component, Some(&ident(name)), name), Ok(-7));
+        assert_eq!(offset(&mut component, Some(expr!("x")), name), Ok(-7));
 
         let mut component = declared(name, Value::Number(2.5));
-        assert_eq!(offset(&mut component, Some(&ident(name)), name), Ok(3));
+        assert_eq!(offset(&mut component, Some(expr!("x")), name), Ok(3));
 
         for value in [f64::NAN, f64::from(i32::MAX) + 1.0] {
             let mut component = declared(name, Value::Number(value));
-            assert!(offset(&mut component, Some(&ident(name)), name).is_err());
+            assert!(offset(&mut component, Some(expr!("x")), name).is_err());
         }
     }
 
@@ -574,16 +584,16 @@ mod tests {
         assert_eq!(offset_value(&none, None), Some(0));
 
         let fractional = RefCell::new(declared("x", Value::Number(1.5)));
-        assert_eq!(offset_value(&fractional, Some(&ident("x"))), Some(2));
+        assert_eq!(offset_value(&fractional, Some(expr!("x"))), Some(2));
 
         let missing = RefCell::new(Component::new());
-        assert_eq!(offset_value(&missing, Some(&ident("x"))), None);
+        assert_eq!(offset_value(&missing, Some(expr!("x"))), None);
 
         let text = RefCell::new(declared("x", Value::String("4".to_owned())));
-        assert_eq!(offset_value(&text, Some(&ident("x"))), None);
+        assert_eq!(offset_value(&text, Some(expr!("x"))), None);
 
         let whole = RefCell::new(declared("x", Value::Number(4.0)));
-        assert_eq!(offset_value(&whole, Some(&ident("x"))), Some(4));
+        assert_eq!(offset_value(&whole, Some(expr!("x"))), Some(4));
     }
 
     #[test]
@@ -730,14 +740,14 @@ mod tests {
 
     fn targets() -> Vec<BindingTarget> {
         vec![
-            BindingTarget::Text(ident("title")),
-            BindingTarget::Checked(ident("on")),
-            BindingTarget::Selected(ident("on")),
-            BindingTarget::Disabled(ident("on")),
-            BindingTarget::Visible(ident("off")),
+            BindingTarget::Text(expr!("title")),
+            BindingTarget::Checked(expr!("on")),
+            BindingTarget::Selected(expr!("on")),
+            BindingTarget::Disabled(expr!("on")),
+            BindingTarget::Visible(expr!("off")),
             BindingTarget::Offset {
-                x: Some(ident("x")),
-                y: Some(ident("y")),
+                x: Some(expr!("x")),
+                y: Some(expr!("y")),
             },
         ]
     }
@@ -806,13 +816,13 @@ mod tests {
         let bindings = [
             Binding {
                 widget: ids[0],
-                target: BindingTarget::Text(ident("title")),
+                target: BindingTarget::Text(expr!("title")),
                 scopes: Vec::new(),
                 component: Rc::clone(&component),
             },
             Binding {
                 widget: ids[1],
-                target: BindingTarget::Checked(ident("on")),
+                target: BindingTarget::Checked(expr!("on")),
                 scopes: Vec::new(),
                 component: Rc::clone(&component),
             },

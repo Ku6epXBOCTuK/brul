@@ -86,6 +86,10 @@ mod tests {
     use crate::ui::Ui;
     use crate::{Binding, BindingTarget, Built, ComponentHandle, Value};
 
+    fn name(component: &mut crate::Component) -> Result<Value, crate::Error> {
+        component.read("name")
+    }
+
     fn generated_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
         if theme.is_some() {
             return Err("unknown theme".to_owned());
@@ -94,14 +98,7 @@ mod tests {
         let id = widget.id();
         Ok(Built {
             widget,
-            bindings: vec![Binding::new(
-                component,
-                id,
-                BindingTarget::Text(Expr::new(
-                    ExprKind::Ident("name".to_owned()),
-                    Position::default(),
-                )),
-            )],
+            bindings: vec![Binding::new(component, id, BindingTarget::Text(name))],
             handlers: Vec::new(),
             structures: Vec::new(),
             props: Vec::new(),

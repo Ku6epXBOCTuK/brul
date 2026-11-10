@@ -425,6 +425,15 @@ mod tests {
         Expr::new(ExprKind::Ident(name.to_owned()), Position::default())
     }
 
+    macro_rules! read {
+        ($name:literal) => {{
+            fn read(component: &mut Component) -> Result<Value, Error> {
+                component.read($name)
+            }
+            read
+        }};
+    }
+
     fn shown(component: &ComponentHandle) -> Option<Value> {
         component.borrow().track();
         let flag = evaluate(component, &ident("shown")).and_then(|value| value.as_flag());
@@ -549,7 +558,7 @@ mod tests {
             bindings.push(Binding::new(
                 component,
                 text.id(),
-                BindingTarget::Text(ident("label")),
+                BindingTarget::Text(read!("label")),
             ));
             children.push(text);
         }
@@ -856,14 +865,14 @@ mod tests {
     #[test]
     fn every_binding_target_writes_its_own_state() {
         let targets = [
-            BindingTarget::Text(ident("title")),
-            BindingTarget::Checked(ident("on")),
-            BindingTarget::Selected(ident("on")),
-            BindingTarget::Disabled(ident("on")),
-            BindingTarget::Visible(ident("off")),
+            BindingTarget::Text(read!("title")),
+            BindingTarget::Checked(read!("on")),
+            BindingTarget::Selected(read!("on")),
+            BindingTarget::Disabled(read!("on")),
+            BindingTarget::Visible(read!("off")),
             BindingTarget::Offset {
-                x: Some(ident("x")),
-                y: Some(ident("y")),
+                x: Some(read!("x")),
+                y: Some(read!("y")),
             },
         ];
         let (ids, tree) = state_after(targets);

@@ -1,4 +1,4 @@
-﻿use brul_codegen::emit;
+use brul_codegen::emit;
 
 #[test]
 fn emits_static_tree() {
@@ -153,7 +153,7 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(module.contains(r#"let widget0 = brul_gui::Widget::text("");"#));
     assert!(module.contains(
-        r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(brul::ast::Expr::new(brul::ast::ExprKind::Ident("name".to_owned()), brul::ast::Position { line: 3, column: 12 }))));"#
+        r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read("name")?; Ok(value) })));"#
     ));
 }
 
@@ -176,11 +176,11 @@ window Demo (title: "demo") {
         );
     }
     assert!(module.contains(
-        r#"brul::BindingTarget::Offset { x: Some(brul::ast::Expr::new(brul::ast::ExprKind::Ident("left".to_owned()"#
+        r#"brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read("left")?; Ok(value) }"#
     ));
     assert!(
         module.contains(
-            r#"y: Some(brul::ast::Expr::new(brul::ast::ExprKind::Ident("top".to_owned()"#
+            r#"y: Some(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read("top")?; Ok(value) }"#
         )
     );
 }
@@ -452,6 +452,102 @@ fn emits_every_expression_kind() {
             "'{source}' did not emit {kind}"
         );
     }
+}
+
+fn operated(source: &str) -> String {
+    emit::operation(&brul_syntax::parser::parse_expression(source).expect("expression parses"))
+}
+
+#[test]
+fn emits_value_literals_and_reads() {
+    assert_eq!(operated("x"), "component.read(\"x\")?");
+    assert_eq!(operated("42"), "brul::Value::Number(42.0)");
+    assert_eq!(operated("\"hi\""), "brul::Value::String(\"hi\".to_owned())");
+    assert_eq!(operated("true"), "brul::Value::Bool(true)");
+    assert_eq!(operated("null"), "brul::Value::Null");
+    assert_eq!(
+        operated("a.b"),
+        "brul::eval::read_field(&(component.read(\"a\")?), \"b\")?"
+    );
+    assert_eq!(
+        operated("a[0]"),
+        "brul::eval::read_index(&(component.read(\"a\")?), &(brul::Value::Number(0.0)))?"
+    );
+}
+
+#[test]
+fn emits_value_operations() {
+    assert_eq!(
+        operated("!x"),
+        "brul::eval::apply_unary(brul::ast::UnaryOp::Not, component.read(\"x\")?)?"
+    );
+    assert_eq!(
+        operated("1 + 2"),
+        "brul::eval::apply_binary(brul::ast::BinaryOp::Add, brul::Value::Number(1.0), brul::Value::Number(2.0))?"
+    );
+    assert_eq!(
+        operated("[1, x]"),
+        "brul::Value::Array(vec![brul::Value::Number(1.0), component.read(\"x\")?])"
+    );
+    assert_eq!(
+        operated("{ a: 1 }"),
+        "brul::Value::Object(vec![(\"a\".to_owned(), brul::Value::Number(1.0))])"
+    );
+    assert_eq!(
+        operated("`v=${x}`"),
+        "brul::Value::String(brul::eval::template(vec![brul::Value::String(\"v=\".to_owned()), component.read(\"x\")?])?)"
+    );
+}
+
+#[test]
+fn emits_value_calls() {
+    assert_eq!(
+        operated("f(1)"),
+        "brul::eval::call(component, \"f\", vec![brul::Value::Number(1.0)])?"
+    );
+    assert!(
+        operated("every(100, tick)").contains("component.every(interval, \"tick\")?"),
+        "{}",
+        operated("every(100, tick)")
+    );
+    assert!(operated("every(100)").contains("brul::Error::Arity"));
+    assert!(operated("every(100, 5)").contains("expected: \"function name\""));
+    assert!(operated("a.b()").contains("Unsupported(\"method call\")"));
+    assert!(operated("a ? b : c").contains("expected: \"Bool\""));
+}
+
+#[test]
+fn emits_value_assignments() {
+    let source = operated("a.b = 1");
+    assert!(
+        source.contains("let value = brul::Value::Number(1.0);"),
+        "{source}"
+    );
+    assert!(
+        source.contains("let mut container0 = component.read(\"a\")?;"),
+        "{source}"
+    );
+    assert!(
+        source.contains("brul::eval::assign_field(&mut container0, \"b\", value.clone())?;"),
+        "{source}"
+    );
+    assert!(
+        source.contains("component.assign(\"a\", container0.clone())?;"),
+        "{source}"
+    );
+    assert!(source.ends_with("value }"), "{source}");
+
+    assert!(
+        operated("items[0] = x").contains("brul::eval::assign_index("),
+        "{}",
+        operated("items[0] = x")
+    );
+    assert!(
+        operated("x += 1").contains("brul::ast::BinaryOp::Add, component.read(\"x\")?"),
+        "{}",
+        operated("x += 1")
+    );
+    assert!(operated("x = [1, 2]").contains("brul::Value::Array"));
 }
 
 fn scratch(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {

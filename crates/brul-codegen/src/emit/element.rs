@@ -122,7 +122,7 @@ fn text_binding(out: &mut String, text: Option<Expr>, name: &str, inner: &str) {
     let _ = writeln!(
         out,
         "{inner}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Text({})));",
-        expression::expression(&expression)
+        closure(&expression)
     );
 }
 
@@ -234,7 +234,7 @@ fn parameters(out: &mut String, element: &Element, name: &str, pad: &str) -> Res
         let _ = writeln!(
             out,
             "{pad}bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
-            expression::expression(value)
+            closure(value)
         );
     }
     if x.is_some() || y.is_some() {
@@ -248,9 +248,16 @@ fn parameters(out: &mut String, element: &Element, name: &str, pad: &str) -> Res
     Ok(())
 }
 
+fn closure(value: &Expr) -> String {
+    format!(
+        "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ let value = {}; Ok(value) }}",
+        expression::operation(value)
+    )
+}
+
 fn optional_expression(value: Option<&Expr>) -> String {
     match value {
-        Some(item) => format!("Some({})", expression::expression(item)),
+        Some(item) => format!("Some({})", closure(item)),
         None => "None".to_owned(),
     }
 }

@@ -13,7 +13,7 @@ mod structure;
 mod style;
 mod view;
 
-pub use expression::expression;
+pub use expression::{expression, operation};
 pub use module::{module, module_file};
 
 pub(super) use element::items;
