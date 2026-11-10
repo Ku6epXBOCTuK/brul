@@ -385,20 +385,6 @@ impl Widget {
         self.state.visible = visible;
         self
     }
-
-    fn children(&self) -> &[Self] {
-        match &self.data {
-            WidgetData::View { children, .. } => children,
-            WidgetData::Text { .. } | WidgetData::Image(_) => &[],
-        }
-    }
-
-    fn children_mut(&mut self) -> &mut [Self] {
-        match &mut self.data {
-            WidgetData::View { children, .. } => children,
-            WidgetData::Text { .. } | WidgetData::Image(_) => &mut [],
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -496,9 +482,43 @@ impl From<TextError> for WidgetError {
     }
 }
 
+struct Node {
+    id: WidgetId,
+    data: NodeData,
+    layout: LayoutStyle,
+    styles: StyleSet,
+    state: WidgetState,
+    offset: Option<Offset>,
+    draggable: bool,
+    children: Vec<u32>,
+}
+
+enum NodeData {
+    View {
+        direction: Direction,
+    },
+    Text {
+        content: String,
+        styles: Box<TextStyleSet>,
+    },
+    Image(Rc<Texture>),
+}
+
+impl Node {
+    fn kind(&self) -> WidgetKind {
+        match &self.data {
+            NodeData::View { .. } => WidgetKind::View,
+            NodeData::Text { .. } => WidgetKind::Text,
+            NodeData::Image(_) => WidgetKind::Image,
+        }
+    }
+}
+
 pub struct WidgetTree {
-    root: Widget,
-    states: HashMap<WidgetId, WidgetState>,
+    nodes: Vec<Node>,
+    index: HashMap<WidgetId, u32>,
+    free: Vec<u32>,
+    root: u32,
     geometry: Option<Geometry>,
     snapshot: Option<WidgetSnapshot>,
     hovered: Vec<WidgetId>,
@@ -571,11 +591,11 @@ impl TextVariants {
 
 impl WidgetTree {
     pub fn new(root: Widget) -> Self {
-        let mut states = HashMap::new();
-        collect_states(&root, &mut states);
-        Self {
-            root,
-            states,
+        let mut tree = Self {
+            nodes: Vec::new(),
+            index: HashMap::new(),
+            free: Vec::new(),
+            root: 0,
             geometry: None,
             snapshot: None,
             hovered: Vec::new(),
@@ -583,12 +603,116 @@ impl WidgetTree {
             dirty: Vec::new(),
             full_dirty: true,
             layout_dirty: true,
+        };
+        tree.root = tree.insert(root);
+        tree
+    }
+
+    fn insert(&mut self, widget: Widget) -> u32 {
+        let Widget {
+            id,
+            data,
+            layout,
+            styles,
+            state,
+            offset,
+            draggable,
+        } = widget;
+        let (data, children) = match data {
+            WidgetData::View {
+                direction,
+                children,
+            } => (NodeData::View { direction }, children),
+            WidgetData::Text { content, styles } => {
+                (NodeData::Text { content, styles }, Vec::new())
+            }
+            WidgetData::Image(texture) => (NodeData::Image(texture), Vec::new()),
+        };
+        let mut slots = Vec::with_capacity(children.len());
+        for child in children {
+            slots.push(self.insert(child));
         }
+        let node = Node {
+            id,
+            data,
+            layout,
+            styles,
+            state,
+            offset,
+            draggable,
+            children: slots,
+        };
+        let slot = match self.free.pop() {
+            Some(slot) => {
+                self.nodes[slot as usize] = node;
+                slot
+            }
+            None => {
+                self.nodes.push(node);
+                (self.nodes.len() - 1) as u32
+            }
+        };
+        self.index.insert(id, slot);
+        slot
+    }
+
+    fn extract(&mut self, slot: u32) -> Widget {
+        let children = std::mem::take(&mut self.nodes[slot as usize].children);
+        let children = children
+            .into_iter()
+            .map(|child| self.extract(child))
+            .collect();
+        let node = &mut self.nodes[slot as usize];
+        let data = match &mut node.data {
+            NodeData::View { direction } => WidgetData::View {
+                direction: *direction,
+                children,
+            },
+            NodeData::Text { content, styles } => WidgetData::Text {
+                content: std::mem::take(content),
+                styles: Box::new(std::mem::take(&mut **styles)),
+            },
+            NodeData::Image(texture) => WidgetData::Image(Rc::clone(texture)),
+        };
+        let widget = Widget {
+            id: node.id,
+            data,
+            layout: node.layout,
+            styles: node.styles.clone(),
+            state: node.state,
+            offset: node.offset,
+            draggable: node.draggable,
+        };
+        self.index.remove(&widget.id);
+        self.free.push(slot);
+        widget
+    }
+
+    fn remove(&mut self, slot: u32) {
+        let children = std::mem::take(&mut self.nodes[slot as usize].children);
+        for child in children {
+            self.remove(child);
+        }
+        self.index.remove(&self.nodes[slot as usize].id);
+        self.free.push(slot);
+    }
+
+    fn node(&self, id: WidgetId) -> Option<&Node> {
+        self.index.get(&id).map(|slot| &self.nodes[*slot as usize])
+    }
+
+    fn node_mut(&mut self, id: WidgetId) -> Option<&mut Node> {
+        let slot = *self.index.get(&id)?;
+        Some(&mut self.nodes[slot as usize])
     }
 
     pub fn replace_root(&mut self, root: Widget) {
-        self.root = root;
-        self.refresh();
+        self.nodes.clear();
+        self.index.clear();
+        self.free.clear();
+        self.clear_interaction();
+        self.root = self.insert(root);
+        self.invalidate();
     }
 
     pub fn replace_children(
@@ -598,63 +722,68 @@ impl WidgetTree {
         count: usize,
         children: Vec<Widget>,
     ) -> bool {
-        let Some(widget) = find_widget_mut(&mut self.root, parent) else {
+        let Some(slot) = self.index.get(&parent).copied() else {
             return false;
         };
-        let WidgetData::View {
-            children: current, ..
-        } = &mut widget.data
-        else {
-            return false;
-        };
-        if start > current.len() || count > current.len() - start {
+        if !matches!(self.nodes[slot as usize].data, NodeData::View { .. }) {
             return false;
         }
-        current.splice(start..start + count, children);
-        self.refresh();
+        let current = self.nodes[slot as usize].children.len();
+        if start > current || count > current - start {
+            return false;
+        }
+        self.clear_interaction();
+        let removed: Vec<u32> = self.nodes[slot as usize]
+            .children
+            .splice(start..start + count, [])
+            .collect();
+        for child in removed {
+            self.remove(child);
+        }
+        let mut inserted = Vec::with_capacity(children.len());
+        for child in children {
+            inserted.push(self.insert(child));
+        }
+        self.nodes[slot as usize]
+            .children
+            .splice(start..start, inserted);
+        self.invalidate();
         true
     }
 
     pub fn replace_all_children(&mut self, parent: WidgetId, children: Vec<Widget>) -> bool {
-        let count = {
-            let Some(widget) = find_widget_mut(&mut self.root, parent) else {
-                return false;
-            };
-            let WidgetData::View { children, .. } = &widget.data else {
-                return false;
-            };
-            children.len()
+        let Some(slot) = self.index.get(&parent).copied() else {
+            return false;
         };
+        if !matches!(self.nodes[slot as usize].data, NodeData::View { .. }) {
+            return false;
+        }
+        let count = self.nodes[slot as usize].children.len();
         self.replace_children(parent, 0, count, children)
     }
 
     pub fn take_children(&mut self, parent: WidgetId) -> Option<Vec<Widget>> {
-        let children = {
-            let widget = find_widget_mut(&mut self.root, parent)?;
-            let WidgetData::View { children, .. } = &mut widget.data else {
-                return None;
-            };
-            std::mem::take(children)
-        };
-        self.refresh();
+        let slot = *self.index.get(&parent)?;
+        if !matches!(self.nodes[slot as usize].data, NodeData::View { .. }) {
+            return None;
+        }
+        self.clear_interaction();
+        let children = std::mem::take(&mut self.nodes[slot as usize].children);
+        let children = children
+            .into_iter()
+            .map(|child| self.extract(child))
+            .collect();
+        self.invalidate();
         Some(children)
     }
 
     pub fn contains(&self, id: WidgetId) -> bool {
-        fn contains(widget: &Widget, id: WidgetId) -> bool {
-            widget.id == id || widget.children().iter().any(|child| contains(child, id))
-        }
-        contains(&self.root, id)
+        self.index.contains_key(&id)
     }
 
-    fn refresh(&mut self) {
-        let mut states = HashMap::new();
-        collect_states(&self.root, &mut states);
-        self.states = states;
+    fn invalidate(&mut self) {
         self.geometry = None;
         self.snapshot = None;
-        self.hovered.clear();
-        self.pressed.clear();
         self.dirty.clear();
         self.full_dirty = true;
         self.layout_dirty = true;
@@ -671,7 +800,14 @@ impl WidgetTree {
         }
 
         let mut texts = HashMap::new();
-        let node = build_layout(&self.root, engine, Some(viewport.width), scale, &mut texts)?;
+        let node = build_layout(
+            &self.nodes,
+            self.root,
+            engine,
+            Some(viewport.width),
+            scale,
+            &mut texts,
+        )?;
         let placed = layout::layout(&node, viewport)?;
         let changed = self
             .geometry
@@ -712,7 +848,7 @@ impl WidgetTree {
     pub fn snapshot(&mut self) -> Result<&WidgetSnapshot, WidgetError> {
         if self.snapshot.is_none() {
             let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
-            let snapshot = build_snapshot(&self.root, geometry, &self.states);
+            let snapshot = build_snapshot(&self.nodes, self.root, geometry);
             self.snapshot = Some(snapshot);
         }
         Ok(self.snapshot.as_ref().expect("snapshot built"))
@@ -735,7 +871,7 @@ impl WidgetTree {
     }
 
     pub fn state(&self, id: WidgetId) -> Option<WidgetState> {
-        self.states.get(&id).copied()
+        Some(self.node(id)?.state)
     }
 
     pub fn set_checked(&mut self, id: WidgetId, checked: bool) -> bool {
@@ -760,12 +896,12 @@ impl WidgetTree {
     }
 
     pub fn set_text(&mut self, id: WidgetId, content: String) -> bool {
-        let Some(widget) = find_widget_mut(&mut self.root, id) else {
+        let Some(node) = self.node_mut(id) else {
             return false;
         };
-        let WidgetData::Text {
+        let NodeData::Text {
             content: current, ..
-        } = &mut widget.data
+        } = &mut node.data
         else {
             return false;
         };
@@ -778,14 +914,14 @@ impl WidgetTree {
     }
 
     pub fn set_offset(&mut self, id: WidgetId, x: i32, y: i32) -> bool {
-        let Some(widget) = find_widget_mut(&mut self.root, id) else {
+        let Some(node) = self.node_mut(id) else {
             return false;
         };
         let offset = Offset { x, y };
-        if widget.offset == Some(offset) {
+        if node.offset == Some(offset) {
             return false;
         }
-        widget.offset = Some(offset);
+        node.offset = Some(offset);
         self.invalidate_layout();
         true
     }
@@ -799,9 +935,9 @@ impl WidgetTree {
 
     pub fn toggle_checked(&mut self, id: WidgetId) -> Option<bool> {
         let checked = {
-            let state = self.states.get_mut(&id)?;
-            state.checked = !state.checked;
-            state.checked
+            let node = self.node_mut(id)?;
+            node.state.checked = !node.state.checked;
+            node.state.checked
         };
         self.snapshot = None;
         self.mark_dirty(id);
@@ -822,14 +958,14 @@ impl WidgetTree {
         let mut events = Vec::new();
         let leaving: Vec<WidgetId> = self.hovered[common..].iter().rev().copied().collect();
         for id in leaving {
-            if let Some(state) = self.states.get_mut(&id) {
+            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
                 state.hovered = false;
             }
             self.mark_dirty(id);
             events.push(WidgetEvent::PointerLeave(id));
         }
         for &id in &path[common..] {
-            if let Some(state) = self.states.get_mut(&id) {
+            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
                 state.hovered = true;
             }
             self.mark_dirty(id);
@@ -846,12 +982,12 @@ impl WidgetTree {
 
         let mut events = Vec::with_capacity(path.len());
         for &id in path.iter().rev() {
-            if let Some(state) = self.states.get_mut(&id) {
+            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
                 state.pressed = true;
             }
             self.mark_dirty(id);
             events.push(WidgetEvent::Press(id));
-            if is_draggable(&self.root, id) {
+            if self.node(id).is_some_and(|node| node.draggable) {
                 events.push(WidgetEvent::Drag(id));
             }
         }
@@ -868,7 +1004,7 @@ impl WidgetTree {
 
         let mut events = Vec::new();
         for &id in pressed.iter().rev() {
-            if let Some(state) = self.states.get_mut(&id) {
+            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
                 state.pressed = false;
             }
             self.mark_dirty(id);
@@ -891,14 +1027,14 @@ impl WidgetTree {
         let mut events = Vec::with_capacity(hovered.len() + pressed.len());
 
         for &id in hovered.iter().rev() {
-            if let Some(state) = self.states.get_mut(&id) {
+            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
                 state.hovered = false;
             }
             self.mark_dirty(id);
             events.push(WidgetEvent::PointerLeave(id));
         }
         for &id in pressed.iter().rev() {
-            if let Some(state) = self.states.get_mut(&id) {
+            if let Some(state) = self.node_mut(id).map(|node| &mut node.state) {
                 state.pressed = false;
             }
             self.mark_dirty(id);
@@ -912,7 +1048,7 @@ impl WidgetTree {
 
     fn update_state(&mut self, id: WidgetId, update: impl FnOnce(&mut WidgetState)) -> bool {
         let changed = {
-            let Some(state) = self.states.get_mut(&id) else {
+            let Some(state) = self.node_mut(id).map(|node| &mut node.state) else {
                 return false;
             };
             let before = *state;
@@ -934,25 +1070,25 @@ impl WidgetTree {
     }
 
     fn clear_interaction(&mut self) {
-        for &id in &self.hovered {
-            if let Some(state) = self.states.get_mut(&id) {
-                state.hovered = false;
+        let hovered = std::mem::take(&mut self.hovered);
+        let pressed = std::mem::take(&mut self.pressed);
+        for id in hovered {
+            if let Some(node) = self.node_mut(id) {
+                node.state.hovered = false;
             }
         }
-        for &id in &self.pressed {
-            if let Some(state) = self.states.get_mut(&id) {
-                state.pressed = false;
+        for id in pressed {
+            if let Some(node) = self.node_mut(id) {
+                node.state.pressed = false;
             }
         }
-        self.hovered.clear();
-        self.pressed.clear();
     }
 
     fn set_pressed(&mut self, pressed: bool) {
         let had_pressed = !self.pressed.is_empty();
         let ids = std::mem::take(&mut self.pressed);
         for id in &ids {
-            if let Some(state) = self.states.get_mut(id) {
+            if let Some(state) = self.node_mut(*id).map(|node| &mut node.state) {
                 state.pressed = pressed;
             }
             self.mark_dirty(*id);
@@ -965,14 +1101,14 @@ impl WidgetTree {
     fn hit_path(&self, x: i32, y: i32) -> Result<Vec<WidgetId>, WidgetError> {
         let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
         let mut path = Vec::new();
-        collect_hit(&self.root, &geometry.layout, &self.states, x, y, &mut path);
+        collect_hit(&self.nodes, self.root, &geometry.layout, x, y, &mut path);
         Ok(path)
     }
 
     fn active_path(&self, path: &[WidgetId]) -> Vec<WidgetId> {
         let mut active = Vec::with_capacity(path.len());
         for &id in path {
-            let Some(state) = self.states.get(&id) else {
+            let Some(state) = self.node(id).map(|node| &node.state) else {
                 break;
             };
             if state.disabled || !state.visible {
@@ -984,62 +1120,39 @@ impl WidgetTree {
     }
 }
 
-fn collect_states(widget: &Widget, states: &mut HashMap<WidgetId, WidgetState>) {
-    states.insert(widget.id, widget.state);
-    for child in widget.children() {
-        collect_states(child, states);
-    }
-}
-
-fn find_widget_mut(widget: &mut Widget, id: WidgetId) -> Option<&mut Widget> {
-    if widget.id == id {
-        return Some(widget);
-    }
-    for child in widget.children_mut() {
-        if let Some(found) = find_widget_mut(child, id) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-fn is_draggable(widget: &Widget, id: WidgetId) -> bool {
-    if widget.id == id {
-        return widget.draggable;
-    }
-    widget
-        .children()
-        .iter()
-        .any(|child| is_draggable(child, id))
-}
-
 fn build_layout(
-    widget: &Widget,
+    tree: &[Node],
+    slot: u32,
     engine: &mut TextEngine,
     available_width: Option<u32>,
     scale: f32,
     texts: &mut HashMap<WidgetId, TextVariants>,
 ) -> Result<LayoutNode, WidgetError> {
-    let resolved = layout::resolve(widget.layout.width, available_width)?;
+    let node = &tree[slot as usize];
+    let resolved = layout::resolve(node.layout.width, available_width)?;
     let content_width = resolved
-        .map(|width| width.saturating_sub(layout::inset_x(&widget.layout)))
+        .map(|width| width.saturating_sub(layout::inset_x(&node.layout)))
         .or(available_width);
 
-    let node = match &widget.data {
-        WidgetData::View {
-            direction,
-            children,
-        } => {
-            let mut nodes = Vec::with_capacity(children.len());
-            for child in children {
-                nodes.push(build_layout(child, engine, content_width, scale, texts)?);
+    let layout_node = match &node.data {
+        NodeData::View { direction } => {
+            let mut children = Vec::with_capacity(node.children.len());
+            for &child in &node.children {
+                children.push(build_layout(
+                    tree,
+                    child,
+                    engine,
+                    content_width,
+                    scale,
+                    texts,
+                )?);
             }
             match direction {
-                Direction::Row => LayoutNode::row(nodes),
-                Direction::Column => LayoutNode::column(nodes),
+                Direction::Row => LayoutNode::row(children),
+                Direction::Column => LayoutNode::column(children),
             }
         }
-        WidgetData::Text { content, styles } => {
+        NodeData::Text { content, styles } => {
             let max_width = content_width.map(|width| width as f32 / scale);
             let mut variants =
                 TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
@@ -1053,26 +1166,22 @@ fn build_layout(
                 variants = variants.with(state, engine.layout(content, style, max_width, scale)?);
             }
             let size = variants.base.size;
-            texts.insert(widget.id, variants);
+            texts.insert(node.id, variants);
             LayoutNode::leaf(size.width, size.height)
         }
-        WidgetData::Image(texture) => LayoutNode::leaf(texture.width(), texture.height()),
+        NodeData::Image(texture) => LayoutNode::leaf(texture.width(), texture.height()),
     };
 
-    let node = node.with_style(widget.layout);
-    Ok(match widget.offset {
-        Some(offset) => node.with_offset(offset.x, offset.y),
-        None => node,
+    let layout_node = layout_node.with_style(node.layout);
+    Ok(match node.offset {
+        Some(offset) => layout_node.with_offset(offset.x, offset.y),
+        None => layout_node,
     })
 }
 
-fn build_snapshot(
-    root: &Widget,
-    geometry: &Geometry,
-    states: &HashMap<WidgetId, WidgetState>,
-) -> WidgetSnapshot {
+fn build_snapshot(tree: &[Node], root: u32, geometry: &Geometry) -> WidgetSnapshot {
     let mut nodes = Vec::new();
-    snapshot_widget(root, &geometry.layout, states, &geometry.texts, &mut nodes);
+    snapshot_widget(tree, root, &geometry.layout, &geometry.texts, &mut nodes);
     WidgetSnapshot {
         size: Size {
             width: geometry.layout.width,
@@ -1083,86 +1192,84 @@ fn build_snapshot(
 }
 
 fn snapshot_widget(
-    widget: &Widget,
+    tree: &[Node],
+    slot: u32,
     layout_box: &LayoutBox,
-    states: &HashMap<WidgetId, WidgetState>,
     texts: &HashMap<WidgetId, TextVariants>,
     nodes: &mut Vec<WidgetSnapshotNode>,
 ) {
-    let state = *states.get(&widget.id).expect("widget state");
-    if !state.visible {
+    let node = &tree[slot as usize];
+    if !node.state.visible {
         return;
     }
 
-    let style = widget.styles.resolve(state);
+    let style = node.styles.resolve(node.state);
     let content_x = layout_box.x.saturating_add(
-        widget
-            .layout
+        node.layout
             .border_width
-            .saturating_add(widget.layout.padding.left) as i32,
+            .saturating_add(node.layout.padding.left) as i32,
     );
     let content_y = layout_box.y.saturating_add(
-        widget
-            .layout
+        node.layout
             .border_width
-            .saturating_add(widget.layout.padding.top) as i32,
+            .saturating_add(node.layout.padding.top) as i32,
     );
     let content_width = layout_box
         .width
-        .saturating_sub(layout::inset_x(&widget.layout));
+        .saturating_sub(layout::inset_x(&node.layout));
     let content_height = layout_box
         .height
-        .saturating_sub(layout::inset_y(&widget.layout));
-    let text = match &widget.data {
-        WidgetData::Text { .. } => texts
-            .get(&widget.id)
-            .map(|variants| variants.resolve(state)),
+        .saturating_sub(layout::inset_y(&node.layout));
+    let text = match &node.data {
+        NodeData::Text { .. } => texts
+            .get(&node.id)
+            .map(|variants| variants.resolve(node.state)),
         _ => None,
     };
-    let texture = match &widget.data {
-        WidgetData::Image(texture) => Some(Rc::clone(texture)),
+    let texture = match &node.data {
+        NodeData::Image(texture) => Some(Rc::clone(texture)),
         _ => None,
     };
 
     nodes.push(WidgetSnapshotNode {
-        id: widget.id,
-        kind: widget.kind(),
+        id: node.id,
+        kind: node.kind(),
         x: layout_box.x,
         y: layout_box.y,
         width: layout_box.width,
         height: layout_box.height,
-        border_width: widget.layout.border_width,
+        border_width: node.layout.border_width,
         content_x,
         content_y,
         content_width,
         content_height,
-        state,
+        state: node.state,
         style,
         text,
         texture,
     });
 
-    for (child, child_box) in widget.children().iter().zip(&layout_box.children) {
-        snapshot_widget(child, child_box, states, texts, nodes);
+    for (&child, child_box) in node.children.iter().zip(&layout_box.children) {
+        snapshot_widget(tree, child, child_box, texts, nodes);
     }
 }
 
 fn collect_hit(
-    widget: &Widget,
+    tree: &[Node],
+    slot: u32,
     layout_box: &LayoutBox,
-    states: &HashMap<WidgetId, WidgetState>,
     x: i32,
     y: i32,
     path: &mut Vec<WidgetId>,
 ) -> bool {
-    let state = states.get(&widget.id).expect("widget state");
-    if !state.visible || !contains(layout_box, x, y) {
+    let node = &tree[slot as usize];
+    if !node.state.visible || !contains(layout_box, x, y) {
         return false;
     }
 
-    path.push(widget.id);
-    for (child, child_box) in widget.children().iter().zip(&layout_box.children).rev() {
-        if collect_hit(child, child_box, states, x, y, path) {
+    path.push(node.id);
+    for (&child, child_box) in node.children.iter().zip(&layout_box.children).rev() {
+        if collect_hit(tree, child, child_box, x, y, path) {
             return true;
         }
     }
