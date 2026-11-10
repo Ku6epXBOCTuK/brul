@@ -5,7 +5,7 @@ use brul_syntax::markup::{EachBlock, IfBlock};
 
 use super::Emit;
 use super::Frame;
-use super::expression;
+use super::expression::operation;
 use super::items;
 
 pub(super) fn structure_if(
@@ -39,6 +39,9 @@ pub(super) fn structure_each(
     *emit.next_structure += 1;
     emit.functions
         .push(value_function(index, &block.collection));
+    if let Some(key) = &block.key {
+        emit.functions.push(key_function(index, key));
+    }
     emit.functions.push(dispatcher(index, emit));
     let themes = themes(emit);
     for (position, theme) in themes.iter().enumerate() {
@@ -51,11 +54,23 @@ pub(super) fn structure_each(
 
 fn value_function(index: usize, value: &brul_syntax::ast::Expr) -> String {
     format!(
-        "fn structure{index}_value(component: &brul::ComponentHandle) -> Option<brul::Value> {{
-    brul::evaluate(component, &{})
+        "fn structure{index}_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
+    let value = {};
+    Ok(value)
 }}
 ",
-        expression(value)
+        operation(value)
+    )
+}
+
+fn key_function(index: usize, key: &brul_syntax::ast::Expr) -> String {
+    format!(
+        "fn structure{index}_key(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
+    let value = {};
+    Ok(value)
+}}
+",
+        operation(key)
     )
 }
 
@@ -129,23 +144,20 @@ fn rebuild_arm(
     let mut out = arm_header(index, position);
     let _ = writeln!(
         out,
-        "    let children = match brul::evaluate(component, &{}) {{",
-        expression(&block.condition)
+        "    let condition = structure{index}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let children = match condition {{"
     );
-    out.push_str("        Some(brul::Value::Bool(true)) => vec![\n");
+    out.push_str("        brul::Value::Bool(true) => vec![\n");
     let mut counter = 0;
     items(&mut out, &block.then_block, emit, arm, &mut counter)?;
     out.push_str("        ],\n");
-    out.push_str("        Some(brul::Value::Bool(false)) => vec![\n");
+    out.push_str("        brul::Value::Bool(false) => vec![\n");
     if let Some(else_block) = &block.else_block {
         items(&mut out, else_block, emit, arm, &mut counter)?;
     }
     out.push_str("        ],\n");
     out.push_str(
-        "        Some(other) => return Err(format!(\"if condition expects Bool, got {}\", other.type_name())),\n",
+        "        other => return Err(format!(\"if condition expects Bool, got {}\", other.type_name())),\n    };\n",
     );
-    out.push_str("        None => return Err(\"if condition failed to evaluate\".to_owned()),\n");
-    out.push_str("    };\n");
     widget(&mut out, arm);
     Ok(out)
 }
@@ -163,15 +175,12 @@ fn each_arm(
     out.push_str("    let mut children = Vec::new();\n");
     let _ = writeln!(
         out,
-        "    let items = match brul::evaluate(component, &{}) {{",
-        expression(&block.collection)
+        "    let collection = structure{index}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let items = match collection {{"
     );
-    out.push_str("        Some(brul::Value::Array(items)) => items,\n");
+    out.push_str("        brul::Value::Array(items) => items,\n");
     out.push_str(
-        "        Some(other) => return Err(format!(\"each expects Array, got {}\", other.type_name())),\n",
+        "        other => return Err(format!(\"each expects Array, got {}\", other.type_name())),\n    };\n",
     );
-    out.push_str("        None => return Err(\"each failed to evaluate\".to_owned()),\n");
-    out.push_str("    };\n");
     out.push_str("    for (position, item) in items.into_iter().enumerate() {\n");
     out.push_str("        component.borrow_mut().push_build_scope(&[\n");
     let _ = writeln!(
@@ -187,11 +196,10 @@ fn each_arm(
     }
     out.push_str("        ]);\n");
     match &block.key {
-        Some(key) => {
+        Some(_) => {
             let _ = writeln!(
                 out,
-                "        let key = brul::evaluate(component, &{});",
-                expression(key)
+                "        let key = structure{index}_key(&mut component.borrow_mut()).ok();"
             );
         }
         None => out.push_str("        let key = None;\n"),

@@ -127,7 +127,8 @@ fn structure_values_read_the_declared_seeds() {
         .iter()
         .find(|structure| structure.each)
         .expect("each structure");
-    let Some(Value::Array(items)) = (each.value)(&component) else {
+    let value = (each.value)(&mut component.borrow_mut()).expect("each value");
+    let Value::Array(items) = value else {
         panic!("each value is not an array");
     };
     assert_eq!(items.len(), 2);

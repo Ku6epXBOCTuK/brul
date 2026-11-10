@@ -239,7 +239,7 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "fn structure0_value(component: &brul::ComponentHandle) -> Option<brul::Value> {"
+        "fn structure0_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
         "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {"
@@ -249,8 +249,8 @@ window Demo (title: "demo") {
             "fn structure0_rebuild_0(component: &brul::ComponentHandle) -> brul::Rebuilt {"
         )
     );
-    assert!(module.contains("Some(brul::Value::Bool(true)) => vec!["));
-    assert!(module.contains("Some(brul::Value::Bool(false)) => vec!["));
+    assert!(module.contains("brul::Value::Bool(true) => vec!["));
+    assert!(module.contains("brul::Value::Bool(false) => vec!["));
     assert!(module.contains(
         "structures.push(brul::Structure { parent: widget1.id(), each: false, value: structure0_value, rebuild: structure0_rebuild });"
     ));
@@ -269,7 +269,7 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "fn structure0_value(component: &brul::ComponentHandle) -> Option<brul::Value> {"
+        "fn structure0_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(
         module.contains(
@@ -281,7 +281,7 @@ window Demo (title: "demo") {
     assert!(module.contains(
         r#"brul::Variable { name: "position".to_owned(), value: brul::Value::Number(position as f64) },"#
     ));
-    assert!(module.contains("let key = brul::evaluate(component, &"));
+    assert!(module.contains("let key = structure0_key(&mut component.borrow_mut()).ok();"));
     assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count });"));
     assert!(module.contains("each: true, value: structure0_value"));
 }

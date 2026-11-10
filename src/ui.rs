@@ -193,7 +193,7 @@ impl Ui {
             scope.run(|| {
                 Effect::new(move || {
                     component.borrow().track();
-                    let value = (structure.value)(&component);
+                    let value = (structure.value)(&mut component.borrow_mut()).ok();
                     if !initialized.replace(true) {
                         *last.borrow_mut() = value;
                         return;
@@ -434,10 +434,10 @@ mod tests {
         }};
     }
 
-    fn shown(component: &ComponentHandle) -> Option<Value> {
-        component.borrow().track();
-        let flag = evaluate(component, &ident("shown")).and_then(|value| value.as_flag());
-        Some(Value::Bool(flag.unwrap_or(false)))
+    fn shown(component: &mut Component) -> Result<Value, Error> {
+        component.track();
+        let flag = component.read("shown")?.as_flag();
+        Ok(Value::Bool(flag.unwrap_or(false)))
     }
 
     fn rebuild_shown(
@@ -550,10 +550,11 @@ mod tests {
         }
         let mut children = Vec::new();
         let mut bindings = Vec::new();
-        if shown(component)
+        let visible = shown(&mut component.borrow_mut())
+            .ok()
             .and_then(|value| value.as_flag())
-            .unwrap_or(false)
-        {
+            .unwrap_or(false);
+        if visible {
             let text = Widget::text("bound");
             bindings.push(Binding::new(
                 component,
