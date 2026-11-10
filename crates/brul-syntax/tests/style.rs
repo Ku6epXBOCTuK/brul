@@ -92,7 +92,10 @@ fn properties_parse_with_values_and_order() {
             "item",
             vec![
                 property("width", Value::Percent(100.0)),
-                property("padding", Value::Px(4.0)),
+                property("padding-top", Value::Px(4.0)),
+                property("padding-right", Value::Px(4.0)),
+                property("padding-bottom", Value::Px(4.0)),
+                property("padding-left", Value::Px(4.0)),
                 property("opacity", Value::Number(0.5)),
                 property("font-family", Value::String("Segoe UI".to_owned())),
                 property(
@@ -104,6 +107,29 @@ fn properties_parse_with_values_and_order() {
             ],
         )])
     );
+}
+
+#[test]
+fn padding_takes_one_to_four_values_in_css_order() {
+    let source = ".a { padding: 1px 2px 3px; }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "a",
+            vec![
+                property("padding-top", Value::Px(1.0)),
+                property("padding-right", Value::Px(2.0)),
+                property("padding-bottom", Value::Px(3.0)),
+                property("padding-left", Value::Px(2.0)),
+            ],
+        )])
+    );
+}
+
+#[test]
+fn padding_rejects_a_fifth_value() {
+    let error = parse_file(".a { padding: 1px 2px 3px 4px 5px; }").unwrap_err();
+    assert_eq!(error.message, "expected at most 4 values for 'padding'");
 }
 
 #[test]

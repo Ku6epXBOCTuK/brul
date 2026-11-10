@@ -76,7 +76,6 @@ fn apply(
         Kind::Width => layout.width = dimension(value, kind)?,
         Kind::Height => layout.height = dimension(value, kind)?,
         Kind::Stretch => layout.stretch = number(value, kind)? as f32,
-        Kind::Padding => layout.padding = Padding::all(px_value(value, kind)?),
         Kind::PaddingSide(side) => {
             *edge(&mut layout.padding, side) = px_value(value, kind)?;
         }

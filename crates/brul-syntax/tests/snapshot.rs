@@ -15,7 +15,10 @@ fn classes_merge_left_to_right() {
 
     assert_eq!(snapshot.get(Kind::Width), Some(&Value::Px(8.0)));
     assert_eq!(snapshot.get(Kind::Color), Some(&gray(0x11)));
-    assert_eq!(snapshot.get(Kind::Padding), Some(&Value::Px(2.0)));
+    assert_eq!(
+        snapshot.get(Kind::PaddingSide(brul_syntax::style::Side::Left)),
+        Some(&Value::Px(2.0))
+    );
 }
 
 #[test]

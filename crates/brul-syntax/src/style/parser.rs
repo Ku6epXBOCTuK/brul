@@ -1,9 +1,10 @@
 use crate::cursor::Cursor;
 use crate::error::Error;
-use crate::style::ast::{ClassRule, Property, State, Stylesheet, Theme, ThemeEntry, Value};
+use crate::style::ast::{ClassRule, Property, State, Stylesheet, Theme, ThemeEntry};
 use crate::style::properties::Kind;
+use crate::style::shorthand;
 use crate::style::validate::{self, PropertyAt, RuleAt, ThemeAt, ThemeKeyAt};
-use crate::style::value::Type;
+use crate::style::value::{self, Type};
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser::new(source);
@@ -70,9 +71,10 @@ impl<'a> Parser<'a> {
                 }
                 None => return Err(self.cursor.error("expected '}'")),
                 _ => {
-                    let (property, at) = self.property()?;
-                    properties.push(property);
-                    positions.push(at);
+                    for (property, at) in self.property()? {
+                        properties.push(property);
+                        positions.push(at);
+                    }
                 }
             }
         }
@@ -124,9 +126,19 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn property(&mut self) -> Result<(Property, PropertyAt), Error> {
+    fn property(&mut self) -> Result<Vec<(Property, PropertyAt)>, Error> {
         let at = self.cursor.value_start();
         let name = self.cursor.ident()?;
+        if let Some(shorthand) = shorthand::get(&name) {
+            self.cursor.expect(':')?;
+            let values = (shorthand.parse)(&mut self.cursor, &name)?;
+            self.cursor.expect(';')?;
+            return Ok(shorthand
+                .properties(values)
+                .into_iter()
+                .map(|property| (property, PropertyAt { at }))
+                .collect());
+        }
         let kind = Kind::from_name(&name).ok_or_else(|| {
             Error::at(
                 self.cursor.source(),
@@ -136,14 +148,14 @@ impl<'a> Parser<'a> {
         })?;
         let spec = kind.spec();
         self.cursor.expect(':')?;
-        let value = if spec.theme_type().is_some() && self.cursor.eat_keyword("theme") {
-            self.cursor.expect('.')?;
-            Value::ThemeRef(self.cursor.ident()?)
-        } else {
-            spec.ty.parse(&mut self.cursor, &name)?
-        };
+        let value = value::value(
+            &mut self.cursor,
+            spec.theme_type().is_some(),
+            spec.ty,
+            &name,
+        )?;
         self.cursor.expect(';')?;
-        Ok((Property { kind, value }, PropertyAt { at }))
+        Ok(vec![(Property { kind, value }, PropertyAt { at })])
     }
 
     fn theme_property(&mut self) -> Result<(ThemeEntry, ThemeKeyAt), Error> {

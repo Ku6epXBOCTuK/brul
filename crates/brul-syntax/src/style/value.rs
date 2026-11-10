@@ -17,6 +17,14 @@ pub enum Type {
     NumberIn(&'static [f64]),
 }
 
+pub fn value(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<Value, Error> {
+    if theme && cursor.eat_keyword("theme") {
+        cursor.expect('.')?;
+        return Ok(Value::ThemeRef(cursor.ident()?));
+    }
+    ty.parse(cursor, name)
+}
+
 impl Type {
     pub fn parse(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
         match self {

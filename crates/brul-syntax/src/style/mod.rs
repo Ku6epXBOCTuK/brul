@@ -2,6 +2,7 @@ mod ast;
 mod parser;
 mod properties;
 mod rule;
+mod shorthand;
 mod snapshot;
 mod validate;
 mod value;

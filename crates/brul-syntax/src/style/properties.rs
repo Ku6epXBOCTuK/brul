@@ -14,7 +14,6 @@ pub enum Kind {
     Width,
     Height,
     Stretch,
-    Padding,
     PaddingSide(Side),
     Spacing,
     BorderWidth,
@@ -96,7 +95,6 @@ pub static SPECS: &[Spec] = &[
     Spec::new(Kind::Width, "width", Type::Length, Forbidden),
     Spec::new(Kind::Height, "height", Type::Length, Forbidden),
     Spec::new(Kind::Stretch, "stretch", Type::Number, Forbidden),
-    Spec::new(Kind::Padding, "padding", Type::Px, Forbidden),
     Spec::new(
         Kind::PaddingSide(Side::Left),
         "padding-left",

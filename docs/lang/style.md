@@ -49,32 +49,37 @@
 
 ## Свойства MVP
 
-| Свойство                               | Тип                               | Дефолт                  | Меняется по состоянию?          |
-| -------------------------------------- | --------------------------------- | ----------------------- | ------------------------------- |
-| `width`, `height`                      | px \| %                           | auto (от детей/лейаута) | ❌ геометрия                    |
-| `stretch`                              | число                             | 0                       | ❌ геометрия                    |
-| `padding` (+ `-left/right/top/bottom`) | px                                | 0                       | ❌ геометрия                    |
-| `spacing`                              | px                                | 0 (только Row/Column)   | ❌ геометрия                    |
-| `justify-content`                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
-| `align-items`                          | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
-| `background`                           | Color \| Gradient                 | transparent             | ✅                              |
-| `border` (шорткат: ширина+цвет)        | px + (Color \| theme.*)           | 0, transparent          | ✅ (цвет)                       |
-| `border-width`                         | px                                | 0                       | ❌ геометрия                    |
-| `border-color`                         | Color                             | transparent             | ✅                              |
-| `radius`                               | px                                | 0                       | ❌ геометрия                    |
-| `color`                                | Color                             | theme-зависимый         | ✅                              |
-| `font-size`                            | px                                | 14                      | ❌ (размер текста — компоновка) |
-| `font-family`                          | String                            | наследуется от окна     | ❌                              |
-| `text-align`                           | left\|center\|right               | left                    | ✅                              |
-| `vertical-align`                       | top\|center\|bottom               | top                     | ✅                              |
-| `font-weight`                          | число (400\|500\|600\|700)        | 400                     | ⚠️ только `Text`, см. ниже      |
-| `tint`                                 | Color                             | — (без окраски)         | ✅ (только Image)               |
-| `opacity`                              | 0.0–1.0                           | 1.0                     | ✅                              |
+| Свойство                                           | Тип                               | Дефолт                  | Меняется по состоянию?          |
+| -------------------------------------------------- | --------------------------------- | ----------------------- | ------------------------------- |
+| `width`, `height`                                  | px \| %                           | auto (от детей/лейаута) | ❌ геометрия                    |
+| `stretch`                                          | число                             | 0                       | ❌ геометрия                    |
+| `padding` (1–4 значения, `-left/right/top/bottom`) | px                                | 0                       | ❌ геометрия                    |
+| `spacing`                                          | px                                | 0 (только Row/Column)   | ❌ геометрия                    |
+| `justify-content`                                  | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
+| `align-items`                                      | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
+| `background`                                       | Color \| Gradient                 | transparent             | ✅                              |
+| `border` (шорткат: ширина+цвет)                    | px + (Color \| theme.*)           | 0, transparent          | ✅ (цвет)                       |
+| `border-width`                                     | px                                | 0                       | ❌ геометрия                    |
+| `border-color`                                     | Color                             | transparent             | ✅                              |
+| `radius`                                           | px                                | 0                       | ❌ геометрия                    |
+| `color`                                            | Color                             | theme-зависимый         | ✅                              |
+| `font-size`                                        | px                                | 14                      | ❌ (размер текста — компоновка) |
+| `font-family`                                      | String                            | наследуется от окна     | ❌                              |
+| `text-align`                                       | left\|center\|right               | left                    | ✅                              |
+| `vertical-align`                                   | top\|center\|bottom               | top                     | ✅                              |
+| `font-weight`                                      | число (400\|500\|600\|700)        | 400                     | ⚠️ только `Text`, см. ниже      |
+| `tint`                                             | Color                             | — (без окраски)         | ✅ (только Image)               |
+| `opacity`                                          | 0.0–1.0                           | 1.0                     | ✅                              |
 
 _«Меняется по состоянию?» = разрешено ли свойство в `.class:state`. Остальные
 там запрещены компилятором: переключение снапшота не должно вызывать релайаут.
 Единственное исключение — `font-weight`: вместо релайаута он перешейпит `Text`,
 правила ниже._
+
+`padding` — шорткат как в CSS: одно значение — все стороны, два — вертикаль и
+горизонталь, три — верх, горизонталь, низ, четыре — верх, право, низ, лево.
+Раскладывается в `padding-top/right/bottom/left` при парсинге, поэтому дальше
+свойства неотличимы от написанных по отдельности.
 
 ## Текстовые метрики
 
@@ -186,7 +191,12 @@ theme dark {
 .item-panel:hover { background: theme.surface-hover; }
 .item-icon { width: 48px; radius: 12px; background: theme.surface-elevated; }
 .item-image { width: 30px; height: 30px; tint: theme.text-muted; }
-.default-badge { height: 22px; radius: 11px; background: theme.accent-soft; padding-left: 10px; padding-right: 10px; }
+.default-badge {
+    height: 22px;
+    radius: 11px;
+    background: theme.accent-soft;
+    padding: 0px 10px;
+}
 .badge-text { color: #60a5fa; font-size: 12px; vertical-align: center; }
 .text-main {
     width: 100%;
