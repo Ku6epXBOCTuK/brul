@@ -11,7 +11,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::gpu::Gpu;
-use crate::input::{Input, event_input, point, window_input};
+use crate::input::{Input, event_input, point, system_scheme, window_input};
 use crate::layout::Size;
 use crate::paint::Frame;
 use crate::text::TextEngine;
@@ -270,6 +270,37 @@ struct Timer {
     function: String,
 }
 
+impl Timer {
+    fn new(interval: Duration, function: String) -> Self {
+        Self {
+            next: Instant::now() + interval,
+            interval,
+            function,
+        }
+    }
+}
+
+fn due(timers: &mut [Timer], now: Instant) -> Vec<WidgetEvent> {
+    let mut events = Vec::new();
+    for timer in timers {
+        if timer.next > now {
+            continue;
+        }
+        events.push(WidgetEvent::Timer(timer.function.clone()));
+        while timer.next <= now {
+            timer.next += timer.interval;
+        }
+    }
+    events
+}
+
+fn wakeup(timers: &[Timer]) -> ControlFlow {
+    match timers.iter().map(|timer| timer.next).min() {
+        Some(next) => ControlFlow::WaitUntil(next),
+        None => ControlFlow::Wait,
+    }
+}
+
 struct TreeApp {
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
@@ -297,10 +328,7 @@ impl ApplicationHandler for TreeApp {
             Ok(gpu) => gpu,
             Err(error) => return self.fail(event_loop, error),
         };
-        let scheme = match event_loop.system_theme() {
-            Some(winit::window::Theme::Light) => ColorScheme::Light,
-            _ => ColorScheme::Dark,
-        };
+        let scheme = system_scheme(event_loop.system_theme().as_ref());
         self.tree = (self.build)(scheme);
         let mut engine = TextEngine::new();
         let size = window.surface_size();
@@ -393,26 +421,14 @@ impl ApplicationHandler for TreeApp {
             window.request_redraw();
         }
 
-        let now = Instant::now();
-        let mut events = Vec::new();
-        for timer in &mut self.timers {
-            if timer.next <= now {
-                events.push(WidgetEvent::Timer(timer.function.clone()));
-                while timer.next <= now {
-                    timer.next += timer.interval;
-                }
-            }
-        }
+        let events = due(&mut self.timers, Instant::now());
         if !events.is_empty()
             && let Some(window) = self.window.clone()
         {
             self.dispatch_events(event_loop, &window, events);
         }
 
-        match self.timers.iter().map(|timer| timer.next).min() {
-            Some(next) => event_loop.set_control_flow(ControlFlow::WaitUntil(next)),
-            None => event_loop.set_control_flow(ControlFlow::Wait),
-        }
+        event_loop.set_control_flow(wakeup(&self.timers));
     }
 }
 
@@ -456,11 +472,9 @@ impl TreeApp {
                 WindowCommand::Drag => {
                     let _ = window.drag_window();
                 }
-                WindowCommand::Every { interval, function } => self.timers.push(Timer {
-                    next: Instant::now() + interval,
-                    interval,
-                    function,
-                }),
+                WindowCommand::Every { interval, function } => {
+                    self.timers.push(Timer::new(interval, function));
+                }
                 WindowCommand::SetTheme(_) => {}
             }
         }
@@ -603,7 +617,12 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::{WindowConfig, WindowError};
+    use std::time::{Duration, Instant};
+
+    use winit::event_loop::ControlFlow;
+
+    use super::{Timer, WindowConfig, WindowError, due, wakeup};
+    use crate::widget::WidgetEvent;
 
     #[test]
     fn default_config_is_valid() {
@@ -659,5 +678,69 @@ mod tests {
         assert!(!config.is_header(-1.0, 1.0));
         assert!(config.is_header(79.0, 2.0));
         assert!(!config.is_header(80.0, 2.0));
+    }
+
+    #[test]
+    fn a_new_timer_waits_for_its_interval() {
+        let timer = Timer::new(Duration::from_secs(5), "later".to_owned());
+        assert!(timer.next > Instant::now());
+        assert_eq!(timer.interval, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn a_due_timer_fires_once_and_moves_past_now() {
+        let now = Instant::now();
+        let mut timers = vec![Timer {
+            next: now,
+            interval: Duration::from_millis(10),
+            function: "tick".to_owned(),
+        }];
+
+        let events = due(&mut timers, now);
+
+        assert_eq!(events.len(), 1);
+        assert!(matches!(&events[0], WidgetEvent::Timer(name) if name == "tick"));
+        assert!(timers[0].next > now);
+        assert!(due(&mut timers, now).is_empty());
+    }
+
+    #[test]
+    fn a_timer_in_the_future_stays_silent() {
+        let now = Instant::now();
+        let mut timers = vec![Timer {
+            next: now + Duration::from_secs(1),
+            interval: Duration::from_secs(1),
+            function: "late".to_owned(),
+        }];
+        assert!(due(&mut timers, now).is_empty());
+    }
+
+    #[test]
+    fn the_loop_waits_for_the_earliest_timer() {
+        let now = Instant::now();
+        assert_eq!(wakeup(&[]), ControlFlow::Wait);
+
+        let mut timers = vec![
+            Timer {
+                next: now + Duration::from_secs(2),
+                interval: Duration::from_secs(1),
+                function: "far".to_owned(),
+            },
+            Timer {
+                next: now + Duration::from_secs(1),
+                interval: Duration::from_secs(1),
+                function: "near".to_owned(),
+            },
+        ];
+        assert_eq!(
+            wakeup(&timers),
+            ControlFlow::WaitUntil(now + Duration::from_secs(1))
+        );
+
+        timers[0].next = now + Duration::from_secs(1);
+        assert_eq!(
+            wakeup(&timers),
+            ControlFlow::WaitUntil(now + Duration::from_secs(1))
+        );
     }
 }

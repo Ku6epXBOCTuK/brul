@@ -47,6 +47,10 @@ pub(crate) fn scheme(theme: &Theme) -> ColorScheme {
     }
 }
 
+pub(crate) fn system_scheme(theme: Option<&Theme>) -> ColorScheme {
+    theme.map_or(ColorScheme::Dark, scheme)
+}
+
 pub(crate) fn point(x: f64, y: f64) -> (i32, i32) {
     (x.floor() as i32, y.floor() as i32)
 }
@@ -172,6 +176,13 @@ mod tests {
     fn the_two_themes_map_to_their_schemes() {
         assert_eq!(scheme(&Theme::Light), ColorScheme::Light);
         assert_eq!(scheme(&Theme::Dark), ColorScheme::Dark);
+    }
+
+    #[test]
+    fn a_missing_system_theme_is_dark() {
+        assert_eq!(system_scheme(None), ColorScheme::Dark);
+        assert_eq!(system_scheme(Some(&Theme::Light)), ColorScheme::Light);
+        assert_eq!(system_scheme(Some(&Theme::Dark)), ColorScheme::Dark);
     }
 
     #[test]
