@@ -6,12 +6,12 @@ use std::time::{Duration, Instant};
 use brul_reactive;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::gpu::Gpu;
+use crate::input::{Input, event_input, point, window_input};
 use crate::layout::Size;
 use crate::paint::Frame;
 use crate::text::TextEngine;
@@ -243,40 +243,19 @@ impl ApplicationHandler for App {
         };
         let window = Arc::clone(window);
 
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed
-                    && event.logical_key == Key::Named(NamedKey::Escape)
-                {
-                    event_loop.exit();
-                }
+        let input = window_input(&event).or_else(|| event_input(&event));
+        match input {
+            Some(Input::Exit) => event_loop.exit(),
+            Some(Input::Key { exit: true, .. }) => event_loop.exit(),
+            Some(Input::Down(_, y)) if self.config.is_header(y, window.scale_factor()) => {
+                let _ = window.drag_window();
             }
-            WindowEvent::PointerButton {
-                state: ElementState::Pressed,
-                position,
-                primary: true,
-                button,
-                is_macos_activation_click: false,
-                ..
-            } => {
-                if button.mouse_button() == Some(MouseButton::Left)
-                    && self.config.is_header(position.y, window.scale_factor())
-                {
-                    let _ = window.drag_window();
-                }
-            }
-            WindowEvent::SurfaceResized(size) => {
-                self.resize(size.width, size.height);
-                window.request_redraw();
-            }
-            WindowEvent::ScaleFactorChanged { .. } => {
+            Some(Input::Surface) => {
                 let size = window.surface_size();
                 self.resize(size.width, size.height);
                 window.request_redraw();
             }
-            WindowEvent::RedrawRequested => self.render(&window),
-            WindowEvent::Occluded(false) => window.request_redraw(),
+            Some(Input::Redraw) => self.render(&window),
             _ => {}
         }
     }
@@ -284,23 +263,6 @@ impl ApplicationHandler for App {
 
 type EventHandler = Box<dyn FnMut(&[WidgetEvent]) -> Vec<WindowCommand>>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
-
-fn key_code(key: &Key) -> Option<String> {
-    let named = match key {
-        Key::Named(NamedKey::Escape) => "Escape",
-        Key::Named(NamedKey::Enter) => "Enter",
-        Key::Named(NamedKey::Tab) => "Tab",
-        Key::Named(NamedKey::Backspace) => "Backspace",
-        Key::Named(NamedKey::Delete) => "Delete",
-        Key::Named(NamedKey::ArrowUp) => "ArrowUp",
-        Key::Named(NamedKey::ArrowDown) => "ArrowDown",
-        Key::Named(NamedKey::ArrowLeft) => "ArrowLeft",
-        Key::Named(NamedKey::ArrowRight) => "ArrowRight",
-        Key::Character(text) => return Some(text.to_string()),
-        _ => return None,
-    };
-    Some(named.to_owned())
-}
 
 struct Timer {
     next: Instant,
@@ -377,75 +339,49 @@ impl ApplicationHandler for TreeApp {
         };
         let window = Arc::clone(window);
 
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed {
-                    if let Some(code) = key_code(&event.logical_key) {
-                        self.dispatch_events(event_loop, &window, vec![WidgetEvent::Key(code)]);
-                    }
-                    if event.logical_key == Key::Named(NamedKey::Escape) {
-                        event_loop.exit();
-                    }
+        let input = window_input(&event).or_else(|| event_input(&event));
+        match input {
+            Some(Input::Exit) => event_loop.exit(),
+            Some(Input::Key { code, exit }) => {
+                self.dispatch_events(event_loop, &window, vec![WidgetEvent::Key(code)]);
+                if exit {
+                    event_loop.exit();
                 }
             }
-            WindowEvent::PointerMoved { position, .. } => {
-                let events = self
-                    .tree
-                    .borrow_mut()
-                    .pointer_moved(position.x.floor() as i32, position.y.floor() as i32);
+            Some(Input::Moved(x, y)) => {
+                let (x, y) = point(x, y);
+                let events = self.tree.borrow_mut().pointer_moved(x, y);
                 self.dispatch(event_loop, &window, events);
             }
-            WindowEvent::PointerLeft { .. } => {
+            Some(Input::Left) => {
                 let events = self.tree.borrow_mut().pointer_leave();
                 self.dispatch_events(event_loop, &window, events);
             }
-            WindowEvent::PointerButton {
-                state,
-                position,
-                primary: true,
-                button,
-                is_macos_activation_click: false,
-                ..
-            } => {
-                if button.mouse_button() != Some(MouseButton::Left) {
-                    return;
-                }
-                if state == ElementState::Pressed
-                    && self.config.is_header(position.y, window.scale_factor())
-                {
+            Some(Input::Down(x, y)) => {
+                if self.config.is_header(y, window.scale_factor()) {
                     let _ = window.drag_window();
                     return;
                 }
-
-                let x = position.x.floor() as i32;
-                let y = position.y.floor() as i32;
-                let events = if state == ElementState::Pressed {
-                    self.tree.borrow_mut().pointer_down(x, y)
-                } else {
-                    self.tree.borrow_mut().pointer_up(x, y)
-                };
+                let (x, y) = point(x, y);
+                let events = self.tree.borrow_mut().pointer_down(x, y);
                 self.dispatch(event_loop, &window, events);
             }
-            WindowEvent::ThemeChanged(theme) => {
-                let scheme = match theme {
-                    winit::window::Theme::Light => ColorScheme::Light,
-                    _ => ColorScheme::Dark,
-                };
+            Some(Input::Up(x, y)) => {
+                let (x, y) = point(x, y);
+                let events = self.tree.borrow_mut().pointer_up(x, y);
+                self.dispatch(event_loop, &window, events);
+            }
+            Some(Input::Theme(scheme)) => {
                 self.tree = (self.build)(scheme);
                 let size = window.surface_size();
                 self.resize(event_loop, &window, size.width, size.height);
             }
-            WindowEvent::SurfaceResized(size) => {
-                self.resize(event_loop, &window, size.width, size.height);
-            }
-            WindowEvent::ScaleFactorChanged { .. } => {
+            Some(Input::Surface) => {
                 let size = window.surface_size();
                 self.resize(event_loop, &window, size.width, size.height);
             }
-            WindowEvent::RedrawRequested => self.render(event_loop, &window),
-            WindowEvent::Occluded(false) => window.request_redraw(),
-            _ => {}
+            Some(Input::Redraw) => self.render(event_loop, &window),
+            None => {}
         }
     }
 

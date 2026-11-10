@@ -124,6 +124,7 @@
 mod atlas;
 mod color;
 mod gpu;
+mod input;
 mod layout;
 mod paint;
 mod rect;
