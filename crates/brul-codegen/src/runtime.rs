@@ -351,14 +351,14 @@ impl Bindings {
             let binding = binding.clone();
             let tree = Rc::clone(tree);
             scope.run(|| {
-                Effect::new(move || apply(&binding, &tree));
+                Effect::new(move || apply(&binding, &mut tree.borrow_mut()));
             });
         }
         Self { _scope: scope }
     }
 }
 
-pub fn apply(binding: &Binding, tree: &RefCell<WidgetTree>) {
+pub fn apply(binding: &Binding, tree: &mut WidgetTree) {
     let component = Rc::clone(&binding.component);
     component.borrow().track();
     let count = binding.scopes.len();
@@ -367,7 +367,7 @@ pub fn apply(binding: &Binding, tree: &RefCell<WidgetTree>) {
     component.borrow_mut().pop_binding_scopes(count);
 }
 
-fn write_target(binding: &Binding, component: &RefCell<Component>, tree: &RefCell<WidgetTree>) {
+fn write_target(binding: &Binding, component: &RefCell<Component>, tree: &mut WidgetTree) {
     let widget = binding.widget;
     match &binding.target {
         BindingTarget::Text(expression) => set_text(tree, widget, string(component, *expression)),
@@ -415,26 +415,26 @@ fn flag(component: &RefCell<Component>, expression: Expression) -> Option<bool> 
     expression(&mut component.borrow_mut()).ok()?.as_flag()
 }
 
-pub fn set_text(tree: &RefCell<WidgetTree>, widget: WidgetId, value: Option<String>) {
+pub fn set_text(tree: &mut WidgetTree, widget: WidgetId, value: Option<String>) {
     if let Some(value) = value {
-        tree.borrow_mut().set_text(widget, value);
+        tree.set_text(widget, value);
     }
 }
 
 pub fn set_flag(
-    tree: &RefCell<WidgetTree>,
+    tree: &mut WidgetTree,
     widget: WidgetId,
     value: Option<bool>,
     set: fn(&mut WidgetTree, WidgetId, bool) -> bool,
 ) {
     if let Some(value) = value {
-        set(&mut tree.borrow_mut(), widget, value);
+        set(tree, widget, value);
     }
 }
 
-pub fn set_offset(tree: &RefCell<WidgetTree>, widget: WidgetId, x: Option<i32>, y: Option<i32>) {
+pub fn set_offset(tree: &mut WidgetTree, widget: WidgetId, x: Option<i32>, y: Option<i32>) {
     if let (Some(x), Some(y)) = (x, y) {
-        tree.borrow_mut().set_offset(widget, x, y);
+        tree.set_offset(widget, x, y);
     }
 }
 

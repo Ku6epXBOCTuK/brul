@@ -159,7 +159,7 @@ impl Ui {
             let tree = Rc::clone(&self.tree);
             let scope = self.scope.child();
             scope.run(|| {
-                Effect::new(move || runtime::apply(&binding, &tree));
+                Effect::new(move || runtime::apply(&binding, &mut tree.borrow_mut()));
             });
             self.bindings.push(Owned {
                 widget,
@@ -339,7 +339,13 @@ impl Ui {
                     .map(|position| rows.remove(position).1)
                     .unwrap_or_default();
                 rows.push((parent, rebuilt_rows.clone()));
-                reconcile_each(&self.tree, parent, &old_rows, widget, &rebuilt_rows)
+                reconcile_each(
+                    &mut self.tree.borrow_mut(),
+                    parent,
+                    &old_rows,
+                    widget,
+                    &rebuilt_rows,
+                )
             } else {
                 widget.into_children()
             };
@@ -836,7 +842,7 @@ mod tests {
         Binding::new(component, widget, target)
     }
 
-    fn state_after(targets: [BindingTarget; 6]) -> (Vec<WidgetId>, RefCell<WidgetTree>) {
+    fn state_after(targets: [BindingTarget; 6]) -> (Vec<WidgetId>, WidgetTree) {
         let mut component = Component::new();
         component
             .declare("title", Value::String("hi".to_owned()), false)
@@ -850,9 +856,9 @@ mod tests {
             .map(|index| Widget::text(index.to_string()))
             .collect();
         let ids: Vec<WidgetId> = widgets.iter().map(Widget::id).collect();
-        let tree = RefCell::new(WidgetTree::new(Widget::view(Direction::Column, widgets)));
+        let mut tree = WidgetTree::new(Widget::view(Direction::Column, widgets));
         for (index, target) in targets.into_iter().enumerate() {
-            runtime::apply(&binding(&component, ids[index], target), &tree);
+            runtime::apply(&binding(&component, ids[index], target), &mut tree);
         }
         (ids, tree)
     }
@@ -870,25 +876,23 @@ mod tests {
                 y: Some(read!("y")),
             },
         ];
-        let (ids, tree) = state_after(targets);
-        assert!(!tree.borrow_mut().set_text(ids[0], "hi".to_owned()));
-        let state = tree.borrow().state(ids[1]).expect("state");
+        let (ids, mut tree) = state_after(targets);
+        assert!(!tree.set_text(ids[0], "hi".to_owned()));
+        let state = tree.state(ids[1]).expect("state");
         assert!(state.checked);
-        assert!(tree.borrow().state(ids[2]).expect("state").selected);
-        assert!(tree.borrow().state(ids[3]).expect("state").disabled);
-        assert!(!tree.borrow().state(ids[4]).expect("state").visible);
+        assert!(tree.state(ids[2]).expect("state").selected);
+        assert!(tree.state(ids[3]).expect("state").disabled);
+        assert!(!tree.state(ids[4]).expect("state").visible);
         let mut engine = TextEngine::new();
-        tree.borrow_mut()
-            .layout(
-                &mut engine,
-                Size {
-                    width: 200,
-                    height: 200,
-                },
-                1.0,
-            )
-            .expect("layout");
-        let mut tree = tree.borrow_mut();
+        tree.layout(
+            &mut engine,
+            Size {
+                width: 200,
+                height: 200,
+            },
+            1.0,
+        )
+        .expect("layout");
         let snapshot = tree.snapshot().expect("snapshot");
         let node = snapshot.node(ids[5]).cloned().expect("node");
         assert_eq!((node.x, node.y), (4, 6));

@@ -1,16 +1,14 @@
-use std::cell::RefCell;
-
 use brul_gui::{Widget, WidgetId, WidgetTree};
 
 use crate::RowInfo;
 pub(crate) fn reconcile_each(
-    tree: &RefCell<WidgetTree>,
+    tree: &mut WidgetTree,
     parent: WidgetId,
     old_rows: &[RowInfo],
     new_widget: Widget,
     new_rows: &[RowInfo],
 ) -> Vec<Widget> {
-    let Some(old_children) = tree.borrow_mut().take_children(parent) else {
+    let Some(old_children) = tree.take_children(parent) else {
         return new_widget.into_children();
     };
     let mut old_widgets = group(old_children, old_rows);
@@ -72,12 +70,12 @@ mod tests {
 
     #[test]
     fn each_without_old_children_builds_the_new_ones() {
-        let tree = RefCell::new(WidgetTree::new(Widget::view(Direction::Column, Vec::new())));
+        let mut tree = WidgetTree::new(Widget::view(Direction::Column, Vec::new()));
         let absent = Widget::text("absent").id();
         let fresh = Widget::view(Direction::Column, vec![Widget::text("a")]);
         let new_id = fresh.id();
         let children = reconcile_each(
-            &tree,
+            &mut tree,
             absent,
             &[row(None, "a", 1)],
             fresh,
@@ -93,9 +91,9 @@ mod tests {
         let first_id = first.id();
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
-        let tree = RefCell::new(WidgetTree::new(root));
+        let mut tree = WidgetTree::new(root);
         let children = reconcile_each(
-            &tree,
+            &mut tree,
             parent,
             &[row(None, "a", 1)],
             Widget::view(Direction::Column, vec![Widget::text("a")]),
@@ -110,9 +108,9 @@ mod tests {
         let first_id = first.id();
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
-        let tree = RefCell::new(WidgetTree::new(root));
+        let mut tree = WidgetTree::new(root);
         let children = reconcile_each(
-            &tree,
+            &mut tree,
             parent,
             &[row(None, "a", 1)],
             Widget::view(Direction::Column, vec![Widget::text("b")]),
@@ -127,10 +125,10 @@ mod tests {
         let first_id = first.id();
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
-        let tree = RefCell::new(WidgetTree::new(root));
+        let mut tree = WidgetTree::new(root);
         let key = Some(Value::Number(1.0));
         let children = reconcile_each(
-            &tree,
+            &mut tree,
             parent,
             &[row(key.clone(), "a", 1)],
             Widget::view(Direction::Column, vec![Widget::text("b")]),
@@ -145,14 +143,14 @@ mod tests {
         let first_id = first.id();
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
-        let tree = RefCell::new(WidgetTree::new(root));
+        let mut tree = WidgetTree::new(root);
         let key = Some(Value::Number(1.0));
         let fresh = Widget::view(
             Direction::Column,
             vec![Widget::text("a"), Widget::text("a")],
         );
         let children = reconcile_each(
-            &tree,
+            &mut tree,
             parent,
             &[row(key.clone(), "a", 1)],
             fresh,
@@ -168,9 +166,9 @@ mod tests {
         let first_id = first.id();
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
-        let tree = RefCell::new(WidgetTree::new(root));
+        let mut tree = WidgetTree::new(root);
         let children = reconcile_each(
-            &tree,
+            &mut tree,
             parent,
             &[row(None, "a", 1)],
             Widget::view(Direction::Column, vec![Widget::text("a")]),
@@ -186,7 +184,7 @@ mod tests {
         let (first_id, second_id) = (first.id(), second.id());
         let root = Widget::view(Direction::Column, vec![first, second]);
         let parent = root.id();
-        let tree = RefCell::new(WidgetTree::new(root));
+        let mut tree = WidgetTree::new(root);
         let row = |key: f64, item: &str, start: usize| RowInfo {
             key: Some(Value::Number(key)),
             item: Value::String(item.to_owned()),
@@ -200,7 +198,7 @@ mod tests {
             vec![Widget::text("b"), Widget::text("a")],
         );
 
-        let children = reconcile_each(&tree, parent, &old_rows, fresh, &new_rows);
+        let children = reconcile_each(&mut tree, parent, &old_rows, fresh, &new_rows);
         let ids: Vec<WidgetId> = children.iter().map(Widget::id).collect();
         assert_eq!(ids, vec![second_id, first_id]);
     }
