@@ -1,6 +1,7 @@
 use brul_gui::{
-    Color, Dimension, LayoutStyle, Padding, Size, StyleSet, StyleState, TextEngine, Texture,
-    Widget, WidgetError, WidgetEvent, WidgetState, WidgetStyle, WidgetTree,
+    Color, Dimension, LayoutStyle, Padding, Size, StyleSet, StyleState, TextAlign, TextEngine,
+    TextStyle, TextStyleSet, Texture, Widget, WidgetError, WidgetEvent, WidgetState, WidgetStyle,
+    WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -229,6 +230,55 @@ fn hover_switches_style_snapshot() {
     let node = snapshot.node(id).expect("view");
     assert_eq!(node.style.background, base.background);
     assert!(!node.state.hovered);
+}
+
+#[test]
+fn hover_switches_the_text_variant_without_relayout() {
+    let styles = TextStyleSet::new(TextStyle::default()).with(
+        StyleState::Hovered,
+        TextStyle {
+            align: TextAlign::Right,
+            ..TextStyle::default()
+        },
+    );
+    let text = Widget::text_with_styles("wide text", styles).with_layout(fixed(80, 20));
+    let id = text.id();
+    let mut tree = WidgetTree::new(text);
+    let mut engine = TextEngine::new();
+
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 80,
+            height: 20,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    let base = {
+        let snapshot = tree.snapshot().expect("snapshot");
+        let node = snapshot.node(id).expect("text");
+        node.text.clone().expect("text layout")
+    };
+
+    tree.pointer_moved(10, 10).expect("move");
+    let hovered = {
+        let snapshot = tree.snapshot().expect("snapshot");
+        let node = snapshot.node(id).expect("text");
+        assert_eq!(node.width, 80);
+        assert_eq!(node.height, 20);
+        node.text.clone().expect("text layout")
+    };
+    assert!(hovered.glyphs[0].x > base.glyphs[0].x);
+
+    tree.pointer_leave();
+    let after = {
+        let snapshot = tree.snapshot().expect("snapshot");
+        let node = snapshot.node(id).expect("text");
+        node.text.clone().expect("text layout")
+    };
+    assert_eq!(after.glyphs[0].x, base.glyphs[0].x);
 }
 
 #[test]

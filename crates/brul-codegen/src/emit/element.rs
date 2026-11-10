@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use brul_gui::TextStyle;
+use brul_gui::TextStyleSet;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element};
@@ -10,7 +10,7 @@ use crate::styles;
 
 use super::Emit;
 use super::Frame;
-use super::style::{layout, style_set, text_style};
+use super::style::{layout, style_set, text_style_set};
 use super::{component, events, expression, structure};
 use crate::runtime::HandlerEvent;
 
@@ -72,7 +72,7 @@ fn kind(
             container(out, element, resolved, emit, frame, counter)?;
             Ok(None)
         }
-        "Text" => text_widget(out, element, resolved.text.clone()),
+        "Text" => text_widget(out, element, &resolved.text),
         name => Err(error_at(
             element.position,
             format!("widget '{name}' is not generated yet"),
@@ -176,19 +176,25 @@ pub(crate) fn items(
 fn text_widget(
     out: &mut String,
     element: &Element,
-    style: TextStyle,
+    styles: &TextStyleSet,
 ) -> Result<Option<Expr>, Error> {
+    let styles = text_style_set(styles);
     match element.block.items.as_slice() {
         [BlockItem::Expr(expression)] => {
             let ExprKind::String(content) = &expression.kind else {
-                let _ = match text_style(style) {
-                    Some(style) => write!(out, "brul_gui::Widget::styled_text(\"\", {style})"),
+                let _ = match &styles {
+                    Some(styles) => {
+                        write!(out, "brul_gui::Widget::text_with_styles(\"\", {styles})")
+                    }
                     None => write!(out, "brul_gui::Widget::text(\"\")"),
                 };
                 return Ok(Some(expression.clone()));
             };
-            let _ = match text_style(style) {
-                Some(style) => write!(out, "brul_gui::Widget::styled_text({content:?}, {style})"),
+            let _ = match &styles {
+                Some(styles) => write!(
+                    out,
+                    "brul_gui::Widget::text_with_styles({content:?}, {styles})"
+                ),
                 None => write!(out, "brul_gui::Widget::text({content:?})"),
             };
             Ok(None)

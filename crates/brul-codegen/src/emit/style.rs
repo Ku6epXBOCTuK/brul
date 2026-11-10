@@ -1,6 +1,6 @@
 use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, StyleSet, StyleState, TextAlign, TextStyle,
-    VerticalAlign, WidgetStyle,
+    TextStyleSet, VerticalAlign, WidgetStyle,
 };
 
 pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
@@ -122,7 +122,32 @@ fn widget_style(style: WidgetStyle) -> String {
     }
 }
 
-pub(super) fn text_style(style: TextStyle) -> Option<String> {
+pub(super) fn text_style_set(set: &TextStyleSet) -> Option<String> {
+    let base = set.base();
+    let mut states = Vec::new();
+    for state in StyleState::ALL {
+        let Some(style) = set.state(state) else {
+            continue;
+        };
+        if style == base {
+            continue;
+        }
+        states.push(format!(
+            ".with(brul_gui::StyleState::{state:?}, {})",
+            text_style_expr(style)
+        ));
+    }
+    if *base == TextStyle::default() && states.is_empty() {
+        return None;
+    }
+    let mut out = format!("brul_gui::TextStyleSet::new({})", text_style_expr(base));
+    for state in states {
+        out.push_str(&state);
+    }
+    Some(out)
+}
+
+fn text_style_expr(style: &TextStyle) -> String {
     let TextStyle {
         family,
         font_size,
@@ -132,28 +157,30 @@ pub(super) fn text_style(style: TextStyle) -> Option<String> {
     } = style;
     let default = TextStyle::default();
     let mut fields = Vec::new();
-    if family != default.family {
+    if *family != default.family {
         let family = family.as_deref().unwrap_or_default();
         fields.push(format!("family: Some({family:?}.to_owned())"));
     }
-    if font_size != default.font_size {
+    if *font_size != default.font_size {
         fields.push(format!("font_size: {font_size:?}f32"));
     }
-    if line_height != default.line_height {
+    if *line_height != default.line_height {
         fields.push(format!("line_height: {line_height:?}f32"));
     }
-    if weight != default.weight {
+    if *weight != default.weight {
         fields.push(format!("weight: {weight}"));
     }
-    if align_value != default.align {
-        fields.push(format!("align: {}", text_align(align_value)));
+    if *align_value != default.align {
+        fields.push(format!("align: {}", text_align(*align_value)));
     }
-    (!fields.is_empty()).then(|| {
+    if fields.is_empty() {
+        "brul_gui::TextStyle::default()".to_owned()
+    } else {
         format!(
             "brul_gui::TextStyle {{ {}, ..brul_gui::TextStyle::default() }}",
             fields.join(", ")
         )
-    })
+    }
 }
 
 fn dimension(value: Dimension) -> String {

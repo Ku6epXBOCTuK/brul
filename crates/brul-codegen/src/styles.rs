@@ -1,13 +1,13 @@
 use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, Padding, StyleSet, StyleState, TextStyle,
-    VerticalAlign, WidgetStyle,
+    TextStyleSet, VerticalAlign, WidgetStyle,
 };
 use brul_syntax::style::{Kind, Property, Side, Snapshot, State, Stylesheet, Value};
 
 pub struct Resolved {
     pub layout: LayoutStyle,
     pub styles: StyleSet,
-    pub text: TextStyle,
+    pub text: TextStyleSet,
 }
 
 pub fn resolve(
@@ -16,15 +16,21 @@ pub fn resolve(
     theme: Option<&str>,
 ) -> Result<Resolved, String> {
     let base = snapshot(stylesheet, classes, None, theme)?;
-    let (layout, base_style, text) = base_styles(&base)?;
+    let (layout, base_style, base_text) = base_styles(&base)?;
     let mut styles = StyleSet::new(base_style);
+    let mut text = TextStyleSet::new(base_text.clone());
     for state in StyleState::ALL {
         let state_snapshot = snapshot(stylesheet, classes, Some(syntax_state(state)), theme)?;
         if state_snapshot == base {
             continue;
         }
-        let style = state_style(&state_snapshot, base_style)?;
-        styles = styles.with(state, style);
+        let (style, state_text) = state_styles(&state_snapshot, base_style, &base_text)?;
+        if style != base_style {
+            styles = styles.with(state, style);
+        }
+        if state_text != base_text {
+            text = text.with(state, state_text);
+        }
     }
     Ok(Resolved {
         layout,
@@ -54,14 +60,18 @@ fn base_styles(snapshot: &Snapshot) -> Result<(LayoutStyle, WidgetStyle, TextSty
     Ok((layout, style, text))
 }
 
-fn state_style(snapshot: &Snapshot, value: WidgetStyle) -> Result<WidgetStyle, String> {
+fn state_styles(
+    snapshot: &Snapshot,
+    style: WidgetStyle,
+    text: &TextStyle,
+) -> Result<(WidgetStyle, TextStyle), String> {
     let mut layout = LayoutStyle::default();
-    let mut style = value;
-    let mut text = TextStyle::default();
+    let mut style = style;
+    let mut text = text.clone();
     for property in snapshot.properties() {
         apply(property, &mut layout, &mut style, &mut text)?;
     }
-    Ok(style)
+    Ok((style, text))
 }
 
 fn apply(

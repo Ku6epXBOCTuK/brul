@@ -4,7 +4,7 @@ use cosmic_text::{Align, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Sw
 
 use crate::atlas::{Atlas, AtlasSlot};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextStyle {
     pub family: Option<String>,
     pub font_size: f32,

@@ -96,11 +96,47 @@ fn font_covers_size_family_weight_and_alignment() {
     let resolved = resolved(
         ".a { font-size: 20px; font-family: \"Inter\"; font-weight: 600; text-align: center; }",
     );
-    assert_eq!(resolved.text.font_size, 20.0);
-    assert_eq!(resolved.text.line_height, 24.0);
-    assert_eq!(resolved.text.family.as_deref(), Some("Inter"));
-    assert_eq!(resolved.text.weight, 600);
-    assert_eq!(resolved.text.align, brul_gui::TextAlign::Center);
+    let text = resolved.text.base();
+    assert_eq!(text.font_size, 20.0);
+    assert_eq!(text.line_height, 24.0);
+    assert_eq!(text.family.as_deref(), Some("Inter"));
+    assert_eq!(text.weight, 600);
+    assert_eq!(text.align, brul_gui::TextAlign::Center);
+}
+
+#[test]
+fn font_weight_in_a_state_becomes_a_text_variant() {
+    let resolved = resolved(
+        ".a { width: 40px; height: 20px; font-weight: 500; } .a:hover { font-weight: 600; }",
+    );
+
+    assert_eq!(resolved.text.base().weight, 500);
+    assert_eq!(
+        resolved
+            .text
+            .resolve(brul_gui::WidgetState {
+                hovered: true,
+                ..brul_gui::WidgetState::default()
+            })
+            .weight,
+        600
+    );
+}
+
+#[test]
+fn text_alignment_in_a_state_becomes_a_text_variant() {
+    let resolved = resolved(".a { text-align: left; } .a:hover { text-align: right; }");
+
+    assert_eq!(
+        resolved
+            .text
+            .resolve(brul_gui::WidgetState {
+                hovered: true,
+                ..brul_gui::WidgetState::default()
+            })
+            .align,
+        brul_gui::TextAlign::Right
+    );
 }
 
 #[test]

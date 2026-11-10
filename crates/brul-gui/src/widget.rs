@@ -168,6 +168,70 @@ impl StyleSet {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TextStyleSet {
+    base: TextStyle,
+    hovered: Option<TextStyle>,
+    pressed: Option<TextStyle>,
+    checked: Option<TextStyle>,
+    selected: Option<TextStyle>,
+    disabled: Option<TextStyle>,
+}
+
+impl TextStyleSet {
+    pub fn new(base: TextStyle) -> Self {
+        Self {
+            base,
+            ..Self::default()
+        }
+    }
+
+    pub fn with(mut self, state: StyleState, style: TextStyle) -> Self {
+        match state {
+            StyleState::Hovered => self.hovered = Some(style),
+            StyleState::Pressed => self.pressed = Some(style),
+            StyleState::Checked => self.checked = Some(style),
+            StyleState::Selected => self.selected = Some(style),
+            StyleState::Disabled => self.disabled = Some(style),
+        }
+        self
+    }
+
+    pub fn base(&self) -> &TextStyle {
+        &self.base
+    }
+
+    pub fn state(&self, state: StyleState) -> Option<&TextStyle> {
+        match state {
+            StyleState::Hovered => self.hovered.as_ref(),
+            StyleState::Pressed => self.pressed.as_ref(),
+            StyleState::Checked => self.checked.as_ref(),
+            StyleState::Selected => self.selected.as_ref(),
+            StyleState::Disabled => self.disabled.as_ref(),
+        }
+    }
+
+    pub fn resolve(&self, state: WidgetState) -> TextStyle {
+        let mut style = self.base.clone();
+        if state.selected {
+            style = self.selected.clone().unwrap_or(style);
+        }
+        if state.checked {
+            style = self.checked.clone().unwrap_or(style);
+        }
+        if state.hovered {
+            style = self.hovered.clone().unwrap_or(style);
+        }
+        if state.pressed {
+            style = self.pressed.clone().unwrap_or(style);
+        }
+        if state.disabled {
+            style = self.disabled.clone().unwrap_or(style);
+        }
+        style
+    }
+}
+
 pub struct Widget {
     id: WidgetId,
     data: WidgetData,
@@ -185,7 +249,7 @@ enum WidgetData {
     },
     Text {
         content: String,
-        style: TextStyle,
+        styles: Box<TextStyleSet>,
     },
     Image(Rc<Texture>),
 }
@@ -244,9 +308,13 @@ impl Widget {
     }
 
     pub fn styled_text(content: impl Into<String>, style: TextStyle) -> Self {
+        Self::text_with_styles(content, TextStyleSet::new(style))
+    }
+
+    pub fn text_with_styles(content: impl Into<String>, styles: TextStyleSet) -> Self {
         Self::new(WidgetData::Text {
             content: content.into(),
-            style,
+            styles: Box::new(styles),
         })
     }
 
@@ -444,7 +512,61 @@ struct Geometry {
     viewport: Size,
     scale: f32,
     layout: LayoutBox,
-    texts: HashMap<WidgetId, TextLayout>,
+    texts: HashMap<WidgetId, TextVariants>,
+}
+
+#[derive(Clone, Debug)]
+struct TextVariants {
+    base: TextLayout,
+    hovered: Option<TextLayout>,
+    pressed: Option<TextLayout>,
+    checked: Option<TextLayout>,
+    selected: Option<TextLayout>,
+    disabled: Option<TextLayout>,
+}
+
+impl TextVariants {
+    fn new(base: TextLayout) -> Self {
+        Self {
+            base,
+            hovered: None,
+            pressed: None,
+            checked: None,
+            selected: None,
+            disabled: None,
+        }
+    }
+
+    fn with(mut self, state: StyleState, layout: TextLayout) -> Self {
+        match state {
+            StyleState::Hovered => self.hovered = Some(layout),
+            StyleState::Pressed => self.pressed = Some(layout),
+            StyleState::Checked => self.checked = Some(layout),
+            StyleState::Selected => self.selected = Some(layout),
+            StyleState::Disabled => self.disabled = Some(layout),
+        }
+        self
+    }
+
+    fn resolve(&self, state: WidgetState) -> TextLayout {
+        let mut layout = &self.base;
+        if state.selected {
+            layout = self.selected.as_ref().unwrap_or(layout);
+        }
+        if state.checked {
+            layout = self.checked.as_ref().unwrap_or(layout);
+        }
+        if state.hovered {
+            layout = self.hovered.as_ref().unwrap_or(layout);
+        }
+        if state.pressed {
+            layout = self.pressed.as_ref().unwrap_or(layout);
+        }
+        if state.disabled {
+            layout = self.disabled.as_ref().unwrap_or(layout);
+        }
+        layout.clone()
+    }
 }
 
 impl WidgetTree {
@@ -896,7 +1018,7 @@ fn build_layout(
     engine: &mut TextEngine,
     available_width: Option<u32>,
     scale: f32,
-    texts: &mut HashMap<WidgetId, TextLayout>,
+    texts: &mut HashMap<WidgetId, TextVariants>,
 ) -> Result<LayoutNode, WidgetError> {
     let resolved = layout::resolve(widget.layout.width, available_width)?;
     let content_width = resolved
@@ -917,11 +1039,22 @@ fn build_layout(
                 Direction::Column => LayoutNode::column(nodes),
             }
         }
-        WidgetData::Text { content, style } => {
+        WidgetData::Text { content, styles } => {
             let max_width = content_width.map(|width| width as f32 / scale);
-            let layout = engine.layout(content, style, max_width, scale)?;
-            texts.insert(widget.id, layout.clone());
-            LayoutNode::leaf(layout.size.width, layout.size.height)
+            let mut variants =
+                TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
+            for state in StyleState::ALL {
+                let Some(style) = styles.state(state) else {
+                    continue;
+                };
+                if style == styles.base() {
+                    continue;
+                }
+                variants = variants.with(state, engine.layout(content, style, max_width, scale)?);
+            }
+            let size = variants.base.size;
+            texts.insert(widget.id, variants);
+            LayoutNode::leaf(size.width, size.height)
         }
         WidgetData::Image(texture) => LayoutNode::leaf(texture.width(), texture.height()),
     };
@@ -953,7 +1086,7 @@ fn snapshot_widget(
     widget: &Widget,
     layout_box: &LayoutBox,
     states: &HashMap<WidgetId, WidgetState>,
-    texts: &HashMap<WidgetId, TextLayout>,
+    texts: &HashMap<WidgetId, TextVariants>,
     nodes: &mut Vec<WidgetSnapshotNode>,
 ) {
     let state = *states.get(&widget.id).expect("widget state");
@@ -981,7 +1114,9 @@ fn snapshot_widget(
         .height
         .saturating_sub(layout::inset_y(&widget.layout));
     let text = match &widget.data {
-        WidgetData::Text { .. } => texts.get(&widget.id).cloned(),
+        WidgetData::Text { .. } => texts
+            .get(&widget.id)
+            .map(|variants| variants.resolve(state)),
         _ => None,
     };
     let texture = match &widget.data {

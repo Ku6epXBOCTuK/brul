@@ -178,6 +178,28 @@ window Demo (title: "demo") {
 }
 
 #[test]
+fn emits_text_styles_for_a_state() {
+    let source = r#"<style>
+.a { width: 40px; height: 20px; font-weight: 500; }
+.a:hover { font-weight: 600; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    Text (a) { "hi" }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(
+        module.contains(
+            r#"brul_gui::Widget::text_with_styles("hi", brul_gui::TextStyleSet::new(brul_gui::TextStyle { weight: 500, ..brul_gui::TextStyle::default() }).with(brul_gui::StyleState::Hovered, brul_gui::TextStyle { weight: 600, ..brul_gui::TextStyle::default() }))"#
+        ),
+        "{module}"
+    );
+}
+
+#[test]
 fn emits_parameter_bindings() {
     let source = r#"<markup>
 window Demo (title: "demo") {
