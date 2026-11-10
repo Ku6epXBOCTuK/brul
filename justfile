@@ -1,7 +1,9 @@
 check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
-    cargo test --workspace
+    cargo nextest run --workspace
+    # NOTE: nextest не запускает доктесты — их прогоняет cargo test
+    cargo test --workspace --doc
 
 cov:
     cargo llvm-cov --workspace --lcov --output-path target/lcov.info --include-build-script

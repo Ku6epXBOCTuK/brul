@@ -2,9 +2,9 @@
 
 Маршрут задачами: одна задача — один коммит и один ревью. Процесс и бюджет —
 [workflow.md](workflow.md); здесь только очередь. Задача закрыта, когда зелёные
-`cargo clippy --workspace -- -D warnings` и `cargo test --workspace`;
-выполненный пункт отмечается `[x]`, историю хранит git. Текущая задача — первый
-неотмеченный пункт.
+`cargo clippy --workspace -- -D warnings`, `cargo nextest run --workspace` и
+`cargo test --workspace --doc`; выполненный пункт отмечается `[x]`, историю
+хранит git. Текущая задача — первый неотмеченный пункт.
 
 ## Фаза 3 — DSL
 
