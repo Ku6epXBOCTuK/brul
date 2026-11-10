@@ -1240,21 +1240,21 @@ impl Pass<'_> {
     ) -> Result<LayoutNode, WidgetError> {
         let node = &self.tree[slot.index()];
         self.order.push(slot);
-        if let (Some(cached), false) = (self.cached, self.blocked[slot.index()]) {
-            if let Some(previous) = cached.get(slot.index()) {
-                let size = Size {
-                    width: previous.width.saturating_sub(layout::inset_x(&node.layout)),
-                    height: previous
-                        .height
-                        .saturating_sub(layout::inset_y(&node.layout)),
-                };
-                self.frozen.push((slot, previous.clone()));
-                let layout_node = LayoutNode::leaf(size.width, size.height).with_style(node.layout);
-                return Ok(match node.offset {
-                    Some(offset) => layout_node.with_offset(offset.x, offset.y),
-                    None => layout_node,
-                });
-            }
+        if let (Some(cached), false) = (self.cached, self.blocked[slot.index()])
+            && let Some(previous) = cached.get(slot.index())
+        {
+            let size = Size {
+                width: previous.width.saturating_sub(layout::inset_x(&node.layout)),
+                height: previous
+                    .height
+                    .saturating_sub(layout::inset_y(&node.layout)),
+            };
+            self.frozen.push((slot, previous.clone()));
+            let layout_node = LayoutNode::leaf(size.width, size.height).with_style(node.layout);
+            return Ok(match node.offset {
+                Some(offset) => layout_node.with_offset(offset.x, offset.y),
+                None => layout_node,
+            });
         }
 
         let resolved = layout::resolve(node.layout.width, available_width)?;
