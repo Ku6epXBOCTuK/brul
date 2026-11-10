@@ -359,12 +359,14 @@ impl Bindings {
 }
 
 pub fn apply(binding: &Binding, tree: &mut WidgetTree) {
-    let component = Rc::clone(&binding.component);
-    component.borrow().track();
+    binding.component.borrow().track();
     let count = binding.scopes.len();
-    component.borrow_mut().push_binding_scopes(&binding.scopes);
-    write_target(binding, &component, tree);
-    component.borrow_mut().pop_binding_scopes(count);
+    binding
+        .component
+        .borrow_mut()
+        .push_binding_scopes(&binding.scopes);
+    write_target(binding, &binding.component, tree);
+    binding.component.borrow_mut().pop_binding_scopes(count);
 }
 
 fn write_target(binding: &Binding, component: &RefCell<Component>, tree: &mut WidgetTree) {

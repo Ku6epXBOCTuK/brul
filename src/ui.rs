@@ -255,7 +255,7 @@ impl Ui {
         for event in events {
             match event {
                 WidgetEvent::Timer(function) => {
-                    call(&Rc::clone(&self.component), function, Vec::new());
+                    call(&self.component, function, Vec::new());
                 }
                 _ => self.dispatch_event(event),
             }
@@ -274,8 +274,7 @@ impl Ui {
         else {
             return;
         };
-        let component = Rc::clone(&handler.component);
-        call(&component, &handler.function, arguments(event));
+        call(&handler.component, &handler.function, arguments(event));
     }
 
     fn take_commands(&mut self) -> Vec<WindowCommand> {
