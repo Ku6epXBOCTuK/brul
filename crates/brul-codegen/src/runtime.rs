@@ -209,6 +209,15 @@ impl Host for EventHost {
 
 pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Built, String> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    start(&component, &instance)?;
+    let given = declare_props(&component, parent, instance.props, instance.name)?;
+    declare_defaults(&component, instance.defaults, &given, instance.name)?;
+    let mut built = (instance.view)(instance.theme, &component)?;
+    bind(&mut built, parent, &component, instance.props);
+    Ok(built)
+}
+
+fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), String> {
     if !instance.events.is_empty() {
         component.borrow_mut().set_host(EventHost {
             events: instance
@@ -223,28 +232,56 @@ pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Buil
                 .collect(),
         });
     }
-    if let Some(program) = instance.script {
-        execute_program(&mut component.borrow_mut(), program).map_err(|error| error.reason())?;
+    match instance.script {
+        Some(program) => {
+            execute_program(&mut component.borrow_mut(), program).map_err(|error| error.reason())
+        }
+        None => Ok(()),
     }
-    let mut given: Vec<&str> = Vec::new();
-    for argument in instance.props {
+}
+
+fn declare_props<'a>(
+    component: &ComponentHandle,
+    parent: &ComponentHandle,
+    props: &'a [PropArgument],
+    name: &str,
+) -> Result<Vec<&'a str>, String> {
+    let mut given = Vec::new();
+    for argument in props {
         let value = evaluate_argument(parent, argument)?;
-        assign(&component, argument, value, instance.name)?;
+        assign(component, argument, value, name)?;
         given.push(argument.name);
     }
-    for argument in instance.defaults {
+    Ok(given)
+}
+
+fn declare_defaults(
+    component: &ComponentHandle,
+    defaults: &[PropArgument],
+    given: &[&str],
+    name: &str,
+) -> Result<(), String> {
+    for argument in defaults {
         if given.contains(&argument.name) {
             continue;
         }
-        let value = evaluate_argument(&component, argument)?;
-        assign(&component, argument, value, instance.name)?;
+        let value = evaluate_argument(component, argument)?;
+        assign(component, argument, value, name)?;
     }
-    let mut built = (instance.view)(instance.theme, &component)?;
+    Ok(())
+}
+
+fn bind(
+    built: &mut Built,
+    parent: &ComponentHandle,
+    component: &ComponentHandle,
+    props: &[PropArgument],
+) {
     let widget = built.widget.id();
-    for argument in instance.props {
+    for argument in props {
         built.props.push(PropBinding {
             widget,
-            target: Rc::clone(&component),
+            target: Rc::clone(component),
             name: argument.name.to_owned(),
             ty: argument.ty,
             expression: argument.expression.clone(),
@@ -252,7 +289,6 @@ pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Buil
             component: Rc::clone(parent),
         });
     }
-    Ok(built)
 }
 
 fn evaluate_argument(
