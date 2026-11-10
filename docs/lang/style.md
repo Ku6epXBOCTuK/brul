@@ -58,7 +58,7 @@
 | `justify-content`                                  | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
 | `align-items`                                      | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
 | `background`                                       | Color \| Gradient                 | transparent             | ✅                              |
-| `border` (шорткат: ширина+цвет)                    | px + (Color \| theme.*)           | 0, transparent          | ✅ (цвет)                       |
+| `border` (шорткат: ширина+цвет)                    | px + (Color \| theme.*)           | 0, transparent          | ❌ (только `border-color`)      |
 | `border-width`                                     | px                                | 0                       | ❌ геометрия                    |
 | `border-color`                                     | Color                             | transparent             | ✅                              |
 | `radius`                                           | px                                | 0                       | ❌ геометрия                    |
@@ -78,8 +78,12 @@ _«Меняется по состоянию?» = разрешено ли сво�
 
 `padding` — шорткат как в CSS: одно значение — все стороны, два — вертикаль и
 горизонталь, три — верх, горизонталь, низ, четыре — верх, право, низ, лево.
-Раскладывается в `padding-top/right/bottom/left` при парсинге, поэтому дальше
-свойства неотличимы от написанных по отдельности.
+`border` — шорткат из ширины и цвета: `border: 2px theme.border-main`. Оба
+раскладываются при парсинге (`padding` — в `padding-top/right/bottom/left`,
+`border` — в `border-width` и `border-color`), поэтому дальше свойства
+неотличимы от написанных по отдельности. Ширина — геометрия, поэтому `border` в
+`.class:state` запрещён, как и `border-width`; менять в состоянии можно только
+`border-color`.
 
 ## Текстовые метрики
 

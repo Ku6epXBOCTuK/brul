@@ -5,8 +5,7 @@ ClassRule   = "." Ident [ ":" State ] "{" { Prop } "}" ;
 State       = "hover" | "pressed" | "checked" | "selected" | "disabled" ;
 Prop        = Ident ":" Value { Value } ";" ;
 Value       = Number | Number "px" | Number "%" | Color | String
-            | ThemeRef | Gradient | Keyword | BorderValue ;
-BorderValue = Number "px" ( Color | ThemeRef ) ;   (* шорткат border: <ширина> <цвет> *)
+            | ThemeRef | Gradient | Keyword ;
 Keyword     = Ident ;
 Gradient    = "linear-gradient" "(" Number [ "deg" ] "," Color "," Color ")" ;
 ThemeRef    = "theme" "." Ident ;

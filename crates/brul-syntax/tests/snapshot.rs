@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    Border, BorderColor, ClassRule, Color, Kind, Property, SnapshotError, State, Stylesheet, Theme,
-    ThemeEntry, Value, parse_file,
+    ClassRule, Color, Kind, Property, SnapshotError, State, Stylesheet, Theme, ThemeEntry, Value,
+    parse_file,
 };
 
 fn gray(value: u8) -> Value {
@@ -124,41 +124,21 @@ fn border_theme_refs_resolve_to_a_color() {
     .expect("sheet");
     let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
 
+    assert_eq!(snapshot.get(Kind::BorderWidth), Some(&Value::Px(2.0)));
     assert_eq!(
-        snapshot.get(Kind::Border),
-        Some(&Value::Border(Border {
-            width: 2.0,
-            color: BorderColor::Color(Color::rgb(0x11, 0x11, 0x11)),
-        }))
+        snapshot.get(Kind::BorderColor),
+        Some(&Value::Color(Color::rgb(0x11, 0x11, 0x11)))
     );
 }
 
 #[test]
-fn border_theme_ref_to_a_non_color_is_an_error() {
-    let sheet = Stylesheet {
-        themes: vec![Theme {
-            name: "light".to_string(),
-            properties: vec![ThemeEntry {
-                key: "radius".to_string(),
-                value: Value::Px(4.0),
-            }],
-        }],
-        rules: vec![ClassRule {
-            class: "a".to_string(),
-            state: None,
-            properties: vec![Property {
-                kind: Kind::Border,
-                value: Value::Border(Border {
-                    width: 2.0,
-                    color: BorderColor::ThemeRef("radius".to_string()),
-                }),
-            }],
-        }],
-    };
+fn border_theme_ref_to_a_non_color_is_rejected_at_parse_time() {
+    let error =
+        parse_file("theme light { radius: 4px; }\n.a { border: 2px theme.radius; }").unwrap_err();
 
     assert_eq!(
-        sheet.snapshot(&["a"], None, None),
-        Err(SnapshotError::NotAColor("radius".to_string()))
+        error.message,
+        "theme key 'radius' is a px length, but 'border-color' expects a color"
     );
 }
 
@@ -167,7 +147,10 @@ fn literals_survive_without_themes() {
     let sheet = parse_file(".a { border: 2px #111111; }").expect("sheet");
     let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
 
-    assert!(matches!(snapshot.get(Kind::Border), Some(Value::Border(_))));
+    assert!(matches!(
+        snapshot.get(Kind::BorderColor),
+        Some(Value::Color(_))
+    ));
 }
 
 #[test]
@@ -175,7 +158,6 @@ fn snapshot_errors_render_distinct_messages() {
     let errors = [
         SnapshotError::UnknownTheme(String::from("dark")),
         SnapshotError::UnknownThemeKey(String::from("dark")),
-        SnapshotError::NotAColor(String::from("dark")),
     ];
 
     let mut messages: Vec<String> = errors.iter().map(|error| error.to_string()).collect();

@@ -7,7 +7,6 @@ rule! {
         State,
         Prop,
         Value,
-        BorderValue,
         Keyword,
         Gradient,
         ThemeRef,

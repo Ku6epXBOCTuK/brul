@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    Border, BorderColor, ClassRule, Color, Gradient, Kind, Property, State, Stylesheet, Theme,
-    ThemeEntry, Value, parse_file,
+    ClassRule, Color, Gradient, Kind, Property, State, Stylesheet, Theme, ThemeEntry, Value,
+    parse_file,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -295,35 +295,37 @@ fn border_shortcut_parses() {
         sheet(vec![
             rule(
                 "box",
-                vec![property(
-                    "border",
-                    Value::Border(Border {
-                        width: 2.0,
-                        color: BorderColor::Color(Color::rgb(0x3b, 0x82, 0xf6)),
-                    }),
-                )],
+                vec![
+                    property("border-width", Value::Px(2.0)),
+                    property("border-color", Value::Color(Color::rgb(0x3b, 0x82, 0xf6)),),
+                ],
             ),
             rule(
                 "small",
-                vec![property(
-                    "border",
-                    Value::Border(Border {
-                        width: 1.5,
-                        color: BorderColor::Color(Color::WHITE),
-                    }),
-                )],
+                vec![
+                    property("border-width", Value::Px(1.5)),
+                    property("border-color", Value::Color(Color::WHITE)),
+                ],
             ),
             rule(
                 "themed",
-                vec![property(
-                    "border",
-                    Value::Border(Border {
-                        width: 2.0,
-                        color: BorderColor::ThemeRef("border-main".to_owned()),
-                    }),
-                )],
+                vec![
+                    property("border-width", Value::Px(2.0)),
+                    property("border-color", Value::ThemeRef("border-main".to_owned())),
+                ],
             ),
         ])
+    );
+}
+
+#[test]
+fn border_in_a_state_is_rejected_through_its_width() {
+    let error = parse_file(".a { border: 2px #3b82f6; }\n.a:hover { border: 4px #3b82f6; }")
+        .expect_err("border in a state");
+
+    assert_eq!(
+        error.message,
+        "property 'border-width' cannot change in a state"
     );
 }
 
@@ -565,7 +567,7 @@ fn errors_point_at_the_source() {
         ),
         (
             "theme light { radius: 4px; }\n.a { border: 2px theme.radius; }",
-            "theme key 'radius' is a px length, but 'border' expects a color",
+            "theme key 'radius' is a px length, but 'border-color' expects a color",
             2,
             6,
         ),

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::style::ast::{Border, BorderColor, Property, State, Stylesheet, Theme, Value};
+use crate::style::ast::{Property, State, Stylesheet, Theme, Value};
 use crate::style::properties::Kind;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -47,7 +47,6 @@ impl Snapshot {
 pub enum SnapshotError {
     UnknownTheme(String),
     UnknownThemeKey(String),
-    NotAColor(String),
 }
 
 impl fmt::Display for SnapshotError {
@@ -55,7 +54,6 @@ impl fmt::Display for SnapshotError {
         match self {
             SnapshotError::UnknownTheme(name) => write!(f, "unknown theme '{name}'"),
             SnapshotError::UnknownThemeKey(name) => write!(f, "unknown theme key '{name}'"),
-            SnapshotError::NotAColor(name) => write!(f, "theme key '{name}' is not a color"),
         }
     }
 }
@@ -111,16 +109,6 @@ fn theme_value<'a>(theme: Option<&'a Theme>, key: &str) -> Result<&'a Value, Sna
 fn resolve(value: &Value, theme: Option<&Theme>) -> Result<Value, SnapshotError> {
     match value {
         Value::ThemeRef(key) => Ok(theme_value(theme, key)?.clone()),
-        Value::Border(border) => match &border.color {
-            BorderColor::ThemeRef(key) => match theme_value(theme, key)? {
-                Value::Color(color) => Ok(Value::Border(Border {
-                    width: border.width,
-                    color: BorderColor::Color(*color),
-                })),
-                _ => Err(SnapshotError::NotAColor(key.clone())),
-            },
-            BorderColor::Color(_) => Ok(value.clone()),
-        },
         value => Ok(value.clone()),
     }
 }

@@ -2,7 +2,7 @@ use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, Padding, StyleSet, StyleState, TextStyle,
     WidgetStyle,
 };
-use brul_syntax::style::{BorderColor, Kind, Property, Side, Snapshot, State, Stylesheet, Value};
+use brul_syntax::style::{Kind, Property, Side, Snapshot, State, Stylesheet, Value};
 
 pub struct Resolved {
     pub layout: LayoutStyle,
@@ -81,11 +81,6 @@ fn apply(
         }
         Kind::Spacing => layout.spacing = px_value(value, kind)?,
         Kind::BorderWidth => layout.border_width = px_value(value, kind)?,
-        Kind::Border => {
-            let border = border(value, kind)?;
-            layout.border_width = px(border.width);
-            style.border = border_color(&border.color);
-        }
         Kind::JustifyContent => layout.justify = justify(keyword(value, kind)?),
         Kind::AlignItems => layout.align = align(keyword(value, kind)?),
         Kind::Background => style.background = background(value)?,
@@ -149,13 +144,6 @@ fn background(value: &Value) -> Result<Color, String> {
     }
 }
 
-fn border(value: &Value, kind: Kind) -> Result<&brul_syntax::style::Border, String> {
-    match value {
-        Value::Border(value) => Ok(value),
-        _ => Err(expected(kind, "a border")),
-    }
-}
-
 fn dimension(value: &Value, kind: Kind) -> Result<Dimension, String> {
     match value {
         Value::Px(value) => Ok(Dimension::Px(px(*value))),
@@ -201,13 +189,6 @@ fn paint(value: &Value, kind: Kind) -> Result<Color, String> {
 
 fn expected(kind: Kind, ty: &str) -> String {
     format!("expected {ty} for '{}'", kind.name())
-}
-
-fn border_color(value: &BorderColor) -> Color {
-    match value {
-        BorderColor::Color(value) => color(*value),
-        BorderColor::ThemeRef(_) => Color::TRANSPARENT,
-    }
 }
 
 fn color(value: brul_syntax::style::Color) -> Color {

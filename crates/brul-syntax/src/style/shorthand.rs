@@ -10,16 +10,23 @@ pub struct Shorthand {
     pub parse: fn(&mut Cursor, &str) -> Result<Vec<Value>, Error>,
 }
 
-pub static SHORTHANDS: &[Shorthand] = &[Shorthand {
-    name: "padding",
-    kinds: &[
-        Kind::PaddingSide(Side::Top),
-        Kind::PaddingSide(Side::Right),
-        Kind::PaddingSide(Side::Bottom),
-        Kind::PaddingSide(Side::Left),
-    ],
-    parse: box_values,
-}];
+pub static SHORTHANDS: &[Shorthand] = &[
+    Shorthand {
+        name: "border",
+        kinds: &[Kind::BorderWidth, Kind::BorderColor],
+        parse: border_values,
+    },
+    Shorthand {
+        name: "padding",
+        kinds: &[
+            Kind::PaddingSide(Side::Top),
+            Kind::PaddingSide(Side::Right),
+            Kind::PaddingSide(Side::Bottom),
+            Kind::PaddingSide(Side::Left),
+        ],
+        parse: box_values,
+    },
+];
 
 pub fn get(name: &str) -> Option<&'static Shorthand> {
     SHORTHANDS.iter().find(|shorthand| shorthand.name == name)
@@ -34,6 +41,12 @@ impl Shorthand {
             .map(|(kind, value)| Property { kind, value })
             .collect()
     }
+}
+
+fn border_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
+    let width = value::value(cursor, true, Type::Px, name)?;
+    let color = value::value(cursor, true, Type::Color, name)?;
+    Ok(vec![width, color])
 }
 
 fn box_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {

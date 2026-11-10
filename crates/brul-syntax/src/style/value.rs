@@ -1,6 +1,6 @@
 use crate::cursor::Cursor;
 use crate::error::Error;
-use crate::style::ast::{Border, BorderColor, Color, Gradient, Value};
+use crate::style::ast::{Color, Gradient, Value};
 
 #[derive(Clone, Copy)]
 pub enum Type {
@@ -10,7 +10,6 @@ pub enum Type {
     Length,
     Color,
     Paint,
-    Border,
     String,
     Keywords(&'static [&'static str]),
     NumberRange(f64, f64),
@@ -29,7 +28,7 @@ impl Type {
     pub fn parse(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
         match self {
             Type::Number | Type::Px | Type::Length => self.number_value(cursor, name),
-            Type::Color | Type::Paint | Type::Border => self.paint_value(cursor, name),
+            Type::Color | Type::Paint => self.paint_value(cursor, name),
             Type::ThemeKey => theme_key(cursor, name),
             Type::String => string(cursor, name).map(Value::String),
             Type::Keywords(names) => keyword(cursor, name, names),
@@ -59,7 +58,6 @@ impl Type {
         match self {
             Type::Color => color(cursor, name).map(Value::Color),
             Type::Paint => paint(cursor, name),
-            Type::Border => border(cursor, name),
             _ => unreachable!("parse sends only paint types here"),
         }
     }
@@ -126,12 +124,6 @@ fn paint(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
     Ok(Value::Color(color(cursor, name)?))
 }
 
-fn border(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
-    let width = px(cursor, name)?;
-    let color = color_or_theme(cursor, name)?;
-    Ok(Value::Border(Border { width, color }))
-}
-
 fn color(cursor: &mut Cursor, name: &str) -> Result<Color, Error> {
     let at = cursor.value_start();
     let message = expected(name, "color");
@@ -147,27 +139,6 @@ fn color(cursor: &mut Cursor, name: &str) -> Result<Color, Error> {
             Err(Error::at(cursor.source(), at, message))
         }
         _ => Err(Error::at(cursor.source(), at, message)),
-    }
-}
-
-fn color_or_theme(cursor: &mut Cursor, name: &str) -> Result<BorderColor, Error> {
-    let at = cursor.value_start();
-    match cursor.peek() {
-        Some('#') => Ok(BorderColor::Color(hex_color(cursor)?)),
-        Some(ch) if ch.is_ascii_alphabetic() => {
-            if cursor.eat_keyword("theme") {
-                cursor.expect('.')?;
-                return Ok(BorderColor::ThemeRef(cursor.ident()?));
-            }
-            if cursor.eat_keyword("transparent") {
-                return Ok(BorderColor::Color(Color::TRANSPARENT));
-            }
-            if cursor.eat_keyword("white") {
-                return Ok(BorderColor::Color(Color::WHITE));
-            }
-            Err(Error::at(cursor.source(), at, expected(name, "color")))
-        }
-        _ => Err(Error::at(cursor.source(), at, expected(name, "color"))),
     }
 }
 

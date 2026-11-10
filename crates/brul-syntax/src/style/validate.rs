@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::style::ast::{BorderColor, ClassRule, Theme, ThemeEntry, Value};
+use crate::style::ast::{ClassRule, Theme, ThemeEntry, Value};
 use crate::style::properties::{Kind, StatePolicy, ThemeType};
 
 pub struct PropertyAt {
@@ -88,27 +88,13 @@ pub fn refs(
     };
     for (rule, position) in rules.iter().zip(positions) {
         for (property, at) in rule.properties.iter().zip(&position.properties) {
-            match &property.value {
-                Value::ThemeRef(key) => {
-                    let Some(expected) = property.kind.theme_type() else {
-                        continue;
-                    };
-                    check(source, declared, key, expected, property.kind, at.at)?;
-                }
-                Value::Border(border) => {
-                    if let BorderColor::ThemeRef(key) = &border.color {
-                        check(
-                            source,
-                            declared,
-                            key,
-                            ThemeType::Color,
-                            property.kind,
-                            at.at,
-                        )?;
-                    }
-                }
-                _ => {}
-            }
+            let Value::ThemeRef(key) = &property.value else {
+                continue;
+            };
+            let Some(expected) = property.kind.theme_type() else {
+                continue;
+            };
+            check(source, declared, key, expected, property.kind, at.at)?;
         }
     }
     Ok(())
