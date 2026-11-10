@@ -95,13 +95,13 @@ pub fn refs(
     };
     for (rule, position) in rules.iter().zip(positions) {
         for (property, at) in rule.properties.iter().zip(&position.properties) {
-            let spec =
-                properties::get(&property.name).expect("the parser rejects unknown properties");
-            let Some(expected) = spec.theme_type() else {
-                continue;
-            };
             match &property.value {
                 Value::ThemeRef(key) => {
+                    let spec = properties::get(&property.name)
+                        .expect("the parser rejects unknown properties");
+                    let Some(expected) = spec.theme_type() else {
+                        continue;
+                    };
                     check(source, declared, key, expected, &property.name, at.at)?;
                 }
                 Value::Border(border) => {

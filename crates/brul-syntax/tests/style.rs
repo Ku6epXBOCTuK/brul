@@ -531,6 +531,12 @@ fn errors_point_at_the_source() {
             6,
         ),
         (
+            "theme light { radius: 4px; }\n.a { border: 2px theme.radius; }",
+            "theme key 'radius' is a px length, but 'border' expects a color",
+            2,
+            6,
+        ),
+        (
             ".a { stretch: theme.x; }",
             "expected number for 'stretch'",
             1,
