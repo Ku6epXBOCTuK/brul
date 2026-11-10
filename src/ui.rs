@@ -187,20 +187,21 @@ impl Ui {
             let component = Rc::clone(&self.component);
             let requests = Rc::clone(&self.requests);
             let initialized = Rc::new(Cell::new(false));
-            let last: Rc<RefCell<Option<Value>>> = Rc::new(RefCell::new(None));
+            let last: Rc<Cell<Option<Value>>> = Rc::new(Cell::new(None));
             let scope = self.scope.child();
             scope.run(|| {
                 Effect::new(move || {
                     component.borrow().track();
                     let value = (structure.value)(&mut component.borrow_mut()).ok();
                     if !initialized.replace(true) {
-                        *last.borrow_mut() = value;
+                        last.set(value);
                         return;
                     }
-                    if *last.borrow() == value {
+                    let changed = last.take().as_ref() != value.as_ref();
+                    last.set(value);
+                    if !changed {
                         return;
                     }
-                    *last.borrow_mut() = value;
                     let mut requests = requests.borrow_mut();
                     if !requests.contains(&structure.parent) {
                         requests.push(structure.parent);
