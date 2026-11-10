@@ -13,6 +13,7 @@ window Demo (title: "demo") {
 "#;
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
+    component.borrow_mut().set_names(names());
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut structures = Vec::new();
@@ -90,6 +91,7 @@ window Styled (title: "styled") {
 "#;
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
+    component.borrow_mut().set_names(names());
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut structures = Vec::new();
@@ -161,7 +163,7 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(module.contains(r#"let widget0 = brul_gui::Widget::text("");"#));
     assert!(module.contains(
-        r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read("name")?; Ok(value) })));"#
+        r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read_id(brul::VariableId::from_index(0))?; Ok(value) })));"#
     ));
 }
 
@@ -226,11 +228,11 @@ window Demo (title: "demo") {
         );
     }
     assert!(module.contains(
-        r#"brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read("left")?; Ok(value) }"#
+        r#"brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read_id(brul::VariableId::from_index(3))?; Ok(value) }"#
     ));
     assert!(
         module.contains(
-            r#"y: Some(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read("top")?; Ok(value) }"#
+            r#"y: Some(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read_id(brul::VariableId::from_index(4))?; Ok(value) }"#
         )
     );
 }
@@ -505,23 +507,28 @@ fn emits_every_expression_kind() {
 }
 
 fn operated(source: &str) -> String {
-    emit::operation(&brul_syntax::parser::parse_expression(source).expect("expression parses"))
+    let expression = brul_syntax::parser::parse_expression(source).expect("expression parses");
+    let names = emit::identifiers(&expression);
+    emit::operation(&expression, &names)
 }
 
 #[test]
 fn emits_value_literals_and_reads() {
-    assert_eq!(operated("x"), "component.read(\"x\")?");
+    assert_eq!(
+        operated("x"),
+        "component.read_id(brul::VariableId::from_index(0))?"
+    );
     assert_eq!(operated("42"), "brul::Value::Number(42.0)");
     assert_eq!(operated("\"hi\""), "brul::Value::String(\"hi\".to_owned())");
     assert_eq!(operated("true"), "brul::Value::Bool(true)");
     assert_eq!(operated("null"), "brul::Value::Null");
     assert_eq!(
         operated("a.b"),
-        "brul::eval::read_field(&(component.read(\"a\")?), \"b\")?"
+        "brul::eval::read_field(&(component.read_id(brul::VariableId::from_index(0))?), \"b\")?"
     );
     assert_eq!(
         operated("a[0]"),
-        "brul::eval::read_index(&(component.read(\"a\")?), &(brul::Value::Number(0.0)))?"
+        "brul::eval::read_index(&(component.read_id(brul::VariableId::from_index(0))?), &(brul::Value::Number(0.0)))?"
     );
 }
 
@@ -529,7 +536,7 @@ fn emits_value_literals_and_reads() {
 fn emits_value_operations() {
     assert_eq!(
         operated("!x"),
-        "brul::eval::apply_unary(brul::ast::UnaryOp::Not, component.read(\"x\")?)?"
+        "brul::eval::apply_unary(brul::ast::UnaryOp::Not, component.read_id(brul::VariableId::from_index(0))?)?"
     );
     assert_eq!(
         operated("1 + 2"),
@@ -537,7 +544,7 @@ fn emits_value_operations() {
     );
     assert_eq!(
         operated("[1, x]"),
-        "brul::Value::Array(vec![brul::Value::Number(1.0), component.read(\"x\")?])"
+        "brul::Value::Array(vec![brul::Value::Number(1.0), component.read_id(brul::VariableId::from_index(0))?])"
     );
     assert_eq!(
         operated("{ a: 1 }"),
@@ -545,7 +552,7 @@ fn emits_value_operations() {
     );
     assert_eq!(
         operated("`v=${x}`"),
-        "brul::Value::String(brul::eval::template(vec![brul::Value::String(\"v=\".to_owned()), component.read(\"x\")?])?)"
+        "brul::Value::String(brul::eval::template(vec![brul::Value::String(\"v=\".to_owned()), component.read_id(brul::VariableId::from_index(0))?])?)"
     );
 }
 
@@ -574,7 +581,8 @@ fn emits_value_assignments() {
         "{source}"
     );
     assert!(
-        source.contains("let mut container0 = component.read(\"a\")?;"),
+        source
+            .contains("let mut container0 = component.read_id(brul::VariableId::from_index(0))?;"),
         "{source}"
     );
     assert!(
@@ -582,7 +590,8 @@ fn emits_value_assignments() {
         "{source}"
     );
     assert!(
-        source.contains("component.assign(\"a\", container0.clone())?;"),
+        source
+            .contains("component.assign_id(brul::VariableId::from_index(0), container0.clone())?;"),
         "{source}"
     );
     assert!(source.ends_with("value }"), "{source}");
@@ -593,7 +602,9 @@ fn emits_value_assignments() {
         operated("items[0] = x")
     );
     assert!(
-        operated("x += 1").contains("brul::ast::BinaryOp::Add, component.read(\"x\")?"),
+        operated("x += 1").contains(
+            "brul::ast::BinaryOp::Add, component.read_id(brul::VariableId::from_index(0))?"
+        ),
         "{}",
         operated("x += 1")
     );

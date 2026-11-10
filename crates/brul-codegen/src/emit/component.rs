@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use brul_script::Names;
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Element, Event, Member, Prop, PropType};
@@ -45,6 +46,7 @@ pub(super) fn component(
         },
         frame,
         counter,
+        emit.names,
     );
     Ok(())
 }
@@ -186,7 +188,14 @@ fn defaults<'a>(
     Ok(defaults)
 }
 
-fn write(out: &mut String, index: usize, call: Call<'_>, frame: Frame<'_>, counter: &mut usize) {
+fn write(
+    out: &mut String,
+    index: usize,
+    call: Call<'_>,
+    frame: Frame<'_>,
+    counter: &mut usize,
+    names: &Names<'_>,
+) {
     let Call {
         name,
         props,
@@ -210,8 +219,8 @@ fn write(out: &mut String, index: usize, call: Call<'_>, frame: Frame<'_>, count
         "{inner}    script: component{index}_script().as_ref(),"
     );
     let _ = writeln!(out, "{inner}    name: {name:?},");
-    arguments(out, "props", &props, &inner);
-    arguments(out, "defaults", &defaults, &inner);
+    arguments(out, "props", &props, &inner, names);
+    arguments(out, "defaults", &defaults, &inner, names);
     let _ = writeln!(out, "{inner}    events: &[");
     for (event, handler, params) in &events {
         let params = params
@@ -234,13 +243,19 @@ fn write(out: &mut String, index: usize, call: Call<'_>, frame: Frame<'_>, count
     let _ = write!(out, "{pad}}}");
 }
 
-fn arguments(out: &mut String, field: &str, arguments: &[(&str, PropType, &Expr)], inner: &str) {
+fn arguments(
+    out: &mut String,
+    field: &str,
+    arguments: &[(&str, PropType, &Expr)],
+    inner: &str,
+    names: &Names<'_>,
+) {
     let _ = writeln!(out, "{inner}    {field}: &[");
     for (name, ty, value) in arguments {
         let _ = writeln!(
             out,
             "{inner}        brul::PropArgument {{ name: {name:?}, ty: brul::PropType::{ty:?}, expression: {} }},",
-            expression::closure(value)
+            expression::closure(value, names)
         );
     }
     let _ = writeln!(out, "{inner}    ],");

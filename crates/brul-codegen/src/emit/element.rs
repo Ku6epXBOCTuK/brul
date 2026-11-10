@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
 use brul_gui::TextStyleSet;
+use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element};
@@ -40,8 +41,8 @@ pub(super) fn widget(
     let text = kind(out, element, &resolved, emit, frame, counter)?;
     modifiers(out, &resolved, events.drag, &inner);
     out.push_str(";\n");
-    text_binding(out, text, &name, &inner);
-    parameters(out, element, &name, &inner)?;
+    text_binding(out, text, &name, &inner, emit.names);
+    parameters(out, element, &name, &inner, emit.names)?;
     handler_bindings(out, &events.handlers, &name, &inner);
     let _ = writeln!(out, "{inner}{name}");
     let _ = write!(out, "{pad}}}");
@@ -115,14 +116,14 @@ fn modifiers(out: &mut String, resolved: &styles::Resolved, drag: bool, inner: &
     }
 }
 
-fn text_binding(out: &mut String, text: Option<Expr>, name: &str, inner: &str) {
+fn text_binding(out: &mut String, text: Option<Expr>, name: &str, inner: &str, names: &Names<'_>) {
     let Some(expression) = text else {
         return;
     };
     let _ = writeln!(
         out,
         "{inner}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Text({})));",
-        expression::closure(&expression)
+        expression::closure(&expression, names)
     );
 }
 
@@ -206,7 +207,13 @@ fn text_widget(
     }
 }
 
-fn parameters(out: &mut String, element: &Element, name: &str, pad: &str) -> Result<(), Error> {
+fn parameters(
+    out: &mut String,
+    element: &Element,
+    name: &str,
+    pad: &str,
+    names: &Names<'_>,
+) -> Result<(), Error> {
     let mut x = None;
     let mut y = None;
     for arg in &element.args {
@@ -240,12 +247,12 @@ fn parameters(out: &mut String, element: &Element, name: &str, pad: &str) -> Res
         let _ = writeln!(
             out,
             "{pad}bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
-            expression::closure(value)
+            expression::closure(value, names)
         );
     }
     if x.is_some() || y.is_some() {
-        let x = optional_expression(x);
-        let y = optional_expression(y);
+        let x = optional_expression(x, names);
+        let y = optional_expression(y, names);
         let _ = writeln!(
             out,
             "{pad}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Offset {{ x: {x}, y: {y} }}));"
@@ -254,9 +261,9 @@ fn parameters(out: &mut String, element: &Element, name: &str, pad: &str) -> Res
     Ok(())
 }
 
-fn optional_expression(value: Option<&Expr>) -> String {
+fn optional_expression(value: Option<&Expr>, names: &Names<'_>) -> String {
     match value {
-        Some(item) => format!("Some({})", expression::closure(item)),
+        Some(item) => format!("Some({})", expression::closure(item, names)),
         None => "None".to_owned(),
     }
 }

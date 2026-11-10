@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_reactive::{Effect, flush};
-use brul_script::{Component, Error, Value, Variable, eval};
+use brul_script::{Component, Error, Value, Variable, VariableId, eval};
 use brul_syntax::parser::parse_expression;
 
 fn evaluate(component: &mut Component, source: &str) -> Result<Value, Error> {
@@ -24,6 +24,31 @@ fn property_reads_its_value() {
         .unwrap();
 
     assert_eq!(component.read("checked"), Ok(Value::Bool(false)));
+}
+
+#[test]
+fn ids_address_the_same_bindings_as_names() {
+    let mut component = Component::new();
+    component.set_names(&["checked", "count"]);
+    component
+        .declare("count", Value::Number(2.0), false)
+        .unwrap();
+    component
+        .declare_property("checked", Value::Bool(false))
+        .unwrap();
+
+    assert_eq!(
+        component.read_id(VariableId::from_index(1)),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        component.read_id(VariableId::from_index(0)),
+        Ok(Value::Bool(false))
+    );
+    component
+        .assign_id(VariableId::from_index(0), Value::Bool(true))
+        .unwrap();
+    assert_eq!(component.read("checked"), Ok(Value::Bool(true)));
 }
 
 #[test]

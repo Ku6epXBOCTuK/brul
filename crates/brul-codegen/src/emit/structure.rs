@@ -8,6 +8,8 @@ use super::Frame;
 use super::expression::operation;
 use super::items;
 
+use brul_script::Names;
+
 pub(super) fn structure_if(
     out: &mut String,
     block: &IfBlock,
@@ -17,7 +19,8 @@ pub(super) fn structure_if(
 ) -> Result<(), Error> {
     let index = *emit.next_structure;
     *emit.next_structure += 1;
-    emit.functions.push(value_function(index, &block.condition));
+    emit.functions
+        .push(value_function(index, &block.condition, emit.names));
     emit.functions.push(dispatcher(index, emit));
     let themes = themes(emit);
     for (position, theme) in themes.iter().enumerate() {
@@ -38,9 +41,9 @@ pub(super) fn structure_each(
     let index = *emit.next_structure;
     *emit.next_structure += 1;
     emit.functions
-        .push(value_function(index, &block.collection));
+        .push(value_function(index, &block.collection, emit.names));
     if let Some(key) = &block.key {
-        emit.functions.push(key_function(index, key));
+        emit.functions.push(key_function(index, key, emit.names));
     }
     emit.functions.push(dispatcher(index, emit));
     let themes = themes(emit);
@@ -52,25 +55,25 @@ pub(super) fn structure_each(
     Ok(())
 }
 
-fn value_function(index: usize, value: &brul_syntax::ast::Expr) -> String {
+fn value_function(index: usize, value: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
     format!(
         "fn structure{index}_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
     let value = {};
     Ok(value)
 }}
 ",
-        operation(value)
+        operation(value, names)
     )
 }
 
-fn key_function(index: usize, key: &brul_syntax::ast::Expr) -> String {
+fn key_function(index: usize, key: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
     format!(
         "fn structure{index}_key(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
     let value = {};
     Ok(value)
 }}
 ",
-        operation(key)
+        operation(key, names)
     )
 }
 

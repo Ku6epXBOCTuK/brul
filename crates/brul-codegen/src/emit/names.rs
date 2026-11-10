@@ -131,7 +131,7 @@ fn statement_node<'a>(statement: &'a Statement, names: &mut Names<'a>) {
     }
 }
 
-fn expression<'a>(expr: &'a Expr, names: &mut Names<'a>) {
+pub(super) fn expression<'a>(expr: &'a Expr, names: &mut Names<'a>) {
     match &expr.kind {
         ExprKind::Ident(name) => {
             names.intern(name);

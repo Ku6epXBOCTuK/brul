@@ -8,6 +8,7 @@ use crate::environment::Environment;
 use crate::error::Error;
 use crate::execute::execute;
 use crate::host::Host;
+use crate::names::VariableId;
 use crate::value::Value;
 
 struct Property {
@@ -22,6 +23,7 @@ pub struct Variable {
 }
 
 pub struct Component {
+    names: &'static [&'static str],
     environment: Environment,
     properties: Vec<Property>,
     functions: Vec<Function>,
@@ -35,6 +37,7 @@ pub struct Component {
 impl Default for Component {
     fn default() -> Self {
         Self {
+            names: &[],
             environment: Environment::default(),
             properties: Vec::new(),
             functions: Vec::new(),
@@ -50,6 +53,14 @@ impl Default for Component {
 impl Component {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn set_names(&mut self, names: &'static [&'static str]) {
+        self.names = names;
+    }
+
+    pub fn names(&self) -> &'static [&'static str] {
+        self.names
     }
 
     pub fn set_host(&mut self, host: impl Host + 'static) {
@@ -187,6 +198,10 @@ impl Component {
         Err(Error::Undefined(name.to_owned()))
     }
 
+    pub fn read_id(&self, id: VariableId) -> Result<Value, Error> {
+        self.read(self.name(id))
+    }
+
     pub fn assign(&mut self, name: &str, value: Value) -> Result<(), Error> {
         if self.environment.contains(name) {
             self.environment.assign(name, value)?;
@@ -199,6 +214,10 @@ impl Component {
             return Ok(());
         }
         Err(Error::Undefined(name.to_owned()))
+    }
+
+    pub fn assign_id(&mut self, id: VariableId, value: Value) -> Result<(), Error> {
+        self.assign(self.name(id), value)
     }
 
     pub fn assign_property(&mut self, name: &str, value: Value) -> Result<(), Error> {
@@ -218,5 +237,12 @@ impl Component {
         self.properties
             .iter()
             .find(|property| property.name == name)
+    }
+
+    fn name(&self, id: VariableId) -> &'static str {
+        self.names
+            .get(id.index() as usize)
+            .copied()
+            .expect("variable id is in the name table")
     }
 }

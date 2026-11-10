@@ -20,6 +20,7 @@ pub(super) fn view(
         out,
         "pub fn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {{"
     );
+    out.push_str("    component.borrow_mut().set_names(names());\n");
     out.push_str("    let mut bindings = Vec::new();\n");
     out.push_str("    let mut handlers = Vec::new();\n");
     out.push_str("    let mut structures = Vec::new();\n");

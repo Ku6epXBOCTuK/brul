@@ -1,3 +1,4 @@
+use brul_script::Names;
 use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
 
@@ -17,12 +18,19 @@ mod view;
 pub use expression::{expression, operation};
 pub use module::{module, module_file};
 
+pub fn identifiers(expression: &brul_syntax::ast::Expr) -> Names<'_> {
+    let mut names = Names::new();
+    names::expression(expression, &mut names);
+    names
+}
+
 pub(super) use element::items;
 
 pub(super) struct Emit<'a> {
     registry: &'a Registry,
     imports: &'a [Import],
     stylesheet: &'a Stylesheet,
+    names: &'a Names<'a>,
     program: Option<&'a Program>,
     functions: &'a mut Vec<String>,
     next_structure: &'a mut usize,
