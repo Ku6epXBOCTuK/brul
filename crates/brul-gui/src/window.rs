@@ -668,8 +668,8 @@ mod tests {
     use super::{
         EventHandler, Step, Surface, Timer, TreeApp, WindowConfig, WindowError, due, wakeup,
     };
-    use crate::WidgetError;
     use crate::widget::{Widget, WidgetEvent, WidgetTree};
+    use crate::{TextEngine, WidgetError};
 
     struct FakeSurface {
         scale: f64,
@@ -914,6 +914,27 @@ mod tests {
         assert_eq!(surface.redraws.get(), 1);
     }
 
+    #[test]
+    fn an_engine_lays_the_tree_out_on_a_resize() {
+        let surface = FakeSurface::new(2.0);
+        let mut app = tree_app(commands(Vec::new()));
+        app.engine = Some(TextEngine::new());
+
+        assert_eq!(app.resize(&surface, 4, 5), Step::Continue);
+        assert_eq!(surface.redraws.get(), 1);
+        assert!(!app.tree.borrow().layout_dirty());
+    }
+
+    #[test]
+    fn an_invalid_scale_ends_the_loop() {
+        let surface = FakeSurface::new(0.0);
+        let mut app = tree_app(commands(Vec::new()));
+        app.engine = Some(TextEngine::new());
+
+        assert_eq!(app.resize(&surface, 4, 5), Step::Exit);
+        assert_eq!(surface.redraws.get(), 0);
+        assert!(app.error.borrow().is_some());
+    }
     #[test]
     fn a_failing_widget_event_is_reported_and_stops_the_loop() {
         let surface = FakeSurface::new(1.0);
