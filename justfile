@@ -1,3 +1,6 @@
+generate-rules:
+    cargo run -p brul-syntax --bin rules
+
 check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings

@@ -1,3 +1,4 @@
+// NOTE: generated from docs/lang/markup.ebnf; do not edit.
 rule! {
     pub enum Rule {
         File,

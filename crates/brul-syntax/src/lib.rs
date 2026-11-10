@@ -20,6 +20,7 @@ macro_rules! rule {
 
 pub mod ast;
 pub mod cursor;
+pub mod ebnf;
 pub mod error;
 pub mod lexer;
 pub mod markup;

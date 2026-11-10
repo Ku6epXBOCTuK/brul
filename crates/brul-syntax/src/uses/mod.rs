@@ -1,14 +1,9 @@
+mod rule;
+
 use crate::error::Error;
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
 
-rule! {
-    pub enum Rule {
-        File,
-        Use,
-        Ident,
-        String,
-    }
-}
+pub use rule::Rule;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Use {
