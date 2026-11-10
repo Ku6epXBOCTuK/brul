@@ -301,6 +301,32 @@ fn wakeup(timers: &[Timer]) -> ControlFlow {
     }
 }
 
+trait Surface {
+    fn scale_factor(&self) -> f64;
+    fn drag(&self);
+    fn redraw(&self);
+}
+
+impl Surface for Arc<dyn Window> {
+    fn scale_factor(&self) -> f64 {
+        Window::scale_factor(self.as_ref())
+    }
+
+    fn drag(&self) {
+        let _ = self.as_ref().drag_window();
+    }
+
+    fn redraw(&self) {
+        self.as_ref().request_redraw();
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    Continue,
+    Exit,
+}
+
 struct TreeApp {
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
@@ -322,11 +348,17 @@ impl ApplicationHandler for TreeApp {
 
         let window = match create_window(event_loop, &self.config) {
             Ok(window) => window,
-            Err(error) => return self.fail(event_loop, error),
+            Err(error) => {
+                let step = self.fail(error);
+                return self.finish(event_loop, step);
+            }
         };
         let gpu = match Gpu::new(&window) {
             Ok(gpu) => gpu,
-            Err(error) => return self.fail(event_loop, error),
+            Err(error) => {
+                let step = self.fail(error);
+                return self.finish(event_loop, step);
+            }
         };
         let scheme = system_scheme(event_loop.system_theme().as_ref());
         self.tree = (self.build)(scheme);
@@ -341,7 +373,8 @@ impl ApplicationHandler for TreeApp {
                 .borrow_mut()
                 .layout(&mut engine, viewport, window.scale_factor() as f32);
         if let Err(error) = layout {
-            return self.fail(event_loop, WindowError::stage("widgets", error));
+            let step = self.fail(WindowError::stage("widgets", error));
+            return self.finish(event_loop, step);
         }
 
         self.window = Some(Arc::clone(&window));
@@ -371,7 +404,8 @@ impl ApplicationHandler for TreeApp {
         match input {
             Some(Input::Exit) => event_loop.exit(),
             Some(Input::Key { code, exit }) => {
-                self.dispatch_events(event_loop, &window, vec![WidgetEvent::Key(code)]);
+                let step = self.dispatch_events(&window, vec![WidgetEvent::Key(code)]);
+                self.finish(event_loop, step);
                 if exit {
                     event_loop.exit();
                 }
@@ -379,11 +413,13 @@ impl ApplicationHandler for TreeApp {
             Some(Input::Moved(x, y)) => {
                 let (x, y) = point(x, y);
                 let events = self.tree.borrow_mut().pointer_moved(x, y);
-                self.dispatch(event_loop, &window, events);
+                let step = self.dispatch(&window, events);
+                self.finish(event_loop, step);
             }
             Some(Input::Left) => {
                 let events = self.tree.borrow_mut().pointer_leave();
-                self.dispatch_events(event_loop, &window, events);
+                let step = self.dispatch_events(&window, events);
+                self.finish(event_loop, step);
             }
             Some(Input::Down(x, y)) => {
                 if self.config.is_header(y, window.scale_factor()) {
@@ -392,21 +428,25 @@ impl ApplicationHandler for TreeApp {
                 }
                 let (x, y) = point(x, y);
                 let events = self.tree.borrow_mut().pointer_down(x, y);
-                self.dispatch(event_loop, &window, events);
+                let step = self.dispatch(&window, events);
+                self.finish(event_loop, step);
             }
             Some(Input::Up(x, y)) => {
                 let (x, y) = point(x, y);
                 let events = self.tree.borrow_mut().pointer_up(x, y);
-                self.dispatch(event_loop, &window, events);
+                let step = self.dispatch(&window, events);
+                self.finish(event_loop, step);
             }
             Some(Input::Theme(scheme)) => {
                 self.tree = (self.build)(scheme);
                 let size = window.surface_size();
-                self.resize(event_loop, &window, size.width, size.height);
+                let step = self.resize(&window, size.width, size.height);
+                self.finish(event_loop, step);
             }
             Some(Input::Surface) => {
                 let size = window.surface_size();
-                self.resize(event_loop, &window, size.width, size.height);
+                let step = self.resize(&window, size.width, size.height);
+                self.finish(event_loop, step);
             }
             Some(Input::Redraw) => self.render(event_loop, &window),
             None => {}
@@ -425,7 +465,8 @@ impl ApplicationHandler for TreeApp {
         if !events.is_empty()
             && let Some(window) = self.window.clone()
         {
-            self.dispatch_events(event_loop, &window, events);
+            let step = self.dispatch_events(&window, events);
+            self.finish(event_loop, step);
         }
 
         event_loop.set_control_flow(wakeup(&self.timers));
@@ -433,66 +474,64 @@ impl ApplicationHandler for TreeApp {
 }
 
 impl TreeApp {
-    fn fail(&mut self, event_loop: &dyn ActiveEventLoop, error: WindowError) {
+    fn fail(&mut self, error: WindowError) -> Step {
         *self.error.borrow_mut() = Some(error);
-        event_loop.exit();
+        Step::Exit
+    }
+
+    fn finish(&mut self, event_loop: &dyn ActiveEventLoop, step: Step) {
+        if step == Step::Exit {
+            event_loop.exit();
+        }
     }
 
     fn dispatch(
         &mut self,
-        event_loop: &dyn ActiveEventLoop,
-        window: &Arc<dyn Window>,
+        surface: &dyn Surface,
         events: Result<Vec<WidgetEvent>, crate::WidgetError>,
-    ) {
+    ) -> Step {
         match events {
-            Ok(events) => self.dispatch_events(event_loop, window, events),
-            Err(error) => self.fail(event_loop, WindowError::stage("widgets", error)),
+            Ok(events) => self.dispatch_events(surface, events),
+            Err(error) => self.fail(WindowError::stage("widgets", error)),
         }
     }
 
-    fn dispatch_events(
-        &mut self,
-        event_loop: &dyn ActiveEventLoop,
-        window: &Arc<dyn Window>,
-        events: Vec<WidgetEvent>,
-    ) {
+    fn dispatch_events(&mut self, surface: &dyn Surface, events: Vec<WidgetEvent>) -> Step {
         if events.is_empty() {
-            return;
+            return Step::Continue;
         }
-        if events
+        let drag = events
             .iter()
-            .any(|event| matches!(event, WidgetEvent::Drag(_)))
-        {
-            let _ = window.drag_window();
+            .any(|event| matches!(event, WidgetEvent::Drag(_)));
+        if drag {
+            surface.drag();
         }
         let commands = (self.handler)(&events);
+        let step = self.run_commands(surface, commands);
+        brul_reactive::flush();
+        if self.tree.borrow().snapshot_dirty() {
+            surface.redraw();
+        }
+        step
+    }
+
+    fn run_commands(&mut self, surface: &dyn Surface, commands: Vec<WindowCommand>) -> Step {
         for command in commands {
             match command {
-                WindowCommand::Exit => event_loop.exit(),
-                WindowCommand::Drag => {
-                    let _ = window.drag_window();
-                }
+                WindowCommand::Exit => return Step::Exit,
+                WindowCommand::Drag => surface.drag(),
                 WindowCommand::Every { interval, function } => {
                     self.timers.push(Timer::new(interval, function));
                 }
                 WindowCommand::SetTheme(_) => {}
             }
         }
-        brul_reactive::flush();
-        if self.tree.borrow().snapshot_dirty() {
-            window.request_redraw();
-        }
+        Step::Continue
     }
 
-    fn resize(
-        &mut self,
-        event_loop: &dyn ActiveEventLoop,
-        window: &Arc<dyn Window>,
-        width: u32,
-        height: u32,
-    ) {
+    fn resize(&mut self, surface: &dyn Surface, width: u32, height: u32) -> Step {
         if width == 0 || height == 0 {
-            return;
+            return Step::Continue;
         }
         if let Some(gpu) = self.gpu.as_mut() {
             gpu.resize(width, height);
@@ -501,25 +540,27 @@ impl TreeApp {
             Some(engine) => self.tree.borrow_mut().layout(
                 engine,
                 Size { width, height },
-                window.scale_factor() as f32,
+                surface.scale_factor() as f32,
             ),
             None => Ok(()),
         };
         if let Err(error) = layout {
-            return self.fail(event_loop, WindowError::stage("widgets", error));
+            return self.fail(WindowError::stage("widgets", error));
         }
         if let Some(frame) = self.frame.as_mut() {
             frame.resize(width, height);
         } else {
             self.frame = Some(Frame::new(width, height));
         }
-        window.request_redraw();
+        surface.redraw();
+        Step::Continue
     }
 
     fn render(&mut self, event_loop: &dyn ActiveEventLoop, window: &Arc<dyn Window>) {
         brul_reactive::flush();
         if let Err(error) = self.render_frame(window) {
-            self.fail(event_loop, WindowError::stage("widgets", error));
+            let step = self.fail(WindowError::stage("widgets", error));
+            self.finish(event_loop, step);
         }
     }
 
@@ -617,12 +658,67 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
     use std::time::{Duration, Instant};
 
     use winit::event_loop::ControlFlow;
 
-    use super::{Timer, WindowConfig, WindowError, due, wakeup};
-    use crate::widget::WidgetEvent;
+    use super::WindowCommand;
+    use super::{
+        EventHandler, Step, Surface, Timer, TreeApp, WindowConfig, WindowError, due, wakeup,
+    };
+    use crate::WidgetError;
+    use crate::widget::{Widget, WidgetEvent, WidgetTree};
+
+    struct FakeSurface {
+        scale: f64,
+        drags: Cell<usize>,
+        redraws: Cell<usize>,
+    }
+
+    impl FakeSurface {
+        fn new(scale: f64) -> Self {
+            Self {
+                scale,
+                drags: Cell::new(0),
+                redraws: Cell::new(0),
+            }
+        }
+    }
+
+    impl Surface for FakeSurface {
+        fn scale_factor(&self) -> f64 {
+            self.scale
+        }
+
+        fn drag(&self) {
+            self.drags.set(self.drags.get() + 1);
+        }
+
+        fn redraw(&self) {
+            self.redraws.set(self.redraws.get() + 1);
+        }
+    }
+
+    fn tree_app(handler: EventHandler) -> TreeApp {
+        TreeApp {
+            config: WindowConfig::default(),
+            tree: Rc::new(RefCell::new(WidgetTree::new(Widget::text("")))),
+            build: Box::new(|_| Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))),
+            handler,
+            window: None,
+            gpu: None,
+            engine: None,
+            frame: None,
+            error: Rc::new(RefCell::new(None)),
+            timers: Vec::new(),
+        }
+    }
+
+    fn commands(commands: Vec<WindowCommand>) -> EventHandler {
+        Box::new(move |_| commands.clone())
+    }
 
     #[test]
     fn default_config_is_valid() {
@@ -742,5 +838,89 @@ mod tests {
             wakeup(&timers),
             ControlFlow::WaitUntil(now + Duration::from_secs(1))
         );
+    }
+
+    #[test]
+    fn an_empty_event_list_changes_nothing() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+
+        assert_eq!(app.dispatch_events(&surface, Vec::new()), Step::Continue);
+        assert_eq!(surface.drags.get(), 0);
+        assert_eq!(surface.redraws.get(), 0);
+    }
+
+    #[test]
+    fn a_drag_event_drags_the_window() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+        let widget = Widget::text("x").id();
+
+        let step = app.dispatch_events(&surface, vec![WidgetEvent::Drag(widget)]);
+        assert_eq!(step, Step::Continue);
+        assert_eq!(surface.drags.get(), 1);
+    }
+
+    #[test]
+    fn the_exit_command_finishes_the_loop() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(vec![WindowCommand::Exit]));
+        let widget = Widget::text("x").id();
+
+        let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(step, Step::Exit);
+    }
+
+    #[test]
+    fn a_drag_command_drags_the_window() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(vec![WindowCommand::Drag]));
+        let widget = Widget::text("x").id();
+
+        app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(surface.drags.get(), 1);
+    }
+
+    #[test]
+    fn a_timer_command_is_kept() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(vec![WindowCommand::Every {
+            interval: Duration::from_millis(100),
+            function: "tick".to_owned(),
+        }]));
+        let widget = Widget::text("x").id();
+
+        app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(app.timers.len(), 1);
+    }
+
+    #[test]
+    fn a_size_of_zero_is_ignored() {
+        let surface = FakeSurface::new(2.0);
+        let mut app = tree_app(commands(Vec::new()));
+
+        assert_eq!(app.resize(&surface, 0, 10), Step::Continue);
+        assert_eq!(surface.redraws.get(), 0);
+        assert!(app.frame.is_none());
+    }
+
+    #[test]
+    fn a_resize_makes_the_frame_and_asks_for_a_redraw() {
+        let surface = FakeSurface::new(2.0);
+        let mut app = tree_app(commands(Vec::new()));
+
+        assert_eq!(app.resize(&surface, 4, 5), Step::Continue);
+        assert!(app.frame.is_some());
+        assert_eq!(surface.redraws.get(), 1);
+    }
+
+    #[test]
+    fn a_failing_widget_event_is_reported_and_stops_the_loop() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+
+        let step = app.dispatch(&surface, Err(WidgetError::NoLayout));
+        assert_eq!(step, Step::Exit);
+        assert!(app.error.borrow().is_some());
     }
 }
