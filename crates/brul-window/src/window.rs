@@ -9,9 +9,10 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+use brul_gui::{WidgetEvent, WidgetTree};
+
 use crate::gpu::Gpu;
 use crate::input::{Input, event_input, window_input};
-use crate::widget::{WidgetEvent, WidgetTree};
 
 const CLEAR: wgpu::Color = wgpu::Color {
     r: 0.08,

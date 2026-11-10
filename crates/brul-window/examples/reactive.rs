@@ -1,12 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_gui::window::{WindowConfig, run_tree};
 use brul_gui::{
     Color, Dimension, LayoutStyle, Padding, StyleSet, StyleState, Widget, WidgetEvent, WidgetStyle,
     WidgetTree,
 };
 use brul_reactive::{Effect, Signal, batch};
+use brul_window::{WindowConfig, run_tree};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let base = WidgetStyle {

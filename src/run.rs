@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_gui::window;
+use brul_window::{ColorScheme, run_tree_themed};
 
 use crate::{
     Built, Component, ComponentHandle, Host, Ui, Value, WindowConfig, execute_program, script,
@@ -46,7 +46,7 @@ fn run_ui(
     let initial = ui.borrow_mut().dispatch(&[]);
     let builder = Rc::clone(&ui);
     let handler = Rc::clone(&ui);
-    window::run_tree_themed(
+    run_tree_themed(
         config,
         initial,
         move |scheme| {
@@ -68,10 +68,10 @@ fn run_ui(
     Ok(())
 }
 
-pub(crate) fn scheme_theme(fixed: Option<&str>, scheme: window::ColorScheme) -> &str {
+pub(crate) fn scheme_theme(fixed: Option<&str>, scheme: ColorScheme) -> &str {
     fixed.unwrap_or(match scheme {
-        window::ColorScheme::Light => "light",
-        window::ColorScheme::Dark => "dark",
+        ColorScheme::Light => "light",
+        ColorScheme::Dark => "dark",
     })
 }
 
@@ -79,8 +79,9 @@ pub(crate) fn scheme_theme(fixed: Option<&str>, scheme: window::ColorScheme) -> 
 mod tests {
     use super::*;
 
-    use brul_gui::{Widget, WidgetId, window};
+    use brul_gui::{Widget, WidgetId};
     use brul_syntax::ast::{Expr, ExprKind, Position};
+    use brul_window::ColorScheme;
 
     use crate::ui::Ui;
     use crate::{Binding, BindingTarget, Built, ComponentHandle, Value};
@@ -149,19 +150,13 @@ mod tests {
 
     #[test]
     fn explicit_theme_ignores_the_color_scheme() {
-        assert_eq!(
-            scheme_theme(Some("dark"), window::ColorScheme::Light),
-            "dark"
-        );
-        assert_eq!(
-            scheme_theme(Some("light"), window::ColorScheme::Dark),
-            "light"
-        );
+        assert_eq!(scheme_theme(Some("dark"), ColorScheme::Light), "dark");
+        assert_eq!(scheme_theme(Some("light"), ColorScheme::Dark), "light");
     }
 
     #[test]
     fn system_theme_follows_the_color_scheme() {
-        assert_eq!(scheme_theme(None, window::ColorScheme::Light), "light");
-        assert_eq!(scheme_theme(None, window::ColorScheme::Dark), "dark");
+        assert_eq!(scheme_theme(None, ColorScheme::Light), "light");
+        assert_eq!(scheme_theme(None, ColorScheme::Dark), "dark");
     }
 }

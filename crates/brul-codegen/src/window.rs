@@ -1,7 +1,7 @@
-use brul_gui::window::WindowConfig;
 use brul_syntax::ast::{Expr, ExprKind, Position};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Element, Member, Window};
+use brul_window::WindowConfig;
 
 use crate::error_at;
 

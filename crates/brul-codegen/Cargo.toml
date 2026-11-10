@@ -8,6 +8,7 @@ brul-gui = { workspace = true }
 brul-reactive = { workspace = true }
 brul-script = { workspace = true }
 brul-syntax = { workspace = true }
+brul-window = { workspace = true }
 
 [lints]
 workspace = true

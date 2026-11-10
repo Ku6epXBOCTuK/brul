@@ -3,9 +3,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use brul_codegen::runtime::{self, accepts_prop};
-use brul_gui::{WidgetEvent, WidgetId, WidgetTree, window};
+use brul_gui::{WidgetEvent, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_syntax::ast::Expr;
+use brul_window::WindowCommand;
 
 use crate::each::reconcile_each;
 use crate::event::{arguments, call, handler_target};
@@ -17,7 +18,7 @@ pub struct Ui {
     pub tree: Rc<RefCell<WidgetTree>>,
     handlers: Vec<Handler>,
     window_handlers: Vec<Handler>,
-    pub(crate) commands: Rc<RefCell<Vec<window::WindowCommand>>>,
+    pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
     bindings: Vec<Owned>,
     props: Vec<Owned>,
     structures: Vec<OwnedStructure>,
@@ -39,7 +40,7 @@ struct OwnedStructure {
 }
 
 pub(crate) struct CommandHost {
-    pub(crate) commands: Rc<RefCell<Vec<window::WindowCommand>>>,
+    pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
     pub(crate) app: Option<Box<dyn Host>>,
 }
 
@@ -61,12 +62,12 @@ impl Host for CommandHost {
             };
             self.commands
                 .borrow_mut()
-                .push(window::WindowCommand::SetTheme(theme.clone()));
+                .push(WindowCommand::SetTheme(theme.clone()));
             return Ok(Value::Null);
         }
         let command = match name {
-            "exit" => window::WindowCommand::Exit,
-            "dragWindow" => window::WindowCommand::Drag,
+            "exit" => WindowCommand::Exit,
+            "dragWindow" => WindowCommand::Drag,
             _ => return self.delegate(name, arguments),
         };
         if !arguments.is_empty() {
@@ -114,7 +115,7 @@ impl Ui {
         let commands = Rc::new(RefCell::new(Vec::new()));
         for (interval_ms, function) in component.borrow_mut().take_every() {
             if interval_ms.is_finite() && interval_ms > 0.0 {
-                commands.borrow_mut().push(window::WindowCommand::Every {
+                commands.borrow_mut().push(WindowCommand::Every {
                     interval: Duration::from_secs_f64(interval_ms / 1000.0),
                     function,
                 });
@@ -250,7 +251,7 @@ impl Ui {
         Ok(())
     }
 
-    pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<window::WindowCommand> {
+    pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<WindowCommand> {
         for event in events {
             match event {
                 WidgetEvent::Timer(function) => {
@@ -277,12 +278,12 @@ impl Ui {
         call(&component, &handler.function, arguments(event));
     }
 
-    fn take_commands(&mut self) -> Vec<window::WindowCommand> {
+    fn take_commands(&mut self) -> Vec<WindowCommand> {
         let commands = std::mem::take(&mut *self.commands.borrow_mut());
         let mut output = Vec::new();
         for command in commands {
             match command {
-                window::WindowCommand::SetTheme(theme) => {
+                WindowCommand::SetTheme(theme) => {
                     if let Err(error) = self.set_theme(&theme) {
                         eprintln!("{error}");
                     }
@@ -412,9 +413,10 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use brul_gui::{Direction, Size, TextEngine, Widget, window};
+    use brul_gui::{Direction, Size, TextEngine, Widget};
     use brul_syntax::ast::{AssignOp, ExprKind, Position};
     use brul_syntax::markup::PropType;
+    use brul_window::WindowCommand;
 
     use crate::run::generated_built;
     use crate::{Binding, BindingTarget, Component, HandlerEvent, script};
@@ -686,9 +688,7 @@ mod tests {
         assert!(target.borrow().read("missing").is_err());
     }
 
-    fn command_host(
-        app: Option<Box<dyn Host>>,
-    ) -> (CommandHost, Rc<RefCell<Vec<window::WindowCommand>>>) {
+    fn command_host(app: Option<Box<dyn Host>>) -> (CommandHost, Rc<RefCell<Vec<WindowCommand>>>) {
         let commands = Rc::new(RefCell::new(Vec::new()));
         (
             CommandHost {
@@ -741,7 +741,7 @@ mod tests {
         );
         assert_eq!(
             *commands.borrow(),
-            vec![window::WindowCommand::SetTheme("dark".to_owned())]
+            vec![WindowCommand::SetTheme("dark".to_owned())]
         );
     }
 
@@ -759,7 +759,7 @@ mod tests {
         );
         assert_eq!(
             *commands.borrow(),
-            vec![window::WindowCommand::Exit, window::WindowCommand::Drag]
+            vec![WindowCommand::Exit, WindowCommand::Drag]
         );
     }
 
@@ -1012,8 +1012,8 @@ mod tests {
     fn dispatch_returns_commands_it_cannot_handle() {
         let component = component_with(Vec::new(), &[]);
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
-        ui.commands.borrow_mut().push(window::WindowCommand::Exit);
-        assert_eq!(ui.dispatch(&[]), vec![window::WindowCommand::Exit]);
+        ui.commands.borrow_mut().push(WindowCommand::Exit);
+        assert_eq!(ui.dispatch(&[]), vec![WindowCommand::Exit]);
     }
 
     #[test]
@@ -1022,7 +1022,7 @@ mod tests {
         let mut ui = Ui::assemble(component, built, themed_view, None, None);
         ui.commands
             .borrow_mut()
-            .push(window::WindowCommand::SetTheme("dark".to_owned()));
+            .push(WindowCommand::SetTheme("dark".to_owned()));
         assert!(ui.dispatch(&[]).is_empty());
         assert_eq!(ui.theme.as_deref(), Some("dark"));
     }
@@ -1033,7 +1033,7 @@ mod tests {
         let mut ui = Ui::assemble(component, built, rejecting_view, None, None);
         ui.commands
             .borrow_mut()
-            .push(window::WindowCommand::SetTheme("dark".to_owned()));
+            .push(WindowCommand::SetTheme("dark".to_owned()));
         assert!(ui.dispatch(&[]).is_empty());
         assert!(ui.theme.is_none());
     }

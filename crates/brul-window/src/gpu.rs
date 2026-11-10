@@ -5,7 +5,8 @@ use std::task::{Context, Poll, Waker};
 
 use winit::window::Window;
 
-use crate::paint::Frame;
+use brul_gui::Frame;
+
 use crate::window::WindowError;
 
 const BLIT_SHADER: &str = r#"

@@ -14,6 +14,7 @@ brul-gui = { workspace = true }
 brul-reactive = { workspace = true }
 brul-script = { workspace = true }
 brul-syntax = { workspace = true }
+brul-window = { workspace = true }
 
 [workspace]
 resolver = "3"
@@ -34,6 +35,7 @@ brul-gui = { path = 'crates\brul-gui' }
 brul-reactive = { path = 'crates\brul-reactive' }
 brul-script = { path = 'crates\brul-script' }
 brul-syntax = { path = 'crates\brul-syntax' }
+brul-window = { path = 'crates\brul-window' }
 cosmic-text = "0.19.0"
 criterion = { version = "0.8.2", default-features = false }
 image = { version = "0.25.10", default-features = false }

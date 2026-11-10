@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use brul_gui::{Frame, Size, TextEngine, WidgetEvent, WidgetTree};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
@@ -10,11 +11,8 @@ use winit::window::{Window, WindowId};
 
 use crate::gpu::Gpu;
 use crate::input::{Input, event_input, point, system_scheme, window_input};
-use crate::paint::Frame;
 use crate::surface::{Renderer, Surface};
-use crate::widget::{WidgetEvent, WidgetTree};
 use crate::window::{ColorScheme, WindowCommand, WindowConfig, WindowError, create_window};
-use crate::{Size, TextEngine};
 
 type EventHandler = Box<dyn FnMut(&[WidgetEvent]) -> Vec<WindowCommand>>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
@@ -270,7 +268,7 @@ impl TreeApp {
     fn dispatch(
         &mut self,
         surface: &dyn Surface,
-        events: Result<Vec<WidgetEvent>, crate::WidgetError>,
+        events: Result<Vec<WidgetEvent>, brul_gui::WidgetError>,
     ) -> Step {
         match events {
             Ok(events) => self.dispatch_events(surface, events),
@@ -346,7 +344,7 @@ impl TreeApp {
         }
     }
 
-    fn render_frame(&mut self, surface: &dyn Surface) -> Result<(), crate::WidgetError> {
+    fn render_frame(&mut self, surface: &dyn Surface) -> Result<(), brul_gui::WidgetError> {
         if self.tree.borrow().layout_dirty()
             && let Some(engine) = self.engine.as_mut()
         {
@@ -379,7 +377,7 @@ impl TreeApp {
 
 #[cfg(test)]
 mod tests {
-    use crate::WidgetError;
+    use brul_gui::{Frame, Size, TextEngine, Widget, WidgetError, WidgetEvent, WidgetTree};
 
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -392,9 +390,6 @@ mod tests {
     use super::{
         EventHandler, Input, Renderer, Step, Surface, Timer, TreeApp, WindowConfig, due, wakeup,
     };
-    use crate::paint::Frame;
-    use crate::widget::{Widget, WidgetEvent, WidgetTree};
-    use crate::{Size, TextEngine};
 
     struct FakeSurface {
         scale: f64,

@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use brul_gui::Frame;
 use winit::window::Window;
 
 use crate::gpu::Gpu;
-use crate::paint::Frame;
 
 pub(crate) trait Surface {
     fn scale_factor(&self) -> f64;

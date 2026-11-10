@@ -202,6 +202,7 @@ dependencies = [
  "brul-reactive",
  "brul-script",
  "brul-syntax",
+ "brul-window",
 ]
 
 [[package]]
@@ -212,6 +213,7 @@ dependencies = [
  "brul-reactive",
  "brul-script",
  "brul-syntax",
+ "brul-window",
 ]
 
 [[package]]
@@ -221,8 +223,6 @@ dependencies = [
  "brul-reactive",
  "cosmic-text",
  "image",
- "wgpu",
- "winit",
 ]
 
 [[package]]
@@ -246,6 +246,16 @@ version = "0.1.0"
 dependencies = [
  "pest",
  "pest_derive",
+]
+
+[[package]]
+name = "brul-window"
+version = "0.1.0"
+dependencies = [
+ "brul-gui",
+ "brul-reactive",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]

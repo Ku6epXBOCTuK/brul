@@ -113,7 +113,7 @@ fn definition_root(definition: &Definition) -> Result<&Element, Error> {
     Ok(root)
 }
 
-fn window_config(out: &mut String, config: &brul_gui::window::WindowConfig) {
+fn window_config(out: &mut String, config: &brul_window::WindowConfig) {
     let _ = write!(
         out,
         "pub fn window() -> brul::WindowConfig {{
