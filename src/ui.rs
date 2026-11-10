@@ -18,14 +18,24 @@ pub struct Ui {
     handlers: Vec<Handler>,
     window_handlers: Vec<Handler>,
     pub(crate) commands: Rc<RefCell<Vec<window::WindowCommand>>>,
-    bindings: Vec<Binding>,
-    props: Vec<PropBinding>,
-    structures: Vec<Structure>,
+    bindings: Vec<Owned>,
+    props: Vec<Owned>,
+    structures: Vec<OwnedStructure>,
     rows: Vec<(WidgetId, Vec<RowInfo>)>,
     requests: Rc<RefCell<Vec<WidgetId>>>,
     view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
     pub(crate) theme: Option<String>,
     scope: EffectScope,
+}
+
+struct Owned {
+    widget: WidgetId,
+    _scope: EffectScope,
+}
+
+struct OwnedStructure {
+    structure: Structure,
+    _scope: EffectScope,
 }
 
 pub(crate) struct CommandHost {
@@ -122,54 +132,64 @@ impl Ui {
             .filter(|handler| handler.widget.is_none())
             .cloned()
             .collect();
-        let ui = Self {
+        let mut ui = Self {
             component,
             tree,
             handlers,
             window_handlers,
             commands,
-            bindings,
-            props,
-            structures,
+            bindings: Vec::new(),
+            props: Vec::new(),
+            structures: Vec::new(),
             rows: Vec::new(),
             requests: Rc::new(RefCell::new(Vec::new())),
             view,
             theme,
             scope: EffectScope::new(),
         };
-        ui.bind(&ui.bindings);
-        ui.bind_props(&ui.props);
-        ui.bind_structures(&ui.structures);
+        ui.bind(bindings);
+        ui.bind_props(props);
+        ui.bind_structures(structures);
         ui
     }
 
-    fn bind(&self, bindings: &[Binding]) {
+    fn bind(&mut self, bindings: Vec<Binding>) {
         for binding in bindings {
-            let binding = binding.clone();
+            let widget = binding.widget;
             let tree = Rc::clone(&self.tree);
-            self.scope.run(|| {
+            let scope = self.scope.child();
+            scope.run(|| {
                 Effect::new(move || runtime::apply(&binding, &tree));
             });
-        }
-    }
-
-    fn bind_props(&self, props: &[PropBinding]) {
-        for prop in props {
-            let prop = prop.clone();
-            self.scope.run(|| {
-                Effect::new(move || apply_prop(&prop));
+            self.bindings.push(Owned {
+                widget,
+                _scope: scope,
             });
         }
     }
 
-    fn bind_structures(&self, structures: &[Structure]) {
+    fn bind_props(&mut self, props: Vec<PropBinding>) {
+        for prop in props {
+            let widget = prop.widget;
+            let scope = self.scope.child();
+            scope.run(|| {
+                Effect::new(move || apply_prop(&prop));
+            });
+            self.props.push(Owned {
+                widget,
+                _scope: scope,
+            });
+        }
+    }
+
+    fn bind_structures(&mut self, structures: Vec<Structure>) {
         for structure in structures {
-            let structure = structure.clone();
             let component = Rc::clone(&self.component);
             let requests = Rc::clone(&self.requests);
             let initialized = Rc::new(Cell::new(false));
             let last: Rc<RefCell<Option<Value>>> = Rc::new(RefCell::new(None));
-            self.scope.run(|| {
+            let scope = self.scope.child();
+            scope.run(|| {
                 Effect::new(move || {
                     component.borrow().track();
                     let value = (structure.value)(&component);
@@ -187,6 +207,10 @@ impl Ui {
                     }
                 });
             });
+            self.structures.push(OwnedStructure {
+                structure,
+                _scope: scope,
+            });
         }
     }
 
@@ -202,15 +226,15 @@ impl Ui {
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
         self.handlers = handlers;
-        self.bindings = built.bindings;
-        self.props = built.props;
-        self.structures = built.structures;
+        self.bindings.clear();
+        self.props.clear();
+        self.structures.clear();
         self.rows.clear();
         self.requests.borrow_mut().clear();
         self.scope = EffectScope::new();
-        self.bind(&self.bindings);
-        self.bind_props(&self.props);
-        self.bind_structures(&self.structures);
+        self.bind(built.bindings);
+        self.bind_props(built.props);
+        self.bind_structures(built.structures);
         Ok(())
     }
 
@@ -274,23 +298,24 @@ impl Ui {
         if requests.is_empty() {
             return;
         }
-        let mut structures = std::mem::take(&mut self.structures);
+        let structures = std::mem::take(&mut self.structures);
         let mut rows = std::mem::take(&mut self.rows);
         let mut bindings = Vec::new();
         let mut handlers = Vec::new();
         let mut props = Vec::new();
+        let mut added_structures = Vec::new();
         let mut changed = false;
         for parent in requests {
             let Some(index) = structures
                 .iter()
-                .position(|structure| structure.parent == parent)
+                .position(|owned| owned.structure.parent == parent)
             else {
                 continue;
             };
             if !self.tree.borrow().contains(parent) {
                 continue;
             }
-            let structure = structures[index].clone();
+            let structure = structures[index].structure.clone();
             let (built, rebuilt_rows) =
                 match (structure.rebuild)(self.theme.as_deref(), &self.component) {
                     Ok(result) => result,
@@ -303,7 +328,7 @@ impl Ui {
                 widget,
                 bindings: added_bindings,
                 handlers: added_handlers,
-                structures: added_structures,
+                structures: added,
                 props: added_props,
             } = built;
             let children = if structure.each {
@@ -323,7 +348,7 @@ impl Ui {
             bindings.extend(added_bindings);
             handlers.extend(added_handlers);
             props.extend(added_props);
-            structures.extend(added_structures);
+            added_structures.extend(added);
             changed = true;
         }
         self.structures = structures;
@@ -332,24 +357,31 @@ impl Ui {
             return;
         }
         let tree = Rc::clone(&self.tree);
-        self.structures
-            .retain(|structure| tree.borrow().contains(structure.parent));
+        let parents: Vec<WidgetId> = added_structures
+            .iter()
+            .map(|structure| structure.parent)
+            .collect();
+        self.structures.retain(|owned| {
+            tree.borrow().contains(owned.structure.parent)
+                && !parents.contains(&owned.structure.parent)
+        });
         self.rows.retain(|(id, _)| tree.borrow().contains(*id));
-        self.bindings.extend(bindings);
-        self.bindings
-            .retain(|binding| tree.borrow().contains(binding.widget));
-        self.props.extend(props);
-        self.props
-            .retain(|prop| tree.borrow().contains(prop.widget));
+        let widgets: Vec<WidgetId> = bindings.iter().map(|binding| binding.widget).collect();
+        self.bindings.retain(|owned| {
+            tree.borrow().contains(owned.widget) && !widgets.contains(&owned.widget)
+        });
+        let widgets: Vec<WidgetId> = props.iter().map(|prop| prop.widget).collect();
+        self.props.retain(|owned| {
+            tree.borrow().contains(owned.widget) && !widgets.contains(&owned.widget)
+        });
         self.handlers.extend(handlers);
         self.handlers.retain(|handler| match handler.widget {
             Some(widget) => tree.borrow().contains(widget),
             None => true,
         });
-        self.scope = EffectScope::new();
-        self.bind(&self.bindings);
-        self.bind_props(&self.props);
-        self.bind_structures(&self.structures);
+        self.bind(bindings);
+        self.bind_props(props);
+        self.bind_structures(added_structures);
     }
 }
 
@@ -476,6 +508,102 @@ mod tests {
         brul_reactive::flush();
         ui.settle();
         assert_eq!(child_count(&ui, parent), 1);
+    }
+
+    fn bound_view(theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, String> {
+        if theme.is_some() {
+            return Err("unknown theme".to_owned());
+        }
+        let holder = Widget::view(Direction::Column, Vec::new());
+        let parent = holder.id();
+        Ok(Built {
+            widget: holder,
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            structures: vec![Structure {
+                parent,
+                each: false,
+                value: shown,
+                rebuild: rebuild_bound,
+            }],
+            props: Vec::new(),
+        })
+    }
+
+    fn rebuild_bound(
+        theme: Option<&str>,
+        component: &ComponentHandle,
+    ) -> Result<(Built, Vec<RowInfo>), String> {
+        if theme.is_some() {
+            return Err("unknown theme".to_owned());
+        }
+        let mut children = Vec::new();
+        let mut bindings = Vec::new();
+        if shown(component)
+            .and_then(|value| value.as_flag())
+            .unwrap_or(false)
+        {
+            let text = Widget::text("bound");
+            bindings.push(Binding::new(
+                component,
+                text.id(),
+                BindingTarget::Text(ident("label")),
+            ));
+            children.push(text);
+        }
+        Ok((
+            Built {
+                widget: Widget::view(Direction::Column, children),
+                bindings,
+                handlers: Vec::new(),
+                structures: Vec::new(),
+                props: Vec::new(),
+            },
+            Vec::new(),
+        ))
+    }
+
+    #[test]
+    fn the_effect_of_a_removed_branch_dies_with_its_widget() {
+        let let_expr = |name: &str, value: Expr| script::Statement::Let {
+            constant: false,
+            name: name.to_owned(),
+            value: Some(value),
+        };
+        let program = script::Program {
+            functions: Vec::new(),
+            statements: vec![
+                let_expr(
+                    "shown",
+                    Expr::new(ExprKind::Bool(false), Position::default()),
+                ),
+                let_expr(
+                    "label",
+                    Expr::new(ExprKind::String("bound".to_owned()), Position::default()),
+                ),
+            ],
+        };
+        let (component, built) =
+            generated_built(bound_view, None, &[], Some(&program)).expect("launch succeeds");
+        let mut ui = Ui::assemble(component, built, bound_view, None, None);
+        brul_reactive::flush();
+        let assembled = brul_reactive::live_nodes();
+
+        ui.component
+            .borrow_mut()
+            .assign("shown", Value::Bool(true))
+            .unwrap();
+        brul_reactive::flush();
+        ui.settle();
+        assert_eq!(brul_reactive::live_nodes(), assembled + 1);
+
+        ui.component
+            .borrow_mut()
+            .assign("shown", Value::Bool(false))
+            .unwrap();
+        brul_reactive::flush();
+        ui.settle();
+        assert_eq!(brul_reactive::live_nodes(), assembled);
     }
 
     fn declared(name: &str, value: Value) -> ComponentHandle {
