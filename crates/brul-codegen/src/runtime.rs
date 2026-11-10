@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::rc::Rc;
 
 use brul_gui::{Widget, WidgetId, WidgetTree};
@@ -179,6 +180,20 @@ pub struct ComponentEvent {
     pub component: ComponentHandle,
 }
 
+pub struct PendingEvent {
+    pub component: ComponentHandle,
+    pub function: &'static str,
+    pub arguments: Vec<Value>,
+}
+
+thread_local! {
+    static PENDING: RefCell<VecDeque<PendingEvent>> = const { RefCell::new(VecDeque::new()) };
+}
+
+pub fn take_event() -> Option<PendingEvent> {
+    PENDING.with(|pending| pending.borrow_mut().pop_front())
+}
+
 struct EventHost {
     events: Vec<ComponentEvent>,
 }
@@ -204,10 +219,14 @@ impl Host for EventHost {
                 });
             }
         }
-        let Ok(mut component) = event.component.try_borrow_mut() else {
-            return Err(ScriptError::Reentrant(event.name.to_owned()));
-        };
-        component.call_function(event.function, arguments.to_vec())
+        PENDING.with(|pending| {
+            pending.borrow_mut().push_back(PendingEvent {
+                component: Rc::clone(&event.component),
+                function: event.function,
+                arguments: arguments.to_vec(),
+            });
+        });
+        Ok(Value::Null)
     }
 }
 
@@ -575,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn an_event_that_reenters_a_busy_component_reports_an_error() {
+    fn an_event_raised_from_an_expression_is_delivered_after_the_expression_returns() {
         let handle = Rc::new(RefCell::new(Component::new()));
         handle
             .borrow_mut()
@@ -593,20 +612,21 @@ mod tests {
                 component: Rc::clone(&handle),
             }],
         });
-        let error = reentrant(&mut handle.borrow_mut()).unwrap_err();
-        assert!(matches!(error, ScriptError::Reentrant(name) if name == "go"));
 
-        let widget = Widget::text("");
-        let id = widget.id();
-        let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
-        let bindings = [Binding {
-            widget: id,
-            target: BindingTarget::Text(reentrant),
-            scopes: Vec::new().into(),
-            component: Rc::clone(&handle),
-        }];
-        let _bindings = Bindings::new(&bindings, &tree);
-        assert!(!tree.borrow_mut().set_text(id, String::new()));
+        assert_eq!(reentrant(&mut handle.borrow_mut()), Ok(Value::Null));
+
+        let PendingEvent {
+            component,
+            function,
+            arguments,
+        } = take_event().expect("the event is queued");
+        assert_eq!(function, "read");
+        assert!(
+            component
+                .borrow_mut()
+                .call_function(function, arguments)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -772,7 +792,7 @@ mod tests {
     }
 
     #[test]
-    fn event_host_surfaces_an_error_from_the_body() {
+    fn event_host_queues_the_body_and_leaves_errors_to_the_delivery() {
         let component = Rc::new(RefCell::new(Component::new()));
         let divide_by_zero = Expr::new(
             ExprKind::Binary {
@@ -791,8 +811,18 @@ mod tests {
             })
             .unwrap();
         let mut host = event_host(vec![event("on_click", &[], &component)]);
+        assert_eq!(host.call("click", &[]), Ok(Value::Null));
+        let PendingEvent {
+            component,
+            function,
+            arguments,
+        } = take_event().expect("queued");
         assert_eq!(
-            host.call("click", &[]).unwrap_err().reason(),
+            component
+                .borrow_mut()
+                .call_function(function, arguments)
+                .unwrap_err()
+                .reason(),
             ScriptError::DivisionByZero.reason()
         );
     }

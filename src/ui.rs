@@ -12,6 +12,9 @@ use crate::event::{arguments, call, handler_target};
 use crate::{
     Binding, Built, ComponentHandle, Error, Handler, Host, PropBinding, RowInfo, Structure, Value,
 };
+
+const EVENT_DEPTH: usize = 64;
+
 pub struct Ui {
     pub component: ComponentHandle,
     pub tree: Rc<RefCell<WidgetTree>>,
@@ -262,8 +265,20 @@ impl Ui {
                 }
                 _ => self.dispatch_event(event),
             }
+            self.pump_events();
         }
         self.take_commands()
+    }
+
+    fn pump_events(&mut self) {
+        for _ in 0..EVENT_DEPTH {
+            let Some(event) = runtime::take_event() else {
+                return;
+            };
+            call(&event.component, event.function, event.arguments);
+            brul_reactive::flush();
+        }
+        eprintln!("event chain is deeper than {EVENT_DEPTH}");
     }
 
     fn dispatch_event(&mut self, event: &WidgetEvent) {
@@ -297,6 +312,7 @@ impl Ui {
     }
 
     pub fn settle(&mut self) {
+        self.pump_events();
         let requests = std::mem::take(&mut *self.requests.borrow_mut());
         if requests.is_empty() {
             return;
@@ -1048,5 +1064,125 @@ mod tests {
             .push(WindowCommand::SetTheme("dark".to_owned()));
         assert!(ui.dispatch(&[]).is_empty());
         assert!(ui.theme.is_none());
+    }
+
+    fn raise(name: &str) -> script::Statement {
+        script::Statement::Expr(Expr::new(
+            ExprKind::Call {
+                target: Box::new(Expr::new(
+                    ExprKind::Ident(name.to_owned()),
+                    Position::default(),
+                )),
+                args: Vec::new(),
+            },
+            Position::default(),
+        ))
+    }
+
+    fn assign_string(name: &str, value: &str) -> script::Statement {
+        script::Statement::Expr(Expr::new(
+            ExprKind::Assign {
+                target: Box::new(Expr::new(
+                    ExprKind::Ident(name.to_owned()),
+                    Position::default(),
+                )),
+                op: AssignOp::Set,
+                value: Box::new(Expr::new(
+                    ExprKind::String(value.to_owned()),
+                    Position::default(),
+                )),
+            },
+            Position::default(),
+        ))
+    }
+
+    fn child_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+        if theme.is_some() {
+            return Err("unknown theme".to_owned());
+        }
+        let text = Widget::text("child");
+        let id = text.id();
+        Ok(Built {
+            widget: text,
+            bindings: Vec::new(),
+            handlers: vec![Handler::new(
+                component,
+                Some(id),
+                HandlerEvent::Click,
+                "raise",
+            )],
+            structures: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    fn raising_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+        if theme.is_some() {
+            return Err("unknown theme".to_owned());
+        }
+        let program = script::Program {
+            functions: vec![function("raise", Vec::new(), vec![raise("clicked")])],
+            statements: Vec::new(),
+        };
+        let events = [runtime::ComponentEvent {
+            name: "clicked",
+            function: "applied",
+            params: &[],
+            component: Rc::clone(component),
+        }];
+        let child = runtime::instance(
+            component,
+            runtime::Instance {
+                theme,
+                view: child_view,
+                script: Some(&program),
+                name: "Child",
+                props: &[],
+                defaults: &[],
+                events: &events,
+            },
+        )?;
+        let text = Widget::text("");
+        let id = text.id();
+        Ok(Built {
+            widget: Widget::view(Direction::Column, vec![child.widget, text]),
+            bindings: vec![Binding::new(
+                component,
+                id,
+                BindingTarget::Text(read!("label")),
+            )],
+            handlers: child.handlers,
+            structures: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn a_handler_event_runs_after_the_handler_returns() {
+        let (component, built) = generated_built(raising_view, None, &[], None).expect("launch");
+        component
+            .borrow_mut()
+            .declare("label", Value::String(String::new()), false)
+            .expect("declared");
+        let click = built.handlers[0].widget.expect("widget");
+        let text = built.bindings[0].widget;
+        let program = script::Program {
+            functions: vec![function(
+                "applied",
+                Vec::new(),
+                vec![assign_string("label", "after")],
+            )],
+            statements: Vec::new(),
+        };
+        crate::execute_program(&mut component.borrow_mut(), &program).expect("program");
+        let mut ui = Ui::assemble(component, built, raising_view, None, None);
+
+        ui.dispatch(&[WidgetEvent::Click(click)]);
+
+        assert_eq!(
+            ui.component.borrow().read("label"),
+            Ok(Value::String("after".to_owned()))
+        );
+        assert!(!ui.tree.borrow_mut().set_text(text, "after".to_owned()));
     }
 }
