@@ -11,6 +11,7 @@ use crate::styles;
 use super::Emit;
 use super::style::{layout, style_set, text_style};
 use super::{component, events, expression, structure};
+use crate::runtime::HandlerEvent;
 
 pub(super) fn widget(
     out: &mut String,
@@ -27,15 +28,7 @@ pub(super) fn widget(
     {
         return component::component(out, element, index, emit, theme, depth, counter);
     }
-    let classes: Vec<&str> = element
-        .args
-        .iter()
-        .filter_map(|arg| match arg {
-            Arg::Class(class) => Some(class.as_str()),
-            Arg::Named { .. } | Arg::Handler { .. } => None,
-        })
-        .collect();
-    let resolved = styles::resolve(emit.stylesheet, &classes, theme)
+    let resolved = styles::resolve(emit.stylesheet, &classes(element), theme)
         .map_err(|message| error_at(element.position, message))?;
     let events = events::widget(element, emit.program)?;
     let name = format!("widget{}", *counter);
@@ -44,72 +37,118 @@ pub(super) fn widget(
     let inner = "    ".repeat(depth + 1);
     let _ = writeln!(out, "{pad}{{");
     let _ = write!(out, "{inner}let {name} = ");
-    let mut text = None;
-    let direction = if element.name == "Row" {
-        "Row"
-    } else {
-        "Column"
-    };
-    let spacing = resolved.layout.spacing;
+    let text = kind(out, element, &resolved, emit, theme, depth, counter)?;
+    modifiers(out, &resolved, events.drag, &inner);
+    out.push_str(";\n");
+    text_binding(out, text, &name, &inner);
+    parameters(out, element, &name, &inner)?;
+    handler_bindings(out, &events.handlers, &name, &inner);
+    let _ = writeln!(out, "{inner}{name}");
+    let _ = write!(out, "{pad}}}");
+    Ok(())
+}
+
+fn classes(element: &Element) -> Vec<&str> {
+    element
+        .args
+        .iter()
+        .filter_map(|arg| match arg {
+            Arg::Class(class) => Some(class.as_str()),
+            Arg::Named { .. } | Arg::Handler { .. } => None,
+        })
+        .collect()
+}
+
+fn kind(
+    out: &mut String,
+    element: &Element,
+    resolved: &styles::Resolved,
+    emit: &mut Emit<'_>,
+    theme: Option<&str>,
+    depth: usize,
+    counter: &mut usize,
+) -> Result<Option<Expr>, Error> {
     match element.name.as_str() {
         "View" | "Row" | "Column" => {
-            let call = if element.name == "Row" {
-                "row"
-            } else {
-                "column"
-            };
-            if element.block.items.is_empty() {
-                let _ = write!(out, "brul_gui::Widget::{call}(vec![])");
-            } else {
-                let _ = writeln!(out, "brul_gui::Widget::{call}(vec![");
-                items(
-                    out,
-                    &element.block,
-                    emit,
-                    theme,
-                    direction,
-                    spacing,
-                    depth + 2,
-                    counter,
-                )?;
-                let _ = write!(out, "{inner}])");
-            }
+            container(out, element, resolved, emit, theme, depth, counter)?;
+            Ok(None)
         }
-        "Text" => text = text_widget(out, element, resolved.text)?,
-        name => {
-            return Err(error_at(
-                element.position,
-                format!("widget '{name}' is not generated yet"),
-            ));
-        }
+        "Text" => text_widget(out, element, resolved.text.clone()),
+        name => Err(error_at(
+            element.position,
+            format!("widget '{name}' is not generated yet"),
+        )),
     }
+}
+
+fn container(
+    out: &mut String,
+    element: &Element,
+    resolved: &styles::Resolved,
+    emit: &mut Emit<'_>,
+    theme: Option<&str>,
+    depth: usize,
+    counter: &mut usize,
+) -> Result<(), Error> {
+    let row = element.name == "Row";
+    let call = if row { "row" } else { "column" };
+    if element.block.items.is_empty() {
+        let _ = write!(out, "brul_gui::Widget::{call}(vec![])");
+        return Ok(());
+    }
+    let direction = if row { "Row" } else { "Column" };
+    let _ = writeln!(out, "brul_gui::Widget::{call}(vec![");
+    items(
+        out,
+        &element.block,
+        emit,
+        theme,
+        direction,
+        resolved.layout.spacing,
+        depth + 2,
+        counter,
+    )?;
+    let inner = "    ".repeat(depth + 1);
+    let _ = write!(out, "{inner}])");
+    Ok(())
+}
+
+fn modifiers(out: &mut String, resolved: &styles::Resolved, drag: bool, inner: &str) {
     if let Some(layout) = layout(resolved.layout) {
         let _ = write!(out, "\n{inner}.with_layout({layout})");
     }
-    if let Some(styles) = style_set(resolved.styles) {
+    if let Some(styles) = style_set(resolved.styles.clone()) {
         let _ = write!(out, "\n{inner}.with_styles({styles})");
     }
-    if events.drag {
+    if drag {
         let _ = write!(out, "\n{inner}.draggable(true)");
     }
-    out.push_str(";\n");
-    if let Some(text_expression) = text {
-        let _ = writeln!(
-            out,
-            "{inner}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Text({})));",
-            expression::expression(&text_expression)
-        );
-    }
-    parameters(out, element, &name, &inner)?;
-    for (event, handler) in &events.handlers {
+}
+
+fn text_binding(out: &mut String, text: Option<Expr>, name: &str, inner: &str) {
+    let Some(expression) = text else {
+        return;
+    };
+    let _ = writeln!(
+        out,
+        "{inner}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Text({})));",
+        expression::expression(&expression)
+    );
+}
+
+fn handler_bindings(
+    out: &mut String,
+    handlers: &[(HandlerEvent, String)],
+    name: &str,
+    inner: &str,
+) {
+    for (event, handler) in handlers {
+        let handler = handler.as_str();
         let _ = writeln!(
             out,
             "{inner}handlers.push(brul::Handler::new(component, Some({name}.id()), brul::HandlerEvent::{event:?}, {handler:?}));"
         );
     }
-    let _ = writeln!(out, "{inner}{name}");
-    let _ = write!(out, "{pad}}}");
-    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

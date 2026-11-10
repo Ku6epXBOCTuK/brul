@@ -2,12 +2,16 @@ use std::fmt::Write;
 
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Element, Member, PropType};
+use brul_syntax::markup::{Arg, Element, Event, Member, Prop, PropType};
 
 use crate::error_at;
+use crate::loader::Definition;
 
 use super::Emit;
 use super::{events, expression};
+
+type Props<'a> = Vec<(&'a str, PropType, &'a Expr)>;
+type Events<'a> = Vec<(&'a str, &'a str, Vec<PropType>)>;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn component(
@@ -21,6 +25,16 @@ pub(super) fn component(
 ) -> Result<(), Error> {
     let definition = &emit.registry.definitions[index];
     let name = &definition.name;
+    check_shape(element, name)?;
+    let (props, events) = collect(element, definition, name, emit)?;
+    let defaults = defaults(element, definition, name, &props)?;
+    write(
+        out, index, name, theme, depth, counter, &props, &defaults, &events,
+    );
+    Ok(())
+}
+
+fn check_shape(element: &Element, name: &str) -> Result<(), Error> {
     if element.args.iter().any(|arg| matches!(arg, Arg::Class(_))) {
         return Err(error_at(
             element.position,
@@ -33,80 +47,114 @@ pub(super) fn component(
             format!("component '{name}' does not accept children"),
         ));
     }
-    let mut given: Vec<&str> = Vec::new();
-    let mut props: Vec<(&str, PropType, &Expr)> = Vec::new();
-    let mut events: Vec<(&str, &str, Vec<PropType>)> = Vec::new();
+    Ok(())
+}
+
+fn collect<'a>(
+    element: &'a Element,
+    definition: &'a Definition,
+    name: &str,
+    emit: &mut Emit<'_>,
+) -> Result<(Props<'a>, Events<'a>), Error> {
+    let mut props = Props::new();
+    let mut events = Events::new();
     for arg in &element.args {
         match arg {
             Arg::Class(_) => {}
-            Arg::Handler { event, handler } => {
-                if events
-                    .iter()
-                    .any(|item: &(&str, &str, Vec<PropType>)| item.0 == event.as_str())
-                {
-                    return Err(error_at(
-                        element.position,
-                        format!("event '{event}' is handled twice"),
-                    ));
-                }
-                let Some(declaration) =
-                    definition
-                        .component
-                        .members
-                        .iter()
-                        .find_map(|member| match member {
-                            Member::Event(item) if item.name == *event => Some(item),
-                            _ => None,
-                        })
-                else {
-                    return Err(error_at(
-                        element.position,
-                        format!("component '{name}' has no event '{event}'"),
-                    ));
-                };
-                events::define(handler, emit.program, element.position)?;
-                events.push((
-                    event.as_str(),
-                    handler.as_str(),
-                    declaration.params.iter().map(|param| param.ty).collect(),
-                ));
-            }
+            Arg::Handler { event, handler } => events.push(event_of(
+                element, definition, name, emit, &events, event, handler,
+            )?),
             Arg::Named {
                 name: property,
                 value,
-            } => {
-                if given.contains(&property.as_str()) {
-                    return Err(error_at(
-                        value.position,
-                        format!("property '{property}' is given twice"),
-                    ));
-                }
-                let Some(prop) =
-                    definition
-                        .component
-                        .members
-                        .iter()
-                        .find_map(|member| match member {
-                            Member::Prop(prop) if prop.name == *property => Some(prop),
-                            _ => None,
-                        })
-                else {
-                    return Err(error_at(
-                        value.position,
-                        format!("component '{name}' has no property '{property}'"),
-                    ));
-                };
-                props.push((property.as_str(), prop.ty, value));
-                given.push(property);
-            }
+            } => props.push(property_of(definition, name, &props, property, value)?),
         }
     }
-    let mut defaults: Vec<(&str, PropType, &Expr)> = Vec::new();
+    Ok((props, events))
+}
+
+fn event_of<'a>(
+    element: &'a Element,
+    definition: &'a Definition,
+    name: &str,
+    emit: &mut Emit<'_>,
+    events: &Events<'a>,
+    event: &'a str,
+    handler: &'a str,
+) -> Result<(&'a str, &'a str, Vec<PropType>), Error> {
+    if events.iter().any(|item| item.0 == event) {
+        return Err(error_at(
+            element.position,
+            format!("event '{event}' is handled twice"),
+        ));
+    }
+    let Some(declaration) = find_event(definition, event) else {
+        return Err(error_at(
+            element.position,
+            format!("component '{name}' has no event '{event}'"),
+        ));
+    };
+    events::define(handler, emit.program, element.position)?;
+    let params = declaration.params.iter().map(|param| param.ty).collect();
+    Ok((event, handler, params))
+}
+
+fn property_of<'a>(
+    definition: &'a Definition,
+    name: &str,
+    props: &Props<'a>,
+    property: &'a str,
+    value: &'a Expr,
+) -> Result<(&'a str, PropType, &'a Expr), Error> {
+    if props.iter().any(|item| item.0 == property) {
+        return Err(error_at(
+            value.position,
+            format!("property '{property}' is given twice"),
+        ));
+    }
+    let Some(prop) = find_property(definition, property) else {
+        return Err(error_at(
+            value.position,
+            format!("component '{name}' has no property '{property}'"),
+        ));
+    };
+    Ok((property, prop.ty, value))
+}
+
+fn find_event<'a>(definition: &'a Definition, event: &str) -> Option<&'a Event> {
+    definition
+        .component
+        .members
+        .iter()
+        .find_map(|member| match member {
+            Member::Event(item) if item.name == event => Some(item),
+            _ => None,
+        })
+}
+
+fn find_property<'a>(definition: &'a Definition, name: &str) -> Option<&'a Prop> {
+    definition
+        .component
+        .members
+        .iter()
+        .find_map(|member| match member {
+            Member::Prop(item) if item.name == name => Some(item),
+            _ => None,
+        })
+}
+
+fn defaults<'a>(
+    element: &'a Element,
+    definition: &'a Definition,
+    name: &str,
+    props: &Props<'a>,
+) -> Result<Props<'a>, Error> {
+    let mut defaults = Props::new();
     for member in &definition.component.members {
         let Member::Prop(prop) = member else {
             continue;
         };
-        if given.contains(&prop.name.as_str()) {
+        if props.iter().any(|item| item.0 == prop.name) {
             continue;
         }
         let Some(default) = &prop.default else {
@@ -120,6 +168,21 @@ pub(super) fn component(
         };
         defaults.push((prop.name.as_str(), prop.ty, default));
     }
+    Ok(defaults)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write(
+    out: &mut String,
+    index: usize,
+    name: &str,
+    theme: Option<&str>,
+    depth: usize,
+    counter: &mut usize,
+    props: &Props<'_>,
+    defaults: &Props<'_>,
+    events: &Events<'_>,
+) {
     let widget = format!("widget{}", *counter);
     *counter += 1;
     let pad = "    ".repeat(depth);
@@ -140,10 +203,10 @@ pub(super) fn component(
         "{inner}    script: component{index}_script().as_ref(),"
     );
     let _ = writeln!(out, "{inner}    name: {name:?},");
-    arguments(out, "props", &props, &inner);
-    arguments(out, "defaults", &defaults, &inner);
+    arguments(out, "props", props, &inner);
+    arguments(out, "defaults", defaults, &inner);
     let _ = writeln!(out, "{inner}    events: &[");
-    for (event, handler, params) in &events {
+    for (event, handler, params) in events {
         let params = params
             .iter()
             .map(|ty| format!("brul::PropType::{ty:?}"))
@@ -162,7 +225,6 @@ pub(super) fn component(
     let _ = writeln!(out, "{inner}let {widget} = built.widget;");
     let _ = writeln!(out, "{inner}{widget}");
     let _ = write!(out, "{pad}}}");
-    Ok(())
 }
 
 fn arguments(out: &mut String, field: &str, arguments: &[(&str, PropType, &Expr)], inner: &str) {

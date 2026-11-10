@@ -11,13 +11,51 @@ pub fn expression(expression: &Expr) -> String {
     )
 }
 
+enum Category {
+    Leaf,
+    Composite,
+    Container,
+}
+
+fn category(kind: &ExprKind) -> Category {
+    match kind {
+        ExprKind::Number(_)
+        | ExprKind::String(_)
+        | ExprKind::Bool(_)
+        | ExprKind::Null
+        | ExprKind::Ident(_) => Category::Leaf,
+        ExprKind::Field { .. }
+        | ExprKind::Index { .. }
+        | ExprKind::Call { .. }
+        | ExprKind::Unary { .. }
+        | ExprKind::Binary { .. }
+        | ExprKind::Ternary { .. }
+        | ExprKind::Assign { .. } => Category::Composite,
+        ExprKind::Array(_) | ExprKind::Object(_) | ExprKind::Template(_) => Category::Container,
+    }
+}
+
 fn expression_kind(kind: &ExprKind) -> String {
+    match category(kind) {
+        Category::Leaf => leaf(kind),
+        Category::Composite => composite(kind),
+        Category::Container => container(kind),
+    }
+}
+
+fn leaf(kind: &ExprKind) -> String {
     match kind {
         ExprKind::Number(value) => format!("brul::ast::ExprKind::Number({value:?})"),
         ExprKind::String(text) => format!("brul::ast::ExprKind::String({text:?}.to_owned())"),
         ExprKind::Bool(value) => format!("brul::ast::ExprKind::Bool({value})"),
         ExprKind::Null => "brul::ast::ExprKind::Null".to_owned(),
         ExprKind::Ident(name) => format!("brul::ast::ExprKind::Ident({name:?}.to_owned())"),
+        _ => unreachable!("only leaves reach this function"),
+    }
+}
+
+fn composite(kind: &ExprKind) -> String {
+    match kind {
         ExprKind::Field { target, name } => format!(
             "brul::ast::ExprKind::Field {{ target: Box::new({}), name: {name:?}.to_owned() }}",
             expression(target)
@@ -56,6 +94,12 @@ fn expression_kind(kind: &ExprKind) -> String {
             expression(target),
             expression(value)
         ),
+        _ => unreachable!("only composite expressions reach this function"),
+    }
+}
+
+fn container(kind: &ExprKind) -> String {
+    match kind {
         ExprKind::Array(items) => {
             format!("brul::ast::ExprKind::Array(vec![{}])", expressions(items))
         }
@@ -83,6 +127,7 @@ fn expression_kind(kind: &ExprKind) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+        _ => unreachable!("only containers reach this function"),
     }
 }
 

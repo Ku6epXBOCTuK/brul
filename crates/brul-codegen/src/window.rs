@@ -16,19 +16,7 @@ pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Err
     let mut handlers = Vec::new();
     for arg in &window.args {
         match arg {
-            Arg::Named { name, value } => match name.as_str() {
-                "title" => config.title = string(value, "title")?,
-                "width" => config.width = size(value, "width")?,
-                "height" => config.height = size(value, "height")?,
-                "frameless" => flag(value, "frameless")?,
-                "transparent" => flag(value, "transparent")?,
-                _ => {
-                    return Err(error_at(
-                        value.position,
-                        format!("unknown window argument '{name}'"),
-                    ));
-                }
-            },
+            Arg::Named { name, value } => apply(&mut config, name, value)?,
             Arg::Handler { event, handler } => handlers.push(HandlerArg {
                 event: event.clone(),
                 function: handler.clone(),
@@ -40,6 +28,23 @@ pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Err
         }
     }
     Ok((config, handlers))
+}
+
+fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Error> {
+    match name {
+        "title" => config.title = string(value, "title")?,
+        "width" => config.width = size(value, "width")?,
+        "height" => config.height = size(value, "height")?,
+        "frameless" => flag(value, "frameless")?,
+        "transparent" => flag(value, "transparent")?,
+        _ => {
+            return Err(error_at(
+                value.position,
+                format!("unknown window argument '{name}'"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub fn root(window: &Window) -> Result<&Element, Error> {
