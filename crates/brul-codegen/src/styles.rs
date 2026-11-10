@@ -2,7 +2,7 @@ use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, Padding, StyleSet, StyleState, TextStyle,
     WidgetStyle,
 };
-use brul_syntax::style::{BorderColor, Kind, Property, Snapshot, State, Stylesheet, Value};
+use brul_syntax::style::{BorderColor, Kind, Property, Side, Snapshot, State, Stylesheet, Value};
 
 pub struct Resolved {
     pub layout: LayoutStyle,
@@ -83,10 +83,9 @@ fn apply(
         Kind::Height => layout.height = dimension(value, kind)?,
         Kind::Stretch => layout.stretch = number(value, kind)? as f32,
         Kind::Padding => layout.padding = Padding::all(px_value(value, kind)?),
-        Kind::PaddingLeft => layout.padding.left = px_value(value, kind)?,
-        Kind::PaddingRight => layout.padding.right = px_value(value, kind)?,
-        Kind::PaddingTop => layout.padding.top = px_value(value, kind)?,
-        Kind::PaddingBottom => layout.padding.bottom = px_value(value, kind)?,
+        Kind::PaddingSide(side) => {
+            *edge(&mut layout.padding, side) = px_value(value, kind)?;
+        }
         Kind::Spacing => layout.spacing = px_value(value, kind)?,
         Kind::BorderWidth => layout.border_width = px_value(value, kind)?,
         Kind::Border => {
@@ -112,6 +111,15 @@ fn apply(
         Kind::FontWeight => text.weight = number(value, kind)? as u16,
     }
     Ok(())
+}
+
+fn edge(padding: &mut Padding, side: Side) -> &mut u32 {
+    match side {
+        Side::Left => &mut padding.left,
+        Side::Top => &mut padding.top,
+        Side::Right => &mut padding.right,
+        Side::Bottom => &mut padding.bottom,
+    }
 }
 
 fn justify(value: &str) -> Justify {

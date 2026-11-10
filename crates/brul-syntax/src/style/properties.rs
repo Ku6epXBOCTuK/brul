@@ -2,15 +2,20 @@ use self::StatePolicy::{Forbidden, TextWeight, Visual};
 use crate::style::value::Type;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Top,
+    Right,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Width,
     Height,
     Stretch,
     Padding,
-    PaddingLeft,
-    PaddingRight,
-    PaddingTop,
-    PaddingBottom,
+    PaddingSide(Side),
     Spacing,
     BorderWidth,
     Radius,
@@ -92,10 +97,30 @@ pub static SPECS: &[Spec] = &[
     Spec::new(Kind::Height, "height", Type::Length, Forbidden),
     Spec::new(Kind::Stretch, "stretch", Type::Number, Forbidden),
     Spec::new(Kind::Padding, "padding", Type::Px, Forbidden),
-    Spec::new(Kind::PaddingLeft, "padding-left", Type::Px, Forbidden),
-    Spec::new(Kind::PaddingRight, "padding-right", Type::Px, Forbidden),
-    Spec::new(Kind::PaddingTop, "padding-top", Type::Px, Forbidden),
-    Spec::new(Kind::PaddingBottom, "padding-bottom", Type::Px, Forbidden),
+    Spec::new(
+        Kind::PaddingSide(Side::Left),
+        "padding-left",
+        Type::Px,
+        Forbidden,
+    ),
+    Spec::new(
+        Kind::PaddingSide(Side::Right),
+        "padding-right",
+        Type::Px,
+        Forbidden,
+    ),
+    Spec::new(
+        Kind::PaddingSide(Side::Top),
+        "padding-top",
+        Type::Px,
+        Forbidden,
+    ),
+    Spec::new(
+        Kind::PaddingSide(Side::Bottom),
+        "padding-bottom",
+        Type::Px,
+        Forbidden,
+    ),
     Spec::new(Kind::Spacing, "spacing", Type::Px, Forbidden),
     Spec::new(Kind::BorderWidth, "border-width", Type::Px, Forbidden),
     Spec::new(Kind::Radius, "radius", Type::Px, Forbidden),
@@ -165,7 +190,7 @@ impl Spec {
 
 #[cfg(test)]
 mod tests {
-    use super::{Kind, SPECS};
+    use super::{Kind, SPECS, Side};
 
     #[test]
     fn every_kind_has_its_own_name_and_spec() {
@@ -177,5 +202,19 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), SPECS.len());
+    }
+
+    #[test]
+    fn every_side_has_its_own_property() {
+        let sides = [
+            (Side::Left, "padding-left"),
+            (Side::Top, "padding-top"),
+            (Side::Right, "padding-right"),
+            (Side::Bottom, "padding-bottom"),
+        ];
+        for (side, name) in sides {
+            assert_eq!(Kind::from_name(name), Some(Kind::PaddingSide(side)));
+            assert_eq!(Kind::PaddingSide(side).name(), name);
+        }
     }
 }
