@@ -1,3 +1,6 @@
+// NOTE: UI copy is Russian, so literals in the generated view cannot stay ASCII.
+#![allow(clippy::non_ascii_literal)]
+
 //! bropicker: переключатель браузеров на BRUL.
 //!
 //! Конфиг — TOML из `%APPDATA%\bropicker\config.toml` (или `BP_CONFIG`).

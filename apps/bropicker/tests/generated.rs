@@ -186,14 +186,18 @@ fn view_builds_the_picker_layout() {
     assert_eq!(bindings.len(), 13);
     assert_eq!(props.len(), 16);
 
-    let mut children: Vec<_> = widget.into_children();
-    assert_eq!(children.len(), 3);
+    let mut root: Vec<_> = widget.into_children();
+    assert_eq!(root.len(), 1);
+    let card = root.remove(0);
+    assert_eq!(card.kind(), WidgetKind::View);
+    let mut children: Vec<_> = card.into_children();
+    assert_eq!(children.len(), 4);
     assert!(
         children
             .iter()
             .all(|child| child.kind() == WidgetKind::View)
     );
-    let list = children.remove(1);
+    let list = children.remove(2);
     let rows: Vec<_> = list.into_children();
     assert_eq!(rows.len(), 1);
     assert_eq!(

@@ -49,6 +49,8 @@
     import BrowserItem from "./browser_item.brul";
     import CheckRow from "./check_row.brul";
     import SettingsRow from "./settings_row.brul";
+    resource globe from "../assets/icons/globe.png";
+    resource external_link from "../assets/icons/external_link.png";
 </use>
 
 <markup>
@@ -61,24 +63,42 @@
         on key: handleKey
     ) {
         Column (root) {
-            Column (header, on drag: dragWindow) {
-                Text (muted) { "bropicker" }
-                Text (text) { url }
-            }
-            Column (list) {
-                each (browsers as browser, index (browser.name)) {
-                    BrowserItem (index: index, icon: browser.icon, name: browser.name,
-                                path: browser.path, isDefault: browser.isDefault,
-                                selected: index == selectedIndex,
-                                on clicked: launch) { }
+            Column (card) {
+                Column (header, on drag: dragWindow) {
+                    Row (header-top) {
+                        View (app-icon) {
+                            Row (app-icon-row) {
+                                Image (app-icon-image) { globe }
+                            }
+                        }
+                        Column (header-titles) {
+                            Text (title) { "Выбрать браузер" }
+                            Text (subtitle) { "Для открытия ссылки" }
+                        }
+                    }
+                    View (url-field) {
+                        Row (url-row) {
+                            Image (url-icon) { external_link }
+                            Text (url-text) { url }
+                        }
+                    }
                 }
-            }
-            Row (footer) {
-                CheckRow (label: "Remember choice", checked: rememberChoice,
-                        on toggled: toggleRemember) { }
-                CheckRow (label: "Always ask", checked: alwaysAskChoice,
-                        on toggled: toggleAlwaysAsk) { }
-                Text (settings-button, on click: openSettings) { "Settings" }
+                View (header-rule) { }
+                Column (list) {
+                    each (browsers as browser, index (browser.name)) {
+                        BrowserItem (index: index, icon: browser.icon, name: browser.name,
+                                    path: browser.path, isDefault: browser.isDefault,
+                                    selected: index == selectedIndex,
+                                    on clicked: launch) { }
+                    }
+                }
+                Row (footer) {
+                    CheckRow (label: "Remember choice", checked: rememberChoice,
+                            on toggled: toggleRemember) { }
+                    CheckRow (label: "Always ask", checked: alwaysAskChoice,
+                            on toggled: toggleAlwaysAsk) { }
+                    Text (settings-button, on click: openSettings) { "Settings" }
+                }
             }
         }
     }
@@ -124,37 +144,112 @@
     theme dark {
         background: #14171d;
         surface: #1c2028;
-        text: #f0f3f8;
-        muted: #98a2b3;
+        surface-main: #0f172a;
+        surface-elevated: #1e293b80;
+        border: #334155;
+        text: #ffffff;
+        muted: #94a3b8;
+        control: #cbd5e1;
     }
     theme light {
         background: #f4f6f9;
         surface: #ffffff;
-        text: #171c24;
-        muted: #647080;
+        surface-main: #ffffff;
+        surface-elevated: #f8fafc;
+        border: #e2e8f0;
+        text: #0f172a;
+        muted: #64748b;
+        control: #475569;
     }
     .root {
         width: 100%;
         height: 100%;
-        padding: 16px;
-        spacing: 12px;
-        background: theme.background;
-        radius: 22px;
+        padding: 20px;
+        background: transparent;
+    }
+    .card {
+        width: 100%;
+        height: 100%;
+        background: theme.surface-main;
+        border: 1px theme.border;
+        radius: 16px;
+        clip: true;
     }
     .header {
         width: 100%;
-        height: 56px;
-        padding-left: 14px;
-        padding-right: 14px;
-        padding-top: 8px;
-        padding-bottom: 8px;
-        spacing: 2px;
-        background: theme.surface;
-        radius: 14px;
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 20px;
+        padding-bottom: 12px;
+        spacing: 12px;
     }
-    .text { color: theme.text; font-size: 16px; font-weight: 600; }
+    .header-top {
+        width: 100%;
+        spacing: 12px;
+        align-items: center;
+    }
+    .app-icon {
+        width: 48px;
+        height: 48px;
+        radius: 12px;
+        background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    }
+    .app-icon-row {
+        width: 100%;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+    }
+    .app-icon-image {
+        width: 24px;
+        height: 24px;
+        tint: #ffffff;
+    }
+    .header-titles {
+        stretch: 1;
+        spacing: 4px;
+        justify-content: center;
+    }
+    .title { color: theme.text; font-size: 18px; font-weight: 600; }
+    .subtitle { color: theme.muted; font-size: 14px; }
+    .url-field {
+        width: 100%;
+        height: 44px;
+        background: theme.surface-elevated;
+        border: 1px theme.border;
+        radius: 12px;
+    }
+    .url-row {
+        width: 100%;
+        height: 100%;
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 8px;
+        align-items: center;
+    }
+    .url-icon {
+        width: 16px;
+        height: 16px;
+        tint: theme.muted;
+    }
+    .url-text {
+        color: theme.control;
+        font-size: 14px;
+        font-family: "Consolas";
+    }
+    .header-rule {
+        width: 100%;
+        height: 1px;
+        background: theme.border;
+    }
     .muted { color: theme.muted; font-size: 12px; }
-    .list { width: 100%; stretch: 1; spacing: 8px; }
+    .list {
+        width: 100%;
+        stretch: 1;
+        spacing: 8px;
+        padding-left: 12px;
+        padding-right: 12px;
+    }
     .footer {
         width: 100%;
         height: 44px;
