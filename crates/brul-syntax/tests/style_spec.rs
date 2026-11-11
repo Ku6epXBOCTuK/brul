@@ -71,7 +71,7 @@ fn document_examples_parse() {
         .iter()
         .filter(|example| example.kind == Kind::Parse)
         .collect();
-    assert_eq!(parsed.len(), 4, "expected four style examples");
+    assert_eq!(parsed.len(), 5, "expected five style examples");
     for example in parsed {
         let sheet = parse_file(&example.body)
             .unwrap_or_else(|error| panic!("example at line {}: {error}", example.line));

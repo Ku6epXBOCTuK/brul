@@ -101,6 +101,10 @@ fn apply(
         Kind::Opacity => style.opacity = number(value, kind)? as f32,
         Kind::Clip => style.clip = flag(value, kind)?,
         Kind::Scroll => style.scroll = flag(value, kind)?,
+        Kind::ShadowOffsetX => style.shadow.x = signed_px(value, kind)?,
+        Kind::ShadowOffsetY => style.shadow.y = signed_px(value, kind)?,
+        Kind::ShadowBlur => style.shadow.blur = px_value(value, kind)?,
+        Kind::ShadowColor => style.shadow.color = paint(value, kind)?,
         Kind::FontSize => {
             text.font_size = px_value(value, kind)? as f32;
             text.line_height = text.font_size * 1.2;
@@ -186,6 +190,13 @@ fn number(value: &Value, kind: Kind) -> Result<f64, String> {
 fn px_value(value: &Value, kind: Kind) -> Result<u32, String> {
     match value {
         Value::Px(value) => Ok(px(*value)),
+        _ => Err(expected(kind, "px")),
+    }
+}
+
+fn signed_px(value: &Value, kind: Kind) -> Result<i32, String> {
+    match value {
+        Value::Px(value) => Ok(value.round() as i32),
         _ => Err(expected(kind, "px")),
     }
 }

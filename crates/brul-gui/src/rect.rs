@@ -75,6 +75,34 @@ impl Rect {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Shadow {
+    pub x: i32,
+    pub y: i32,
+    pub blur: u32,
+    pub color: Color,
+}
+
+impl Shadow {
+    pub(crate) fn coverage(&self, x: i32, y: i32, rect: &Rect) -> f32 {
+        if rect.width == 0 || rect.height == 0 || self.color.a == 0 {
+            return 0.0;
+        }
+        let distance = rounded_distance(
+            x as f32 + 0.5 - rect.x.saturating_add(self.x) as f32,
+            y as f32 + 0.5 - rect.y.saturating_add(self.y) as f32,
+            rect.width,
+            rect.height,
+            rect.radius,
+        );
+        if self.blur == 0 {
+            return if distance <= 0.0 { 1.0 } else { 0.0 };
+        }
+        let t = (0.5 - distance / (2.0 * self.blur as f32)).clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ClipRect {
     pub x: i32,

@@ -337,6 +337,77 @@ fn border_shortcut_parses() {
 }
 
 #[test]
+fn box_shadow_shortcut_parses_offsets_blur_and_color() {
+    let source = r#".a { box-shadow: 0px 10px 15px #3b82f640; }
+.negative { box-shadow: -4px 2px 0px transparent; }
+.themed { box-shadow: 1px 2px 3px theme.shadow; }"#;
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![
+            rule(
+                "a",
+                vec![
+                    property("box-shadow-offset-x", Value::Px(0.0)),
+                    property("box-shadow-offset-y", Value::Px(10.0)),
+                    property("box-shadow-blur", Value::Px(15.0)),
+                    property(
+                        "box-shadow-color",
+                        Value::Color(Color::rgba(0x3b, 0x82, 0xf6, 0x40)),
+                    ),
+                ],
+            ),
+            rule(
+                "negative",
+                vec![
+                    property("box-shadow-offset-x", Value::Px(-4.0)),
+                    property("box-shadow-offset-y", Value::Px(2.0)),
+                    property("box-shadow-blur", Value::Px(0.0)),
+                    property("box-shadow-color", Value::Color(Color::TRANSPARENT)),
+                ],
+            ),
+            rule(
+                "themed",
+                vec![
+                    property("box-shadow-offset-x", Value::Px(1.0)),
+                    property("box-shadow-offset-y", Value::Px(2.0)),
+                    property("box-shadow-blur", Value::Px(3.0)),
+                    property("box-shadow-color", Value::ThemeRef("shadow".to_owned())),
+                ],
+            ),
+        ])
+    );
+}
+
+#[test]
+fn box_shadow_geometry_in_a_state_is_rejected() {
+    let error = parse_file(
+        ".a { box-shadow: 0px 10px 15px transparent; }\n.a:hover { box-shadow: 4px 4px 4px #fff; }",
+    )
+    .expect_err("box-shadow in a state");
+
+    assert_eq!(
+        error.message,
+        "property 'box-shadow-offset-x' cannot change in a state"
+    );
+}
+
+#[test]
+fn box_shadow_color_in_a_state_is_allowed() {
+    let source =
+        ".a { box-shadow: 0px 10px 15px transparent; }\n.a:hover { box-shadow-color: #3b82f640; }";
+    assert!(parse_file(source).is_ok());
+}
+
+#[test]
+fn box_shadow_needs_a_color_and_a_non_negative_blur() {
+    let missing_color = parse_file(".a { box-shadow: 0px 10px 15px; }").unwrap_err();
+    assert_eq!(missing_color.message, "expected color for 'box-shadow'");
+
+    let negative_blur = parse_file(".a { box-shadow: 0px 10px -3px #fff; }").unwrap_err();
+    assert_eq!(negative_blur.message, "expected px for 'box-shadow'");
+}
+
+#[test]
 fn border_in_a_state_is_rejected_through_its_width() {
     let error = parse_file(".a { border: 2px #3b82f6; }\n.a:hover { border: 4px #3b82f6; }")
         .expect_err("border in a state");

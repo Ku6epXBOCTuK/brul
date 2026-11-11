@@ -26,6 +26,16 @@ pub static SHORTHANDS: &[Shorthand] = &[
         ],
         parse: box_values,
     },
+    Shorthand {
+        name: "box-shadow",
+        kinds: &[
+            Kind::ShadowOffsetX,
+            Kind::ShadowOffsetY,
+            Kind::ShadowBlur,
+            Kind::ShadowColor,
+        ],
+        parse: shadow_values,
+    },
 ];
 
 pub fn get(name: &str) -> Option<&'static Shorthand> {
@@ -47,6 +57,14 @@ fn border_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
     let width = value::value(cursor, true, Type::Px, name)?;
     let color = value::value(cursor, true, Type::Color, name)?;
     Ok(vec![width, color])
+}
+
+fn shadow_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
+    let offset_x = value::value(cursor, true, Type::SignedPx, name)?;
+    let offset_y = value::value(cursor, true, Type::SignedPx, name)?;
+    let blur = value::value(cursor, true, Type::Px, name)?;
+    let color = value::value(cursor, true, Type::Color, name)?;
+    Ok(vec![offset_x, offset_y, blur, color])
 }
 
 fn box_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {

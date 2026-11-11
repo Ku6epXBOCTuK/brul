@@ -69,7 +69,7 @@ impl Frame {
         }
 
         for node in &snapshot.nodes {
-            if node_clip(node, clip).is_some() {
+            if paint_clip(node, clip).is_some() {
                 self.paint_node(node, atlas, clip);
             }
         }
@@ -81,6 +81,7 @@ impl Frame {
             .with_radius(node.style.radius)
             .with_fill(node.style.background)
             .with_border(node.border_width, node.style.border);
+        self.paint_shadow(node, &rect, opacity, clip);
         self.paint_rect(&rect, opacity, clip, &node.clips);
 
         match node.kind {
@@ -95,6 +96,24 @@ impl Frame {
                 }
             }
             crate::WidgetKind::View => {}
+        }
+    }
+
+    fn paint_shadow(&mut self, node: &WidgetSnapshotNode, rect: &Rect, opacity: f32, clip: Clip) {
+        let shadow = node.style.shadow;
+        let Some(area) = paint_clip(node, clip) else {
+            return;
+        };
+        for y in area.top..area.bottom {
+            for x in area.left..area.right {
+                if !visible(&node.clips, x as i32, y as i32) {
+                    continue;
+                }
+                let coverage = shadow.coverage(x as i32, y as i32, rect);
+                if coverage > 0.0 {
+                    self.blend(x as i32, y as i32, shadow.color, opacity * coverage);
+                }
+            }
         }
     }
 
@@ -317,19 +336,34 @@ fn node_clip(node: &WidgetSnapshotNode, clip: Clip) -> Option<Clip> {
     .and_then(|bounds| bounds.intersect(clip))
 }
 
+fn paint_bounds(node: &WidgetSnapshotNode) -> Option<Clip> {
+    let shadow = node.style.shadow;
+    let left = i64::from(node.x);
+    let top = i64::from(node.y);
+    let right = left + i64::from(node.width);
+    let bottom = top + i64::from(node.height);
+    let offset_x = i64::from(shadow.x);
+    let offset_y = i64::from(shadow.y);
+    let blur = i64::from(shadow.blur);
+    Clip::new(
+        left.min(left + offset_x - blur),
+        top.min(top + offset_y - blur),
+        right.max(right + offset_x + blur),
+        bottom.max(bottom + offset_y + blur),
+    )
+}
+
+fn paint_clip(node: &WidgetSnapshotNode, clip: Clip) -> Option<Clip> {
+    paint_bounds(node).and_then(|bounds| bounds.intersect(clip))
+}
+
 fn dirty_region(snapshot: &WidgetSnapshot, dirty: &Dirty) -> Option<Clip> {
     let mut region: Option<Clip> = None;
     for id in &dirty.ids {
         let Some(node) = snapshot.node(*id) else {
             continue;
         };
-        let bounds = Clip::new(
-            i64::from(node.x),
-            i64::from(node.y),
-            i64::from(node.x) + i64::from(node.width),
-            i64::from(node.y) + i64::from(node.height),
-        );
-        let Some(bounds) = bounds else {
+        let Some(bounds) = paint_bounds(node) else {
             continue;
         };
         region = Some(match region {

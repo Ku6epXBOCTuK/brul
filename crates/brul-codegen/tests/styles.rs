@@ -84,6 +84,23 @@ fn paint_covers_background_border_color_tint_and_the_gradient() {
 }
 
 #[test]
+fn box_shadow_sets_geometry_and_the_state_color() {
+    let resolved = resolved(
+        ".a { box-shadow: -2px 10px 15px transparent; }\n.a:hover { box-shadow-color: #3b82f640; }",
+    );
+    let base = resolved.styles.base().shadow;
+    assert_eq!((base.x, base.y, base.blur), (-2, 10, 15));
+    assert_eq!(base.color, brul_gui::Color::TRANSPARENT);
+
+    let hovered = resolved
+        .styles
+        .resolve(brul_gui::StyleState::Hovered.flags())
+        .shadow;
+    assert_eq!(hovered.color, brul_gui::Color::rgba(0x3b, 0x82, 0xf6, 0x40));
+    assert_eq!((hovered.x, hovered.y, hovered.blur), (-2, 10, 15));
+}
+
+#[test]
 fn a_gradient_background_resolves_to_a_linear_paint() {
     let resolved = resolved(".a { background: linear-gradient(135deg, #fff, #000); }");
 

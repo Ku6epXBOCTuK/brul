@@ -8,7 +8,7 @@ use crate::gradient::Paint;
 use crate::layout::{
     self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, ScrollOffset, Size,
 };
-use crate::rect::ClipRect;
+use crate::rect::{ClipRect, Shadow};
 use crate::text::{TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
 use crate::texture::Texture;
 
@@ -58,6 +58,7 @@ pub struct WidgetStyle {
     pub vertical_align: VerticalAlign,
     pub clip: bool,
     pub scroll: bool,
+    pub shadow: Shadow,
 }
 
 impl Default for WidgetStyle {
@@ -72,6 +73,7 @@ impl Default for WidgetStyle {
             vertical_align: VerticalAlign::Top,
             clip: false,
             scroll: false,
+            shadow: Shadow::default(),
         }
     }
 }

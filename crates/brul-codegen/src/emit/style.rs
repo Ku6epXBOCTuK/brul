@@ -1,5 +1,5 @@
 use brul_gui::{
-    Align, Color, Dimension, Gradient, Justify, LayoutStyle, Paint, StyleSet, StyleState,
+    Align, Color, Dimension, Gradient, Justify, LayoutStyle, Paint, Shadow, StyleSet, StyleState,
     TextAlign, TextStyle, TextStyleSet, VerticalAlign, WidgetStyle,
 };
 
@@ -84,6 +84,7 @@ fn widget_style(style: WidgetStyle) -> String {
         vertical_align: vertical_align_value,
         clip,
         scroll,
+        shadow: shadow_value,
     } = style;
     let default = WidgetStyle::default();
     let mut fields = Vec::new();
@@ -119,6 +120,9 @@ fn widget_style(style: WidgetStyle) -> String {
     }
     if scroll != default.scroll {
         fields.push(format!("scroll: {scroll}"));
+    }
+    if shadow_value != default.shadow {
+        fields.push(format!("shadow: {}", shadow(shadow_value)));
     }
     if fields.is_empty() {
         "brul_gui::WidgetStyle::default()".to_owned()
@@ -233,6 +237,16 @@ fn vertical_align(value: VerticalAlign) -> String {
     }
 }
 
+fn shadow(value: Shadow) -> String {
+    format!(
+        "brul_gui::Shadow {{ x: {}, y: {}, blur: {}, color: {} }}",
+        value.x,
+        value.y,
+        value.blur,
+        color(value.color)
+    )
+}
+
 fn paint(value: Paint) -> String {
     match value {
         Paint::Color(value) => format!("brul_gui::Paint::Color({})", color(value)),
@@ -253,8 +267,30 @@ fn color(value: Color) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::justify;
-    use brul_gui::Justify;
+    use super::{justify, widget_style};
+    use brul_gui::{Color, Justify, Shadow, WidgetStyle};
+
+    #[test]
+    fn shadow_is_emitted_only_when_it_differs_from_default() {
+        assert_eq!(
+            widget_style(WidgetStyle::default()),
+            "brul_gui::WidgetStyle::default()"
+        );
+        let style = WidgetStyle {
+            shadow: Shadow {
+                x: -2,
+                y: 10,
+                blur: 15,
+                color: Color::rgba(59, 130, 246, 64),
+            },
+            ..WidgetStyle::default()
+        };
+
+        assert_eq!(
+            widget_style(style),
+            "brul_gui::WidgetStyle { shadow: brul_gui::Shadow { x: -2, y: 10, blur: 15, color: brul_gui::Color::rgba(59, 130, 246, 64) }, ..brul_gui::WidgetStyle::default() }"
+        );
+    }
 
     #[test]
     fn every_justify_maps_to_its_own_constant() {

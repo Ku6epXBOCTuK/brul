@@ -32,6 +32,10 @@ pub enum Kind {
     Opacity,
     Clip,
     Scroll,
+    ShadowOffsetX,
+    ShadowOffsetY,
+    ShadowBlur,
+    ShadowColor,
 }
 
 impl Kind {
@@ -167,6 +171,20 @@ pub static SPECS: &[Spec] = &[
     ),
     Spec::new(Kind::Clip, "clip", Type::Bool, Visual),
     Spec::new(Kind::Scroll, "scroll", Type::Bool, Forbidden),
+    Spec::new(
+        Kind::ShadowOffsetX,
+        "box-shadow-offset-x",
+        Type::SignedPx,
+        Forbidden,
+    ),
+    Spec::new(
+        Kind::ShadowOffsetY,
+        "box-shadow-offset-y",
+        Type::SignedPx,
+        Forbidden,
+    ),
+    Spec::new(Kind::ShadowBlur, "box-shadow-blur", Type::Px, Forbidden),
+    Spec::new(Kind::ShadowColor, "box-shadow-color", Type::Color, Visual),
 ];
 
 impl Spec {
@@ -181,7 +199,7 @@ impl Spec {
 
     pub fn theme_type(&self) -> Option<ThemeType> {
         match self.ty {
-            Type::Px | Type::Length => Some(ThemeType::Px),
+            Type::Px | Type::SignedPx | Type::Length => Some(ThemeType::Px),
             Type::Color | Type::Paint => Some(ThemeType::Color),
             _ => None,
         }

@@ -49,29 +49,33 @@
 
 ## Свойства MVP
 
-| Свойство                                           | Тип                               | Дефолт                  | Меняется по состоянию?          |
-| -------------------------------------------------- | --------------------------------- | ----------------------- | ------------------------------- |
-| `width`, `height`                                  | px \| %                           | auto (от детей/лейаута) | ❌ геометрия                    |
-| `stretch`                                          | число                             | 0                       | ❌ геометрия                    |
-| `padding` (1–4 значения, `-left/right/top/bottom`) | px                                | 0                       | ❌ геометрия                    |
-| `spacing`                                          | px                                | 0 (только Row/Column)   | ❌ геометрия                    |
-| `justify-content`                                  | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
-| `align-items`                                      | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
-| `background`                                       | Color \| Gradient                 | transparent             | ✅                              |
-| `border` (шорткат: ширина+цвет)                    | px + (Color \| theme.*)           | 0, transparent          | ❌ (только `border-color`)      |
-| `border-width`                                     | px                                | 0                       | ❌ геометрия                    |
-| `border-color`                                     | Color                             | transparent             | ✅                              |
-| `radius`                                           | px                                | 0                       | ❌ геометрия                    |
-| `color`                                            | Color                             | theme-зависимый         | ✅                              |
-| `font-size`                                        | px                                | 14                      | ❌ (размер текста — компоновка) |
-| `font-family`                                      | String                            | наследуется от окна     | ❌                              |
-| `text-align`                                       | left\|center\|right               | left                    | ✅                              |
-| `vertical-align`                                   | top\|center\|bottom               | top                     | ✅                              |
-| `font-weight`                                      | число (400\|500\|600\|700)        | 400                     | ⚠️ только `Text`, см. ниже      |
-| `tint`                                             | Color                             | — (без окраски)         | ✅ (только Image)               |
-| `opacity`                                          | 0.0–1.0                           | 1.0                     | ✅                              |
-| `clip`                                             | Bool                              | false                   | ✅                              |
-| `scroll`                                           | Bool                              | false                   | ❌                              |
+| Свойство                                               | Тип                               | Дефолт                  | Меняется по состоянию?          |
+| ------------------------------------------------------ | --------------------------------- | ----------------------- | ------------------------------- |
+| `width`, `height`                                      | px \| %                           | auto (от детей/лейаута) | ❌ геометрия                    |
+| `stretch`                                              | число                             | 0                       | ❌ геометрия                    |
+| `padding` (1–4 значения, `-left/right/top/bottom`)     | px                                | 0                       | ❌ геометрия                    |
+| `spacing`                                              | px                                | 0 (только Row/Column)   | ❌ геометрия                    |
+| `justify-content`                                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
+| `align-items`                                          | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
+| `background`                                           | Color \| Gradient                 | transparent             | ✅                              |
+| `border` (шорткат: ширина+цвет)                        | px + (Color \| theme.*)           | 0, transparent          | ❌ (только `border-color`)      |
+| `border-width`                                         | px                                | 0                       | ❌ геометрия                    |
+| `border-color`                                         | Color                             | transparent             | ✅                              |
+| `radius`                                               | px                                | 0                       | ❌ геометрия                    |
+| `color`                                                | Color                             | theme-зависимый         | ✅                              |
+| `font-size`                                            | px                                | 14                      | ❌ (размер текста — компоновка) |
+| `font-family`                                          | String                            | наследуется от окна     | ❌                              |
+| `text-align`                                           | left\|center\|right               | left                    | ✅                              |
+| `vertical-align`                                       | top\|center\|bottom               | top                     | ✅                              |
+| `font-weight`                                          | число (400\|500\|600\|700)        | 400                     | ⚠️ только `Text`, см. ниже      |
+| `tint`                                                 | Color                             | — (без окраски)         | ✅ (только Image)               |
+| `opacity`                                              | 0.0–1.0                           | 1.0                     | ✅                              |
+| `clip`                                                 | Bool                              | false                   | ✅                              |
+| `scroll`                                               | Bool                              | false                   | ❌                              |
+| `box-shadow` (шорткат: offset-x, offset-y, blur, цвет) | px + px + px + Color              | — (нет тени)            | ❌ (только `box-shadow-color`)  |
+| `box-shadow-offset-x`, `box-shadow-offset-y`           | px (может быть отрицательным)     | 0                       | ❌ геометрия                    |
+| `box-shadow-blur`                                      | px                                | 0                       | ❌ геометрия                    |
+| `box-shadow-color`                                     | Color                             | transparent             | ✅                              |
 
 _«Меняется по состоянию?» = разрешено ли свойство в `.class:state`. Остальные
 там запрещены компилятором: переключение снапшота не должно вызывать релайаут.
@@ -86,6 +90,13 @@ _«Меняется по состоянию?» = разрешено ли сво�
 неотличимы от написанных по отдельности. Ширина — геометрия, поэтому `border` в
 `.class:state` запрещён, как и `border-width`; менять в состоянии можно только
 `border-color`.
+
+`box-shadow` — шорткат из смещения по x, смещения по y, размытия и цвета:
+`box-shadow: 0px 10px 15px #3b82f640`. Смещения и размытие — px, смещения могут
+быть отрицательными; цвет — Color или `theme.*`. Тень рисуется под border-box
+узла с тем же `radius`, без «spread» и без `inset`. Геометрия тени в
+`.class:state` запрещена, как у `border`: по состоянию меняется только
+`box-shadow-color`, поэтому тень появляется и исчезает без релайаута.
 
 `linear-gradient` принимает ровно два цвета; угол — как в CSS: `0deg` смотрит
 вверх, `90deg` — вправо, дальше по часовой. `to`-синтаксиса нет.
@@ -155,9 +166,9 @@ theme dark {
 - `transform` (scale/translate/rotate) — любые изменения размера в рантайме
   только визуальной трансформацией, без инвалидации лейаута; на нём будут
   анимации;
-- `box-shadow`, скругление отдельных углов, `:focus`, анимации и переходы,
-  media-queries, CSS-переменные (замена — темы), `position: absolute` в стилях
-  (в MVP абсолют — параметры `x`/`y` в разметке).
+- скругление отдельных углов, `:focus`, анимации и переходы, media-queries,
+  CSS-переменные (замена — темы), `position: absolute` в стилях (в MVP абсолют —
+  параметры `x`/`y` в разметке).
 
 ## Семантика выполнения
 
@@ -257,5 +268,20 @@ theme dark {
   height: 48px;
   radius: 12px;
   background: linear-gradient(135deg, #3b82f6, #06b6d4);
+}
+```
+
+### 5. Тень по наведению
+
+```css
+.raised {
+  width: 44px;
+  height: 44px;
+  radius: 12px;
+  background: #3b82f6;
+  box-shadow: 0px 10px 15px transparent;
+}
+.raised:hover {
+  box-shadow-color: #3b82f640;
 }
 ```

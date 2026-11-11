@@ -7,6 +7,7 @@ pub enum Type {
     ThemeKey,
     Number,
     Px,
+    SignedPx,
     Length,
     Color,
     Paint,
@@ -28,7 +29,9 @@ pub fn value(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<V
 impl Type {
     pub fn parse(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
         match self {
-            Type::Number | Type::Px | Type::Length => self.number_value(cursor, name),
+            Type::Number | Type::Px | Type::SignedPx | Type::Length => {
+                self.number_value(cursor, name)
+            }
             Type::Color | Type::Paint => self.paint_value(cursor, name),
             Type::Bool => boolean(cursor, name).map(Value::Bool),
             Type::ThemeKey => theme_key(cursor, name),
@@ -51,6 +54,7 @@ impl Type {
         match self {
             Type::Number => number(cursor, &expected(name, "number")).map(Value::Number),
             Type::Px => px(cursor, name).map(Value::Px),
+            Type::SignedPx => signed_px(cursor, name).map(Value::Px),
             Type::Length => length(cursor, name),
             _ => unreachable!("parse sends only number types here"),
         }
@@ -116,6 +120,12 @@ fn px(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
             expected(name, "px"),
         ))
     }
+}
+
+fn signed_px(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
+    let negative = cursor.eat('-');
+    let value = px(cursor, name)?;
+    Ok(if negative { -value } else { value })
 }
 
 fn length(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
