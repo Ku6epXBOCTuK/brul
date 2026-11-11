@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_gui::{
-    Color, Dimension, LayoutStyle, Size, StyleSet, StyleState, TextEngine, Widget, WidgetStyle,
-    WidgetTree,
+    Color, Dimension, LayoutStyle, Paint, Size, StyleSet, StyleState, TextEngine, Widget,
+    WidgetStyle, WidgetTree,
 };
 use brul_reactive::{Effect, Signal, batch};
 
@@ -19,13 +19,13 @@ fn signal_change_reaches_widget_state_snapshot_and_dirty_set() {
         })
         .with_styles(
             StyleSet::new(WidgetStyle {
-                background: base,
+                background: Paint::Color(base),
                 ..WidgetStyle::default()
             })
             .with(
                 StyleState::Checked,
                 WidgetStyle {
-                    background: checked,
+                    background: Paint::Color(checked),
                     ..WidgetStyle::default()
                 },
             ),
@@ -55,7 +55,10 @@ fn signal_change_reaches_widget_state_snapshot_and_dirty_set() {
     {
         let mut tree = tree.borrow_mut();
         let snapshot = tree.snapshot().expect("snapshot");
-        assert_eq!(snapshot.node(id).expect("control").style.background, base);
+        assert_eq!(
+            snapshot.node(id).expect("control").style.background,
+            Paint::Color(base)
+        );
     }
 
     batch(|| signal.set(true));
@@ -67,6 +70,6 @@ fn signal_change_reaches_widget_state_snapshot_and_dirty_set() {
     let snapshot = tree.snapshot().expect("snapshot");
     assert_eq!(
         snapshot.node(id).expect("control").style.background,
-        checked
+        Paint::Color(checked)
     );
 }

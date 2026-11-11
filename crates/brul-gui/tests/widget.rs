@@ -1,7 +1,7 @@
 use brul_gui::{
-    Color, Dimension, LayoutStyle, Padding, Size, StyleSet, StyleState, TextAlign, TextEngine,
-    TextStyle, TextStyleSet, Texture, Widget, WidgetError, WidgetEvent, WidgetId, WidgetState,
-    WidgetStyle, WidgetTree,
+    Color, Dimension, LayoutStyle, Padding, Paint, Size, StyleSet, StyleState, TextAlign,
+    TextEngine, TextStyle, TextStyleSet, Texture, Widget, WidgetError, WidgetEvent, WidgetId,
+    WidgetState, WidgetStyle, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -14,7 +14,7 @@ fn fixed(width: u32, height: u32) -> LayoutStyle {
 
 fn style(background: Color) -> WidgetStyle {
     WidgetStyle {
-        background,
+        background: Paint::Color(background),
         ..WidgetStyle::default()
     }
 }

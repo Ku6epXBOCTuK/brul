@@ -1,5 +1,5 @@
 use brul_gui::{
-    Align, Color, Dimension, Justify, LayoutStyle, Padding, StyleSet, StyleState, TextStyle,
+    Align, Color, Dimension, Justify, LayoutStyle, Padding, Paint, StyleSet, StyleState, TextStyle,
     TextStyleSet, VerticalAlign, WidgetStyle,
 };
 use brul_syntax::style::{Kind, Property, Side, Snapshot, State, Stylesheet, Value};
@@ -154,10 +154,14 @@ fn vertical_align(value: &str) -> VerticalAlign {
     }
 }
 
-fn background(value: &Value) -> Result<Color, String> {
+fn background(value: &Value) -> Result<Paint, String> {
     match value {
-        Value::Color(value) => Ok(color(*value)),
-        Value::Gradient(_) => Err("gradient is not supported yet".to_owned()),
+        Value::Color(value) => Ok(Paint::Color(color(*value))),
+        Value::Gradient(value) => Ok(Paint::Gradient(brul_gui::Gradient::Linear {
+            angle: value.angle as f32,
+            from: color(value.from),
+            to: color(value.to),
+        })),
         _ => Err("expected a color or a gradient for 'background'".to_owned()),
     }
 }

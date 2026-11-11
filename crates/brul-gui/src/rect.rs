@@ -1,13 +1,13 @@
-use crate::Color;
+use crate::{Color, Paint};
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
     pub x: i32,
     pub y: i32,
     pub width: u32,
     pub height: u32,
     pub radius: u32,
-    pub fill: Color,
+    pub fill: Paint,
     pub border_width: u32,
     pub border_color: Color,
 }
@@ -27,7 +27,7 @@ impl Rect {
             width,
             height,
             radius: 0,
-            fill: Color::TRANSPARENT,
+            fill: Paint::Color(Color::TRANSPARENT),
             border_width: 0,
             border_color: Color::TRANSPARENT,
         }
@@ -38,7 +38,7 @@ impl Rect {
         self
     }
 
-    pub const fn with_fill(mut self, fill: Color) -> Self {
+    pub const fn with_fill(mut self, fill: Paint) -> Self {
         self.fill = fill;
         self
     }
@@ -60,7 +60,7 @@ impl Rect {
         } else if self.border_width > 0 && distance > -(self.border_width as f32) {
             RectSample::Border(self.border_color)
         } else {
-            RectSample::Fill(self.fill)
+            RectSample::Fill(self.fill.at(self, x, y))
         }
     }
 

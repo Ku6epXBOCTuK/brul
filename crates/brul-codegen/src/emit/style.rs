@@ -1,6 +1,6 @@
 use brul_gui::{
-    Align, Color, Dimension, Justify, LayoutStyle, StyleSet, StyleState, TextAlign, TextStyle,
-    TextStyleSet, VerticalAlign, WidgetStyle,
+    Align, Color, Dimension, Gradient, Justify, LayoutStyle, Paint, StyleSet, StyleState,
+    TextAlign, TextStyle, TextStyleSet, VerticalAlign, WidgetStyle,
 };
 
 pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
@@ -86,7 +86,7 @@ fn widget_style(style: WidgetStyle) -> String {
     let default = WidgetStyle::default();
     let mut fields = Vec::new();
     if background != default.background {
-        fields.push(format!("background: {}", color(background)));
+        fields.push(format!("background: {}", paint(background)));
     }
     if border != default.border {
         fields.push(format!("border: {}", color(border)));
@@ -222,6 +222,17 @@ fn vertical_align(value: VerticalAlign) -> String {
         VerticalAlign::Top => "brul_gui::VerticalAlign::Top".to_owned(),
         VerticalAlign::Center => "brul_gui::VerticalAlign::Center".to_owned(),
         VerticalAlign::Bottom => "brul_gui::VerticalAlign::Bottom".to_owned(),
+    }
+}
+
+fn paint(value: Paint) -> String {
+    match value {
+        Paint::Color(value) => format!("brul_gui::Paint::Color({})", color(value)),
+        Paint::Gradient(Gradient::Linear { angle, from, to }) => format!(
+            "brul_gui::Paint::Gradient(brul_gui::Gradient::Linear {{ angle: {angle:?}f32, from: {}, to: {} }})",
+            color(from),
+            color(to)
+        ),
     }
 }
 

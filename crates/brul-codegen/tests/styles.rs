@@ -1,5 +1,5 @@
 use brul_codegen::styles::resolve;
-use brul_gui::{Align, Dimension, Justify};
+use brul_gui::{Align, Dimension, Gradient, Justify, Paint};
 
 fn resolved(style: &str) -> brul_codegen::styles::Resolved {
     let stylesheet = brul_syntax::style::parse_file(style).expect("stylesheet");
@@ -67,12 +67,15 @@ fn align_items_maps_every_keyword() {
 }
 
 #[test]
-fn paint_covers_background_border_color_tint_and_the_gradient_refusal() {
+fn paint_covers_background_border_color_tint_and_the_gradient() {
     let resolved = resolved(
         ".a { background: #102030; border: 2px #405060; color: #708090; tint: #a0b0c0; radius: 6px; opacity: 0.5; }",
     );
     let style = resolved.styles.base();
-    assert_eq!(style.background, brul_gui::Color::rgb(0x10, 0x20, 0x30));
+    assert_eq!(
+        style.background,
+        Paint::Color(brul_gui::Color::rgb(0x10, 0x20, 0x30))
+    );
     assert_eq!(style.border, brul_gui::Color::rgb(0x40, 0x50, 0x60));
     assert_eq!(style.text, brul_gui::Color::rgb(0x70, 0x80, 0x90));
     assert_eq!(style.tint, Some(brul_gui::Color::rgb(0xa0, 0xb0, 0xc0)));
@@ -81,14 +84,17 @@ fn paint_covers_background_border_color_tint_and_the_gradient_refusal() {
 }
 
 #[test]
-fn a_gradient_background_is_refused() {
-    let stylesheet =
-        brul_syntax::style::parse_file(".a { background: linear-gradient(135deg, #fff, #000); }")
-            .expect("stylesheet");
-    let Err(error) = resolve(&stylesheet, &["a"], None) else {
-        panic!("a gradient must not resolve");
-    };
-    assert!(error.contains("gradient"), "{error}");
+fn a_gradient_background_resolves_to_a_linear_paint() {
+    let resolved = resolved(".a { background: linear-gradient(135deg, #fff, #000); }");
+
+    assert_eq!(
+        resolved.styles.base().background,
+        Paint::Gradient(Gradient::Linear {
+            angle: 135.0,
+            from: brul_gui::Color::WHITE,
+            to: brul_gui::Color::BLACK,
+        })
+    );
 }
 
 #[test]

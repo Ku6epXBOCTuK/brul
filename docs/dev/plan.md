@@ -17,7 +17,7 @@
 - [x] BRUL-190 — `resource` в `<use>`, виджет `Image`, `tint`; спека
   `use.md`/`markup.md`.
 - [x] BRUL-238 — `Value::Image`, `prop … : Image`, загрузка PNG из пути с кэшем.
-- [ ] BRUL-239 — `linear-gradient` в `background`: `Paint` вместо `Color`.
+- [x] BRUL-239 — `linear-gradient` в `background`: `Paint` вместо `Color`.
 - [ ] BRUL-240 — `clip`: свойство стиля и обрезка в снапшоте.
 - [ ] BRUL-241 — колесо мыши → `BindingTarget::Offset` ближайшего контейнера.
 - [ ] BRUL-242 — `box-shadow`: снять из «Отложено» в `style.md`, отрисовка.

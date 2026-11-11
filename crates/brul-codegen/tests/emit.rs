@@ -101,7 +101,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
             {
                 let widget0 = brul_gui::Widget::column(vec![])
                 .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(108, 140, 255, 255), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255), ..brul_gui::WidgetStyle::default() }));
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(108, 140, 255, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255)), ..brul_gui::WidgetStyle::default() }));
                 widget0
             }
         }
@@ -109,7 +109,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
             {
                 let widget0 = brul_gui::Widget::column(vec![])
                 .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(108, 140, 255, 255), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255), ..brul_gui::WidgetStyle::default() }));
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(108, 140, 255, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255)), ..brul_gui::WidgetStyle::default() }));
                 widget0
             }
         }
@@ -117,7 +117,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
             {
                 let widget0 = brul_gui::Widget::column(vec![])
                 .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Color::rgba(17, 34, 51, 255), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Color::rgba(255, 0, 0, 255), ..brul_gui::WidgetStyle::default() }));
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(17, 34, 51, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255)), ..brul_gui::WidgetStyle::default() }));
                 widget0
             }
         }
@@ -809,6 +809,18 @@ window Demo (title: "demo") {
 }
 
 const PNG_SIGNATURE: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+#[test]
+fn emits_a_linear_gradient_background() {
+    let source = "<style>\n.a { background: linear-gradient(90deg, #ff0000, #0000ff); }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (a) { }\n}\n</markup>\n";
+    let module = emit::module(source).unwrap();
+    assert!(
+        module.contains(
+            "background: brul_gui::Paint::Gradient(brul_gui::Gradient::Linear { angle: 90.0f32, from: brul_gui::Color::rgba(255, 0, 0, 255), to: brul_gui::Color::rgba(0, 0, 255, 255) })"
+        ),
+        "{module}"
+    );
+}
 
 #[test]
 fn emits_resource_and_image_with_tint() {

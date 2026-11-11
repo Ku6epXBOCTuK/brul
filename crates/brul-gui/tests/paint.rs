@@ -1,6 +1,6 @@
 use brul_gui::{
-    Color, Dimension, Dirty, Frame, LayoutStyle, Size, StyleSet, StyleState, TextEngine, Texture,
-    VerticalAlign, Widget, WidgetStyle, WidgetTree,
+    Color, Dimension, Dirty, Frame, LayoutStyle, Paint, Size, StyleSet, StyleState, TextEngine,
+    Texture, VerticalAlign, Widget, WidgetStyle, WidgetTree,
 };
 
 fn view(color: Color, width: u32, height: u32) -> Widget {
@@ -11,7 +11,7 @@ fn view(color: Color, width: u32, height: u32) -> Widget {
             ..LayoutStyle::default()
         })
         .with_styles(StyleSet::new(WidgetStyle {
-            background: color,
+            background: Paint::Color(color),
             ..WidgetStyle::default()
         }))
 }
@@ -24,7 +24,7 @@ fn full_view(color: Color) -> Widget {
             ..LayoutStyle::default()
         })
         .with_styles(StyleSet::new(WidgetStyle {
-            background: color,
+            background: Paint::Color(color),
             ..WidgetStyle::default()
         }))
 }
@@ -45,7 +45,7 @@ fn paints_background_and_rounds_corners() {
             ..LayoutStyle::default()
         })
         .with_styles(StyleSet::new(WidgetStyle {
-            background: red,
+            background: Paint::Color(red),
             radius: 8,
             ..WidgetStyle::default()
         }));
@@ -159,13 +159,13 @@ fn dirty_region_leaves_the_rest_of_the_frame_alone() {
     let first = view(red, 8, 8);
     let second = view(red, 8, 8).with_styles(
         StyleSet::new(WidgetStyle {
-            background: red,
+            background: Paint::Color(red),
             ..WidgetStyle::default()
         })
         .with(
             StyleState::Checked,
             WidgetStyle {
-                background: blue,
+                background: Paint::Color(blue),
                 ..WidgetStyle::default()
             },
         ),

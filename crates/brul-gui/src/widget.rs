@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::Color;
+use crate::gradient::Paint;
 use crate::layout::{
     self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, Size,
 };
@@ -47,7 +48,7 @@ impl Default for WidgetState {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WidgetStyle {
-    pub background: Color,
+    pub background: Paint,
     pub border: Color,
     pub text: Color,
     pub radius: u32,
@@ -59,7 +60,7 @@ pub struct WidgetStyle {
 impl Default for WidgetStyle {
     fn default() -> Self {
         Self {
-            background: Color::TRANSPARENT,
+            background: Paint::default(),
             border: Color::TRANSPARENT,
             text: Color::rgb(15, 23, 42),
             radius: 0,

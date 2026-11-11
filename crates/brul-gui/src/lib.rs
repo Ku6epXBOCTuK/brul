@@ -9,10 +9,12 @@
 //! отрисовщика нет.
 //!
 //! ```
-//! use brul_gui::{Color, Rect, RectSample};
+//! use brul_gui::{Color, Paint, Rect, RectSample};
 //!
 //! let accent = Color::rgb(59, 130, 246);
-//! let rect = Rect::new(8, 8, 32, 24).with_radius(6).with_fill(accent);
+//! let rect = Rect::new(8, 8, 32, 24)
+//!     .with_radius(6)
+//!     .with_fill(Paint::Color(accent));
 //! assert_eq!(rect.sample(20, 20), RectSample::Fill(accent));
 //! assert_eq!(rect.sample(8, 8), RectSample::Outside);
 //! ```
@@ -106,6 +108,7 @@
 
 mod atlas;
 mod color;
+mod gradient;
 mod layout;
 mod paint;
 mod rect;
@@ -115,6 +118,7 @@ mod widget;
 
 pub use atlas::{Atlas, AtlasFormat, AtlasSlot};
 pub use color::Color;
+pub use gradient::{Gradient, Paint};
 pub use layout::{
     Align, Dimension, Direction, Justify, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset,
     Padding, Size, layout,
