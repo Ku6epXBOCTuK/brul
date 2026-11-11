@@ -1,5 +1,5 @@
 use crate::atlas::{Atlas, AtlasFormat};
-use crate::rect::{Rect, RectSample};
+use crate::rect::{ClipRect, Rect, RectSample};
 use crate::widget::Dirty;
 use crate::{Color, Texture, WidgetSnapshot, WidgetSnapshotNode};
 
@@ -81,7 +81,7 @@ impl Frame {
             .with_radius(node.style.radius)
             .with_fill(node.style.background)
             .with_border(node.border_width, node.style.border);
-        self.paint_rect(&rect, opacity, clip);
+        self.paint_rect(&rect, opacity, clip, &node.clips);
 
         match node.kind {
             crate::WidgetKind::Text => {
@@ -98,7 +98,7 @@ impl Frame {
         }
     }
 
-    fn paint_rect(&mut self, rect: &Rect, opacity: f32, clip: Clip) {
+    fn paint_rect(&mut self, rect: &Rect, opacity: f32, clip: Clip, clips: &[ClipRect]) {
         let Some(area) = Clip::new(
             i64::from(rect.x),
             i64::from(rect.y),
@@ -111,6 +111,9 @@ impl Frame {
 
         for y in area.top..area.bottom {
             for x in area.left..area.right {
+                if !visible(clips, x as i32, y as i32) {
+                    continue;
+                }
                 let color = match rect.sample(x as i32, y as i32) {
                     RectSample::Outside => continue,
                     RectSample::Fill(color) | RectSample::Border(color) => color,
@@ -147,7 +150,7 @@ impl Frame {
                 for column in 0..slot.width {
                     let x = origin_x.saturating_add(column as i32);
                     let y = origin_y.saturating_add(row as i32);
-                    if !clip.contains(i64::from(x), i64::from(y)) {
+                    if !clip.contains(i64::from(x), i64::from(y)) || !visible(&node.clips, x, y) {
                         continue;
                     }
                     let index = ((slot.y + row) as usize * atlas.width() as usize
@@ -196,6 +199,9 @@ impl Frame {
 
         for y in area.top..area.bottom {
             for x in area.left..area.right {
+                if !visible(&node.clips, x as i32, y as i32) {
+                    continue;
+                }
                 let source_x = ((x - i64::from(node.content_x)) as u64 * u64::from(texture.width())
                     / u64::from(node.content_width)) as u32;
                 let source_y = ((y - i64::from(node.content_y)) as u64
@@ -295,6 +301,10 @@ impl Clip {
     fn contains(self, x: i64, y: i64) -> bool {
         x >= self.left && x < self.right && y >= self.top && y < self.bottom
     }
+}
+
+fn visible(clips: &[ClipRect], x: i32, y: i32) -> bool {
+    clips.iter().all(|clip| clip.contains(x, y))
 }
 
 fn node_clip(node: &WidgetSnapshotNode, clip: Clip) -> Option<Clip> {

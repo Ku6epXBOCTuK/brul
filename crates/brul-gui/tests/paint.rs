@@ -317,3 +317,49 @@ fn text_does_not_paint_outside_its_box() {
     assert!(inked_inside, "no ink inside the box");
     assert!(!inked_below, "text painted below its box");
 }
+
+#[test]
+fn clips_children_to_a_rounded_parent() {
+    let child = Widget::column(Vec::new())
+        .with_layout(LayoutStyle {
+            width: Dimension::Px(32),
+            height: Dimension::Px(16),
+            ..LayoutStyle::default()
+        })
+        .with_styles(StyleSet::new(WidgetStyle {
+            background: Paint::Color(Color::rgb(255, 0, 0)),
+            ..Default::default()
+        }));
+    let parent = Widget::column(vec![child])
+        .with_layout(LayoutStyle {
+            width: Dimension::Px(16),
+            height: Dimension::Px(16),
+            ..LayoutStyle::default()
+        })
+        .with_styles(StyleSet::new(WidgetStyle {
+            clip: true,
+            radius: 4,
+            ..Default::default()
+        }));
+    let mut tree = WidgetTree::new(parent);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 32,
+            height: 32,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let mut frame = Frame::new(32, 32);
+    frame.paint(
+        tree.snapshot().expect("snapshot"),
+        engine.atlas(),
+        &Dirty::all(),
+    );
+
+    assert_eq!(pixel(&frame, 8, 8), [255, 0, 0, 255]);
+    assert_eq!(pixel(&frame, 20, 8), [0, 0, 0, 0]);
+    assert_eq!(pixel(&frame, 0, 0), [0, 0, 0, 0]);
+}

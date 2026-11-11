@@ -5,8 +5,9 @@ ClassRule   = "." Ident [ ":" State ] "{" { Prop } "}" ;
 State       = "hover" | "pressed" | "checked" | "selected" | "disabled" ;
 Prop        = Ident ":" Value { Value } ";" ;
 Value       = Number | Number "px" | Number "%" | Color | String
-            | ThemeRef | Gradient | Keyword ;
+            | ThemeRef | Gradient | Bool | Keyword ;
 Keyword     = Ident ;
+Bool        = "true" | "false" ;
 Gradient    = "linear-gradient" "(" Number [ "deg" ] "," Color "," Color ")" ;
 ThemeRef    = "theme" "." Ident ;
 

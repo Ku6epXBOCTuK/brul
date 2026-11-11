@@ -82,6 +82,7 @@ fn widget_style(style: WidgetStyle) -> String {
         tint,
         opacity,
         vertical_align: vertical_align_value,
+        clip,
     } = style;
     let default = WidgetStyle::default();
     let mut fields = Vec::new();
@@ -111,6 +112,9 @@ fn widget_style(style: WidgetStyle) -> String {
             "vertical_align: {}",
             vertical_align(vertical_align_value)
         ));
+    }
+    if clip != default.clip {
+        fields.push(format!("clip: {clip}"));
     }
     if fields.is_empty() {
         "brul_gui::WidgetStyle::default()".to_owned()

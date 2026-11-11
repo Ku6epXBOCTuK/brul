@@ -9,6 +9,7 @@ rule! {
         Prop,
         Value,
         Keyword,
+        Bool,
         Gradient,
         ThemeRef,
         Ident,

@@ -962,6 +962,17 @@ fn emits_image_value_binding() {
 }
 
 #[test]
+fn emits_clip_only_when_it_is_set() {
+    let clipped = "<style>\n.panel { clip: true; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (panel) { }\n}\n</markup>\n";
+    let module = emit::module(clipped).unwrap();
+    assert!(module.contains("clip: true"), "{module}");
+
+    let plain = "<style>\n.panel { radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (panel) { }\n}\n</markup>\n";
+    let module = emit::module(plain).unwrap();
+    assert!(!module.contains("clip:"), "{module}");
+}
+
+#[test]
 fn resource_without_a_file_path_is_rejected() {
     let source = "<use>\n    resource check from \"./check.png\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Image { check }\n}\n</markup>\n";
     let error = emit::module(source).unwrap_err();

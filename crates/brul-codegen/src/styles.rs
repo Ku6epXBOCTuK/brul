@@ -99,6 +99,7 @@ fn apply(
         Kind::Tint => style.tint = Some(paint(value, kind)?),
         Kind::Radius => style.radius = px_value(value, kind)?,
         Kind::Opacity => style.opacity = number(value, kind)? as f32,
+        Kind::Clip => style.clip = flag(value, kind)?,
         Kind::FontSize => {
             text.font_size = px_value(value, kind)? as f32;
             text.line_height = text.font_size * 1.2;
@@ -185,6 +186,13 @@ fn px_value(value: &Value, kind: Kind) -> Result<u32, String> {
     match value {
         Value::Px(value) => Ok(px(*value)),
         _ => Err(expected(kind, "px")),
+    }
+}
+
+fn flag(value: &Value, kind: Kind) -> Result<bool, String> {
+    match value {
+        Value::Bool(value) => Ok(*value),
+        _ => Err(expected(kind, "true or false")),
     }
 }
 

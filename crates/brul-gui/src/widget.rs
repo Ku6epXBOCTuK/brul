@@ -8,6 +8,7 @@ use crate::gradient::Paint;
 use crate::layout::{
     self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, Size,
 };
+use crate::rect::ClipRect;
 use crate::text::{TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
 use crate::texture::Texture;
 
@@ -55,6 +56,7 @@ pub struct WidgetStyle {
     pub tint: Option<Color>,
     pub opacity: f32,
     pub vertical_align: VerticalAlign,
+    pub clip: bool,
 }
 
 impl Default for WidgetStyle {
@@ -67,6 +69,7 @@ impl Default for WidgetStyle {
             tint: None,
             opacity: 1.0,
             vertical_align: VerticalAlign::Top,
+            clip: false,
         }
     }
 }
@@ -417,6 +420,7 @@ pub struct WidgetSnapshotNode {
     pub style: WidgetStyle,
     pub text: Option<TextLayout>,
     pub texture: Option<Rc<Texture>>,
+    pub clips: Vec<ClipRect>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1195,7 +1199,15 @@ impl WidgetTree {
     fn hit_path(&self, x: i32, y: i32) -> Result<Vec<Slot>, WidgetError> {
         let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
         let mut path = Vec::new();
-        collect_hit(&self.nodes, self.root, &geometry.boxes, x, y, &mut path);
+        collect_hit(
+            &self.nodes,
+            self.root,
+            &geometry.boxes,
+            &[],
+            x,
+            y,
+            &mut path,
+        );
         Ok(path)
     }
 
@@ -1368,7 +1380,7 @@ fn build_snapshot(
     texts: &HashMap<WidgetId, ShapedText>,
 ) -> WidgetSnapshot {
     let mut nodes = Vec::new();
-    snapshot_widget(tree, root, &geometry.boxes, texts, &mut nodes);
+    snapshot_widget(tree, root, &geometry.boxes, texts, &[], &mut nodes);
     let root_box = &geometry.boxes[root.index()];
     WidgetSnapshot {
         size: Size {
@@ -1384,6 +1396,7 @@ fn snapshot_widget(
     slot: Slot,
     boxes: &[LayoutBox],
     texts: &HashMap<WidgetId, ShapedText>,
+    clips: &[ClipRect],
     nodes: &mut Vec<WidgetSnapshotNode>,
 ) {
     let node = &tree[slot.index()];
@@ -1436,10 +1449,21 @@ fn snapshot_widget(
         style,
         text,
         texture,
+        clips: clips.to_vec(),
     });
 
+    let mut child_clips = clips.to_vec();
+    if style.clip {
+        child_clips.push(ClipRect::new(
+            layout_box.x,
+            layout_box.y,
+            layout_box.width,
+            layout_box.height,
+            style.radius,
+        ));
+    }
     for &child in &node.children {
-        snapshot_widget(tree, child, boxes, texts, nodes);
+        snapshot_widget(tree, child, boxes, texts, &child_clips, nodes);
     }
 }
 
@@ -1447,18 +1471,35 @@ fn collect_hit(
     tree: &[Node],
     slot: Slot,
     boxes: &[LayoutBox],
+    clips: &[ClipRect],
     x: i32,
     y: i32,
     path: &mut Vec<Slot>,
 ) -> bool {
     let node = &tree[slot.index()];
-    if !node.state.visible || !contains(&boxes[slot.index()], x, y) {
+    if !node.state.visible
+        || !contains(&boxes[slot.index()], x, y)
+        || !clips.iter().all(|clip| clip.contains(x, y))
+    {
         return false;
+    }
+
+    let style = node.styles.resolve(node.state);
+    let mut child_clips = clips.to_vec();
+    if style.clip {
+        let layout_box = &boxes[slot.index()];
+        child_clips.push(ClipRect::new(
+            layout_box.x,
+            layout_box.y,
+            layout_box.width,
+            layout_box.height,
+            style.radius,
+        ));
     }
 
     path.push(slot);
     for &child in node.children.iter().rev() {
-        if collect_hit(tree, child, boxes, x, y, path) {
+        if collect_hit(tree, child, boxes, &child_clips, x, y, path) {
             return true;
         }
     }

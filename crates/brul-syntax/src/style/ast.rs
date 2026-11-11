@@ -62,6 +62,7 @@ pub enum Value {
     Color(Color),
     ThemeRef(String),
     Gradient(Gradient),
+    Bool(bool),
 }
 
 #[derive(Debug, Clone, PartialEq)]

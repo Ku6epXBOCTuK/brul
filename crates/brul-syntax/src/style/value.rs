@@ -11,6 +11,7 @@ pub enum Type {
     Color,
     Paint,
     String,
+    Bool,
     Keywords(&'static [&'static str]),
     NumberRange(f64, f64),
     NumberIn(&'static [f64]),
@@ -29,6 +30,7 @@ impl Type {
         match self {
             Type::Number | Type::Px | Type::Length => self.number_value(cursor, name),
             Type::Color | Type::Paint => self.paint_value(cursor, name),
+            Type::Bool => boolean(cursor, name).map(Value::Bool),
             Type::ThemeKey => theme_key(cursor, name),
             Type::String => string(cursor, name).map(Value::String),
             Type::Keywords(names) => keyword(cursor, name, names),
@@ -79,6 +81,21 @@ fn number_in(
 
 fn expected(name: &str, what: &str) -> String {
     format!("expected {what} for '{name}'")
+}
+
+fn boolean(cursor: &mut Cursor, name: &str) -> Result<bool, Error> {
+    let at = cursor.value_start();
+    if cursor.eat_keyword("true") {
+        Ok(true)
+    } else if cursor.eat_keyword("false") {
+        Ok(false)
+    } else {
+        Err(Error::at(
+            cursor.source(),
+            at,
+            expected(name, "true or false"),
+        ))
+    }
 }
 
 fn number(cursor: &mut Cursor, message: &str) -> Result<f64, Error> {

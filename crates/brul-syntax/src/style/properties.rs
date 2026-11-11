@@ -30,6 +30,7 @@ pub enum Kind {
     VerticalAlign,
     FontWeight,
     Opacity,
+    Clip,
 }
 
 impl Kind {
@@ -163,6 +164,7 @@ pub static SPECS: &[Spec] = &[
         Type::NumberRange(0.0, 1.0),
         Visual,
     ),
+    Spec::new(Kind::Clip, "clip", Type::Bool, Visual),
 ];
 
 impl Spec {

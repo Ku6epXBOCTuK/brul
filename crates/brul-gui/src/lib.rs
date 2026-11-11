@@ -124,7 +124,7 @@ pub use layout::{
     Padding, Size, layout,
 };
 pub use paint::Frame;
-pub use rect::{Rect, RectSample};
+pub use rect::{ClipRect, Rect, RectSample};
 pub use text::{
     PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize, TextStyle, VerticalAlign,
 };

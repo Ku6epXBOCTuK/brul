@@ -76,6 +76,15 @@ fn comments_between_rules_are_ignored() {
 }
 
 #[test]
+fn clip_takes_a_bool() {
+    let source = ".a { clip: true; }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule("a", vec![property("clip", Value::Bool(true))])])
+    );
+}
+
+#[test]
 fn properties_parse_with_values_and_order() {
     let source = r#".item {
         width: 100%;
@@ -476,6 +485,12 @@ fn errors_point_at_the_source() {
             "expected number from 0 to 1 for 'opacity'",
             1,
             15,
+        ),
+        (
+            ".a { clip: 1; }",
+            "expected true or false for 'clip'",
+            1,
+            12,
         ),
         (
             ".a { font-weight: 650; }",

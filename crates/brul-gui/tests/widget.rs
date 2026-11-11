@@ -194,6 +194,38 @@ fn hit_test_returns_deepest_widget() {
 }
 
 #[test]
+fn a_clipped_child_is_not_hit() {
+    let child = Widget::column(Vec::new()).with_layout(fixed(32, 16));
+    let child_id = child.id();
+    let parent = Widget::column(vec![child])
+        .with_layout(fixed(16, 16))
+        .with_styles(StyleSet::new(WidgetStyle {
+            clip: true,
+            radius: 4,
+            ..WidgetStyle::default()
+        }));
+    let parent_id = parent.id();
+    let root = Widget::column(vec![parent]).with_layout(fixed(32, 16));
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 32,
+            height: 16,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    assert_eq!(tree.hit(0, 0).expect("hit"), Some(parent_id));
+    assert_ne!(tree.hit(20, 8).expect("hit"), Some(child_id));
+    assert_eq!(tree.hit(20, 8).expect("hit"), Some(root_id));
+}
+
+#[test]
 fn hover_switches_style_snapshot() {
     let base = style(Color::rgb(1, 2, 3));
     let hovered = style(Color::rgb(4, 5, 6));
