@@ -464,6 +464,32 @@ fn relayout_moves_an_untouched_branch_by_the_size_of_a_dirty_sibling() {
 }
 
 #[test]
+fn set_image_replaces_the_texture_and_relayouts() {
+    let image = Widget::image(Texture::empty());
+    let id = image.id();
+    let mut tree = WidgetTree::new(image);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 10,
+        height: 10,
+    };
+
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    let texture = std::rc::Rc::new(Texture::from_rgba(2, 3, &[0u8; 24]).expect("texture"));
+    assert!(tree.set_image(id, std::rc::Rc::clone(&texture)));
+    assert!(!tree.set_image(id, texture));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let node = tree
+        .snapshot()
+        .expect("snapshot")
+        .node(id)
+        .cloned()
+        .expect("node");
+
+    assert_eq!((node.width, node.height), (2, 3));
+}
+
+#[test]
 fn a_stretched_branch_is_laid_out_again_when_its_sibling_shrinks() {
     fn build(left: &str) -> (WidgetTree, WidgetId, WidgetId, WidgetId) {
         let left_widget = Widget::text(left);

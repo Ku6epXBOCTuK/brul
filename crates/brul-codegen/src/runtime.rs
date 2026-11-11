@@ -1,8 +1,10 @@
 use std::cell::RefCell;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use brul_gui::{Widget, WidgetId, WidgetTree};
+use brul_gui::{Texture, Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{
     Component, Error as ScriptError, Host, Value, Variable, VariableId, execute_program,
@@ -119,6 +121,7 @@ pub type Expression = fn(&mut Component) -> Result<Value, ScriptError>;
 #[derive(Debug, Clone)]
 pub enum BindingTarget {
     Text(Expression),
+    Image(Expression),
     Checked(Expression),
     Selected(Expression),
     Disabled(Expression),
@@ -350,7 +353,7 @@ pub fn accepts_prop(value: &Value, ty: PropType) -> bool {
         PropType::Bool => matches!(value, Value::Bool(_)),
         PropType::Number => matches!(value, Value::Number(_)),
         PropType::String => matches!(value, Value::String(_)),
-        PropType::Image => matches!(value, Value::Null),
+        PropType::Image => matches!(value, Value::Null | Value::Image(_)),
     }
 }
 
@@ -363,19 +366,22 @@ pub fn prop_name(ty: PropType) -> &'static str {
     }
 }
 
+pub type Textures = Rc<RefCell<HashMap<PathBuf, Rc<Texture>>>>;
+
 pub struct Bindings {
     _scope: EffectScope,
 }
 
 impl Bindings {
-    pub fn new(bindings: &[Binding], tree: &Rc<RefCell<WidgetTree>>) -> Self {
+    pub fn new(bindings: &[Binding], tree: &Rc<RefCell<WidgetTree>>, textures: &Textures) -> Self {
         let scope = EffectScope::new();
         for binding in bindings {
             let binding = binding.clone();
             let tree = Rc::clone(tree);
+            let textures = Rc::clone(textures);
             scope.run(|| {
                 Effect::new(move || {
-                    let pending = evaluate(&binding);
+                    let pending = evaluate(&binding, &textures);
                     write(pending, binding.widget, &mut tree.borrow_mut());
                 });
             });
@@ -386,6 +392,7 @@ impl Bindings {
 
 pub enum Write {
     Text(Option<String>),
+    Image(Option<Rc<Texture>>),
     Checked(Option<bool>),
     Selected(Option<bool>),
     Disabled(Option<bool>),
@@ -393,7 +400,7 @@ pub enum Write {
     Offset(Option<i32>, Option<i32>),
 }
 
-pub fn evaluate(binding: &Binding) -> Write {
+pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
     binding.component.borrow().track();
     let count = binding.scopes.len();
     binding
@@ -403,6 +410,7 @@ pub fn evaluate(binding: &Binding) -> Write {
     let component = &binding.component;
     let write = match &binding.target {
         BindingTarget::Text(expression) => Write::Text(string(component, *expression)),
+        BindingTarget::Image(expression) => Write::Image(texture(component, *expression, textures)),
         BindingTarget::Checked(expression) => Write::Checked(flag(component, *expression)),
         BindingTarget::Selected(expression) => Write::Selected(flag(component, *expression)),
         BindingTarget::Disabled(expression) => Write::Disabled(flag(component, *expression)),
@@ -418,6 +426,7 @@ pub fn evaluate(binding: &Binding) -> Write {
 pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {
     match write {
         Write::Text(value) => set_text(tree, widget, value),
+        Write::Image(value) => set_texture(tree, widget, value),
         Write::Checked(value) => set_flag(tree, widget, value, WidgetTree::set_checked),
         Write::Selected(value) => set_flag(tree, widget, value, WidgetTree::set_selected),
         Write::Disabled(value) => set_flag(tree, widget, value, WidgetTree::set_disabled),
@@ -435,6 +444,56 @@ fn string(component: &RefCell<Component>, expression: Expression) -> Option<Stri
 
 fn flag(component: &RefCell<Component>, expression: Expression) -> Option<bool> {
     expression(&mut component.borrow_mut()).ok()?.as_flag()
+}
+
+fn texture(
+    component: &RefCell<Component>,
+    expression: Expression,
+    textures: &Textures,
+) -> Option<Rc<Texture>> {
+    let value = expression(&mut component.borrow_mut()).ok()?;
+    match &value {
+        Value::Image(path) => load_texture(Path::new(path.as_ref()), textures),
+        Value::Null => Some(Rc::new(Texture::empty())),
+        _ => None,
+    }
+}
+
+fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
+    let key = match fs::canonicalize(source) {
+        Ok(key) => key,
+        Err(error) => {
+            eprintln!("cannot read image '{}': {error}", source.display());
+            return None;
+        }
+    };
+    if let Some(texture) = textures.borrow().get(&key) {
+        return Some(Rc::clone(texture));
+    }
+    let bytes = match fs::read(&key) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            eprintln!("cannot read image '{}': {error}", source.display());
+            return None;
+        }
+    };
+    match Texture::from_png(&bytes) {
+        Ok(texture) => {
+            let texture = Rc::new(texture);
+            textures.borrow_mut().insert(key, Rc::clone(&texture));
+            Some(texture)
+        }
+        Err(error) => {
+            eprintln!("cannot decode image '{}': {error}", source.display());
+            None
+        }
+    }
+}
+
+pub fn set_texture(tree: &mut WidgetTree, widget: WidgetId, value: Option<Rc<Texture>>) {
+    if let Some(value) = value {
+        tree.set_image(widget, value);
+    }
 }
 
 pub fn set_text(tree: &mut WidgetTree, widget: WidgetId, value: Option<String>) {
@@ -520,7 +579,7 @@ mod tests {
         Expr::new(ExprKind::Number(value), Position::default())
     }
 
-    const NAMES: &[&str] = &["name", "visible", "x", "y", "title", "on", "off"];
+    const NAMES: &[&str] = &["name", "visible", "x", "y", "title", "on", "off", "icon"];
 
     fn component() -> Component {
         let mut component = Component::new();
@@ -551,7 +610,7 @@ mod tests {
             component: Rc::clone(&component),
         }];
 
-        let _bindings = Bindings::new(&bindings, &tree);
+        let _bindings = Bindings::new(&bindings, &tree, &Textures::default());
         assert!(!tree.borrow_mut().set_text(id, "hello".to_owned()));
 
         component
@@ -600,7 +659,7 @@ mod tests {
             component: Rc::clone(&handle),
         }];
 
-        let _bindings = Bindings::new(&bindings, &tree);
+        let _bindings = Bindings::new(&bindings, &tree, &Textures::default());
         assert!(free.get());
         assert!(!tree.borrow_mut().set_visible(id, true));
     }
@@ -894,7 +953,7 @@ mod tests {
             })
             .collect();
 
-        let _bindings = Bindings::new(&bindings, &tree);
+        let _bindings = Bindings::new(&bindings, &tree, &Textures::default());
         assert!(!tree.borrow_mut().set_text(ids[0], "hi".to_owned()));
         assert!(tree.borrow().state(ids[1]).expect("state").checked);
         assert!(tree.borrow().state(ids[2]).expect("state").selected);
@@ -943,8 +1002,66 @@ mod tests {
             },
         ];
 
-        let _bindings = Bindings::new(&bindings, &tree);
+        let _bindings = Bindings::new(&bindings, &tree, &Textures::default());
         assert!(!tree.borrow_mut().set_text(ids[0], "0".to_owned()));
         assert!(!tree.borrow().state(ids[1]).expect("state").checked);
+    }
+
+    #[test]
+    fn an_image_prop_accepts_a_path_and_null() {
+        assert!(accepts_prop(&Value::Image("a.png".into()), PropType::Image));
+        assert!(accepts_prop(&Value::Null, PropType::Image));
+        assert!(!accepts_prop(
+            &Value::String("a.png".into()),
+            PropType::Image
+        ));
+    }
+
+    fn image_binding(path: Value) -> (Binding, Textures) {
+        let widget = Widget::image(Texture::empty());
+        let component = Rc::new(RefCell::new(declared("icon", path)));
+        let binding = Binding {
+            widget: widget.id(),
+            target: BindingTarget::Image(expr!("icon")),
+            scopes: Vec::new().into(),
+            component,
+        };
+        (binding, Textures::default())
+    }
+
+    #[test]
+    fn an_image_binding_loads_the_file_once() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../brul-gui/tests/fixtures/tint.png"
+        );
+        let (binding, textures) = image_binding(Value::Image(path.into()));
+        let first = evaluate(&binding, &textures);
+        let second = evaluate(&binding, &textures);
+        let (Write::Image(Some(first)), Write::Image(Some(second))) = (first, second) else {
+            panic!("the fixture must load");
+        };
+
+        assert!(Rc::ptr_eq(&first, &second));
+        assert!(first.width() > 1);
+        assert_eq!(textures.borrow().len(), 1);
+    }
+
+    #[test]
+    fn an_image_binding_ignores_a_missing_file() {
+        let (binding, textures) = image_binding(Value::Image("no-such-image.png".into()));
+
+        assert!(matches!(evaluate(&binding, &textures), Write::Image(None)));
+        assert!(textures.borrow().is_empty());
+    }
+
+    #[test]
+    fn an_image_binding_shows_an_empty_texture_for_null() {
+        let (binding, textures) = image_binding(Value::Null);
+        let Write::Image(Some(texture)) = evaluate(&binding, &textures) else {
+            panic!("null must be an empty texture");
+        };
+
+        assert_eq!((texture.width(), texture.height()), (1, 1));
     }
 }

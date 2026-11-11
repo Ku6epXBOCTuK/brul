@@ -41,6 +41,15 @@ impl Texture {
         })
     }
 
+    pub fn empty() -> Self {
+        Self {
+            width: 1,
+            height: 1,
+            pixels: vec![0, 0, 0, 0],
+            tint: None,
+        }
+    }
+
     pub fn from_rgba(width: u32, height: u32, pixels: &[u8]) -> Result<Self, TextureError> {
         if width == 0 || height == 0 {
             return Err(TextureError::InvalidRgba);

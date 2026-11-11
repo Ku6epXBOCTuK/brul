@@ -38,10 +38,10 @@ pub(super) fn widget(
     let inner = "    ".repeat(frame.depth() + 1);
     let _ = writeln!(out, "{pad}{{");
     let _ = write!(out, "{inner}let {name} = ");
-    let text = kind(out, element, &resolved, emit, frame, counter)?;
+    let content = kind(out, element, &resolved, emit, frame, counter)?;
     modifiers(out, &resolved, events.drag, &inner);
     out.push_str(";\n");
-    text_binding(out, text, &name, &inner, emit.names);
+    content_binding(out, content, &name, &inner, emit.names);
     parameters(out, element, &name, &inner, emit.names)?;
     handler_bindings(out, &events.handlers, &name, &inner);
     let _ = writeln!(out, "{inner}{name}");
@@ -60,6 +60,11 @@ fn classes(element: &Element) -> Vec<&str> {
         .collect()
 }
 
+enum Content {
+    Text(Expr),
+    Image(Expr),
+}
+
 fn kind(
     out: &mut String,
     element: &Element,
@@ -67,14 +72,14 @@ fn kind(
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
-) -> Result<Option<Expr>, Error> {
+) -> Result<Option<Content>, Error> {
     match element.name.as_str() {
         "View" | "Row" | "Column" => {
             container(out, element, resolved, emit, frame, counter)?;
             Ok(None)
         }
-        "Text" => text_widget(out, element, &resolved.text),
-        "Image" => image_widget(out, element, emit),
+        "Text" => Ok(text_widget(out, element, &resolved.text)?.map(Content::Text)),
+        "Image" => Ok(image_widget(out, element, emit)?.map(Content::Image)),
         name => Err(error_at(
             element.position,
             format!("widget '{name}' is not generated yet"),
@@ -117,13 +122,23 @@ fn modifiers(out: &mut String, resolved: &styles::Resolved, drag: bool, inner: &
     }
 }
 
-fn text_binding(out: &mut String, text: Option<Expr>, name: &str, inner: &str, names: &Names<'_>) {
-    let Some(expression) = text else {
+fn content_binding(
+    out: &mut String,
+    content: Option<Content>,
+    name: &str,
+    inner: &str,
+    names: &Names<'_>,
+) {
+    let Some(content) = content else {
         return;
+    };
+    let (target, expression) = match content {
+        Content::Text(expression) => ("Text", expression),
+        Content::Image(expression) => ("Image", expression),
     };
     let _ = writeln!(
         out,
-        "{inner}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Text({})));",
+        "{inner}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({})));",
         expression::closure(&expression, names)
     );
 }
@@ -216,27 +231,21 @@ fn image_widget(
     let [BlockItem::Expr(expression)] = element.block.items.as_slice() else {
         return Err(error_at(
             element.position,
-            "Image requires a single resource name",
+            "Image requires a single content expression",
         ));
     };
-    let ExprKind::Ident(name) = &expression.kind else {
-        return Err(error_at(
-            expression.position,
-            "Image requires a single resource name",
-        ));
-    };
-    if !emit.resources.iter().any(|resource| &resource.name == name) {
-        return Err(error_at(
-            expression.position,
-            format!("image source '{name}' is not a resource declared in <use>"),
-        ));
+    if let ExprKind::Ident(name) = &expression.kind
+        && emit.resources.iter().any(|resource| &resource.name == name)
+    {
+        let _ = write!(
+            out,
+            "brul_gui::Widget::image(brul_gui::Texture::from_png({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
+            emit.resource_prefix
+        );
+        return Ok(None);
     }
-    let _ = write!(
-        out,
-        "brul_gui::Widget::image(brul_gui::Texture::from_png({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
-        emit.resource_prefix
-    );
-    Ok(None)
+    out.push_str("brul_gui::Widget::image(brul_gui::Texture::empty())");
+    Ok(Some(expression.clone()))
 }
 
 fn parameters(

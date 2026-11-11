@@ -8,6 +8,7 @@ pub enum Value {
     Null,
     Array(Rc<Vec<Value>>),
     Object(Rc<Vec<(String, Value)>>),
+    Image(Rc<str>),
 }
 
 impl Value {
@@ -19,6 +20,14 @@ impl Value {
             Value::Null => "Null",
             Value::Array(_) => "Array",
             Value::Object(_) => "Object",
+            Value::Image(_) => "Image",
+        }
+    }
+
+    pub fn as_image(&self) -> Option<&str> {
+        match self {
+            Value::Image(path) => Some(path.as_ref()),
+            _ => None,
         }
     }
 
@@ -81,11 +90,13 @@ mod tests {
         assert_eq!(Value::String("a".into()).as_text(), Some("a"));
         assert_eq!(Value::Bool(true).as_flag(), Some(true));
         assert_eq!(Value::Number(1.0).as_pixels(), Some(1));
+        assert_eq!(Value::Image("a.png".into()).as_image(), Some("a.png"));
         for value in [
             Value::Null,
             Value::Number(1.0),
             Value::Array(Vec::new().into()),
             Value::Object(Vec::new().into()),
+            Value::Image("a.png".into()),
         ] {
             assert_eq!(value.as_text(), None, "{value:?}");
             assert_eq!(value.as_flag(), None, "{value:?}");
@@ -96,6 +107,7 @@ mod tests {
             Value::Bool(true),
             Value::Array(Vec::new().into()),
             Value::Object(Vec::new().into()),
+            Value::Image("a.png".into()),
         ] {
             assert_eq!(value.as_pixels(), None, "{value:?}");
         }

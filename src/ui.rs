@@ -28,6 +28,7 @@ pub struct Ui {
     requests: Rc<RefCell<Vec<WidgetId>>>,
     view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
     pub(crate) theme: Option<String>,
+    textures: runtime::Textures,
     scope: EffectScope,
 }
 
@@ -148,6 +149,7 @@ impl Ui {
             requests: Rc::new(RefCell::new(Vec::new())),
             view,
             theme,
+            textures: runtime::Textures::default(),
             scope: EffectScope::new(),
         };
         ui.bind(bindings);
@@ -160,10 +162,11 @@ impl Ui {
         for binding in bindings {
             let widget = binding.widget;
             let tree = Rc::clone(&self.tree);
+            let textures = Rc::clone(&self.textures);
             let scope = self.scope.child();
             scope.run(|| {
                 Effect::new(move || {
-                    let pending = runtime::evaluate(&binding);
+                    let pending = runtime::evaluate(&binding, &textures);
                     runtime::write(pending, binding.widget, &mut tree.borrow_mut());
                 });
             });
@@ -433,7 +436,7 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use brul_gui::{Direction, Size, TextEngine, Widget};
+    use brul_gui::{Direction, Size, TextEngine, Texture, Widget};
     use brul_syntax::ast::{AssignOp, Expr, ExprKind, Position};
     use brul_syntax::markup::PropType;
     use brul_window::WindowCommand;
@@ -443,7 +446,7 @@ mod tests {
 
     const NAMES: &[&str] = &[
         "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code",
-        "accent", "missing",
+        "accent", "missing", "icon",
     ];
 
     macro_rules! read {
@@ -871,6 +874,58 @@ mod tests {
         Binding::new(component, widget, target)
     }
 
+    fn icon(component: &mut Component) -> Result<Value, Error> {
+        component.read("icon")
+    }
+
+    fn image_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+        if theme.is_some() {
+            return Err("unknown theme".to_owned());
+        }
+        let widget = Widget::image(Texture::empty());
+        let id = widget.id();
+        Ok(Built {
+            widget,
+            bindings: vec![binding(component, id, BindingTarget::Image(icon))],
+            handlers: Vec::new(),
+            structures: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn an_image_binding_reaches_the_tree_through_ui() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/crates/brul-gui/tests/fixtures/tint.png"
+        );
+        let (component, built) = generated_built(
+            image_view,
+            NAMES,
+            None,
+            &[("icon", Value::Image(path.into()))],
+            None,
+        )
+        .expect("launch");
+        let ui = Ui::assemble(component, built, image_view, None, None);
+        let mut engine = TextEngine::new();
+        let mut tree = ui.tree.borrow_mut();
+
+        tree.layout(
+            &mut engine,
+            Size {
+                width: 100,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("layout");
+        let snapshot = tree.snapshot().expect("snapshot");
+        let node = snapshot.nodes.first().expect("node");
+
+        assert!(node.width > 1);
+    }
+
     fn state_after(targets: [BindingTarget; 6]) -> (Vec<WidgetId>, WidgetTree) {
         let mut component = Component::new();
         component.set_names(NAMES);
@@ -889,7 +944,7 @@ mod tests {
         let mut tree = WidgetTree::new(Widget::view(Direction::Column, widgets));
         for (index, target) in targets.into_iter().enumerate() {
             let binding = binding(&component, ids[index], target);
-            let pending = runtime::evaluate(&binding);
+            let pending = runtime::evaluate(&binding, &runtime::Textures::default());
             runtime::write(pending, binding.widget, &mut tree);
         }
         (ids, tree)

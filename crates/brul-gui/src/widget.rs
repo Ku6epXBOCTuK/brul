@@ -985,6 +985,22 @@ impl WidgetTree {
         true
     }
 
+    pub fn set_image(&mut self, id: WidgetId, texture: Rc<Texture>) -> bool {
+        let Some(&slot) = self.index.get(&id) else {
+            return false;
+        };
+        let NodeData::Image(current) = &mut self.nodes[slot.index()].data else {
+            return false;
+        };
+        if Rc::ptr_eq(current, &texture) {
+            return false;
+        }
+        *current = texture;
+        self.stale.insert(slot);
+        self.invalidate_layout();
+        true
+    }
+
     pub fn set_offset(&mut self, id: WidgetId, x: i32, y: i32) -> bool {
         let Some(&slot) = self.index.get(&id) else {
             return false;

@@ -938,23 +938,15 @@ fn rejects_broken_resources() {
 }
 
 #[test]
-fn rejects_images_that_are_not_resource_names() {
-    let cases = [
-        (
-            "Image (icon) { \"check\" }",
-            "Image requires a single resource name",
-        ),
-        (
-            "Image (icon) { missing }",
-            "image source 'missing' is not a resource declared in <use>",
-        ),
-    ];
-    for (markup, expected) in cases {
-        let source =
-            format!("<markup>\nwindow Demo (title: \"demo\") {{\n    {markup}\n}}\n</markup>\n");
-        let error = emit::module(&source).unwrap_err();
-        assert_eq!(error.message, expected);
-    }
+fn emits_image_value_binding() {
+    let source =
+        "<markup>\nwindow Demo (title: \"demo\") {\n    Image (icon) { icon }\n}\n</markup>\n";
+    let module = emit::module(source).unwrap();
+    assert!(
+        module.contains("brul_gui::Widget::image(brul_gui::Texture::empty())"),
+        "{module}"
+    );
+    assert!(module.contains("brul::BindingTarget::Image("), "{module}");
 }
 
 #[test]
