@@ -62,6 +62,8 @@
         background: theme.item;
         border: 1px theme.border;
         radius: 14px;
+        animate background: 300ms;
+        animate border-color: 300ms;
     }
     .item:hover { background: theme.hover; }
     .item:pressed { background: theme.selected; border-color: theme.accent; }
