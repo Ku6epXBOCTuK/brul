@@ -9,10 +9,9 @@ pub(crate) fn call(component: &ComponentHandle, function: &str, arguments: Vec<V
 
 pub(crate) fn arguments(event: &WidgetEvent) -> Vec<Value> {
     match event {
-        WidgetEvent::Key(code) => vec![Value::Object(vec![(
-            "code".to_owned(),
-            Value::String(code.clone()),
-        )])],
+        WidgetEvent::Key(code) => vec![Value::Object(
+            vec![("code".to_owned(), Value::String(code.as_str().into()))].into(),
+        )],
         _ => Vec::new(),
     }
 }

@@ -171,7 +171,7 @@ fn evaluation_resolves_identifiers() {
         .declare("count", Value::Number(2.0), false)
         .unwrap();
     component
-        .declare_property(id("label"), Value::String("items".to_owned()))
+        .declare_property(id("label"), Value::String("items".into()))
         .unwrap();
 
     assert_eq!(
@@ -180,7 +180,7 @@ fn evaluation_resolves_identifiers() {
     );
     assert_eq!(
         evaluate(&mut component, "label + \"s\""),
-        Ok(Value::String("itemss".to_owned()))
+        Ok(Value::String("itemss".into()))
     );
 }
 

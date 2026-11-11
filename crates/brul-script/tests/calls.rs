@@ -20,7 +20,7 @@ impl Host for FakeHost {
             .push((name.to_owned(), arguments.to_vec()));
         match name {
             "runBrowser" | "set_theme" | "exit" => Ok(Value::Null),
-            "currentTheme" => Ok(Value::String("dark".to_owned())),
+            "currentTheme" => Ok(Value::String("dark".into())),
             _ => Err(Error::UnknownFunction(name.to_owned())),
         }
     }
@@ -59,19 +59,10 @@ fn failure_with(host: &FakeHost, source: &str) -> Error {
 
 #[test]
 fn string_converts_scalars_to_text() {
-    assert_eq!(evaluate("String(42)"), Ok(Value::String("42".to_owned())));
-    assert_eq!(
-        evaluate("String(true)"),
-        Ok(Value::String("true".to_owned()))
-    );
-    assert_eq!(
-        evaluate("String(null)"),
-        Ok(Value::String("null".to_owned()))
-    );
-    assert_eq!(
-        evaluate("String(\"hi\")"),
-        Ok(Value::String("hi".to_owned()))
-    );
+    assert_eq!(evaluate("String(42)"), Ok(Value::String("42".into())));
+    assert_eq!(evaluate("String(true)"), Ok(Value::String("true".into())));
+    assert_eq!(evaluate("String(null)"), Ok(Value::String("null".into())));
+    assert_eq!(evaluate("String(\"hi\")"), Ok(Value::String("hi".into())));
 }
 
 #[test]
@@ -159,12 +150,12 @@ fn host_function_receives_arguments_and_returns_value() {
         host.calls.borrow().as_slice(),
         &[(
             "runBrowser".to_owned(),
-            vec![Value::Number(2.0), Value::String("dark".to_owned())]
+            vec![Value::Number(2.0), Value::String("dark".into())]
         )]
     );
     assert_eq!(
         evaluate_with(&host, "currentTheme()"),
-        Ok(Value::String("dark".to_owned()))
+        Ok(Value::String("dark".into()))
     );
 }
 
@@ -176,10 +167,7 @@ fn side_effect_builtins_go_to_the_host() {
     assert_eq!(
         host.calls.borrow().as_slice(),
         &[
-            (
-                "set_theme".to_owned(),
-                vec![Value::String("dark".to_owned())]
-            ),
+            ("set_theme".to_owned(), vec![Value::String("dark".into())]),
             ("exit".to_owned(), vec![]),
         ]
     );

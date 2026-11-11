@@ -62,7 +62,7 @@ mod tests {
     fn row(key: Option<Value>, item: &str, count: usize) -> RowInfo {
         RowInfo {
             key,
-            item: Value::String(item.to_owned()),
+            item: Value::String(item.into()),
             start: 0,
             count,
         }
@@ -187,7 +187,7 @@ mod tests {
         let mut tree = WidgetTree::new(root);
         let row = |key: f64, item: &str, start: usize| RowInfo {
             key: Some(Value::Number(key)),
-            item: Value::String(item.to_owned()),
+            item: Value::String(item.into()),
             start,
             count: 1,
         };

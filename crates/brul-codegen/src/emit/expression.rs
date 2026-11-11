@@ -152,7 +152,7 @@ fn expressions(expressions: &[Expr]) -> String {
 pub fn operation(expression: &Expr, names: &Names<'_>) -> String {
     match &expression.kind {
         ExprKind::Number(value) => format!("brul::Value::Number({value:?})"),
-        ExprKind::String(text) => format!("brul::Value::String({text:?}.to_owned())"),
+        ExprKind::String(text) => format!("brul::Value::String({text:?}.into())"),
         ExprKind::Bool(value) => format!("brul::Value::Bool({value})"),
         ExprKind::Null => "brul::Value::Null".to_owned(),
         ExprKind::Ident(name) => format!("component.read_id({})?", variable(name, names)),
@@ -168,10 +168,13 @@ pub fn operation(expression: &Expr, names: &Names<'_>) -> String {
             operation(index, names)
         ),
         ExprKind::Array(items) => {
-            format!("brul::Value::Array(vec![{}])", operations(items, names))
+            format!(
+                "brul::Value::Array(vec![{}].into())",
+                operations(items, names)
+            )
         }
         ExprKind::Object(fields) => format!(
-            "brul::Value::Object(vec![{}])",
+            "brul::Value::Object(vec![{}].into())",
             fields
                 .iter()
                 .map(|(name, value)| {
@@ -186,7 +189,7 @@ pub fn operation(expression: &Expr, names: &Names<'_>) -> String {
                 .iter()
                 .map(|part| match part {
                     TemplatePart::Text(text) => {
-                        format!("brul::Value::String({text:?}.to_owned())")
+                        format!("brul::Value::String({text:?}.into())")
                     }
                     TemplatePart::Expr(expression) => operation(expression, names),
                 })

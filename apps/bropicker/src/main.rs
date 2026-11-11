@@ -19,10 +19,16 @@ impl Session {
             .position(|browser| browser.is_default)
             .unwrap_or(0);
         vec![
-            ("url", Value::String(self.url.clone())),
+            ("url", Value::String(self.url.clone().into())),
             (
                 "browsers",
-                Value::Array(self.browsers.iter().map(entry_value).collect()),
+                Value::Array(
+                    self.browsers
+                        .iter()
+                        .map(entry_value)
+                        .collect::<Vec<_>>()
+                        .into(),
+                ),
             ),
             ("selected", Value::Number(selected as f64)),
             ("remember", Value::Bool(self.settings.remember_choice)),
@@ -127,12 +133,21 @@ fn entry_value(browser: &BrowserEntry) -> Value {
     } else {
         browser.emoji.clone()
     };
-    Value::Object(vec![
-        ("icon".to_string(), Value::String(icon)),
-        ("name".to_string(), Value::String(browser.name.clone())),
-        ("path".to_string(), Value::String(browser.path.clone())),
-        ("isDefault".to_string(), Value::Bool(browser.is_default)),
-    ])
+    Value::Object(
+        vec![
+            ("icon".to_string(), Value::String(icon.into())),
+            (
+                "name".to_string(),
+                Value::String(browser.name.clone().into()),
+            ),
+            (
+                "path".to_string(),
+                Value::String(browser.path.clone().into()),
+            ),
+            ("isDefault".to_string(), Value::Bool(browser.is_default)),
+        ]
+        .into(),
+    )
 }
 
 #[cfg(test)]
@@ -220,7 +235,7 @@ mod tests {
     fn an_argument_that_is_not_a_browser_index_is_rejected() {
         let (mut host, _) = host(Ok(()));
         for argument in [
-            Value::String("zero".to_string()),
+            Value::String("zero".into()),
             Value::Number(1.5),
             Value::Number(-1.0),
             Value::Number(f64::NAN),
@@ -336,7 +351,7 @@ mod tests {
         };
         let icon = fields.iter().find(|(key, _)| key == "icon");
         match icon {
-            Some((_, Value::String(icon))) => icon.clone(),
+            Some((_, Value::String(icon))) => icon.to_string(),
             _ => panic!("an entry carries an icon"),
         }
     }

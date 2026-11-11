@@ -15,12 +15,15 @@ fn component() -> Component {
 }
 
 fn item() -> Value {
-    Value::Object(vec![
-        ("icon".to_owned(), Value::String("folder".to_owned())),
-        ("name".to_owned(), Value::String("projects".to_owned())),
-        ("path".to_owned(), Value::String("C:/projects".to_owned())),
-        ("isDefault".to_owned(), Value::Bool(false)),
-    ])
+    Value::Object(
+        vec![
+            ("icon".to_owned(), Value::String("folder".into())),
+            ("name".to_owned(), Value::String("projects".into())),
+            ("path".to_owned(), Value::String("C:/projects".into())),
+            ("isDefault".to_owned(), Value::Bool(false)),
+        ]
+        .into(),
+    )
 }
 
 fn push_row(component: &mut Component, position: f64) {

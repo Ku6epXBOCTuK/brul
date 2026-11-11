@@ -7,12 +7,15 @@ use criterion::{Criterion, criterion_group, criterion_main};
 const NAMES: &[&str] = &["item", "position", "icon", "name", "path", "selected"];
 
 fn item() -> Value {
-    Value::Object(vec![
-        ("icon".to_owned(), Value::String("folder".to_owned())),
-        ("name".to_owned(), Value::String("projects".to_owned())),
-        ("path".to_owned(), Value::String("C:/projects".to_owned())),
-        ("isDefault".to_owned(), Value::Bool(false)),
-    ])
+    Value::Object(
+        vec![
+            ("icon".to_owned(), Value::String("folder".into())),
+            ("name".to_owned(), Value::String("projects".into())),
+            ("path".to_owned(), Value::String("C:/projects".into())),
+            ("isDefault".to_owned(), Value::Bool(false)),
+        ]
+        .into(),
+    )
 }
 
 fn row_scopes() -> std::rc::Rc<[Vec<Variable>]> {
@@ -35,21 +38,15 @@ fn prop_component() -> Component {
     let mut component = Component::new();
     component.set_names(NAMES);
     component
-        .declare_property(
-            VariableId::from_index(2),
-            Value::String("folder".to_owned()),
-        )
+        .declare_property(VariableId::from_index(2), Value::String("folder".into()))
         .unwrap();
     component
-        .declare_property(
-            VariableId::from_index(3),
-            Value::String("projects".to_owned()),
-        )
+        .declare_property(VariableId::from_index(3), Value::String("projects".into()))
         .unwrap();
     component
         .declare_property(
             VariableId::from_index(4),
-            Value::String("C:/projects".to_owned()),
+            Value::String("C:/projects".into()),
         )
         .unwrap();
     component

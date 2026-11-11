@@ -43,15 +43,15 @@ memo из одного сигнала и общий join, `many_subscribers` —
 
 | Сценарий                  |   Время |
 | ------------------------- | ------: |
-| read/property_string      |  114 ns |
-| read/property_string_id   | 97.5 ns |
-| read/property_scalar      | 35.2 ns |
-| read/property_scalar_id   | 20.9 ns |
-| read/variable_in_frame    | 24.6 ns |
-| read/variable_in_frame_id | 14.9 ns |
-| binding/props_read        |  382 ns |
-| binding/props_read_id     |  328 ns |
-| binding/frame_only        | 12.2 ns |
+| read/property_string      | 31.2 ns |
+| read/property_string_id   | 19.6 ns |
+| read/property_scalar      | 31.4 ns |
+| read/property_scalar_id   | 19.2 ns |
+| read/variable_in_frame    | 22.0 ns |
+| read/variable_in_frame_id | 10.3 ns |
+| binding/props_read        |  100 ns |
+| binding/props_read_id     | 69.1 ns |
+| binding/frame_only        | 11.3 ns |
 
 `read/property_string` и `read/property_scalar` — чтение пропса без переменной в
 окружении, `read/variable_in_frame` — переменная в кадре биндинга,
@@ -72,6 +72,9 @@ memo из одного сигнала и общий join, `many_subscribers` —
   106 → 94.1 ns.
 - BRUL-223 — кадр биндинга ссылается на снимок scope вместо копии значений:
   `binding/frame_only` 777 → 12.2 ns, `binding/props_read_id` 1.09 µs → 328 ns.
+- BRUL-231 — строки, массивы и объекты в `Value` лежат под `Rc`, клон стал
+  счётчиком ссылок: `read/property_string_id` 94.1 → 19.6 ns,
+  `binding/props_read_id` 328 → 69.1 ns.
 
 ## Как обновлять
 

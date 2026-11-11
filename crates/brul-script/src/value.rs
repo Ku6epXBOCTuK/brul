@@ -1,11 +1,13 @@
+use std::rc::Rc;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
-    String(String),
+    String(Rc<str>),
     Bool(bool),
     Null,
-    Array(Vec<Value>),
-    Object(Vec<(String, Value)>),
+    Array(Rc<Vec<Value>>),
+    Object(Rc<Vec<(String, Value)>>),
 }
 
 impl Value {
@@ -22,7 +24,7 @@ impl Value {
 
     pub fn as_text(&self) -> Option<&str> {
         match self {
-            Value::String(content) => Some(content),
+            Value::String(content) => Some(content.as_ref()),
             _ => None,
         }
     }
@@ -76,24 +78,24 @@ mod tests {
 
     #[test]
     fn only_the_matching_variant_converts() {
-        assert_eq!(Value::String("a".to_owned()).as_text(), Some("a"));
+        assert_eq!(Value::String("a".into()).as_text(), Some("a"));
         assert_eq!(Value::Bool(true).as_flag(), Some(true));
         assert_eq!(Value::Number(1.0).as_pixels(), Some(1));
         for value in [
             Value::Null,
             Value::Number(1.0),
-            Value::Array(Vec::new()),
-            Value::Object(Vec::new()),
+            Value::Array(Vec::new().into()),
+            Value::Object(Vec::new().into()),
         ] {
             assert_eq!(value.as_text(), None, "{value:?}");
             assert_eq!(value.as_flag(), None, "{value:?}");
         }
         for value in [
             Value::Null,
-            Value::String("1".to_owned()),
+            Value::String("1".into()),
             Value::Bool(true),
-            Value::Array(Vec::new()),
-            Value::Object(Vec::new()),
+            Value::Array(Vec::new().into()),
+            Value::Object(Vec::new().into()),
         ] {
             assert_eq!(value.as_pixels(), None, "{value:?}");
         }

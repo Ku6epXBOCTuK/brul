@@ -180,7 +180,7 @@ fn each_arm(
         out,
         "    let collection = structure{index}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let items = match collection {{"
     );
-    out.push_str("        brul::Value::Array(items) => items,\n");
+    out.push_str("        brul::Value::Array(items) => std::rc::Rc::unwrap_or_clone(items),\n");
     out.push_str(
         "        other => return Err(format!(\"each expects Array, got {}\", other.type_name())),\n    };\n",
     );

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, TemplatePart, UnaryOp};
 
 use crate::component::Component;
@@ -11,7 +13,7 @@ pub fn eval(component: &mut Component, expression: &Expr) -> Result<Value, Error
 fn eval_expression(component: &mut Component, expression: &Expr) -> Result<Value, Error> {
     match &expression.kind {
         ExprKind::Number(value) => Ok(Value::Number(*value)),
-        ExprKind::String(value) => Ok(Value::String(value.clone())),
+        ExprKind::String(value) => Ok(Value::String(value.as_str().into())),
         ExprKind::Bool(value) => Ok(Value::Bool(*value)),
         ExprKind::Null => Ok(Value::Null),
         ExprKind::Ident(name) => component.read(name),
@@ -26,14 +28,14 @@ fn eval_expression(component: &mut Component, expression: &Expr) -> Result<Value
             for item in items {
                 values.push(eval(component, item)?);
             }
-            Ok(Value::Array(values))
+            Ok(Value::Array(values.into()))
         }
         ExprKind::Object(fields) => {
             let mut values = Vec::with_capacity(fields.len());
             for (name, value) in fields {
                 values.push((name.clone(), eval(component, value)?));
             }
-            Ok(Value::Object(values))
+            Ok(Value::Object(values.into()))
         }
         ExprKind::Template(parts) => eval_template(component, parts),
         ExprKind::Call { target, args } => eval_call(component, target, args),
@@ -102,9 +104,9 @@ fn call_string(arguments: Vec<Value>) -> Result<Value, Error> {
     let value = single_argument("String", arguments)?;
     match value {
         Value::String(text) => Ok(Value::String(text)),
-        Value::Number(number) => Ok(Value::String(number.to_string())),
-        Value::Bool(value) => Ok(Value::String(value.to_string())),
-        Value::Null => Ok(Value::String("null".to_owned())),
+        Value::Number(number) => Ok(Value::String(number.to_string().into())),
+        Value::Bool(value) => Ok(Value::String(value.to_string().into())),
+        Value::Null => Ok(Value::String("null".into())),
         other => Err(argument_error(
             "String",
             "Number, String, Bool or Null",
@@ -119,7 +121,7 @@ fn call_number(arguments: Vec<Value>) -> Result<Value, Error> {
         Value::Number(number) => Ok(Value::Number(number)),
         Value::String(text) => match text.parse() {
             Ok(number) => Ok(Value::Number(number)),
-            Err(_) => Err(Error::InvalidNumber(text)),
+            Err(_) => Err(Error::InvalidNumber(text.to_string())),
         },
         other => Err(argument_error("Number", "String or Number", &other)),
     }
@@ -204,7 +206,10 @@ pub fn read_field(target: &Value, name: &str) -> Result<Value, Error> {
 
 pub fn assign_field(target: &mut Value, name: &str, value: Value) -> Result<(), Error> {
     match target {
-        Value::Object(fields) => match fields.iter_mut().find(|(field, _)| field == name) {
+        Value::Object(fields) => match Rc::make_mut(fields)
+            .iter_mut()
+            .find(|(field, _)| field == name)
+        {
             Some((_, field)) => {
                 *field = value;
                 Ok(())
@@ -230,9 +235,9 @@ pub fn read_index(target: &Value, index: &Value) -> Result<Value, Error> {
             };
             fields
                 .iter()
-                .find(|(field, _)| field == key)
+                .find(|(field, _)| field.as_str() == key.as_ref())
                 .map(|(_, value)| value.clone())
-                .ok_or_else(|| Error::MissingField(key.clone()))
+                .ok_or_else(|| Error::MissingField(key.to_string()))
         }
         other => Err(expected("[]", "Array or Object", other)),
     }
@@ -245,19 +250,22 @@ pub fn assign_index(target: &mut Value, index: &Value, value: Value) -> Result<(
                 return Err(expected("[]", "Number", index));
             };
             let index = array_index(items.len(), index)?;
-            items[index] = value;
+            Rc::make_mut(items)[index] = value;
             Ok(())
         }
         Value::Object(fields) => {
             let Value::String(key) = index else {
                 return Err(expected("[]", "String", index));
             };
-            match fields.iter_mut().find(|(field, _)| field == key) {
+            match Rc::make_mut(fields)
+                .iter_mut()
+                .find(|(field, _)| field.as_str() == key.as_ref())
+            {
                 Some((_, field)) => {
                     *field = value;
                     Ok(())
                 }
-                None => Err(Error::MissingField(key.clone())),
+                None => Err(Error::MissingField(key.to_string())),
             }
         }
         other => Err(expected("[]", "Array or Object", other)),
@@ -282,18 +290,18 @@ fn eval_template(component: &mut Component, parts: &[TemplatePart]) -> Result<Va
     let mut values = Vec::with_capacity(parts.len());
     for part in parts {
         values.push(match part {
-            TemplatePart::Text(chunk) => Value::String(chunk.clone()),
+            TemplatePart::Text(chunk) => Value::String(chunk.as_str().into()),
             TemplatePart::Expr(expression) => eval(component, expression)?,
         });
     }
-    Ok(Value::String(template(values)?))
+    Ok(Value::String(template(values)?.into()))
 }
 
 pub fn template(values: Vec<Value>) -> Result<String, Error> {
     let mut text = String::new();
     for value in values {
         match value {
-            Value::String(chunk) => text.push_str(&chunk),
+            Value::String(chunk) => text.push_str(chunk.as_ref()),
             Value::Number(number) => text.push_str(&number.to_string()),
             other => return Err(expected("${}", "String or Number", &other)),
         }
@@ -346,9 +354,11 @@ pub fn apply_binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Er
 fn add_or_concatenate(left: Value, right: Value) -> Result<Value, Error> {
     match (left, right) {
         (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
-        (Value::String(mut left), Value::String(right)) => {
-            left.push_str(&right);
-            Ok(Value::String(left))
+        (Value::String(left), Value::String(right)) => {
+            let mut text = String::with_capacity(left.len() + right.len());
+            text.push_str(left.as_ref());
+            text.push_str(right.as_ref());
+            Ok(Value::String(text.into()))
         }
         (left, right) => Err(mismatch(BinaryOp::Add, &left, &right)),
     }
@@ -474,13 +484,16 @@ mod tests {
     fn the_public_operations_match_the_interpreter() {
         assert_eq!(
             read_field(
-                &Value::Object(vec![("a".to_owned(), Value::Number(1.0))]),
+                &Value::Object(vec![("a".to_owned(), Value::Number(1.0))].into()),
                 "a"
             ),
             Ok(Value::Number(1.0))
         );
         assert_eq!(
-            read_index(&Value::Array(vec![Value::Bool(true)]), &Value::Number(0.0)),
+            read_index(
+                &Value::Array(vec![Value::Bool(true)].into()),
+                &Value::Number(0.0)
+            ),
             Ok(Value::Bool(true))
         );
         assert_eq!(
@@ -492,10 +505,10 @@ mod tests {
             Ok(Value::Number(-2.0))
         );
         assert_eq!(
-            template(vec![Value::String("a".to_owned()), Value::Number(2.0)]),
+            template(vec![Value::String("a".into()), Value::Number(2.0)]),
             Ok("a2".to_owned())
         );
-        let mut object = Value::Object(vec![("a".to_owned(), Value::Null)]);
+        let mut object = Value::Object(vec![("a".to_owned(), Value::Null)].into());
         assert_eq!(assign_field(&mut object, "a", Value::Bool(true)), Ok(()));
         assert_eq!(read_field(&object, "a"), Ok(Value::Bool(true)));
     }

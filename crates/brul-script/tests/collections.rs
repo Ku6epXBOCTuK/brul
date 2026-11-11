@@ -25,7 +25,8 @@ fn object(fields: &[(&str, Value)]) -> Value {
         fields
             .iter()
             .map(|(name, value)| ((*name).to_owned(), value.clone()))
-            .collect(),
+            .collect::<Vec<_>>()
+            .into(),
     )
 }
 
@@ -33,11 +34,14 @@ fn object(fields: &[(&str, Value)]) -> Value {
 fn array_literal_evaluates_elements() {
     assert_eq!(
         evaluate("[1, 2 + 3, \"x\"]"),
-        Ok(Value::Array(vec![
-            Value::Number(1.0),
-            Value::Number(5.0),
-            Value::String("x".to_owned()),
-        ]))
+        Ok(Value::Array(
+            vec![
+                Value::Number(1.0),
+                Value::Number(5.0),
+                Value::String("x".into()),
+            ]
+            .into(),
+        ))
     );
 }
 
@@ -46,7 +50,7 @@ fn object_literal_evaluates_fields() {
     assert_eq!(
         evaluate("{ name: \"Chrome\", flag: true }"),
         Ok(object(&[
-            ("name", Value::String("Chrome".to_owned())),
+            ("name", Value::String("Chrome".into())),
             ("flag", Value::Bool(true)),
         ]))
     );
@@ -61,7 +65,7 @@ fn array_index_reads_element() {
 fn fields_and_indexes_chain() {
     assert_eq!(
         evaluate("{ items: [{ name: \"a\" }] }.items[0].name"),
-        Ok(Value::String("a".to_owned()))
+        Ok(Value::String("a".into()))
     );
 }
 
@@ -71,7 +75,7 @@ fn object_reads_string_key() {
     component
         .declare(
             "browser",
-            object(&[("profile-dir", Value::String("/tmp".to_owned()))]),
+            object(&[("profile-dir", Value::String("/tmp".into()))]),
             false,
         )
         .unwrap();
@@ -81,7 +85,7 @@ fn object_reads_string_key() {
             &mut component,
             &parse_expression("browser[\"profile-dir\"]").unwrap()
         ),
-        Ok(Value::String("/tmp".to_owned()))
+        Ok(Value::String("/tmp".into()))
     );
 }
 
@@ -124,14 +128,8 @@ fn field_and_index_require_the_right_target() {
 
 #[test]
 fn template_substitutes_text_and_numbers() {
-    assert_eq!(
-        evaluate("`n=${1 + 2}`"),
-        Ok(Value::String("n=3".to_owned()))
-    );
-    assert_eq!(
-        evaluate("`a${\"b\"}c`"),
-        Ok(Value::String("abc".to_owned()))
-    );
+    assert_eq!(evaluate("`n=${1 + 2}`"), Ok(Value::String("n=3".into())));
+    assert_eq!(evaluate("`a${\"b\"}c`"), Ok(Value::String("abc".into())));
 }
 
 #[test]
@@ -152,11 +150,7 @@ fn assignment_updates_array_elements() {
     component
         .declare(
             "values",
-            Value::Array(vec![
-                Value::Number(1.0),
-                Value::Number(2.0),
-                Value::Number(3.0),
-            ]),
+            Value::Array(vec![Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)].into()),
             false,
         )
         .unwrap();
@@ -169,11 +163,9 @@ fn assignment_updates_array_elements() {
 
     assert_eq!(
         component.read("values"),
-        Ok(Value::Array(vec![
-            Value::Number(5.0),
-            Value::Number(5.0),
-            Value::Number(3.0),
-        ]))
+        Ok(Value::Array(
+            vec![Value::Number(5.0), Value::Number(5.0), Value::Number(3.0),].into(),
+        ))
     );
 }
 

@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn generated_launch_declares_seeds() {
-        let seeds = [("name", Value::String("from seed".to_owned()))];
+        let seeds = [("name", Value::String("from seed".into()))];
         let (id, ui) = assembled(None, &seeds, None);
         brul_reactive::flush();
         assert!(!ui.tree.borrow_mut().set_text(id, "from seed".to_owned()));

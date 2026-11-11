@@ -15,7 +15,7 @@ fn failure(source: &str) -> Error {
 #[test]
 fn literals_evaluate_to_their_values() {
     assert_eq!(evaluate("2.5"), Ok(Value::Number(2.5)));
-    assert_eq!(evaluate("\"hi\""), Ok(Value::String("hi".to_owned())));
+    assert_eq!(evaluate("\"hi\""), Ok(Value::String("hi".into())));
     assert_eq!(evaluate("true"), Ok(Value::Bool(true)));
     assert_eq!(evaluate("false"), Ok(Value::Bool(false)));
     assert_eq!(evaluate("null"), Ok(Value::Null));
@@ -31,10 +31,7 @@ fn arithmetic_follows_precedence() {
 
 #[test]
 fn addition_concatenates_strings() {
-    assert_eq!(
-        evaluate("\"a\" + \"b\""),
-        Ok(Value::String("ab".to_owned()))
-    );
+    assert_eq!(evaluate("\"a\" + \"b\""), Ok(Value::String("ab".into())));
 }
 
 #[test]
@@ -112,7 +109,7 @@ fn ternary_picks_a_branch_by_bool() {
     assert_eq!(evaluate("false ? 1 : 2"), Ok(Value::Number(2.0)));
     assert_eq!(
         evaluate("1 < 2 ? \"a\" : \"b\""),
-        Ok(Value::String("a".to_owned()))
+        Ok(Value::String("a".into()))
     );
     assert_eq!(
         failure("1 ? 1 : 2"),

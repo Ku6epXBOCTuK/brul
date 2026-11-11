@@ -6,12 +6,21 @@ use brul::{Built, Component, ComponentHandle, HandlerEvent, Value};
 use brul_gui::WidgetKind;
 
 fn browser(name: &str, is_default: bool) -> Value {
-    Value::Object(vec![
-        ("icon".to_owned(), Value::String(name[..1].to_uppercase())),
-        ("name".to_owned(), Value::String(name.to_owned())),
-        ("path".to_owned(), Value::String(format!("C:/{name}"))),
-        ("isDefault".to_owned(), Value::Bool(is_default)),
-    ])
+    Value::Object(
+        vec![
+            (
+                "icon".to_owned(),
+                Value::String(name[..1].to_uppercase().into()),
+            ),
+            ("name".to_owned(), Value::String(name.into())),
+            (
+                "path".to_owned(),
+                Value::String(format!("C:/{name}").into()),
+            ),
+            ("isDefault".to_owned(), Value::Bool(is_default)),
+        ]
+        .into(),
+    )
 }
 
 fn seeded() -> ComponentHandle {
@@ -19,16 +28,12 @@ fn seeded() -> ComponentHandle {
     component.borrow_mut().set_names(generated::names());
     let mut state = component.borrow_mut();
     state
-        .declare(
-            "url",
-            Value::String("https://example.com".to_owned()),
-            false,
-        )
+        .declare("url", Value::String("https://example.com".into()), false)
         .expect("url seed");
     state
         .declare(
             "browsers",
-            Value::Array(vec![browser("first", true), browser("second", false)]),
+            Value::Array(vec![browser("first", true), browser("second", false)].into()),
             true,
         )
         .expect("browsers seed");
@@ -148,7 +153,7 @@ fn structure_rebuild_rebuilds_rows() {
         .expect("each structure");
     let (rebuilt, rows) = (each.rebuild)(None, &component).expect("rebuild");
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].key, Some(Value::String("first".to_owned())));
+    assert_eq!(rows[0].key, Some(Value::String("first".into())));
     assert_eq!(rows[0].count, 1);
     assert_eq!(rebuilt.widget.into_children().len(), 2);
 }

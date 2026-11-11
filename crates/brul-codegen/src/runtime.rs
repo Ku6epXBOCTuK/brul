@@ -538,7 +538,7 @@ mod tests {
     fn text_binding_follows_the_component() {
         let mut component = component();
         component
-            .declare("name", Value::String("hello".to_owned()), false)
+            .declare("name", Value::String("hello".into()), false)
             .unwrap();
         let widget = Widget::text("");
         let id = widget.id();
@@ -556,7 +556,7 @@ mod tests {
 
         component
             .borrow_mut()
-            .assign("name", Value::String("bye".to_owned()))
+            .assign("name", Value::String("bye".into()))
             .unwrap();
         brul_reactive::flush();
         assert!(!tree.borrow_mut().set_text(id, "bye".to_owned()));
@@ -643,7 +643,7 @@ mod tests {
 
     #[test]
     fn text_returns_the_string_and_names_the_actual_type() {
-        let mut component = declared("name", Value::String("hello".to_owned()));
+        let mut component = declared("name", Value::String("hello".into()));
         assert_eq!(text(&mut component, expr!("name")), Ok("hello".to_owned()));
 
         let mut component = declared("name", Value::Number(3.0));
@@ -657,7 +657,7 @@ mod tests {
         let mut component = declared(name, Value::Bool(true));
         assert_eq!(boolean(&mut component, expr!("visible"), name), Ok(true));
 
-        let mut component = declared(name, Value::String("yes".to_owned()));
+        let mut component = declared(name, Value::String("yes".into()));
         let error = boolean(&mut component, expr!("visible"), name).unwrap_err();
         assert!(error.contains(name));
     }
@@ -694,7 +694,7 @@ mod tests {
         let missing = RefCell::new(Component::new());
         assert_eq!(offset_value(&missing, Some(expr!("x"))), None);
 
-        let text = RefCell::new(declared("x", Value::String("4".to_owned())));
+        let text = RefCell::new(declared("x", Value::String("4".into())));
         assert_eq!(offset_value(&text, Some(expr!("x"))), None);
 
         let whole = RefCell::new(declared("x", Value::Number(4.0)));
@@ -842,7 +842,7 @@ mod tests {
     fn declared_all() -> Rc<RefCell<Component>> {
         let mut component = component();
         for (name, value) in [
-            ("title", Value::String("hi".to_owned())),
+            ("title", Value::String("hi".into())),
             ("on", Value::Bool(true)),
             ("off", Value::Bool(false)),
             ("x", Value::Number(4.0)),
@@ -924,7 +924,7 @@ mod tests {
             .declare("title", Value::Number(1.0), false)
             .unwrap();
         component
-            .declare("on", Value::String("yes".to_owned()), false)
+            .declare("on", Value::String("yes".into()), false)
             .unwrap();
         let component = Rc::new(RefCell::new(component));
         let (ids, tree) = six_widgets();

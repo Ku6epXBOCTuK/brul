@@ -64,7 +64,7 @@ impl Host for CommandHost {
             };
             self.commands
                 .borrow_mut()
-                .push(WindowCommand::SetTheme(theme.clone()));
+                .push(WindowCommand::SetTheme(theme.to_string()));
             return Ok(Value::Null);
         }
         let command = match name {
@@ -679,8 +679,8 @@ mod tests {
 
     #[test]
     fn a_prop_binding_writes_the_property_of_the_child() {
-        let source = declared("colour", Value::String("red".to_owned()));
-        let target = child_with_property("accent", Value::String("blue".to_owned()));
+        let source = declared("colour", Value::String("red".into()));
+        let target = child_with_property("accent", Value::String("blue".into()));
         apply_prop(&prop(
             &source,
             &target,
@@ -690,14 +690,14 @@ mod tests {
         ));
         assert_eq!(
             target.borrow().read("accent").expect("read back"),
-            Value::String("red".to_owned())
+            Value::String("red".into())
         );
     }
 
     #[test]
     fn a_prop_binding_skips_a_value_of_the_wrong_type() {
-        let source = declared("colour", Value::String("red".to_owned()));
-        let target = child_with_property("accent", Value::String("blue".to_owned()));
+        let source = declared("colour", Value::String("red".into()));
+        let target = child_with_property("accent", Value::String("blue".into()));
         apply_prop(&prop(
             &source,
             &target,
@@ -707,14 +707,14 @@ mod tests {
         ));
         assert_eq!(
             target.borrow().read("accent").expect("read back"),
-            Value::String("blue".to_owned())
+            Value::String("blue".into())
         );
     }
 
     #[test]
     fn a_prop_binding_survives_an_unknown_property() {
-        let source = declared("colour", Value::String("red".to_owned()));
-        let target = child_with_property("accent", Value::String("blue".to_owned()));
+        let source = declared("colour", Value::String("red".into()));
+        let target = child_with_property("accent", Value::String("blue".into()));
         apply_prop(&prop(
             &source,
             &target,
@@ -773,7 +773,7 @@ mod tests {
             })
         );
         assert_eq!(
-            host.call("set_theme", &[Value::String("dark".to_owned())]),
+            host.call("set_theme", &[Value::String("dark".into())]),
             Ok(Value::Null)
         );
         assert_eq!(
@@ -875,7 +875,7 @@ mod tests {
         let mut component = Component::new();
         component.set_names(NAMES);
         component
-            .declare("title", Value::String("hi".to_owned()), false)
+            .declare("title", Value::String("hi".into()), false)
             .unwrap();
         component.declare("on", Value::Bool(true), false).unwrap();
         component.declare("off", Value::Bool(false), false).unwrap();
@@ -1022,7 +1022,7 @@ mod tests {
         let seen = ui.component.borrow().read("seen").expect("seen");
         assert_eq!(
             seen,
-            Value::Object(vec![("code".to_owned(), Value::String("Enter".to_owned()))])
+            Value::Object(vec![("code".to_owned(), Value::String("Enter".into()))].into())
         );
     }
 
@@ -1179,7 +1179,7 @@ mod tests {
             generated_built(raising_view, NAMES, None, &[], None).expect("launch");
         component
             .borrow_mut()
-            .declare("label", Value::String(String::new()), false)
+            .declare("label", Value::String("".into()), false)
             .expect("declared");
         let click = built.handlers[0].widget.expect("widget");
         let text = built.bindings[0].widget;
@@ -1198,7 +1198,7 @@ mod tests {
 
         assert_eq!(
             ui.component.borrow().read("label"),
-            Ok(Value::String("after".to_owned()))
+            Ok(Value::String("after".into()))
         );
         assert!(!ui.tree.borrow_mut().set_text(text, "after".to_owned()));
     }

@@ -17,7 +17,7 @@ fn id(name: &str) -> VariableId {
 #[test]
 fn value_reports_its_kind() {
     assert_eq!(Value::Number(1.0).type_name(), "Number");
-    assert_eq!(Value::String("a".to_owned()).type_name(), "String");
+    assert_eq!(Value::String("a".into()).type_name(), "String");
     assert_eq!(Value::Bool(true).type_name(), "Bool");
     assert_eq!(Value::Null.type_name(), "Null");
 }
@@ -29,7 +29,7 @@ fn declares_and_reads_variables() {
         .declare(id("selectedIndex"), Value::Number(0.0), false)
         .unwrap();
     environment
-        .declare(id("url"), Value::String("about:blank".to_owned()), false)
+        .declare(id("url"), Value::String("about:blank".into()), false)
         .unwrap();
     assert_eq!(
         environment.get(id("selectedIndex")),
@@ -37,7 +37,7 @@ fn declares_and_reads_variables() {
     );
     assert_eq!(
         environment.get(id("url")),
-        Some(&Value::String("about:blank".to_owned()))
+        Some(&Value::String("about:blank".into()))
     );
 }
 

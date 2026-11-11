@@ -521,7 +521,7 @@ fn emits_value_literals_and_reads() {
         "component.read_id(brul::VariableId::from_index(0))?"
     );
     assert_eq!(operated("42"), "brul::Value::Number(42.0)");
-    assert_eq!(operated("\"hi\""), "brul::Value::String(\"hi\".to_owned())");
+    assert_eq!(operated("\"hi\""), "brul::Value::String(\"hi\".into())");
     assert_eq!(operated("true"), "brul::Value::Bool(true)");
     assert_eq!(operated("null"), "brul::Value::Null");
     assert_eq!(
@@ -546,15 +546,15 @@ fn emits_value_operations() {
     );
     assert_eq!(
         operated("[1, x]"),
-        "brul::Value::Array(vec![brul::Value::Number(1.0), component.read_id(brul::VariableId::from_index(0))?])"
+        "brul::Value::Array(vec![brul::Value::Number(1.0), component.read_id(brul::VariableId::from_index(0))?].into())"
     );
     assert_eq!(
         operated("{ a: 1 }"),
-        "brul::Value::Object(vec![(\"a\".to_owned(), brul::Value::Number(1.0))])"
+        "brul::Value::Object(vec![(\"a\".to_owned(), brul::Value::Number(1.0))].into())"
     );
     assert_eq!(
         operated("`v=${x}`"),
-        "brul::Value::String(brul::eval::template(vec![brul::Value::String(\"v=\".to_owned()), component.read_id(brul::VariableId::from_index(0))?])?)"
+        "brul::Value::String(brul::eval::template(vec![brul::Value::String(\"v=\".into()), component.read_id(brul::VariableId::from_index(0))?])?)"
     );
 }
 
@@ -664,7 +664,7 @@ fn emits_component_properties() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("name: \"Badge\","));
     assert!(module.contains(
-        "brul::PropArgument { name: brul::VariableId::from_index(0), ty: brul::PropType::String, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = brul::Value::String(\"hi\".to_owned()); Ok(value) }"
+        "brul::PropArgument { name: brul::VariableId::from_index(0), ty: brul::PropType::String, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = brul::Value::String(\"hi\".into()); Ok(value) }"
     ));
     assert!(module.contains(
         "brul::PropArgument { name: brul::VariableId::from_index(1), ty: brul::PropType::Number,"
