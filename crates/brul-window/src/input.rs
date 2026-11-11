@@ -7,7 +7,7 @@ use crate::window::ColorScheme;
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Input {
     Exit,
-    Key { code: String, exit: bool },
+    Key(String),
     Moved(f64, f64),
     Left,
     Down(f64, f64),
@@ -75,10 +75,7 @@ pub(crate) fn event_input(event: &WindowEvent) -> Option<Input> {
     match event {
         WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
             let code = key_code(&event.logical_key)?;
-            Some(Input::Key {
-                code,
-                exit: event.logical_key == Key::Named(NamedKey::Escape),
-            })
+            Some(Input::Key(code))
         }
         WindowEvent::PointerMoved { position, .. } => Some(Input::Moved(position.x, position.y)),
         WindowEvent::PointerLeft { .. } => Some(Input::Left),
@@ -228,32 +225,8 @@ mod tests {
     }
 
     #[test]
-    fn escape_is_the_key_that_leaves() {
-        assert_eq!(
-            event_input(&key_event(
-                Key::Named(NamedKey::Escape),
-                ElementState::Pressed
-            )),
-            Some(Input::Key {
-                code: "Escape".to_owned(),
-                exit: true
-            })
-        );
-        assert_eq!(
-            event_input(&key_event(
-                Key::Character("a".into()),
-                ElementState::Pressed
-            )),
-            Some(Input::Key {
-                code: "a".to_owned(),
-                exit: false
-            })
-        );
-    }
-
-    #[test]
     fn a_released_key_is_ignored() {
-        let event = key_event(Key::Named(NamedKey::Escape), ElementState::Released);
+        let event = key_event(Key::Character("a".into()), ElementState::Released);
         assert_eq!(event_input(&event), None);
     }
 

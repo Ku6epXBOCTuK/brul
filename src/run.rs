@@ -1,8 +1,11 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
-use brul_window::{ColorScheme, run_tree_themed};
+use brul_gui::WidgetEvent;
+use brul_window::{ColorScheme, WindowCommand, WindowKey, WindowSpec, run_windows};
 
+use crate::ui::CommandHost;
 use crate::{
     Built, Component, ComponentHandle, Host, Ui, Value, WindowConfig, execute_program, script,
 };
@@ -13,28 +16,53 @@ pub struct WindowDef {
     pub view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
 }
 
-/// Запускает окно по модулю, сгенерированному из `.brul`.
+/// Запускает окна по модулю, сгенерированному из `.brul`.
 pub fn run_generated(
-    config: WindowConfig,
+    windows: Vec<WindowDef>,
     script: Option<script::Program>,
     names: &'static [&'static str],
-    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
     theme: Option<&str>,
     seeds: &[(&str, Value)],
     host: Option<Box<dyn Host>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (component, built) = generated_built(view, names, theme, seeds, script.as_ref())?;
-    let ui = Ui::assemble(component, built, view, theme.map(str::to_owned), host);
-    run_ui(config, theme.map(str::to_owned), ui)
+    if windows.is_empty() {
+        return Err(std::io::Error::other("no window declarations").into());
+    }
+
+    let component = generated_component(names, script.as_ref(), seeds)?;
+    let keys = windows
+        .iter()
+        .enumerate()
+        .map(|(index, window)| (window.name.to_owned(), WindowKey(index as u64)))
+        .collect();
+    let commands = Rc::new(RefCell::new(Vec::new()));
+    component.borrow_mut().set_host(CommandHost {
+        commands: Rc::clone(&commands),
+        app: host,
+        windows: Rc::new(keys),
+    });
+    let pending = std::mem::take(&mut *commands.borrow_mut());
+    let runtime = Rc::new(RefCell::new(Runtime::new(
+        windows, component, commands, theme, pending,
+    )));
+
+    let creator = Rc::clone(&runtime);
+    let handler = Rc::clone(&runtime);
+    let closed = Rc::clone(&runtime);
+    run_windows(
+        WindowKey(0),
+        move |key, scheme| creator.borrow_mut().create(key, scheme),
+        move |key, events| handler.borrow_mut().dispatch(key, events),
+        move |key| closed.borrow_mut().close(key),
+    )?;
+    Ok(())
 }
 
-pub(crate) fn generated_built(
-    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+pub(crate) fn generated_component(
     names: &'static [&'static str],
-    theme: Option<&str>,
-    seeds: &[(&str, Value)],
     script: Option<&script::Program>,
-) -> Result<(ComponentHandle, Built), Box<dyn std::error::Error>> {
+    seeds: &[(&str, Value)],
+) -> Result<ComponentHandle, Box<dyn std::error::Error>> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
     component.borrow_mut().set_names(names);
     for (name, value) in seeds {
@@ -43,39 +71,145 @@ pub(crate) fn generated_built(
     if let Some(program) = script {
         execute_program(&mut component.borrow_mut(), program)?;
     }
+    Ok(component)
+}
+
+#[cfg(test)]
+pub(crate) fn generated_built(
+    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+    names: &'static [&'static str],
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+    script: Option<&script::Program>,
+) -> Result<(ComponentHandle, Built), Box<dyn std::error::Error>> {
+    let component = generated_component(names, script, seeds)?;
     let built = view(theme, &component).map_err(std::io::Error::other)?;
     Ok((component, built))
 }
 
-fn run_ui(
-    config: WindowConfig,
+struct Runtime {
+    defs: Vec<WindowDef>,
+    component: ComponentHandle,
+    uis: HashMap<WindowKey, Ui>,
+    commands: Rc<RefCell<Vec<WindowCommand>>>,
+    fixed_theme: Option<String>,
     theme: Option<String>,
-    ui: Ui,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let ui = Rc::new(RefCell::new(ui));
-    let initial = ui.borrow_mut().dispatch(&[]);
-    let builder = Rc::clone(&ui);
-    let handler = Rc::clone(&ui);
-    run_tree_themed(
-        config,
-        initial,
-        move |scheme| {
-            let mut ui = builder.borrow_mut();
-            if let Err(error) = ui.set_theme(scheme_theme(theme.as_deref(), scheme))
+    pending: Vec<WindowCommand>,
+}
+
+impl Runtime {
+    fn new(
+        defs: Vec<WindowDef>,
+        component: ComponentHandle,
+        commands: Rc<RefCell<Vec<WindowCommand>>>,
+        fixed_theme: Option<&str>,
+        pending: Vec<WindowCommand>,
+    ) -> Self {
+        let mut runtime = Self {
+            defs,
+            component,
+            uis: HashMap::new(),
+            commands,
+            fixed_theme: fixed_theme.map(str::to_owned),
+            theme: None,
+            pending,
+        };
+        let pending = std::mem::take(&mut runtime.pending);
+        runtime.pending = runtime.absorb(pending);
+        runtime
+    }
+
+    fn absorb(&mut self, commands: Vec<WindowCommand>) -> Vec<WindowCommand> {
+        let mut rest = Vec::new();
+        for command in commands {
+            match command {
+                WindowCommand::SetTheme(theme) => self.apply_theme(&theme),
+                command => rest.push(command),
+            }
+        }
+        rest
+    }
+
+    fn apply_theme(&mut self, theme: &str) {
+        self.theme = Some(theme.to_owned());
+        for ui in self.uis.values_mut() {
+            if let Err(error) = ui.set_theme(theme)
                 && !error.message.contains("unknown theme")
             {
                 eprintln!("{error}");
             }
-            Rc::clone(&ui.tree)
-        },
-        move |events| {
-            let commands = handler.borrow_mut().dispatch(events);
-            brul_reactive::flush();
-            handler.borrow_mut().settle();
-            commands
-        },
-    )?;
-    Ok(())
+        }
+    }
+
+    fn theme_for(&self, scheme: ColorScheme) -> String {
+        match &self.theme {
+            Some(theme) => theme.clone(),
+            None => scheme_theme(self.fixed_theme.as_deref(), scheme).to_owned(),
+        }
+    }
+
+    fn create(&mut self, key: WindowKey, scheme: ColorScheme) -> Result<WindowSpec, String> {
+        let index = usize::try_from(key.0)
+            .ok()
+            .filter(|index| *index < self.defs.len())
+            .ok_or_else(|| format!("{key} is not declared"))?;
+        let (config, view) = {
+            let def = &self.defs[index];
+            (def.config.clone(), def.view)
+        };
+        let theme = self.theme_for(scheme);
+        if let Some(ui) = self.uis.get_mut(&key) {
+            if let Err(error) = ui.set_theme(&theme)
+                && !error.message.contains("unknown theme")
+            {
+                eprintln!("{error}");
+            }
+            return Ok(WindowSpec {
+                config,
+                tree: Rc::clone(&ui.tree),
+                commands: Vec::new(),
+            });
+        }
+
+        let built = view(self.fixed_theme.as_deref(), &self.component)?;
+        let mut ui = Ui::assemble_with(
+            Rc::clone(&self.component),
+            built,
+            view,
+            self.fixed_theme.clone(),
+            Rc::clone(&self.commands),
+        );
+        if let Err(error) = ui.set_theme(&theme)
+            && !error.message.contains("unknown theme")
+        {
+            eprintln!("{error}");
+        }
+        let mut commands = std::mem::take(&mut self.pending);
+        commands.extend(ui.dispatch(&[]));
+        let tree = Rc::clone(&ui.tree);
+        self.uis.insert(key, ui);
+        Ok(WindowSpec {
+            config,
+            tree,
+            commands,
+        })
+    }
+
+    fn dispatch(&mut self, key: WindowKey, events: &[WidgetEvent]) -> Vec<WindowCommand> {
+        let Some(ui) = self.uis.get_mut(&key) else {
+            return Vec::new();
+        };
+        let commands = ui.dispatch(events);
+        brul_reactive::flush();
+        if let Some(ui) = self.uis.get_mut(&key) {
+            ui.settle();
+        }
+        self.absorb(commands)
+    }
+
+    fn close(&mut self, key: WindowKey) {
+        self.uis.remove(&key);
+    }
 }
 
 pub(crate) fn scheme_theme(fixed: Option<&str>, scheme: ColorScheme) -> &str {
@@ -91,7 +225,6 @@ mod tests {
 
     use brul_gui::{Widget, WidgetId};
     use brul_syntax::ast::{Expr, ExprKind, Position};
-    use brul_window::ColorScheme;
 
     use crate::ui::Ui;
     use crate::{Binding, BindingTarget, Built, ComponentHandle, Value};
@@ -103,7 +236,7 @@ mod tests {
     }
 
     fn generated_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
-        if theme.is_some() {
+        if theme == Some("sepia") {
             return Err("unknown theme".to_owned());
         }
         let widget = Widget::text("");
@@ -115,6 +248,28 @@ mod tests {
             structures: Vec::new(),
             props: Vec::new(),
         })
+    }
+
+    fn defs() -> Vec<WindowDef> {
+        ["First", "Second"]
+            .into_iter()
+            .map(|name| WindowDef {
+                name,
+                config: WindowConfig::default(),
+                view: generated_view,
+            })
+            .collect()
+    }
+
+    fn runtime(theme: Option<&str>) -> Runtime {
+        let component = generated_component(NAMES, None, &[]).expect("component");
+        Runtime::new(
+            defs(),
+            component,
+            Rc::new(RefCell::new(Vec::new())),
+            theme,
+            Vec::new(),
+        )
     }
 
     fn assembled(
@@ -155,6 +310,60 @@ mod tests {
         let (id, ui) = assembled(None, &[], Some(&program));
         brul_reactive::flush();
         assert!(!ui.tree.borrow_mut().set_text(id, "from script".to_owned()));
+    }
+
+    #[test]
+    fn a_window_is_built_once_and_reused() {
+        let mut runtime = runtime(None);
+        let first = runtime
+            .create(WindowKey(1), ColorScheme::Dark)
+            .expect("second window");
+        let again = runtime
+            .create(WindowKey(1), ColorScheme::Light)
+            .expect("second window again");
+
+        assert!(Rc::ptr_eq(&first.tree, &again.tree));
+        assert_eq!(first.config.title, again.config.title);
+    }
+
+    #[test]
+    fn an_unknown_key_is_an_error() {
+        let mut runtime = runtime(None);
+        let error = match runtime.create(WindowKey(7), ColorScheme::Dark) {
+            Ok(_) => panic!("unknown window was created"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "window 7 is not declared");
+    }
+
+    #[test]
+    fn a_theme_command_reaches_every_open_window() {
+        let mut runtime = runtime(None);
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("first window");
+        runtime
+            .create(WindowKey(1), ColorScheme::Dark)
+            .expect("second window");
+        runtime
+            .commands
+            .borrow_mut()
+            .push(WindowCommand::SetTheme("light".to_owned()));
+
+        assert!(runtime.dispatch(WindowKey(0), &[]).is_empty());
+        for ui in runtime.uis.values() {
+            assert_eq!(ui.theme.as_deref(), Some("light"));
+        }
+    }
+
+    #[test]
+    fn closing_a_window_drops_its_ui() {
+        let mut runtime = runtime(None);
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("first window");
+        runtime.close(WindowKey(0));
+        assert!(runtime.uis.is_empty());
     }
 
     #[test]

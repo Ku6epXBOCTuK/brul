@@ -1,11 +1,12 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
 use brul_codegen::runtime::{self, accepts_prop};
 use brul_gui::{WidgetEvent, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_window::WindowCommand;
+use brul_window::{WindowCommand, WindowKey};
 
 use crate::each::reconcile_each;
 use crate::event::{arguments, call, handler_target};
@@ -45,6 +46,7 @@ struct OwnedStructure {
 pub(crate) struct CommandHost {
     pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
     pub(crate) app: Option<Box<dyn Host>>,
+    pub(crate) windows: Rc<HashMap<String, WindowKey>>,
 }
 
 impl Host for CommandHost {
@@ -68,8 +70,11 @@ impl Host for CommandHost {
                 .push(WindowCommand::SetTheme(theme.to_string()));
             return Ok(Value::Null);
         }
+        if name == "openWindow" {
+            return self.open_window(arguments);
+        }
         let command = match name {
-            "exit" => WindowCommand::Exit,
+            "exit" | "closeWindow" => WindowCommand::Close,
             "dragWindow" => WindowCommand::Drag,
             _ => return self.delegate(name, arguments),
         };
@@ -92,6 +97,27 @@ impl Host for CommandHost {
 }
 
 impl CommandHost {
+    fn open_window(&mut self, arguments: &[Value]) -> Result<Value, Error> {
+        if arguments.len() != 1 {
+            return Err(Error::Arity {
+                name: "openWindow".to_owned(),
+                expected: "one",
+            });
+        }
+        let Value::String(name) = &arguments[0] else {
+            return Err(Error::Argument {
+                name: "openWindow",
+                expected: "String",
+                found: arguments[0].type_name(),
+            });
+        };
+        let Some(key) = self.windows.get(&**name) else {
+            return Err(Error::UnknownWindow(name.to_string()));
+        };
+        self.commands.borrow_mut().push(WindowCommand::Open(*key));
+        Ok(Value::Null)
+    }
+
     fn delegate(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
         match &mut self.app {
             Some(host) => host.call(name, arguments),
@@ -101,12 +127,30 @@ impl CommandHost {
 }
 
 impl Ui {
+    #[cfg(test)]
     pub(crate) fn assemble(
         component: ComponentHandle,
         built: Built,
         view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
         theme: Option<String>,
         host: Option<Box<dyn Host>>,
+    ) -> Self {
+        let commands = Rc::new(RefCell::new(Vec::new()));
+        let ui = Self::assemble_with(component, built, view, theme, Rc::clone(&commands));
+        ui.component.borrow_mut().set_host(CommandHost {
+            commands,
+            app: host,
+            windows: Rc::new(HashMap::new()),
+        });
+        ui
+    }
+
+    pub(crate) fn assemble_with(
+        component: ComponentHandle,
+        built: Built,
+        view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+        theme: Option<String>,
+        commands: Rc<RefCell<Vec<WindowCommand>>>,
     ) -> Self {
         let Built {
             widget,
@@ -115,7 +159,6 @@ impl Ui {
             props,
             structures,
         } = built;
-        let commands = Rc::new(RefCell::new(Vec::new()));
         for (interval_ms, function) in component.borrow_mut().take_every() {
             if interval_ms.is_finite() && interval_ms > 0.0 {
                 commands.borrow_mut().push(WindowCommand::Every {
@@ -126,10 +169,6 @@ impl Ui {
                 eprintln!("every interval must be a positive number");
             }
         }
-        component.borrow_mut().set_host(CommandHost {
-            commands: Rc::clone(&commands),
-            app: host,
-        });
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         let window_handlers = handlers
             .iter()
@@ -299,19 +338,7 @@ impl Ui {
     }
 
     fn take_commands(&mut self) -> Vec<WindowCommand> {
-        let commands = std::mem::take(&mut *self.commands.borrow_mut());
-        let mut output = Vec::new();
-        for command in commands {
-            match command {
-                WindowCommand::SetTheme(theme) => {
-                    if let Err(error) = self.set_theme(&theme) {
-                        eprintln!("{error}");
-                    }
-                }
-                command => output.push(command),
-            }
-        }
-        output
+        std::mem::take(&mut *self.commands.borrow_mut())
     }
 
     pub fn settle(&mut self) {
@@ -734,6 +761,7 @@ mod tests {
             CommandHost {
                 commands: Rc::clone(&commands),
                 app,
+                windows: Rc::new(HashMap::new()),
             },
             commands,
         )
@@ -789,6 +817,7 @@ mod tests {
     fn the_builtin_commands_take_no_arguments() {
         let (mut host, commands) = command_host(None);
         assert_eq!(host.call("exit", &[]), Ok(Value::Null));
+        assert_eq!(host.call("closeWindow", &[]), Ok(Value::Null));
         assert_eq!(host.call("dragWindow", &[]), Ok(Value::Null));
         assert_eq!(
             host.call("exit", &[Value::Number(1.0)]),
@@ -799,8 +828,41 @@ mod tests {
         );
         assert_eq!(
             *commands.borrow(),
-            vec![WindowCommand::Exit, WindowCommand::Drag]
+            vec![
+                WindowCommand::Close,
+                WindowCommand::Close,
+                WindowCommand::Drag
+            ]
         );
+    }
+
+    #[test]
+    fn open_window_finds_a_declared_name() {
+        let commands = Rc::new(RefCell::new(Vec::new()));
+        let mut windows = HashMap::new();
+        windows.insert("Settings".to_owned(), WindowKey(1));
+        let mut host = CommandHost {
+            commands: Rc::clone(&commands),
+            app: None,
+            windows: Rc::new(windows),
+        };
+
+        assert_eq!(
+            host.call("openWindow", &[Value::String("Settings".into())]),
+            Ok(Value::Null)
+        );
+        assert_eq!(
+            host.call("openWindow", &[Value::String("Missing".into())]),
+            Err(Error::UnknownWindow("Missing".to_owned()))
+        );
+        assert_eq!(
+            host.call("openWindow", &[]),
+            Err(Error::Arity {
+                name: "openWindow".to_owned(),
+                expected: "one",
+            })
+        );
+        assert_eq!(*commands.borrow(), vec![WindowCommand::Open(WindowKey(1))]);
     }
 
     #[test]
@@ -1113,26 +1175,17 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_applies_a_theme_command() {
+    fn dispatch_returns_the_theme_command() {
         let (component, built) =
             generated_built(themed_view, NAMES, None, &[], None).expect("launch");
         let mut ui = Ui::assemble(component, built, themed_view, None, None);
         ui.commands
             .borrow_mut()
             .push(WindowCommand::SetTheme("dark".to_owned()));
-        assert!(ui.dispatch(&[]).is_empty());
-        assert_eq!(ui.theme.as_deref(), Some("dark"));
-    }
-
-    #[test]
-    fn dispatch_logs_a_theme_the_view_rejects() {
-        let (component, built) =
-            generated_built(rejecting_view, NAMES, None, &[], None).expect("launch");
-        let mut ui = Ui::assemble(component, built, rejecting_view, None, None);
-        ui.commands
-            .borrow_mut()
-            .push(WindowCommand::SetTheme("dark".to_owned()));
-        assert!(ui.dispatch(&[]).is_empty());
+        assert_eq!(
+            ui.dispatch(&[]),
+            vec![WindowCommand::SetTheme("dark".to_owned())]
+        );
         assert!(ui.theme.is_none());
     }
 

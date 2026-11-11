@@ -171,7 +171,7 @@ pub fn run_tree_themed(
     let app = crate::tree::tree_app(
         config,
         tree,
-        Box::new(build),
+        Some(Box::new(build)),
         Box::new(handler),
         Rc::clone(&error),
         initial,
@@ -186,10 +186,11 @@ pub fn run_tree_themed(
 
 pub fn run_windows(
     initial: WindowKey,
-    create: impl FnMut(WindowKey, ColorScheme) -> WindowSpec + 'static,
+    create: impl FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
     handler: impl FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
+    closed: impl FnMut(WindowKey) + 'static,
 ) -> Result<(), WindowError> {
-    crate::windows::run(initial, create, handler)
+    crate::windows::run(initial, create, handler, closed)
 }
 
 pub(crate) fn create_window(
@@ -265,7 +266,6 @@ impl ApplicationHandler for App {
         let input = window_input(&event).or_else(|| event_input(&event));
         match input {
             Some(Input::Exit) => event_loop.exit(),
-            Some(Input::Key { exit: true, .. }) => event_loop.exit(),
             Some(Input::Down(_, y)) if self.config.is_header(y, window.scale_factor()) => {
                 let _ = window.drag_window();
             }

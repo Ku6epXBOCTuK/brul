@@ -44,10 +44,9 @@ impl Session {
             launcher,
         };
         brul::run_generated(
-            generated::window(),
+            generated::windows(),
             generated::script(),
             generated::names(),
-            generated::view,
             self.theme,
             &seeds,
             Some(Box::new(host)),

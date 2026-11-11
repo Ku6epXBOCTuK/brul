@@ -82,7 +82,7 @@ pub(crate) enum Step {
 pub(crate) struct TreeApp {
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
-    build: TreeBuilder,
+    build: Option<TreeBuilder>,
     handler: EventHandler,
     window: Option<Arc<dyn Window>>,
     renderer: Option<Box<dyn Renderer>>,
@@ -121,7 +121,7 @@ impl ApplicationHandler for TreeApp {
 pub(crate) fn tree_app(
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
-    build: TreeBuilder,
+    build: Option<TreeBuilder>,
     handler: EventHandler,
     error: Rc<Cell<Option<WindowError>>>,
     initial: Vec<WindowCommand>,
@@ -168,10 +168,18 @@ impl TreeApp {
         };
         self.tree = match tree {
             Some(tree) => tree,
-            None => {
-                let scheme = system_scheme(event_loop.system_theme().as_ref());
-                (self.build)(scheme)
-            }
+            None => match self.build.as_mut() {
+                Some(build) => {
+                    let scheme = system_scheme(event_loop.system_theme().as_ref());
+                    build(scheme)
+                }
+                None => {
+                    return self.fail(WindowError::Stage {
+                        stage: "window",
+                        message: String::from("window has no content"),
+                    });
+                }
+            },
         };
         let mut engine = TextEngine::new();
         let size = window.surface_size();
@@ -261,7 +269,7 @@ impl TreeApp {
 
     fn handle(&mut self, surface: &dyn Surface, input: Input) -> Step {
         match input {
-            Input::Key { code, exit } => self.press_key(surface, code, exit),
+            Input::Key(code) => self.press_key(surface, code),
             Input::Moved(x, y) => self.move_pointer(surface, x, y),
             Input::Left => self.leave_pointer(surface),
             Input::Down(x, y) => self.press_pointer(surface, x, y),
@@ -279,9 +287,8 @@ impl TreeApp {
         }
     }
 
-    fn press_key(&mut self, surface: &dyn Surface, code: String, exit: bool) -> Step {
-        let step = self.dispatch_events(surface, vec![WidgetEvent::Key(code)]);
-        if exit { Step::Close } else { step }
+    fn press_key(&mut self, surface: &dyn Surface, code: String) -> Step {
+        self.dispatch_events(surface, vec![WidgetEvent::Key(code)])
     }
 
     fn move_pointer(&mut self, surface: &dyn Surface, x: f64, y: f64) -> Step {
@@ -325,8 +332,19 @@ impl TreeApp {
     }
 
     fn change_theme(&mut self, surface: &dyn Surface, scheme: ColorScheme) -> Step {
-        self.tree = (self.build)(scheme);
+        let Some(build) = self.build.as_mut() else {
+            return Step::Continue;
+        };
+        self.tree = build(scheme);
         self.resize_to_surface(surface)
+    }
+
+    pub(crate) fn replace_tree(&mut self, tree: Rc<RefCell<WidgetTree>>) -> Step {
+        self.tree = tree;
+        match self.window.clone() {
+            Some(window) => self.resize_to_surface(&window),
+            None => Step::Continue,
+        }
     }
 
     fn resize_to_surface(&mut self, surface: &dyn Surface) -> Step {
@@ -549,7 +567,9 @@ mod tests {
         super::tree_app(
             WindowConfig::default(),
             Rc::new(RefCell::new(WidgetTree::new(Widget::text("")))),
-            Box::new(|_| Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))),
+            Some(Box::new(|_| {
+                Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))
+            })),
             handler,
             Rc::new(Cell::new(None)),
             Vec::new(),
@@ -561,7 +581,9 @@ mod tests {
         let app = super::tree_app(
             WindowConfig::default(),
             Rc::new(RefCell::new(WidgetTree::new(Widget::text("")))),
-            Box::new(|_| Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))),
+            Some(Box::new(|_| {
+                Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))
+            })),
             commands(Vec::new()),
             Rc::new(Cell::new(None)),
             vec![
@@ -795,20 +817,12 @@ mod tests {
         assert!(app.error.take().is_some());
     }
     #[test]
-    fn a_key_reaches_the_tree_and_escape_leaves() {
+    fn a_key_reaches_the_tree() {
         let surface = FakeSurface::new(1.0);
         let mut app = tree_app(commands(Vec::new()));
 
         let code = "Enter".to_owned();
-        assert_eq!(
-            app.handle(&surface, Input::Key { code, exit: false }),
-            Step::Continue
-        );
-        let code = "Escape".to_owned();
-        assert_eq!(
-            app.handle(&surface, Input::Key { code, exit: true }),
-            Step::Close
-        );
+        assert_eq!(app.handle(&surface, Input::Key(code)), Step::Continue);
     }
 
     #[test]

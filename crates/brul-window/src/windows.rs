@@ -8,20 +8,26 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::WindowId;
 
-use crate::input::system_scheme;
+use crate::input::{scheme, system_scheme};
 use crate::tree::{Step, TreeApp, tree_app, wakeup_at};
 use crate::window::{ColorScheme, WindowCommand, WindowError, WindowKey, WindowSpec};
 
-pub(crate) fn run<C, H>(initial: WindowKey, create: C, handler: H) -> Result<(), WindowError>
+pub(crate) fn run<C, H, F>(
+    initial: WindowKey,
+    create: C,
+    handler: H,
+    closed: F,
+) -> Result<(), WindowError>
 where
-    C: FnMut(WindowKey, ColorScheme) -> WindowSpec + 'static,
+    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
+    F: FnMut(WindowKey) + 'static,
 {
     let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let error = Rc::new(Cell::new(None));
-    let app = Windows::new(initial, create, handler, Rc::clone(&error));
+    let app = Windows::new(initial, create, handler, closed, Rc::clone(&error));
     let result = event_loop.run_app(app);
 
     if let Some(error) = error.take() {
@@ -30,33 +36,50 @@ where
     result.map_err(|error| WindowError::stage("event loop", error))
 }
 
-struct Windows<C, H> {
+struct Windows<C, H, F> {
     initial: WindowKey,
     create: Rc<RefCell<C>>,
     handler: Rc<RefCell<H>>,
+    closed: F,
     error: Rc<Cell<Option<WindowError>>>,
     windows: Vec<(WindowKey, TreeApp)>,
     opened: bool,
 }
 
-impl<C, H> Windows<C, H>
+impl<C, H, F> Windows<C, H, F>
 where
-    C: FnMut(WindowKey, ColorScheme) -> WindowSpec + 'static,
+    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
+    F: FnMut(WindowKey) + 'static,
 {
     fn new(
         initial: WindowKey,
         create: C,
         handler: H,
+        closed: F,
         error: Rc<Cell<Option<WindowError>>>,
     ) -> Self {
         Self {
             initial,
             create: Rc::new(RefCell::new(create)),
             handler: Rc::new(RefCell::new(handler)),
+            closed,
             error,
             windows: Vec::new(),
             opened: false,
+        }
+    }
+
+    fn create(&mut self, key: WindowKey, scheme: ColorScheme) -> Option<WindowSpec> {
+        match (self.create.borrow_mut())(key, scheme) {
+            Ok(spec) => Some(spec),
+            Err(message) => {
+                self.error.set(Some(WindowError::Stage {
+                    stage: "window",
+                    message,
+                }));
+                None
+            }
         }
     }
 
@@ -67,21 +90,22 @@ where
         }
 
         let scheme = system_scheme(event_loop.system_theme().as_ref());
-        let spec = (self.create.borrow_mut())(key, scheme);
+        let Some(spec) = self.create(key, scheme) else {
+            event_loop.exit();
+            return;
+        };
         if let Err(error) = spec.config.validate() {
             self.error.set(Some(error));
             event_loop.exit();
             return;
         }
 
-        let factory = Rc::clone(&self.create);
         let handler = Rc::clone(&self.handler);
-        let build = Box::new(move |scheme| (factory.borrow_mut())(key, scheme).tree);
         let events = Box::new(move |events: &[WidgetEvent]| (handler.borrow_mut())(key, events));
         let mut app = tree_app(
             spec.config,
             Rc::clone(&spec.tree),
-            build,
+            None,
             events,
             Rc::clone(&self.error),
             spec.commands,
@@ -100,25 +124,29 @@ where
             .position(|(_, app)| app.window_id() == Some(window_id))
     }
 
+    fn close(&mut self, event_loop: &dyn ActiveEventLoop, index: usize) {
+        let (key, _) = self.windows.remove(index);
+        (self.closed)(key);
+        if self.windows.is_empty() {
+            event_loop.exit();
+        }
+    }
+
     fn apply(&mut self, event_loop: &dyn ActiveEventLoop, index: usize, step: Step) {
         match step {
             Step::Continue => {}
-            Step::Close => {
-                self.windows.remove(index);
-                if self.windows.is_empty() {
-                    event_loop.exit();
-                }
-            }
+            Step::Close => self.close(event_loop, index),
             Step::Open(key) => self.open(event_loop, key),
             Step::Exit => event_loop.exit(),
         }
     }
 }
 
-impl<C, H> ApplicationHandler for Windows<C, H>
+impl<C, H, F> ApplicationHandler for Windows<C, H, F>
 where
-    C: FnMut(WindowKey, ColorScheme) -> WindowSpec + 'static,
+    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
+    F: FnMut(WindowKey) + 'static,
 {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
         if self.opened {
@@ -137,6 +165,17 @@ where
         let Some(index) = self.index_of(window_id) else {
             return;
         };
+        if let WindowEvent::ThemeChanged(theme) = &event {
+            let key = self.windows[index].0;
+            let Some(spec) = self.create(key, scheme(theme)) else {
+                event_loop.exit();
+                return;
+            };
+            let step = self.windows[index].1.replace_tree(spec.tree);
+            self.apply(event_loop, index, step);
+            return;
+        }
+
         let step = self.windows[index].1.event(window_id, &event);
         self.apply(event_loop, index, step);
     }
@@ -148,9 +187,8 @@ where
             let step = self.windows[index].1.pump(now);
             match step {
                 Step::Close => {
-                    self.windows.remove(index);
+                    self.close(event_loop, index);
                     if self.windows.is_empty() {
-                        event_loop.exit();
                         return;
                     }
                     continue;

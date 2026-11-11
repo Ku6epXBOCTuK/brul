@@ -32,6 +32,7 @@ pub enum Error {
     },
     MissingField(String),
     UnknownFunction(String),
+    UnknownWindow(String),
     Arity {
         name: String,
         expected: &'static str,
@@ -90,6 +91,7 @@ impl fmt::Display for Error {
             }
             Error::MissingField(name) => write!(f, "object has no field '{name}'"),
             Error::UnknownFunction(name) => write!(f, "function '{name}' is not defined"),
+            Error::UnknownWindow(name) => write!(f, "window '{name}' is not declared"),
             Error::Arity { name, expected } => {
                 write!(f, "function '{name}' expects {expected} argument")
             }
