@@ -1,11 +1,12 @@
 use std::fmt;
 
-use crate::style::ast::{Property, State, Stylesheet, Theme, Value};
+use crate::style::ast::{Animation, Property, State, Stylesheet, Theme, Value};
 use crate::style::properties::Kind;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Snapshot {
     properties: Vec<Property>,
+    animations: Vec<Animation>,
 }
 
 impl Snapshot {
@@ -18,6 +19,23 @@ impl Snapshot {
 
     pub fn properties(&self) -> &[Property] {
         &self.properties
+    }
+
+    pub fn animations(&self) -> &[Animation] {
+        &self.animations
+    }
+
+    fn merge_animations(&mut self, animations: &[Animation]) {
+        for animation in animations {
+            match self
+                .animations
+                .iter_mut()
+                .find(|existing| existing.property == animation.property)
+            {
+                Some(existing) => existing.duration = animation.duration,
+                None => self.animations.push(animation.clone()),
+            }
+        }
     }
 
     fn merge(
@@ -81,6 +99,7 @@ impl Stylesheet {
             for rule in self.rules.iter().filter(|rule| rule.class == *class) {
                 if rule.state.is_none() {
                     snapshot.merge(&rule.properties, theme)?;
+                    snapshot.merge_animations(&rule.animations);
                 }
             }
         }

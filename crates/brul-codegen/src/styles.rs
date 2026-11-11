@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, Padding, Paint, StyleSet, StyleState, TextStyle,
-    TextStyleSet, VerticalAlign, WidgetStyle,
+    TextStyleSet, Transitions, VerticalAlign, WidgetStyle,
 };
 use brul_syntax::style::{Kind, Property, Side, Snapshot, State, Stylesheet, Value};
 
@@ -17,7 +19,7 @@ pub fn resolve(
 ) -> Result<Resolved, String> {
     let base = snapshot(stylesheet, classes, None, theme)?;
     let (layout, base_style, base_text) = base_styles(&base)?;
-    let mut styles = StyleSet::new(base_style);
+    let mut styles = StyleSet::new(base_style).with_transitions(transitions(&base)?);
     let mut text = TextStyleSet::new(base_text.clone());
     for state in StyleState::ALL {
         let state_snapshot = snapshot(stylesheet, classes, Some(syntax_state(state)), theme)?;
@@ -72,6 +74,25 @@ fn state_styles(
         apply(property, &mut layout, &mut style, &mut text)?;
     }
     Ok((style, text))
+}
+
+fn transitions(snapshot: &Snapshot) -> Result<Transitions, String> {
+    let mut transitions = Transitions::default();
+    for animation in snapshot.animations() {
+        let field = match animation.property {
+            Kind::Background => &mut transitions.background,
+            Kind::BorderColor => &mut transitions.border,
+            Kind::Color => &mut transitions.text,
+            Kind::Tint => &mut transitions.tint,
+            Kind::Opacity => &mut transitions.opacity,
+            Kind::ShadowColor => &mut transitions.shadow,
+            kind => {
+                return Err(format!("property '{}' cannot be animated", kind.name()));
+            }
+        };
+        *field = Some(Duration::from_millis(animation.duration.round() as u64));
+    }
+    Ok(transitions)
 }
 
 fn apply(

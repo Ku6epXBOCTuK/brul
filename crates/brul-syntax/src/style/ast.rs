@@ -23,6 +23,7 @@ pub struct ClassRule {
     pub class: String,
     pub state: Option<State>,
     pub properties: Vec<Property>,
+    pub animations: Vec<Animation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +51,12 @@ impl State {
 pub struct Property {
     pub kind: Kind,
     pub value: Value,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Animation {
+    pub property: Kind,
+    pub duration: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]

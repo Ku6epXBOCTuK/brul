@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    ClassRule, Color, Kind, Property, SnapshotError, State, Stylesheet, Theme, ThemeEntry, Value,
-    parse_file,
+    Animation, ClassRule, Color, Kind, Property, SnapshotError, State, Stylesheet, Theme,
+    ThemeEntry, Value, parse_file,
 };
 
 fn gray(value: u8) -> Value {
@@ -108,6 +108,7 @@ fn unknown_theme_and_key_are_errors() {
                 kind: Kind::Color,
                 value: Value::ThemeRef("muted".to_string()),
             }],
+            animations: Vec::new(),
         }],
     };
     assert_eq!(
@@ -166,4 +167,27 @@ fn snapshot_errors_render_distinct_messages() {
     messages.sort();
     messages.dedup();
     assert_eq!(messages.len(), errors.len());
+}
+
+#[test]
+fn animations_merge_with_the_rightmost_class_winning() {
+    let sheet = parse_file(
+        ".a { animate color: 100ms; animate opacity: 50ms; }\n.b { animate color: 300ms; }",
+    )
+    .expect("sheet");
+    let snapshot = sheet.snapshot(&["a", "b"], None, None).expect("snapshot");
+
+    assert_eq!(
+        snapshot.animations().to_vec(),
+        vec![
+            Animation {
+                property: Kind::Color,
+                duration: 300.0,
+            },
+            Animation {
+                property: Kind::Opacity,
+                duration: 50.0,
+            },
+        ]
+    );
 }

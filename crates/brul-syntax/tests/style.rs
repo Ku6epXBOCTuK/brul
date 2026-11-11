@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    ClassRule, Color, Gradient, Kind, Property, State, Stylesheet, Theme, ThemeEntry, Value,
-    parse_file,
+    Animation, ClassRule, Color, Gradient, Kind, Property, State, Stylesheet, Theme, ThemeEntry,
+    Value, parse_file,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -15,6 +15,7 @@ fn rule(class: &str, properties: Vec<Property>) -> ClassRule {
         class: class.to_owned(),
         state: None,
         properties,
+        animations: Vec::new(),
     }
 }
 
@@ -23,6 +24,7 @@ fn state_rule(class: &str, state: State) -> ClassRule {
         class: class.to_owned(),
         state: Some(state),
         properties: Vec::new(),
+        animations: Vec::new(),
     }
 }
 
@@ -690,6 +692,57 @@ fn errors_point_at_the_source() {
             (error.line, error.column),
             (line, column),
             "{source}: unexpected position"
+        );
+    }
+}
+
+#[test]
+fn animations_parse_with_their_durations() {
+    let source =
+        ".a { background: #ffffff; animate background: 300ms; animate box-shadow-color: 150ms; }";
+    let parsed = parse_file(source).unwrap();
+    assert_eq!(
+        parsed.rules[0].animations,
+        vec![
+            Animation {
+                property: Kind::Background,
+                duration: 300.0,
+            },
+            Animation {
+                property: Kind::ShadowColor,
+                duration: 150.0,
+            },
+        ]
+    );
+}
+
+#[test]
+fn wrong_animations_are_rejected() {
+    let sources = [
+        (".a { animate widht: 300ms; }", "unknown property 'widht'"),
+        (
+            ".a { animate width: 300ms; }",
+            "property 'width' cannot be animated",
+        ),
+        (
+            ".a { animate background: 300px; }",
+            "expected ms for 'animate background'",
+        ),
+        (
+            ".a { animate background: 300s; }",
+            "expected ms for 'animate background'",
+        ),
+        (
+            ".a { } .a:hover { animate background: 300ms; }",
+            "animate cannot be used in a state",
+        ),
+    ];
+    for (source, message) in sources {
+        let error = parse_file(source).unwrap_err();
+        assert!(
+            error.message.contains(message),
+            "{source}: expected message containing {message}, got {}",
+            error.message
         );
     }
 }

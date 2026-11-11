@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use brul_codegen::styles::resolve;
 use brul_gui::{Align, Dimension, Gradient, Justify, Paint};
 
@@ -179,4 +181,16 @@ fn vertical_alignment_reaches_the_base_and_the_state() {
             .vertical_align,
         brul_gui::VerticalAlign::Center
     );
+}
+
+#[test]
+fn animations_become_transitions_on_the_style_set() {
+    let resolved =
+        resolved(".a { background: #000000; animate background: 300ms; animate opacity: 50ms; }");
+    let transitions = resolved.styles.transitions();
+
+    assert_eq!(transitions.background, Some(Duration::from_millis(300)));
+    assert_eq!(transitions.opacity, Some(Duration::from_millis(50)));
+    assert_eq!(transitions.border, None);
+    assert_eq!(transitions.shadow, None);
 }

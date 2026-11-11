@@ -122,6 +122,16 @@ fn px(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
     }
 }
 
+pub fn duration(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
+    let message = format!("expected ms for 'animate {name}'");
+    let value = number(cursor, &message)?;
+    if cursor.eat_unit("ms") {
+        Ok(value)
+    } else {
+        Err(Error::at(cursor.source(), cursor.pos(), message))
+    }
+}
+
 fn signed_px(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
     let negative = cursor.eat('-');
     let value = px(cursor, name)?;

@@ -9,6 +9,7 @@ pub struct PropertyAt {
 pub struct RuleAt {
     pub class_at: usize,
     pub properties: Vec<PropertyAt>,
+    pub animations: Vec<PropertyAt>,
 }
 
 pub struct ThemeKeyAt {
@@ -118,6 +119,13 @@ pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result
                     state.name(),
                     rule.class
                 ),
+            ));
+        }
+        if let Some(at) = position.animations.first() {
+            return Err(Error::at(
+                source,
+                at.at,
+                "animate cannot be used in a state",
             ));
         }
         for (property, at) in rule.properties.iter().zip(&position.properties) {

@@ -1,6 +1,6 @@
 use brul_gui::{
     Align, Color, Dimension, Gradient, Justify, LayoutStyle, Paint, Shadow, StyleSet, StyleState,
-    TextAlign, TextStyle, TextStyleSet, VerticalAlign, WidgetStyle,
+    TextAlign, TextStyle, TextStyleSet, Transitions, VerticalAlign, WidgetStyle,
 };
 
 pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
@@ -53,6 +53,7 @@ pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
 
 pub(super) fn style_set(set: StyleSet) -> Option<String> {
     let base = set.base();
+    let transitions = set.transitions();
     let mut states = Vec::new();
     for state in StyleState::ALL {
         let style = set.resolve(state.flags());
@@ -63,14 +64,50 @@ pub(super) fn style_set(set: StyleSet) -> Option<String> {
             ));
         }
     }
-    if base == WidgetStyle::default() && states.is_empty() {
+    if base == WidgetStyle::default() && states.is_empty() && transitions.is_empty() {
         return None;
     }
     let mut out = format!("brul_gui::StyleSet::new({})", widget_style(base));
+    if !transitions.is_empty() {
+        out.push_str(&format!(
+            ".with_transitions({})",
+            transitions_expr(transitions)
+        ));
+    }
     for state in states {
         out.push_str(&state);
     }
     Some(out)
+}
+
+fn transitions_expr(value: Transitions) -> String {
+    let fields = [
+        ("background", value.background),
+        ("border", value.border),
+        ("text", value.text),
+        ("tint", value.tint),
+        ("opacity", value.opacity),
+        ("shadow", value.shadow),
+    ];
+    let fields: Vec<String> = fields
+        .into_iter()
+        .filter_map(|(name, duration)| {
+            duration.map(|duration| {
+                format!(
+                    "{name}: Some(std::time::Duration::from_millis({}))",
+                    duration.as_millis()
+                )
+            })
+        })
+        .collect();
+    if fields.is_empty() {
+        "brul_gui::Transitions::default()".to_owned()
+    } else {
+        format!(
+            "brul_gui::Transitions {{ {}, ..brul_gui::Transitions::default() }}",
+            fields.join(", ")
+        )
+    }
 }
 
 fn widget_style(style: WidgetStyle) -> String {
@@ -267,8 +304,30 @@ fn color(value: Color) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{justify, widget_style};
-    use brul_gui::{Color, Justify, Shadow, WidgetStyle};
+    use std::time::Duration;
+
+    use super::{justify, style_set, widget_style};
+    use brul_gui::{Color, Justify, Shadow, StyleSet, Transitions, WidgetStyle};
+
+    #[test]
+    fn transitions_are_emitted_next_to_the_base_style() {
+        let set = StyleSet::new(WidgetStyle::default()).with_transitions(Transitions {
+            background: Some(Duration::from_millis(300)),
+            ..Transitions::default()
+        });
+
+        assert_eq!(
+            style_set(set).as_deref(),
+            Some(
+                "brul_gui::StyleSet::new(brul_gui::WidgetStyle::default()).with_transitions(brul_gui::Transitions { background: Some(std::time::Duration::from_millis(300)), ..brul_gui::Transitions::default() })"
+            )
+        );
+    }
+
+    #[test]
+    fn an_empty_style_set_stays_empty() {
+        assert_eq!(style_set(StyleSet::new(WidgetStyle::default())), None);
+    }
 
     #[test]
     fn shadow_is_emitted_only_when_it_differs_from_default() {

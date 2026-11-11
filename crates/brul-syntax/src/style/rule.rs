@@ -7,6 +7,8 @@ rule! {
         ClassRule,
         State,
         Prop,
+        Animation,
+        Duration,
         Value,
         Keyword,
         Bool,

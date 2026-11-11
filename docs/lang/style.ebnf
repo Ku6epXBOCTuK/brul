@@ -1,9 +1,11 @@
 Stylesheet  = { ThemeBlock | ClassRule } ;
 ThemeBlock  = "theme" Ident "{" { ThemeProp } "}" ;
 ThemeProp   = Ident ":" Value ";" ;
-ClassRule   = "." Ident [ ":" State ] "{" { Prop } "}" ;
+ClassRule   = "." Ident [ ":" State ] "{" { Prop | Animation } "}" ;
 State       = "hover" | "pressed" | "checked" | "selected" | "disabled" ;
 Prop        = Ident ":" Value { Value } ";" ;
+Animation   = "animate" Ident ":" Duration ";" ;
+Duration    = Number "ms" ;
 Value       = Number | Number "px" | Number "%" | Color | String
             | ThemeRef | Gradient | Bool | Keyword ;
 Keyword     = Ident ;

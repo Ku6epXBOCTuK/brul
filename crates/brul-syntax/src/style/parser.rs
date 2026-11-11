@@ -1,6 +1,6 @@
 use crate::cursor::Cursor;
 use crate::error::Error;
-use crate::style::ast::{ClassRule, Property, State, Stylesheet, Theme, ThemeEntry};
+use crate::style::ast::{Animation, ClassRule, Property, State, Stylesheet, Theme, ThemeEntry};
 use crate::style::properties::Kind;
 use crate::style::shorthand;
 use crate::style::validate::{self, PropertyAt, RuleAt, ThemeAt, ThemeKeyAt};
@@ -52,6 +52,8 @@ impl<'a> Parser<'a> {
         self.cursor.expect('{')?;
         let mut properties = Vec::new();
         let mut positions = Vec::new();
+        let mut animations = Vec::new();
+        let mut animation_positions = Vec::new();
         loop {
             self.cursor.skip_trivia();
             match self.cursor.peek() {
@@ -62,15 +64,23 @@ impl<'a> Parser<'a> {
                             class,
                             state,
                             properties,
+                            animations,
                         },
                         RuleAt {
                             class_at,
                             properties: positions,
+                            animations: animation_positions,
                         },
                     ));
                 }
                 None => return Err(self.cursor.error("expected '}'")),
                 _ => {
+                    let at = self.cursor.value_start();
+                    if self.cursor.eat_keyword("animate") {
+                        animations.push(self.animation()?);
+                        animation_positions.push(PropertyAt { at });
+                        continue;
+                    }
                     for (property, at) in self.property()? {
                         properties.push(property);
                         positions.push(at);
@@ -78,6 +88,29 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+    }
+
+    fn animation(&mut self) -> Result<Animation, Error> {
+        let at = self.cursor.value_start();
+        let name = self.cursor.ident()?;
+        let property = Kind::from_name(&name).ok_or_else(|| {
+            Error::at(
+                self.cursor.source(),
+                at,
+                format!("unknown property '{name}'"),
+            )
+        })?;
+        if !property.animatable() {
+            return Err(Error::at(
+                self.cursor.source(),
+                at,
+                format!("property '{name}' cannot be animated"),
+            ));
+        }
+        self.cursor.expect(':')?;
+        let duration = value::duration(&mut self.cursor, &name)?;
+        self.cursor.expect(';')?;
+        Ok(Animation { property, duration })
     }
 
     fn state(&mut self) -> Result<Option<State>, Error> {

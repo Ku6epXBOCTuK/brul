@@ -64,6 +64,18 @@ impl Kind {
     pub fn in_state(self) -> StatePolicy {
         self.spec().in_state
     }
+
+    pub fn animatable(self) -> bool {
+        matches!(
+            self,
+            Kind::Background
+                | Kind::BorderColor
+                | Kind::Color
+                | Kind::Tint
+                | Kind::Opacity
+                | Kind::ShadowColor
+        )
+    }
 }
 
 #[derive(Clone, Copy)]

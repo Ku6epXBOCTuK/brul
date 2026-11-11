@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Duration;
 
 use crate::Color;
 use crate::gradient::Paint;
@@ -122,9 +123,31 @@ impl StyleState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Transitions {
+    pub background: Option<Duration>,
+    pub border: Option<Duration>,
+    pub text: Option<Duration>,
+    pub tint: Option<Duration>,
+    pub opacity: Option<Duration>,
+    pub shadow: Option<Duration>,
+}
+
+impl Transitions {
+    pub fn is_empty(&self) -> bool {
+        self.background.is_none()
+            && self.border.is_none()
+            && self.text.is_none()
+            && self.tint.is_none()
+            && self.opacity.is_none()
+            && self.shadow.is_none()
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct StyleSet {
     base: WidgetStyle,
+    transitions: Transitions,
     hovered: Option<WidgetStyle>,
     pressed: Option<WidgetStyle>,
     checked: Option<WidgetStyle>,
@@ -140,6 +163,11 @@ impl StyleSet {
         }
     }
 
+    pub fn with_transitions(mut self, transitions: Transitions) -> Self {
+        self.transitions = transitions;
+        self
+    }
+
     pub fn with(mut self, state: StyleState, style: WidgetStyle) -> Self {
         match state {
             StyleState::Hovered => self.hovered = Some(style),
@@ -153,6 +181,10 @@ impl StyleSet {
 
     pub fn base(&self) -> WidgetStyle {
         self.base
+    }
+
+    pub fn transitions(&self) -> Transitions {
+        self.transitions
     }
 
     pub fn resolve(&self, state: WidgetState) -> WidgetStyle {
