@@ -71,6 +71,7 @@ pub(crate) struct TreeApp {
     frame: Option<Frame>,
     error: Rc<Cell<Option<WindowError>>>,
     pub(crate) timers: Vec<Timer>,
+    cursor: (i32, i32),
 }
 
 impl ApplicationHandler for TreeApp {
@@ -184,6 +185,7 @@ pub(crate) fn tree_app(
         frame: None,
         error,
         timers: Vec::new(),
+        cursor: (0, 0),
     };
     for command in initial {
         if let WindowCommand::Every { interval, function } = command {
@@ -200,6 +202,7 @@ impl TreeApp {
             Input::Left => self.leave_pointer(surface),
             Input::Down(x, y) => self.press_pointer(surface, x, y),
             Input::Up(x, y) => self.release_pointer(surface, x, y),
+            Input::Wheel(pixels) => self.wheel(surface, pixels),
             other => self.window_action(surface, other),
         }
     }
@@ -219,8 +222,21 @@ impl TreeApp {
 
     fn move_pointer(&mut self, surface: &dyn Surface, x: f64, y: f64) -> Step {
         let (x, y) = point(x, y);
+        self.cursor = (x, y);
         let events = self.tree.borrow_mut().pointer_moved(x, y);
         self.dispatch(surface, events)
+    }
+
+    fn wheel(&mut self, surface: &dyn Surface, pixels: f64) -> Step {
+        if !pixels.is_finite() {
+            return Step::Continue;
+        }
+        let (x, y) = self.cursor;
+        let dy = pixels.round() as i32;
+        if self.tree.borrow_mut().wheel(x, y, dy) {
+            surface.redraw();
+        }
+        Step::Continue
     }
 
     fn leave_pointer(&mut self, surface: &dyn Surface) -> Step {

@@ -1,4 +1,4 @@
-use winit::event::{ButtonSource, ElementState, MouseButton, WindowEvent};
+use winit::event::{ButtonSource, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::Theme;
 
@@ -12,10 +12,13 @@ pub(crate) enum Input {
     Left,
     Down(f64, f64),
     Up(f64, f64),
+    Wheel(f64),
     Theme(ColorScheme),
     Surface,
     Redraw,
 }
+
+const LINE_HEIGHT: f64 = 48.0;
 
 const NAMED: &[(NamedKey, &str)] = &[
     (NamedKey::Escape, "Escape"),
@@ -79,6 +82,11 @@ pub(crate) fn event_input(event: &WindowEvent) -> Option<Input> {
         }
         WindowEvent::PointerMoved { position, .. } => Some(Input::Moved(position.x, position.y)),
         WindowEvent::PointerLeft { .. } => Some(Input::Left),
+        WindowEvent::MouseWheel { delta, .. } => Some(Input::Wheel(match delta {
+            MouseScrollDelta::LineDelta(_, lines) => -f64::from(*lines) * LINE_HEIGHT,
+            MouseScrollDelta::PixelDelta(position) => -position.y,
+            _ => 0.0,
+        })),
         WindowEvent::PointerButton {
             state,
             position,

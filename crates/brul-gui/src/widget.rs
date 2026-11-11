@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use crate::Color;
 use crate::gradient::Paint;
 use crate::layout::{
-    self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, Size,
+    self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, ScrollOffset, Size,
 };
 use crate::rect::ClipRect;
 use crate::text::{TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
@@ -57,6 +57,7 @@ pub struct WidgetStyle {
     pub opacity: f32,
     pub vertical_align: VerticalAlign,
     pub clip: bool,
+    pub scroll: bool,
 }
 
 impl Default for WidgetStyle {
@@ -70,6 +71,7 @@ impl Default for WidgetStyle {
             opacity: 1.0,
             vertical_align: VerticalAlign::Top,
             clip: false,
+            scroll: false,
         }
     }
 }
@@ -504,6 +506,7 @@ struct Node {
     state: WidgetState,
     offset: Option<Offset>,
     draggable: bool,
+    scroll_offset: ScrollOffset,
     children: Vec<Slot>,
 }
 
@@ -664,6 +667,7 @@ impl WidgetTree {
             state,
             offset,
             draggable,
+            scroll_offset: ScrollOffset::ZERO,
             children: slots,
         };
         let slot = match self.free.pop() {
@@ -1045,6 +1049,37 @@ impl WidgetTree {
             .map(|slot| self.nodes[slot.index()].id))
     }
 
+    pub fn wheel(&mut self, x: i32, y: i32, dy: i32) -> bool {
+        if dy == 0 {
+            return false;
+        }
+        let Ok(path) = self.hit_path(x, y) else {
+            return false;
+        };
+        let target = path.iter().rev().copied().find(|slot| {
+            let node = &self.nodes[slot.index()];
+            matches!(node.data, NodeData::View { .. }) && node.styles.resolve(node.state).scroll
+        });
+        let Some(target) = target else {
+            return false;
+        };
+        let Some(geometry) = self.geometry.as_ref() else {
+            return false;
+        };
+        let Some(max) = max_scroll_offset(&self.nodes, target, &geometry.boxes) else {
+            return false;
+        };
+        let node = &mut self.nodes[target.index()];
+        let scroll_offset = node.scroll_offset.saturating_add(dy).clamp(0, max);
+        if scroll_offset == node.scroll_offset {
+            return false;
+        }
+        node.scroll_offset = scroll_offset;
+        self.stale.insert(target);
+        self.invalidate();
+        true
+    }
+
     pub fn pointer_moved(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {
         let path = self.active_path(&self.hit_path(x, y)?);
         let common = common_prefix(&self.hovered, &path);
@@ -1299,7 +1334,9 @@ impl Pass<'_> {
                 }
                 match direction {
                     Direction::Row => LayoutNode::row(children),
-                    Direction::Column => LayoutNode::column(children),
+                    Direction::Column => {
+                        LayoutNode::column(children).with_scroll(node.scroll_offset)
+                    }
                 }
             }
             NodeData::Text { content, styles } => {
@@ -1356,6 +1393,23 @@ impl Pass<'_> {
             None => layout_node,
         })
     }
+}
+
+fn max_scroll_offset(nodes: &[Node], slot: Slot, boxes: &[LayoutBox]) -> Option<i32> {
+    let node = &nodes[slot.index()];
+    let viewport = &boxes[slot.index()];
+    let bottom = node
+        .children
+        .iter()
+        .map(|&child| {
+            let placed = &boxes[child.index()];
+            i64::from(placed.y) + i64::from(placed.height)
+        })
+        .max()?;
+    let overflow = bottom + i64::from(node.scroll_offset.pixels())
+        - i64::from(viewport.y)
+        - i64::from(viewport.height);
+    i32::try_from(overflow.max(0)).ok()
 }
 
 fn flatten_boxes(boxed: &LayoutBox, order: &[Slot], cursor: &mut usize, boxes: &mut [LayoutBox]) {

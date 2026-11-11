@@ -194,6 +194,50 @@ fn hit_test_returns_deepest_widget() {
 }
 
 #[test]
+fn the_wheel_scrolls_the_nearest_scroll_container() {
+    fn list(scroll: bool) -> (WidgetTree, WidgetId, WidgetId) {
+        let first = Widget::text("one").with_layout(fixed(80, 60));
+        let first_id = first.id();
+        let rows = vec![
+            first,
+            Widget::text("two").with_layout(fixed(80, 60)),
+            Widget::text("three").with_layout(fixed(80, 60)),
+        ];
+        let list = Widget::column(rows)
+            .with_layout(fixed(80, 100))
+            .with_styles(StyleSet::new(WidgetStyle {
+                clip: true,
+                scroll,
+                ..WidgetStyle::default()
+            }));
+        let list_id = list.id();
+        (WidgetTree::new(list), list_id, first_id)
+    }
+
+    let (mut tree, _, first_id) = list(true);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 80,
+        height: 100,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    assert!(tree.wheel(10, 10, 50));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
+    assert_eq!(first.expect("first").y, -50);
+
+    assert!(tree.wheel(10, 10, 1_000));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
+    assert_eq!(first.expect("first").y, -80);
+    assert!(tree.wheel(10, 10, -40));
+
+    let (mut tree, _, _) = list(false);
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    assert!(!tree.wheel(10, 10, 50));
+}
+
+#[test]
 fn a_clipped_child_is_not_hit() {
     let child = Widget::column(Vec::new()).with_layout(fixed(32, 16));
     let child_id = child.id();

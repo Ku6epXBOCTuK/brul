@@ -75,7 +75,29 @@ pub struct Offset {
     pub y: i32,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ScrollOffset(i32);
+
+impl ScrollOffset {
+    pub const ZERO: Self = Self(0);
+
+    pub const fn new(pixels: i32) -> Self {
+        Self(pixels)
+    }
+
+    pub const fn pixels(self) -> i32 {
+        self.0
+    }
+
+    pub fn saturating_add(self, pixels: i32) -> Self {
+        Self(self.0.saturating_add(pixels))
+    }
+
+    pub fn clamp(self, min: i32, max: i32) -> Self {
+        Self(self.0.clamp(min, max))
+    }
+}
+
 pub enum LayoutNode {
     Leaf {
         style: LayoutStyle,
@@ -87,6 +109,7 @@ pub enum LayoutNode {
         direction: Direction,
         children: Vec<LayoutNode>,
         offset: Option<Offset>,
+        scroll_offset: ScrollOffset,
     },
 }
 
@@ -105,6 +128,7 @@ impl LayoutNode {
             direction: Direction::Row,
             children,
             offset: None,
+            scroll_offset: ScrollOffset::ZERO,
         }
     }
 
@@ -114,6 +138,7 @@ impl LayoutNode {
             direction: Direction::Column,
             children,
             offset: None,
+            scroll_offset: ScrollOffset::ZERO,
         }
     }
 
@@ -135,6 +160,17 @@ impl LayoutNode {
             | Self::Container {
                 offset: current, ..
             } => *current = offset,
+        }
+        self
+    }
+
+    pub fn with_scroll(mut self, scroll: ScrollOffset) -> Self {
+        if let Self::Container {
+            scroll_offset: current,
+            ..
+        } = &mut self
+        {
+            *current = scroll;
         }
         self
     }
@@ -324,6 +360,7 @@ fn arrange(
         style,
         direction,
         children,
+        scroll_offset,
         ..
     } = node
     else {
@@ -392,6 +429,15 @@ fn arrange(
                 clamp_i32(i64::from(origin_x) + i64::from(offset.x)),
                 clamp_i32(i64::from(origin_y) + i64::from(offset.y)),
             ));
+        } else if scroll_offset.pixels() != 0 {
+            let shift = i64::from(scroll_offset.pixels());
+            let Some((x, y)) = spots[index] else {
+                continue;
+            };
+            spots[index] = Some(match direction {
+                Direction::Row => (clamp_i32(i64::from(x) - shift), y),
+                Direction::Column => (x, clamp_i32(i64::from(y) - shift)),
+            });
         }
     }
 

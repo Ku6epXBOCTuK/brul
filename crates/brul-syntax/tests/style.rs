@@ -85,6 +85,15 @@ fn clip_takes_a_bool() {
 }
 
 #[test]
+fn scroll_takes_a_bool() {
+    let source = ".a { scroll: true; }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule("a", vec![property("scroll", Value::Bool(true))])])
+    );
+}
+
+#[test]
 fn properties_parse_with_values_and_order() {
     let source = r#".item {
         width: 100%;
@@ -491,6 +500,12 @@ fn errors_point_at_the_source() {
             "expected true or false for 'clip'",
             1,
             12,
+        ),
+        (
+            ".a { scroll: 1; }",
+            "expected true or false for 'scroll'",
+            1,
+            14,
         ),
         (
             ".a { font-weight: 650; }",

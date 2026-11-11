@@ -100,6 +100,7 @@ fn apply(
         Kind::Radius => style.radius = px_value(value, kind)?,
         Kind::Opacity => style.opacity = number(value, kind)? as f32,
         Kind::Clip => style.clip = flag(value, kind)?,
+        Kind::Scroll => style.scroll = flag(value, kind)?,
         Kind::FontSize => {
             text.font_size = px_value(value, kind)? as f32;
             text.line_height = text.font_size * 1.2;

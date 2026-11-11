@@ -31,6 +31,7 @@ pub enum Kind {
     FontWeight,
     Opacity,
     Clip,
+    Scroll,
 }
 
 impl Kind {
@@ -165,6 +166,7 @@ pub static SPECS: &[Spec] = &[
         Visual,
     ),
     Spec::new(Kind::Clip, "clip", Type::Bool, Visual),
+    Spec::new(Kind::Scroll, "scroll", Type::Bool, Forbidden),
 ];
 
 impl Spec {

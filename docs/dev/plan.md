@@ -19,7 +19,7 @@
 - [x] BRUL-238 — `Value::Image`, `prop … : Image`, загрузка PNG из пути с кэшем.
 - [x] BRUL-239 — `linear-gradient` в `background`: `Paint` вместо `Color`.
 - [x] BRUL-240 — `clip`: свойство стиля и обрезка в снапшоте.
-- [ ] BRUL-241 — колесо мыши → `BindingTarget::Offset` ближайшего контейнера.
+- [x] BRUL-241 — колесо мыши: `scroll: true` и сдвиг содержимого внутри `clip`.
 - [ ] BRUL-242 — `box-shadow`: снять из «Отложено» в `style.md`, отрисовка.
 - [ ] BRUL-243 — `animate <свойство>: <ms>` в классе, кадровый цикл.
 - [ ] BRUL-244 — мультиокно: несколько winit-окон, surface на окно, команды

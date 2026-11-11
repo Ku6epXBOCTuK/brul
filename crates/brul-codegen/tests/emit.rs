@@ -973,6 +973,17 @@ fn emits_clip_only_when_it_is_set() {
 }
 
 #[test]
+fn emits_scroll_only_when_it_is_set() {
+    let scrolling = "<style>\n.list { scroll: true; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (list) { }\n}\n</markup>\n";
+    let module = emit::module(scrolling).unwrap();
+    assert!(module.contains("scroll: true"), "{module}");
+
+    let plain = "<style>\n.list { radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (list) { }\n}\n</markup>\n";
+    let module = emit::module(plain).unwrap();
+    assert!(!module.contains("scroll:"), "{module}");
+}
+
+#[test]
 fn resource_without_a_file_path_is_rejected() {
     let source = "<use>\n    resource check from \"./check.png\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Image { check }\n}\n</markup>\n";
     let error = emit::module(source).unwrap_err();
