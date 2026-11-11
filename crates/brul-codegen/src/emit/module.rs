@@ -4,7 +4,7 @@ use std::path::Path;
 
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Element, Member};
+use brul_syntax::markup::{Element, Member, Window};
 
 use crate::Definition;
 use crate::error_at;
@@ -31,30 +31,39 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
     let parsed = crate::parse_source(source)?;
     let registry = crate::resolve(&parsed.uses, base)?;
     let names = names::table(&parsed, &registry.definitions);
-    let (config, window_handlers) = crate::arguments(&parsed.window)?;
-    let window_handlers = events::window(&window_handlers, parsed.program.as_ref())?;
-    let root = crate::root(&parsed.window)?;
     let mut functions = Vec::new();
     let mut next_structure = 0;
     let mut out = String::new();
     out.push_str("#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n");
-    view::view(
-        &mut out,
-        "view",
-        root,
-        &window_handlers,
-        &mut Emit {
-            registry: &registry,
-            imports: &registry.imports,
-            resources: &registry.resources,
-            resource_prefix: "",
-            stylesheet: &parsed.stylesheet,
-            names: &names,
-            program: parsed.program.as_ref(),
-            functions: &mut functions,
-            next_structure: &mut next_structure,
-        },
-    )?;
+
+    let mut configs = Vec::new();
+    for (index, window) in parsed.windows.iter().enumerate() {
+        let (config, window_handlers) = crate::arguments(window)?;
+        let window_handlers = events::window(&window_handlers, parsed.program.as_ref())?;
+        let root = crate::root(window)?;
+        if index > 0 {
+            out.push('\n');
+            out.push_str("#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n");
+        }
+        view::view(
+            &mut out,
+            &view_name(index),
+            root,
+            &window_handlers,
+            &mut Emit {
+                registry: &registry,
+                imports: &registry.imports,
+                resources: &registry.resources,
+                resource_prefix: "",
+                stylesheet: &parsed.stylesheet,
+                names: &names,
+                program: parsed.program.as_ref(),
+                functions: &mut functions,
+                next_structure: &mut next_structure,
+            },
+        )?;
+        configs.push(config);
+    }
     out.push_str(&resources::functions("", &registry.resources));
     for index in 0..registry.definitions.len() {
         let definition = &registry.definitions[index];
@@ -90,7 +99,11 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
         out.push_str(function);
     }
     out.push('\n');
-    window_config(&mut out, &config);
+    for (index, config) in configs.iter().enumerate() {
+        window_config(&mut out, index, config);
+    }
+    out.push('\n');
+    window_table(&mut out, &parsed.windows);
     out.push_str(&script::program("script", parsed.program.as_ref()));
     out.push_str(&names::output(&names));
     Ok(out)
@@ -124,18 +137,54 @@ fn definition_root(definition: &Definition) -> Result<&Element, Error> {
     Ok(root)
 }
 
-fn window_config(out: &mut String, config: &brul_window::WindowConfig) {
+fn view_name(index: usize) -> String {
+    match index {
+        0 => "view".to_owned(),
+        index => format!("view{index}"),
+    }
+}
+
+fn window_config(out: &mut String, index: usize, config: &brul_window::WindowConfig) {
+    let name = if index == 0 {
+        "window".to_owned()
+    } else {
+        format!("window{index}")
+    };
     let _ = write!(
         out,
-        "pub fn window() -> brul::WindowConfig {{
+        "pub fn {name}() -> brul::WindowConfig {{
     brul::WindowConfig {{
         title: {:?}.to_owned(),
         width: {},
         height: {},
+        frameless: {},
+        transparent: {},
         ..brul::WindowConfig::default()
     }}
 }}
 ",
-        config.title, config.width, config.height
+        config.title, config.width, config.height, config.frameless, config.transparent
     );
+}
+
+fn window_table(out: &mut String, windows: &[Window]) {
+    out.push_str("pub fn windows() -> Vec<brul::WindowDef> {\n    vec![\n");
+    for (index, window) in windows.iter().enumerate() {
+        let config = if index == 0 {
+            "window()".to_owned()
+        } else {
+            format!("window{index}()")
+        };
+        let view = if index == 0 {
+            "view".to_owned()
+        } else {
+            format!("view: {}", view_name(index))
+        };
+        let _ = writeln!(
+            out,
+            "        brul::WindowDef {{ name: {:?}, config: {config}, {view} }},",
+            window.name
+        );
+    }
+    out.push_str("    ]\n}\n");
 }

@@ -58,6 +58,16 @@ fn window_config_comes_from_the_markup() {
     assert_eq!(config.title, "bropicker");
     assert_eq!(config.width, 488);
     assert_eq!(config.height, 800);
+    assert!(config.frameless);
+    assert!(config.transparent);
+}
+
+#[test]
+fn the_window_table_lists_every_declared_window() {
+    let windows = generated::windows();
+    assert_eq!(windows.len(), 1);
+    assert_eq!(windows[0].name, "Picker");
+    assert_eq!(windows[0].config.title, "bropicker");
 }
 
 #[test]

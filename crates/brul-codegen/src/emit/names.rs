@@ -1,13 +1,15 @@
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind, TemplatePart};
-use brul_syntax::markup::{Arg, Block, BlockItem, Element, Member, Prop, Window};
+use brul_syntax::markup::{Arg, Block, BlockItem, Element, Member, Prop};
 use brul_syntax::script::{Function, Program, Statement};
 
 use crate::{Definition, Source};
 
 pub(super) fn table<'a>(source: &'a Source, definitions: &'a [Definition]) -> Names<'a> {
     let mut names = Names::new();
-    window(&source.window, &mut names);
+    for window in &source.windows {
+        members(&window.members, &mut names);
+    }
     if let Some(program) = &source.program {
         script(program, &mut names);
     }
@@ -28,10 +30,6 @@ pub(super) fn output(names: &Names<'_>) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     format!("\npub fn names() -> &'static [&'static str] {{\n    &[{names}]\n}}\n")
-}
-
-fn window<'a>(window: &'a Window, names: &mut Names<'a>) {
-    members(&window.members, names);
 }
 
 fn members<'a>(members: &'a [Member], names: &mut Names<'a>) {

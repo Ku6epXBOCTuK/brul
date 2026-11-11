@@ -6,6 +6,13 @@ use brul_window::{ColorScheme, run_tree_themed};
 use crate::{
     Built, Component, ComponentHandle, Host, Ui, Value, WindowConfig, execute_program, script,
 };
+
+pub struct WindowDef {
+    pub name: &'static str,
+    pub config: WindowConfig,
+    pub view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+}
+
 /// Запускает окно по модулю, сгенерированному из `.brul`.
 pub fn run_generated(
     config: WindowConfig,

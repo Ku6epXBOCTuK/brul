@@ -12,7 +12,11 @@ pub struct HandlerArg {
 }
 
 pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Error> {
-    let mut config = WindowConfig::default();
+    let mut config = WindowConfig {
+        frameless: false,
+        transparent: false,
+        ..WindowConfig::default()
+    };
     let mut handlers = Vec::new();
     for arg in &window.args {
         match arg {
@@ -35,8 +39,8 @@ fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Erro
         "title" => config.title = string(value, "title")?,
         "width" => config.width = size(value, "width")?,
         "height" => config.height = size(value, "height")?,
-        "frameless" => flag(value, "frameless")?,
-        "transparent" => flag(value, "transparent")?,
+        "frameless" => config.frameless = flag(value, "frameless")?,
+        "transparent" => config.transparent = flag(value, "transparent")?,
         _ => {
             return Err(error_at(
                 value.position,
@@ -91,10 +95,9 @@ fn size(value: &Expr, name: &str) -> Result<u32, Error> {
     }
 }
 
-fn flag(value: &Expr, name: &str) -> Result<(), Error> {
+fn flag(value: &Expr, name: &str) -> Result<bool, Error> {
     match &value.kind {
-        ExprKind::Bool(true) => Ok(()),
-        ExprKind::Bool(false) => Err(error_at(value.position, format!("window is always {name}"))),
+        ExprKind::Bool(flag) => Ok(*flag),
         _ => Err(error_at(
             value.position,
             format!("window argument '{name}' must be a bool"),
@@ -105,6 +108,39 @@ fn flag(value: &Expr, name: &str) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn window(args: Vec<Arg>) -> Window {
+        Window {
+            name: "Demo".to_owned(),
+            args,
+            members: Vec::new(),
+            position: Position::default(),
+        }
+    }
+
+    fn flag_arg(name: &str, value: bool) -> Arg {
+        Arg::Named {
+            name: name.to_owned(),
+            value: Expr::new(ExprKind::Bool(value), Position::default()),
+        }
+    }
+
+    #[test]
+    fn a_plain_window_is_decorated_and_opaque() {
+        let (config, _) = arguments(&window(Vec::new())).expect("arguments");
+
+        assert!(!config.frameless);
+        assert!(!config.transparent);
+    }
+
+    #[test]
+    fn explicit_false_flags_are_accepted() {
+        let args = vec![flag_arg("frameless", false), flag_arg("transparent", false)];
+        let (config, _) = arguments(&window(args)).expect("arguments");
+
+        assert!(!config.frameless);
+        assert!(!config.transparent);
+    }
 
     #[test]
     fn apply_rejects_an_unknown_argument() {

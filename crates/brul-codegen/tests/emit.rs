@@ -50,8 +50,16 @@ pub fn window() -> brul::WindowConfig {
         title: "demo".to_owned(),
         width: 960,
         height: 640,
+        frameless: false,
+        transparent: false,
         ..brul::WindowConfig::default()
     }
+}
+
+pub fn windows() -> Vec<brul::WindowDef> {
+    vec![
+        brul::WindowDef { name: "Demo", config: window(), view },
+    ]
 }
 
 pub fn script() -> Option<brul::script::Program> {
@@ -137,8 +145,16 @@ pub fn window() -> brul::WindowConfig {
         title: "styled".to_owned(),
         width: 960,
         height: 640,
+        frameless: false,
+        transparent: false,
         ..brul::WindowConfig::default()
     }
+}
+
+pub fn windows() -> Vec<brul::WindowDef> {
+    vec![
+        brul::WindowDef { name: "Styled", config: window(), view },
+    ]
 }
 
 pub fn script() -> Option<brul::script::Program> {
@@ -419,8 +435,48 @@ window Demo (title: "demo", width: 488, height: 800, frameless: true, transparen
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "pub fn window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        ..brul::WindowConfig::default()\n    }\n}"
+        "pub fn window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        ..brul::WindowConfig::default()\n    }\n}"
     ));
+}
+
+#[test]
+fn emits_every_window_with_its_flags() {
+    let source = r#"<markup>
+window Picker (title: "bropicker", width: 488, height: 800, frameless: true, transparent: true) {
+    View { }
+}
+
+window Settings (title: "settings", width: 760, height: 560, frameless: false) {
+    Text { "settings" }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+
+    assert!(module.contains("pub fn view1(theme: Option<&str>"));
+    assert!(module.contains(
+        "pub fn window1() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,"
+    ));
+    assert!(module.contains("name: \"Picker\", config: window(), view }"));
+    assert!(module.contains("name: \"Settings\", config: window1(), view: view1 }"));
+}
+
+#[test]
+fn rejects_two_windows_with_the_same_name() {
+    let source = r#"<markup>
+window Picker (title: "one") {
+    View { }
+}
+
+window Picker (title: "two") {
+    View { }
+}
+</markup>
+"#;
+    assert_eq!(
+        emit::module(source).expect_err("error").message,
+        "duplicate window 'Picker'"
+    );
 }
 
 #[test]

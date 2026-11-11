@@ -15,5 +15,5 @@ pub use brul_syntax::ast;
 pub use brul_syntax::markup::PropType;
 pub use brul_syntax::script;
 pub use brul_window::WindowConfig;
-pub use run::run_generated;
+pub use run::{WindowDef, run_generated};
 pub use ui::Ui;
