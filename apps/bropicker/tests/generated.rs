@@ -34,9 +34,25 @@ fn seeded() -> ComponentHandle {
         .declare(
             "browsers",
             Value::Array(vec![browser("first", true), browser("second", false)].into()),
-            true,
+            false,
         )
         .expect("browsers seed");
+    state
+        .declare(
+            "remembered",
+            Value::Array(
+                vec![Value::Object(
+                    vec![
+                        ("domain".to_owned(), Value::String("example.com".into())),
+                        ("browser".to_owned(), Value::String("first".into())),
+                    ]
+                    .into(),
+                )]
+                .into(),
+            ),
+            false,
+        )
+        .expect("remembered seed");
     state
         .declare("selected", Value::Number(0.0), true)
         .expect("selected seed");
@@ -65,9 +81,66 @@ fn window_config_comes_from_the_markup() {
 #[test]
 fn the_window_table_lists_every_declared_window() {
     let windows = generated::windows();
-    assert_eq!(windows.len(), 1);
+    assert_eq!(windows.len(), 2);
     assert_eq!(windows[0].name, "Picker");
     assert_eq!(windows[0].config.title, "bropicker");
+    assert!(windows[0].config.frameless);
+    assert_eq!(windows[1].name, "Settings");
+    assert_eq!(windows[1].config.title, "bropicker - settings");
+    assert_eq!(windows[1].config.width, 760);
+    assert_eq!(windows[1].config.height, 560);
+    assert!(!windows[1].config.frameless);
+}
+
+#[test]
+fn the_settings_window_has_two_lists_and_its_own_key_handler() {
+    let component = seeded();
+    let built = (generated::windows()[1].view)(None, &component).expect("settings view");
+
+    let key = built
+        .handlers
+        .iter()
+        .find(|handler| handler.event == HandlerEvent::Key)
+        .expect("key handler");
+    assert_eq!(key.function, "handleSettingsKey");
+    assert_eq!(
+        built
+            .structures
+            .iter()
+            .filter(|structure| structure.each)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn both_windows_read_the_same_browsers_signal() {
+    let component = seeded();
+    let windows = generated::windows();
+    let picker = (windows[0].view)(None, &component).expect("picker view");
+    let settings = (windows[1].view)(None, &component).expect("settings view");
+    let each = |built: &Built| {
+        built
+            .structures
+            .iter()
+            .find(|structure| structure.each)
+            .expect("each structure")
+            .clone()
+    };
+
+    let value = (each(&settings).value)(&mut component.borrow_mut()).expect("value");
+    assert!(matches!(value, Value::Array(items) if items.len() == 2));
+
+    component
+        .borrow_mut()
+        .assign(
+            "browsers",
+            Value::Array(vec![browser("first", true)].into()),
+        )
+        .expect("assign");
+
+    let value = (each(&picker).value)(&mut component.borrow_mut()).expect("value");
+    assert!(matches!(value, Value::Array(items) if items.len() == 1));
 }
 
 #[test]
@@ -102,7 +175,7 @@ fn view_builds_the_picker_layout() {
         1
     );
 
-    assert_eq!(handlers.len(), 5);
+    assert_eq!(handlers.len(), 6);
     let key = handlers
         .iter()
         .find(|handler| handler.event == HandlerEvent::Key)

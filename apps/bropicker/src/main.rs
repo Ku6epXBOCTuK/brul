@@ -1,47 +1,45 @@
+use std::cell::RefCell;
 use std::error::Error;
+use std::path::PathBuf;
+use std::rc::Rc;
 
 use bropicker::launcher::{Launcher, Runner};
-use bropicker::{BrowserEntry, Config, Settings, Theme, demo_browsers, generated};
+use bropicker::{
+    BrowserEntry, Config, Theme, default_path, demo_browsers, detect_browsers, generated,
+};
 use brul::{Host, Value};
 
 struct Session {
     url: String,
-    browsers: Vec<BrowserEntry>,
-    settings: Settings,
+    config: Rc<RefCell<Config>>,
     theme: Option<&'static str>,
 }
 
 impl Session {
     fn seeds(&self) -> Vec<(&'static str, Value)> {
-        let selected = self
+        let config = self.config.borrow();
+        let selected = config
             .browsers
             .iter()
             .position(|browser| browser.is_default)
             .unwrap_or(0);
         vec![
             ("url", Value::String(self.url.clone().into())),
-            (
-                "browsers",
-                Value::Array(
-                    self.browsers
-                        .iter()
-                        .map(entry_value)
-                        .collect::<Vec<_>>()
-                        .into(),
-                ),
-            ),
+            ("browsers", browsers_value(&config)),
+            ("remembered", remembered_value(&config)),
             ("selected", Value::Number(selected as f64)),
-            ("remember", Value::Bool(self.settings.remember_choice)),
-            ("alwaysAsk", Value::Bool(self.settings.always_ask)),
+            ("remember", Value::Bool(config.settings.remember_choice)),
+            ("alwaysAsk", Value::Bool(config.settings.always_ask)),
         ]
     }
 
     fn run<R: Runner + 'static>(self, launcher: Launcher<R>) -> Result<(), Box<dyn Error>> {
         let seeds = self.seeds();
         let host = LauncherHost {
-            browsers: self.browsers,
+            config: Rc::clone(&self.config),
             url: self.url,
             launcher,
+            path: Some(default_path()),
         };
         brul::run_generated(
             generated::windows(),
@@ -54,35 +52,40 @@ impl Session {
     }
 }
 
-fn session(url: Option<String>, config: Config) -> Session {
-    let browsers = if config.browsers.is_empty() {
-        demo_browsers()
-    } else {
-        config.browsers.clone()
+fn session(url: Option<String>, mut config: Config) -> Session {
+    if config.browsers.is_empty() {
+        config.browsers = demo_browsers();
+    }
+    let theme = match config.theme {
+        Theme::Light => Some("light"),
+        Theme::Dark => Some("dark"),
+        Theme::System => None,
     };
     Session {
         url: url.unwrap_or_else(|| "https://github.com/".to_string()),
-        browsers,
-        settings: config.settings,
-        theme: match config.theme {
-            Theme::Light => Some("light"),
-            Theme::Dark => Some("dark"),
-            Theme::System => None,
-        },
+        config: Rc::new(RefCell::new(config)),
+        theme,
     }
 }
 
 struct LauncherHost<R> {
-    browsers: Vec<BrowserEntry>,
+    config: Rc<RefCell<Config>>,
     url: String,
     launcher: Launcher<R>,
+    path: Option<PathBuf>,
 }
 
-impl<R: Runner> Host for LauncherHost<R> {
-    fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, brul::Error> {
-        if name != "launchBrowser" {
-            return Err(brul::Error::UnknownFunction(name.to_owned()));
+impl<R: Runner> LauncherHost<R> {
+    fn save(&self) {
+        let Some(path) = &self.path else {
+            return;
+        };
+        if let Err(error) = self.config.borrow().save(path) {
+            eprintln!("settings: {error}");
         }
+    }
+
+    fn launch(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
         let index = match arguments {
             [Value::Number(index)] if index.fract() == 0.0 && *index >= 0.0 => *index as usize,
             [value] => {
@@ -94,20 +97,111 @@ impl<R: Runner> Host for LauncherHost<R> {
             }
             _ => {
                 return Err(brul::Error::Arity {
-                    name: name.to_owned(),
+                    name: "launchBrowser".to_owned(),
                     expected: "one",
                 });
             }
         };
-        let Some(browser) = self.browsers.get(index) else {
+        let browser = self.config.borrow().browsers.get(index).cloned();
+        let Some(browser) = browser else {
             eprintln!("launch: browser {index} is not configured");
             return Ok(Value::Null);
         };
-        if let Err(error) = self.launcher.launch(browser, &self.url) {
+        if let Err(error) = self.launcher.launch(&browser, &self.url) {
             eprintln!("launch: {error}");
         }
         Ok(Value::Null)
     }
+
+    fn remove_browser(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
+        let name = text(arguments, "removeBrowser")?;
+        self.config
+            .borrow_mut()
+            .browsers
+            .retain(|browser| browser.name != name);
+        self.save();
+        Ok(browsers_value(&self.config.borrow()))
+    }
+
+    fn remove_remembered(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
+        let domain = text(arguments, "removeRemembered")?;
+        self.config.borrow_mut().remembered.remove(domain);
+        self.save();
+        Ok(remembered_value(&self.config.borrow()))
+    }
+
+    fn detect(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
+        if !arguments.is_empty() {
+            return Err(brul::Error::Arity {
+                name: "detectBrowsers".to_owned(),
+                expected: "no",
+            });
+        }
+        self.config.borrow_mut().add_detected(detect_browsers());
+        self.save();
+        Ok(browsers_value(&self.config.borrow()))
+    }
+}
+
+impl<R: Runner> Host for LauncherHost<R> {
+    fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, brul::Error> {
+        match name {
+            "launchBrowser" => self.launch(arguments),
+            "removeBrowser" => self.remove_browser(arguments),
+            "removeRemembered" => self.remove_remembered(arguments),
+            "detectBrowsers" => self.detect(arguments),
+            _ => Err(brul::Error::UnknownFunction(name.to_owned())),
+        }
+    }
+}
+
+fn text<'a>(arguments: &'a [Value], name: &'static str) -> Result<&'a str, brul::Error> {
+    match arguments {
+        [Value::String(value)] => Ok(value),
+        [value] => Err(brul::Error::Argument {
+            name,
+            expected: "String",
+            found: value.type_name(),
+        }),
+        _ => Err(brul::Error::Arity {
+            name: name.to_owned(),
+            expected: "one",
+        }),
+    }
+}
+
+fn browsers_value(config: &Config) -> Value {
+    Value::Array(
+        config
+            .browsers
+            .iter()
+            .map(entry_value)
+            .collect::<Vec<_>>()
+            .into(),
+    )
+}
+
+fn remembered_value(config: &Config) -> Value {
+    let mut entries: Vec<(&String, &String)> = config.remembered.iter().collect();
+    entries.sort_by(|left, right| left.0.cmp(right.0));
+    Value::Array(
+        entries
+            .into_iter()
+            .map(|(domain, browser)| {
+                Value::Object(
+                    vec![
+                        ("domain".to_string(), Value::String(domain.as_str().into())),
+                        (
+                            "browser".to_string(),
+                            Value::String(browser.as_str().into()),
+                        ),
+                    ]
+                    .into(),
+                )
+            })
+            .collect::<Vec<_>>()
+            .into(),
+    )
 }
 
 fn main() {
@@ -187,13 +281,18 @@ mod tests {
             commands: Rc::clone(&commands),
             outcome,
         };
-        let host = LauncherHost {
+        let config = Config {
             browsers: vec![
                 browser("Firefox", "firefox", true),
                 browser("Chrome", "chrome", false),
             ],
+            ..Config::default()
+        };
+        let host = LauncherHost {
+            config: Rc::new(RefCell::new(config)),
             url: "https://example.com/".to_string(),
             launcher: Launcher::with_runner(runner),
+            path: None,
         };
         (host, commands)
     }
@@ -206,8 +305,58 @@ mod tests {
     fn an_unknown_command_is_rejected() {
         let (mut host, _) = host(Ok(()));
         assert!(matches!(
-            host.call("closeWindow", &[]),
-            Err(brul::Error::UnknownFunction(name)) if name == "closeWindow"
+            host.call("theme", &[]),
+            Err(brul::Error::UnknownFunction(name)) if name == "theme"
+        ));
+    }
+
+    #[test]
+    fn removing_a_browser_updates_the_config_and_the_list() {
+        let (mut host, _) = host(Ok(()));
+
+        let value = host
+            .call("removeBrowser", &[Value::String("Chrome".into())])
+            .expect("removed");
+        let Value::Array(items) = value else {
+            panic!("the list is an array");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(host.config.borrow().browsers.len(), 1);
+    }
+
+    #[test]
+    fn removing_an_unknown_browser_changes_nothing() {
+        let (mut host, _) = host(Ok(()));
+
+        let value = host
+            .call("removeBrowser", &[Value::String("Netscape".into())])
+            .expect("removed");
+        assert!(matches!(value, Value::Array(items) if items.len() == 2));
+        assert_eq!(host.config.borrow().browsers.len(), 2);
+    }
+
+    #[test]
+    fn a_remembered_domain_can_be_removed() {
+        let (mut host, _) = host(Ok(()));
+        host.config
+            .borrow_mut()
+            .remembered
+            .insert("example.com".to_string(), "Chrome".to_string());
+
+        let value = host
+            .call("removeRemembered", &[Value::String("example.com".into())])
+            .expect("removed");
+
+        assert!(matches!(value, Value::Array(items) if items.is_empty()));
+        assert!(host.config.borrow().remembered.is_empty());
+    }
+
+    #[test]
+    fn detection_takes_no_arguments() {
+        let (mut host, _) = host(Ok(()));
+        assert!(matches!(
+            host.call("detectBrowsers", &[Value::Number(1.0)]),
+            Err(brul::Error::Arity { expected: "no", .. })
         ));
     }
 
@@ -286,7 +435,10 @@ mod tests {
     fn session_falls_back_to_the_demo_browsers() {
         let config = Config::default();
         let session = session(None, config);
-        assert_eq!(session.browsers.len(), demo_browsers().len());
+        assert_eq!(
+            session.config.borrow().browsers.len(),
+            demo_browsers().len()
+        );
         assert_eq!(session.url, "https://github.com/");
     }
 
@@ -297,7 +449,7 @@ mod tests {
             ..Config::default()
         };
         let session = session(Some("https://example.com/".to_string()), config);
-        assert_eq!(session.browsers.len(), 1);
+        assert_eq!(session.config.borrow().browsers.len(), 1);
         assert_eq!(session.url, "https://example.com/");
     }
 
@@ -324,10 +476,14 @@ mod tests {
                 browser("Firefox", "firefox", false),
                 browser("Chrome", "chrome", true),
             ],
-            settings: Settings {
+            settings: bropicker::Settings {
                 remember_choice: false,
                 always_ask: false,
             },
+            remembered: std::collections::HashMap::from([(
+                "example.com".to_string(),
+                "Chrome".to_string(),
+            )]),
             ..Config::default()
         };
         let seeds = session(None, config).seeds();
@@ -342,6 +498,10 @@ mod tests {
         assert!(matches!(get("remember"), Value::Bool(false)));
         assert!(matches!(get("alwaysAsk"), Value::Bool(false)));
         assert!(matches!(get("browsers"), Value::Array(browsers) if browsers.len() == 2));
+        let remembered = get("remembered");
+        assert!(
+            matches!(remembered, Value::Array(items) if items.iter().any(|item| matches!(item, Value::Object(fields) if fields.iter().any(|(key, value)| key == "domain" && matches!(value, Value::String(domain) if &**domain == "example.com")))))
+        );
     }
 
     fn icon_of(value: &Value) -> String {

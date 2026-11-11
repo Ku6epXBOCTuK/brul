@@ -66,7 +66,7 @@ pub(crate) fn generated_component(
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
     component.borrow_mut().set_names(names);
     for (name, value) in seeds {
-        component.borrow_mut().declare(name, value.clone(), true)?;
+        component.borrow_mut().declare(name, value.clone(), false)?;
     }
     if let Some(program) = script {
         execute_program(&mut component.borrow_mut(), program)?;
@@ -201,7 +201,7 @@ impl Runtime {
         };
         let commands = ui.dispatch(events);
         brul_reactive::flush();
-        if let Some(ui) = self.uis.get_mut(&key) {
+        for ui in self.uis.values_mut() {
             ui.settle();
         }
         self.absorb(commands)
@@ -223,11 +223,11 @@ pub(crate) fn scheme_theme(fixed: Option<&str>, scheme: ColorScheme) -> &str {
 mod tests {
     use super::*;
 
-    use brul_gui::{Widget, WidgetId};
+    use brul_gui::{Widget, WidgetEvent, WidgetId};
     use brul_syntax::ast::{Expr, ExprKind, Position};
 
     use crate::ui::Ui;
-    use crate::{Binding, BindingTarget, Built, ComponentHandle, Value};
+    use crate::{Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, Value};
 
     const NAMES: &[&str] = &["name"];
 
@@ -364,6 +364,91 @@ mod tests {
             .expect("first window");
         runtime.close(WindowKey(0));
         assert!(runtime.uis.is_empty());
+    }
+
+    fn key_view(component: &ComponentHandle, function: &str) -> Result<Built, String> {
+        let widget = Widget::text("");
+        Ok(Built {
+            widget,
+            bindings: Vec::new(),
+            handlers: vec![Handler::new(component, None, HandlerEvent::Key, function)],
+            structures: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    fn picker_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+        key_view(component, "handleKey")
+    }
+
+    fn settings_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+        key_view(component, "handleSettingsKey")
+    }
+
+    fn exit_program() -> script::Program {
+        let exit = script::Statement::Expr(Expr::new(
+            ExprKind::Call {
+                target: Box::new(Expr::new(
+                    ExprKind::Ident("exit".to_owned()),
+                    Position::default(),
+                )),
+                args: Vec::new(),
+            },
+            Position::default(),
+        ));
+        script::Program {
+            functions: ["handleKey", "handleSettingsKey"]
+                .into_iter()
+                .map(|name| script::Function {
+                    name: name.to_owned(),
+                    params: vec!["ev".to_owned()],
+                    body: vec![exit.clone()],
+                })
+                .collect(),
+            statements: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_key_closes_only_the_window_that_received_it() {
+        let names: &'static [&'static str] =
+            &["handleKey", "handleSettingsKey", "exit", "ev", "code"];
+        let program = exit_program();
+        let component = generated_component(names, Some(&program), &[]).expect("component");
+        let commands = Rc::new(RefCell::new(Vec::new()));
+        let keys = HashMap::from([
+            ("Picker".to_owned(), WindowKey(0)),
+            ("Settings".to_owned(), WindowKey(1)),
+        ]);
+        component.borrow_mut().set_host(CommandHost {
+            commands: Rc::clone(&commands),
+            app: None,
+            windows: Rc::new(keys),
+        });
+        let defs = vec![
+            WindowDef {
+                name: "Picker",
+                config: WindowConfig::default(),
+                view: picker_view,
+            },
+            WindowDef {
+                name: "Settings",
+                config: WindowConfig::default(),
+                view: settings_view,
+            },
+        ];
+        let mut runtime = Runtime::new(defs, component, commands, None, Vec::new());
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("picker");
+        runtime
+            .create(WindowKey(1), ColorScheme::Dark)
+            .expect("settings");
+
+        let commands = runtime.dispatch(WindowKey(1), &[WidgetEvent::Key("Escape".to_owned())]);
+
+        assert_eq!(commands, vec![WindowCommand::Close]);
+        assert!(runtime.uis.contains_key(&WindowKey(0)));
     }
 
     #[test]

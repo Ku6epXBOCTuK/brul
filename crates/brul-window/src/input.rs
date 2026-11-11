@@ -73,7 +73,11 @@ pub(crate) fn window_input(event: &WindowEvent) -> Option<Input> {
 
 pub(crate) fn event_input(event: &WindowEvent) -> Option<Input> {
     match event {
-        WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
+        WindowEvent::KeyboardInput {
+            event,
+            is_synthetic: false,
+            ..
+        } if event.state == ElementState::Pressed => {
             let code = key_code(&event.logical_key)?;
             Some(Input::Key(code))
         }
@@ -222,6 +226,22 @@ mod tests {
         );
         assert_eq!(window_input(&WindowEvent::Occluded(true)), None);
         assert_eq!(window_input(&WindowEvent::Focused(true)), None);
+    }
+
+    #[test]
+    fn a_synthetic_key_press_is_ignored() {
+        let WindowEvent::KeyboardInput { event, .. } =
+            key_event(Key::Character("a".into()), ElementState::Pressed)
+        else {
+            panic!("a keyboard event");
+        };
+        let synthetic = WindowEvent::KeyboardInput {
+            device_id: None,
+            event,
+            is_synthetic: true,
+        };
+
+        assert_eq!(event_input(&synthetic), None);
     }
 
     #[test]

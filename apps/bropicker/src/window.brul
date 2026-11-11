@@ -21,11 +21,34 @@
             exit();
         }
     }
+
+    function handleSettingsKey(ev) {
+        if (ev.code == "Escape") {
+            exit();
+        }
+    }
+
+    function openSettings() {
+        openWindow("Settings");
+    }
+
+    function removeBrowserRow(name) {
+        browsers = removeBrowser(name);
+    }
+
+    function removeRememberedRow(domain) {
+        remembered = removeRemembered(domain);
+    }
+
+    function redetect() {
+        browsers = detectBrowsers();
+    }
 </script>
 
 <use>
     import BrowserItem from "./browser_item.brul";
     import CheckRow from "./check_row.brul";
+    import SettingsRow from "./settings_row.brul";
 </use>
 
 <markup>
@@ -55,6 +78,43 @@
                         on toggled: toggleRemember) { }
                 CheckRow (label: "Always ask", checked: alwaysAskChoice,
                         on toggled: toggleAlwaysAsk) { }
+                Text (settings-button, on click: openSettings) { "Settings" }
+            }
+        }
+    }
+
+    window Settings (
+        title: "bropicker - settings",
+        width: 760,
+        height: 560,
+        on key: handleSettingsKey
+    ) {
+        Column (settings-root) {
+            Text (settings-title) { "Settings" }
+            Row (settings-columns) {
+                Column (settings-panel) {
+                    Row (settings-head) {
+                        Text (muted) { "Browsers" }
+                        Text (settings-action, on click: redetect) { "Autodetect" }
+                    }
+                    Column (settings-list) {
+                        each (browsers as browser, index (browser.name)) {
+                            SettingsRow (name: browser.name, detail: browser.path,
+                                        on removed: removeBrowserRow) { }
+                        }
+                    }
+                }
+                Column (settings-panel) {
+                    Row (settings-head) {
+                        Text (muted) { "Saved domains" }
+                    }
+                    Column (settings-list) {
+                        each (remembered as record, index (record.domain)) {
+                            SettingsRow (name: record.domain, detail: record.browser,
+                                        on removed: removeRememberedRow) { }
+                        }
+                    }
+                }
             }
         }
     }
@@ -106,5 +166,44 @@
         align-items: center;
         background: theme.surface;
         radius: 12px;
+    }
+    .settings-button {
+        color: theme.muted;
+        font-size: 12px;
+        padding: 6px;
+        radius: 8px;
+    }
+    .settings-button:hover { color: theme.text; }
+    .settings-root {
+        width: 100%;
+        height: 100%;
+        padding: 20px;
+        spacing: 14px;
+        background: theme.background;
+    }
+    .settings-title { color: theme.text; font-size: 20px; font-weight: 600; }
+    .settings-columns { width: 100%; stretch: 1; spacing: 14px; }
+    .settings-panel { stretch: 1; spacing: 8px; }
+    .settings-head {
+        width: 100%;
+        height: 26px;
+        spacing: 8px;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .settings-action {
+        color: theme.muted;
+        font-size: 12px;
+        padding: 4px 10px;
+        background: theme.surface;
+        radius: 8px;
+    }
+    .settings-action:hover { color: theme.text; }
+    .settings-list {
+        width: 100%;
+        stretch: 1;
+        spacing: 6px;
+        clip: true;
+        scroll: true;
     }
 </style>

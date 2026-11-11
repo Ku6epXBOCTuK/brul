@@ -79,6 +79,41 @@ pub fn demo_browsers() -> Vec<BrowserEntry> {
     .collect()
 }
 
+const CANDIDATES: &[(&str, &str)] = &[
+    ("Firefox", "firefox.exe"),
+    ("Chrome", "chrome.exe"),
+    ("Edge", "msedge.exe"),
+    ("Brave", "brave.exe"),
+    ("Opera", "opera.exe"),
+    ("Vivaldi", "vivaldi.exe"),
+];
+
+pub fn detect_browsers() -> Vec<BrowserEntry> {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    detect_in(&path, |path| path.exists())
+}
+
+fn detect_in(path: &std::ffi::OsStr, exists: impl Fn(&Path) -> bool) -> Vec<BrowserEntry> {
+    let directories: Vec<PathBuf> = std::env::split_paths(path).collect();
+    CANDIDATES
+        .iter()
+        .filter_map(|(name, exe)| {
+            let path = directories
+                .iter()
+                .map(|directory| directory.join(exe))
+                .find(|path| exists(path))?;
+            Some(BrowserEntry {
+                name: (*name).to_string(),
+                path: path.display().to_string(),
+                flags: String::new(),
+                icon: String::new(),
+                emoji: String::new(),
+                is_default: false,
+            })
+        })
+        .collect()
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct Settings {
@@ -177,6 +212,20 @@ impl Config {
         Self::load_or_default(&default_path())
     }
 
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), ConfigError> {
+        let path = path.as_ref();
+        let source = toml::to_string_pretty(self)
+            .map_err(|error| ConfigError::Invalid(error.to_string()))?;
+        std::fs::write(path, source).map_err(|error| ConfigError::Read {
+            path: path.to_path_buf(),
+            message: error.to_string(),
+        })
+    }
+
+    pub fn save_default(&self) -> Result<(), ConfigError> {
+        self.save(default_path())
+    }
+
     fn load_or_default(path: &Path) -> Result<Self, ConfigError> {
         match std::fs::read_to_string(path) {
             Ok(source) => Self::parse_at(&source, Some(path)),
@@ -194,6 +243,19 @@ impl Config {
 
     pub fn default_browser(&self) -> Option<&BrowserEntry> {
         self.browsers.iter().find(|browser| browser.is_default)
+    }
+
+    pub fn add_detected(&mut self, detected: Vec<BrowserEntry>) {
+        for entry in detected {
+            if self
+                .browsers
+                .iter()
+                .any(|browser| browser.path.eq_ignore_ascii_case(&entry.path))
+            {
+                continue;
+            }
+            self.browsers.push(entry);
+        }
     }
 
     pub fn resolve<'a>(&'a self, url: &str) -> Option<Resolution<'a>> {
@@ -359,6 +421,80 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert_eq!(config.theme, Theme::Light);
+    }
+
+    #[test]
+    fn a_saved_config_loads_back() {
+        let path = temp_file("saved");
+        let config = Config {
+            theme: Theme::Dark,
+            browsers: vec![BrowserEntry {
+                name: "Firefox".to_string(),
+                path: "firefox".to_string(),
+                flags: String::new(),
+                icon: String::new(),
+                emoji: String::new(),
+                is_default: true,
+            }],
+            remembered: HashMap::from([("example.com".to_string(), "Firefox".to_string())]),
+            ..Config::default()
+        };
+
+        config.save(&path).expect("save config");
+        let loaded = Config::load(&path).expect("load config");
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(loaded, config);
+    }
+
+    #[test]
+    fn detection_finds_a_candidate_on_the_path() {
+        let directories = std::env::join_paths([PathBuf::from("C:/one"), PathBuf::from("C:/two")])
+            .expect("path list");
+        let wanted = PathBuf::from("C:/two").join("chrome.exe");
+
+        let found = detect_in(&directories, |path| path == wanted);
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "Chrome");
+        assert_eq!(found[0].path, wanted.display().to_string());
+    }
+
+    #[test]
+    fn detection_skips_candidates_that_are_not_installed() {
+        let directories = std::env::join_paths([PathBuf::from("C:/empty")]).expect("path list");
+        assert!(detect_in(&directories, |_| false).is_empty());
+    }
+
+    #[test]
+    fn detected_browsers_are_added_once_by_path() {
+        let mut config = Config {
+            browsers: vec![BrowserEntry {
+                name: "Firefox".to_string(),
+                path: "C:/Firefox/firefox.exe".to_string(),
+                flags: String::new(),
+                icon: String::new(),
+                emoji: String::new(),
+                is_default: false,
+            }],
+            ..Config::default()
+        };
+        let detected = ["C:/firefox/FIREFOX.EXE", "C:/Chrome/chrome.exe"]
+            .into_iter()
+            .map(|path| BrowserEntry {
+                name: "Detected".to_string(),
+                path: path.to_string(),
+                flags: String::new(),
+                icon: String::new(),
+                emoji: String::new(),
+                is_default: false,
+            })
+            .collect();
+
+        config.add_detected(detected);
+
+        assert_eq!(config.browsers.len(), 2);
+        assert_eq!(config.browsers[1].path, "C:/Chrome/chrome.exe");
     }
 
     #[test]

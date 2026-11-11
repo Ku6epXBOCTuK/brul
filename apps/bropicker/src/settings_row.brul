@@ -1,0 +1,50 @@
+<script>
+    function remove() {
+        removed(name);
+    }
+</script>
+
+<markup>
+    component SettingsRow {
+        prop name: String = "";
+        prop detail: String = "";
+        event removed(value: String);
+
+        Row (row) {
+            Column (details) {
+                Text (name) { name }
+                Text (detail-text) { detail }
+            }
+            Text (remove, on click: remove) { "Remove" }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        surface: #1c2028;
+        text: #f0f3f8;
+        muted: #98a2b3;
+        danger: #f87171;
+    }
+    theme light {
+        surface: #ffffff;
+        text: #171c24;
+        muted: #647080;
+        danger: #dc2626;
+    }
+    .row {
+        width: 100%;
+        height: 52px;
+        padding-left: 12px;
+        padding-right: 10px;
+        spacing: 12px;
+        align-items: center;
+        background: theme.surface;
+        radius: 10px;
+    }
+    .details { stretch: 1; spacing: 2px; }
+    .name { color: theme.text; font-size: 14px; font-weight: 600; }
+    .detail-text { color: theme.muted; font-size: 11px; }
+    .remove { color: theme.danger; font-size: 12px; padding: 6px; }
+</style>
