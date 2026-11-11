@@ -43,29 +43,35 @@ memo из одного сигнала и общий join, `many_subscribers` —
 
 | Сценарий                  |   Время |
 | ------------------------- | ------: |
-| read/property_string      |  111 ns |
-| read/property_string_id   | 94.1 ns |
-| read/property_scalar      | 36.0 ns |
-| read/property_scalar_id   | 23.6 ns |
-| read/variable_in_frame    | 23.6 ns |
-| read/variable_in_frame_id | 14.7 ns |
-| binding/props_read        | 1.19 µs |
-| binding/props_read_id     | 1.09 µs |
-| binding/frame_only        |  777 ns |
+| read/property_string      |  114 ns |
+| read/property_string_id   | 97.5 ns |
+| read/property_scalar      | 35.2 ns |
+| read/property_scalar_id   | 20.9 ns |
+| read/variable_in_frame    | 24.6 ns |
+| read/variable_in_frame_id | 14.9 ns |
+| binding/props_read        |  382 ns |
+| binding/props_read_id     |  328 ns |
+| binding/frame_only        | 12.2 ns |
 
 `read/property_string` и `read/property_scalar` — чтение пропса без переменной в
 окружении, `read/variable_in_frame` — переменная в кадре биндинга,
 `binding/props_read` — кадр из двух переменных и три чтения пропсов внутри него,
 `binding/frame_only` — только кадр, контроль шума. Строки `_id` читают по
 `VariableId` — так делает сгенерированный код; строки без суффикса идут через
-имя и платят за поиск в таблице имён. До BRUL-222 чтение пропса стоило 203 ns и
-103 ns: промах в окружении собирал `Error::Undefined` с копией имени. До
-BRUL-227 эти же сценарии стоили 105 ns, 28.9 ns, 17.2 ns, 1.25 µs и 892 ns, но
-искали переменную сравнением строк и выделяли `String` на каждый `declare`. До
-BRUL-229 пропс искался сравнением строк и `PropBinding` держал `String`:
-`read/property_scalar_id` стоил 28.4 ns, `read/property_string_id` — 106 ns.
-`binding/props_read_id` от этого почти не изменился: время кадра из двух
-переменных перекрывает чтение пропсов.
+имя и платят за поиск в таблице имён.
+
+Что дал каждый шаг:
+
+- BRUL-222 — промах в окружении больше не собирает `Error::Undefined` с копией
+  имени: `read/property_string` 203 → 105 ns, `read/property_scalar` 103 → 28.9
+  ns, `binding/props_read` 1.52 → 1.25 µs.
+- BRUL-227 — переменные хранятся по `VariableId`, без `String` на `declare` и
+  без сравнения имён на чтении: `read/variable_in_frame_id` 17.2 → 14.0 ns.
+- BRUL-229 — пропс ищется по `VariableId`, `PropBinding` больше не держит
+  `String`: `read/property_scalar_id` 28.4 → 23.6 ns, `read/property_string_id`
+  106 → 94.1 ns.
+- BRUL-223 — кадр биндинга ссылается на снимок scope вместо копии значений:
+  `binding/frame_only` 777 → 12.2 ns, `binding/props_read_id` 1.09 µs → 328 ns.
 
 ## Как обновлять
 

@@ -139,14 +139,9 @@ impl Component {
         )
     }
 
-    pub fn push_binding_scopes(&mut self, scopes: &[Vec<Variable>]) {
-        for scope in scopes {
-            self.environment.push_frame();
-            for variable in scope {
-                let _ = self
-                    .environment
-                    .declare(variable.name, variable.value.clone(), false);
-            }
+    pub fn push_binding_scopes(&mut self, scopes: &Rc<[Vec<Variable>]>) {
+        for index in 0..scopes.len() {
+            self.environment.push_scope(scopes, index);
         }
     }
 

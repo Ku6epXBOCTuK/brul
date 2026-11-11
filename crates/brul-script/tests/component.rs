@@ -241,3 +241,24 @@ fn reading_a_property_tracks_it() {
 
     assert_eq!(*seen.borrow(), vec![Value::Bool(false), Value::Bool(true)]);
 }
+
+#[test]
+fn a_scoped_variable_is_readable_but_not_assignable() {
+    let mut component = component();
+    let scopes: Rc<[Vec<Variable>]> = Rc::from(vec![vec![Variable {
+        name: id("item"),
+        value: Value::Number(1.0),
+    }]]);
+
+    component.push_binding_scopes(&scopes);
+    assert_eq!(component.read("item"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        component.assign("item", Value::Number(2.0)),
+        Err(Error::Constant("item".to_owned()))
+    );
+    component.pop_binding_scopes(1);
+    assert_eq!(
+        component.read("item"),
+        Err(Error::Undefined("item".to_owned()))
+    );
+}

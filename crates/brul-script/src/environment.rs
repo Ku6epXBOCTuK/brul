@@ -1,3 +1,6 @@
+use std::rc::Rc;
+
+use crate::component::Variable;
 use crate::error::Error;
 use crate::names::VariableId;
 use crate::value::Value;
@@ -9,11 +12,20 @@ struct Binding {
     constant: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum Frame {
+    Bindings(Vec<Binding>),
+    Scope {
+        scopes: Rc<[Vec<Variable>]>,
+        index: usize,
+    },
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Environment {
     names: &'static [&'static str],
     bindings: Vec<Binding>,
-    frames: Vec<Vec<Binding>>,
+    frames: Vec<Frame>,
 }
 
 impl Environment {
@@ -29,7 +41,14 @@ impl Environment {
     }
 
     pub fn push_frame(&mut self) {
-        self.frames.push(Vec::new());
+        self.frames.push(Frame::Bindings(Vec::new()));
+    }
+
+    pub fn push_scope(&mut self, scopes: &Rc<[Vec<Variable>]>, index: usize) {
+        self.frames.push(Frame::Scope {
+            scopes: Rc::clone(scopes),
+            index,
+        });
     }
 
     pub fn pop_frame(&mut self) {
@@ -38,7 +57,10 @@ impl Environment {
 
     pub fn declare(&mut self, id: VariableId, value: Value, constant: bool) -> Result<(), Error> {
         let name = self.name(id);
-        let bindings = self.frames.last_mut().unwrap_or(&mut self.bindings);
+        let bindings = match self.frames.last_mut() {
+            Some(Frame::Bindings(bindings)) => bindings,
+            _ => &mut self.bindings,
+        };
         if bindings.iter().any(|binding| binding.id == id) {
             return Err(Error::Redeclared(name.to_owned()));
         }
@@ -51,29 +73,26 @@ impl Environment {
     }
 
     pub fn contains(&self, id: VariableId) -> bool {
-        self.frames
-            .iter()
-            .rev()
-            .any(|frame| frame.iter().any(|binding| binding.id == id))
-            || self.bindings.iter().any(|binding| binding.id == id)
+        self.find(id).is_some()
     }
 
     pub fn get(&self, id: VariableId) -> Option<&Value> {
-        for frame in self.frames.iter().rev() {
-            if let Some(binding) = frame.iter().find(|binding| binding.id == id) {
-                return Some(&binding.value);
-            }
-        }
-        self.bindings
-            .iter()
-            .find(|binding| binding.id == id)
-            .map(|binding| &binding.value)
+        self.find(id)
     }
 
     pub fn assign(&mut self, id: VariableId, value: Value) -> Result<(), Error> {
         let name = self.name(id);
         for frame in self.frames.iter_mut().rev() {
-            if let Some(binding) = frame.iter_mut().find(|binding| binding.id == id) {
+            let bindings = match frame {
+                Frame::Bindings(bindings) => bindings,
+                Frame::Scope { scopes, index }
+                    if scopes[*index].iter().any(|variable| variable.name == id) =>
+                {
+                    return Err(Error::Constant(name.to_owned()));
+                }
+                Frame::Scope { .. } => continue,
+            };
+            if let Some(binding) = bindings.iter_mut().find(|binding| binding.id == id) {
                 return binding.set(name, value);
             }
         }
@@ -83,6 +102,29 @@ impl Environment {
             .find(|binding| binding.id == id)
             .ok_or_else(|| Error::Undefined(name.to_owned()))?;
         binding.set(name, value)
+    }
+
+    fn find(&self, id: VariableId) -> Option<&Value> {
+        for frame in self.frames.iter().rev() {
+            match frame {
+                Frame::Bindings(bindings) => {
+                    if let Some(binding) = bindings.iter().find(|binding| binding.id == id) {
+                        return Some(&binding.value);
+                    }
+                }
+                Frame::Scope { scopes, index } => {
+                    if let Some(variable) =
+                        scopes[*index].iter().find(|variable| variable.name == id)
+                    {
+                        return Some(&variable.value);
+                    }
+                }
+            }
+        }
+        self.bindings
+            .iter()
+            .find(|binding| binding.id == id)
+            .map(|binding| &binding.value)
     }
 
     fn name(&self, id: VariableId) -> &'static str {
