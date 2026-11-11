@@ -17,6 +17,8 @@ use crate::window::{ColorScheme, WindowCommand, WindowConfig, WindowError, creat
 type EventHandler = Box<dyn FnMut(&[WidgetEvent]) -> Vec<WindowCommand>>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
 
+const FRAME_INTERVAL: Duration = Duration::from_millis(16);
+
 pub(crate) struct Timer {
     next: Instant,
     interval: Duration,
@@ -47,8 +49,13 @@ pub(crate) fn due(timers: &mut [Timer], now: Instant) -> Vec<WidgetEvent> {
     events
 }
 
-fn wakeup(timers: &[Timer]) -> ControlFlow {
-    match timers.iter().map(|timer| timer.next).min() {
+fn wakeup(timers: &[Timer], frame: Option<Instant>) -> ControlFlow {
+    let timer = timers.iter().map(|timer| timer.next).min();
+    let next = match (timer, frame) {
+        (Some(timer), Some(frame)) => Some(timer.min(frame)),
+        (timer, frame) => timer.or(frame),
+    };
+    match next {
         Some(next) => ControlFlow::WaitUntil(next),
         None => ControlFlow::Wait,
     }
@@ -72,6 +79,8 @@ pub(crate) struct TreeApp {
     error: Rc<Cell<Option<WindowError>>>,
     pub(crate) timers: Vec<Timer>,
     cursor: (i32, i32),
+    tick: Instant,
+    next_frame: Instant,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -162,7 +171,19 @@ impl ApplicationHandler for TreeApp {
             self.finish(event_loop, step);
         }
 
-        event_loop.set_control_flow(wakeup(&self.timers));
+        let frame = if self.tree.borrow().animating() {
+            let now = Instant::now();
+            if now >= self.next_frame {
+                self.next_frame = now + FRAME_INTERVAL;
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            Some(self.next_frame)
+        } else {
+            None
+        };
+        event_loop.set_control_flow(wakeup(&self.timers, frame));
     }
 }
 
@@ -186,6 +207,8 @@ pub(crate) fn tree_app(
         error,
         timers: Vec::new(),
         cursor: (0, 0),
+        tick: Instant::now(),
+        next_frame: Instant::now(),
     };
     for command in initial {
         if let WindowCommand::Every { interval, function } = command {
@@ -361,6 +384,10 @@ impl TreeApp {
     }
 
     fn render_frame(&mut self, surface: &dyn Surface) -> Result<(), brul_gui::WidgetError> {
+        let now = Instant::now();
+        let delta = now.saturating_duration_since(self.tick);
+        self.tick = now;
+        self.tree.borrow_mut().advance(delta);
         if self.tree.borrow().layout_dirty()
             && let Some(engine) = self.engine.as_mut()
         {
@@ -545,7 +572,7 @@ mod tests {
     #[test]
     fn the_loop_waits_for_the_earliest_timer() {
         let now = Instant::now();
-        assert_eq!(wakeup(&[]), ControlFlow::Wait);
+        assert_eq!(wakeup(&[], None), ControlFlow::Wait);
 
         let mut timers = vec![
             Timer {
@@ -560,15 +587,29 @@ mod tests {
             },
         ];
         assert_eq!(
-            wakeup(&timers),
+            wakeup(&timers, None),
             ControlFlow::WaitUntil(now + Duration::from_secs(1))
         );
 
         timers[0].next = now + Duration::from_secs(1);
         assert_eq!(
-            wakeup(&timers),
+            wakeup(&timers, None),
             ControlFlow::WaitUntil(now + Duration::from_secs(1))
         );
+    }
+
+    #[test]
+    fn a_frame_deadline_wakes_the_loop_before_a_later_timer() {
+        let now = Instant::now();
+        let frame = now + Duration::from_millis(16);
+        let timers = vec![Timer {
+            next: now + Duration::from_secs(1),
+            interval: Duration::from_secs(1),
+            function: "late".to_owned(),
+        }];
+
+        assert_eq!(wakeup(&timers, Some(frame)), ControlFlow::WaitUntil(frame));
+        assert_eq!(wakeup(&[], Some(frame)), ControlFlow::WaitUntil(frame));
     }
 
     #[test]

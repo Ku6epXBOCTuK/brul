@@ -23,6 +23,15 @@ impl Color {
         Self { a, ..self }
     }
 
+    pub fn lerp(self, to: Self, progress: f32) -> Self {
+        Self {
+            r: lerp_channel(self.r, to.r, progress),
+            g: lerp_channel(self.g, to.g, progress),
+            b: lerp_channel(self.b, to.b, progress),
+            a: lerp_channel(self.a, to.a, progress),
+        }
+    }
+
     pub fn multiply(self, other: Self) -> Self {
         Self {
             r: multiply_channel(self.r, other.r),
@@ -35,4 +44,10 @@ impl Color {
 
 fn multiply_channel(left: u8, right: u8) -> u8 {
     ((u16::from(left) * u16::from(right) + 127) / 255) as u8
+}
+
+fn lerp_channel(from: u8, to: u8, progress: f32) -> u8 {
+    let from = f32::from(from);
+    let to = f32::from(to);
+    (from + (to - from) * progress.clamp(0.0, 1.0)).round() as u8
 }

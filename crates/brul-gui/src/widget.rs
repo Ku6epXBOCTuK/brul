@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use crate::Color;
+use crate::animation::{Track, Tween};
 use crate::gradient::Paint;
 use crate::layout::{
     self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, ScrollOffset, Size,
@@ -205,6 +206,90 @@ impl StyleSet {
             style = self.disabled.unwrap_or(style);
         }
         style
+    }
+}
+
+struct Transition {
+    from: WidgetStyle,
+    to: WidgetStyle,
+    background: Option<Track>,
+    border: Option<Track>,
+    text: Option<Track>,
+    tint: Option<Track>,
+    opacity: Option<Track>,
+    shadow: Option<Track>,
+}
+
+impl Transition {
+    fn new(from: WidgetStyle, to: WidgetStyle, durations: Transitions) -> Self {
+        Self {
+            from,
+            to,
+            background: durations.background.map(Track::new),
+            border: durations.border.map(Track::new),
+            text: durations.text.map(Track::new),
+            tint: durations.tint.map(Track::new),
+            opacity: durations.opacity.map(Track::new),
+            shadow: durations.shadow.map(Track::new),
+        }
+    }
+
+    fn style(&self) -> WidgetStyle {
+        let mut style = self.to;
+        if let Some(track) = self.background {
+            let progress = track.value();
+            style.background = tween_paint(self.from.background, self.to.background, progress);
+        }
+        if let Some(track) = self.border {
+            style.border = self.from.border.tween(self.to.border, track.value());
+        }
+        if let Some(track) = self.text {
+            style.text = self.from.text.tween(self.to.text, track.value());
+        }
+        if let Some(track) = self.tint {
+            style.tint = tween_tint(self.from.tint, self.to.tint, track.value());
+        }
+        if let Some(track) = self.opacity {
+            style.opacity = self.from.opacity.tween(self.to.opacity, track.value());
+        }
+        if let Some(track) = self.shadow {
+            style.shadow.color = self
+                .from
+                .shadow
+                .color
+                .tween(self.to.shadow.color, track.value());
+        }
+        style
+    }
+
+    fn advance(&mut self, delta: Duration) -> bool {
+        let tracks = [
+            &mut self.background,
+            &mut self.border,
+            &mut self.text,
+            &mut self.tint,
+            &mut self.opacity,
+            &mut self.shadow,
+        ];
+        let mut running = false;
+        for track in tracks.into_iter().flatten() {
+            running |= track.advance(delta);
+        }
+        running
+    }
+}
+
+fn tween_paint(from: Paint, to: Paint, progress: f32) -> Paint {
+    match (from, to) {
+        (Paint::Color(from), Paint::Color(to)) => Paint::Color(from.tween(to, progress)),
+        _ => to,
+    }
+}
+
+fn tween_tint(from: Option<Color>, to: Option<Color>, progress: f32) -> Option<Color> {
+    match (from, to) {
+        (Some(from), Some(to)) => Some(from.tween(to, progress)),
+        _ => to,
     }
 }
 
@@ -542,6 +627,8 @@ struct Node {
     draggable: bool,
     scroll_offset: ScrollOffset,
     children: Vec<Slot>,
+    transition: Option<Transition>,
+    shown: WidgetStyle,
 }
 
 enum NodeData {
@@ -561,6 +648,13 @@ impl Node {
             NodeData::View { .. } => WidgetKind::View,
             NodeData::Text { .. } => WidgetKind::Text,
             NodeData::Image(_) => WidgetKind::Image,
+        }
+    }
+
+    fn style(&self) -> WidgetStyle {
+        match &self.transition {
+            Some(transition) => transition.style(),
+            None => self.styles.resolve(self.state),
         }
     }
 }
@@ -693,6 +787,7 @@ impl WidgetTree {
         for child in children {
             slots.push(self.insert(child));
         }
+        let shown = styles.resolve(state);
         let node = Node {
             id,
             data,
@@ -703,6 +798,8 @@ impl WidgetTree {
             draggable,
             scroll_offset: ScrollOffset::ZERO,
             children: slots,
+            transition: None,
+            shown,
         };
         let slot = match self.free.pop() {
             Some(slot) => {
@@ -984,6 +1081,59 @@ impl WidgetTree {
         }
     }
 
+    pub fn animating(&self) -> bool {
+        self.index
+            .values()
+            .any(|slot| self.nodes[slot.index()].transition.is_some())
+    }
+
+    pub fn advance(&mut self, delta: Duration) -> bool {
+        if delta.is_zero() {
+            return self.animating();
+        }
+        let slots: Vec<Slot> = self.index.values().copied().collect();
+        let mut running = false;
+        let mut changed = false;
+        for slot in slots {
+            let node = &mut self.nodes[slot.index()];
+            let Some(transition) = node.transition.as_mut() else {
+                continue;
+            };
+            let active = transition.advance(delta);
+            if !active {
+                node.transition = None;
+            }
+            let id = node.id;
+            running |= active;
+            changed = true;
+            self.mark_dirty(id);
+        }
+        if changed {
+            self.snapshot = None;
+        }
+        running
+    }
+
+    fn retarget(&mut self, slot: Slot) {
+        let node = &mut self.nodes[slot.index()];
+        let durations = node.styles.transitions();
+        let target = node.styles.resolve(node.state);
+        let from = match node.transition.take() {
+            Some(transition) if transition.to != target => transition.style(),
+            Some(transition) => {
+                node.transition = Some(transition);
+                return;
+            }
+            None => node.shown,
+        };
+        node.shown = target;
+        if durations.is_empty() {
+            node.transition = None;
+            return;
+        }
+        node.transition = (from != target).then(|| Transition::new(from, target, durations));
+    }
+
     pub fn state(&self, id: WidgetId) -> Option<WidgetState> {
         Some(self.node(id)?.state)
     }
@@ -1071,6 +1221,9 @@ impl WidgetTree {
             node.state.checked = !node.state.checked;
             node.state.checked
         };
+        if let Some(&slot) = self.index.get(&id) {
+            self.retarget(slot);
+        }
         self.snapshot = None;
         self.mark_dirty(id);
         Some(checked)
@@ -1128,6 +1281,7 @@ impl WidgetTree {
             node.state.hovered = false;
             let id = node.id;
             self.mark_dirty(id);
+            self.retarget(slot);
             events.push(WidgetEvent::PointerLeave(id));
         }
         for &slot in &path[common..] {
@@ -1135,6 +1289,7 @@ impl WidgetTree {
             node.state.hovered = true;
             let id = node.id;
             self.mark_dirty(id);
+            self.retarget(slot);
             events.push(WidgetEvent::PointerEnter(id));
         }
         self.hovered = path;
@@ -1153,6 +1308,7 @@ impl WidgetTree {
             let id = node.id;
             let draggable = node.draggable;
             self.mark_dirty(id);
+            self.retarget(slot);
             events.push(WidgetEvent::Press(id));
             if draggable {
                 events.push(WidgetEvent::Drag(id));
@@ -1175,6 +1331,7 @@ impl WidgetTree {
             node.state.pressed = false;
             let id = node.id;
             self.mark_dirty(id);
+            self.retarget(slot);
             events.push(WidgetEvent::Release(id));
         }
         if !pressed.is_empty() && pressed.last() == path.last() {
@@ -1198,6 +1355,7 @@ impl WidgetTree {
             node.state.hovered = false;
             let id = node.id;
             self.mark_dirty(id);
+            self.retarget(*slot);
             events.push(WidgetEvent::PointerLeave(id));
         }
         for slot in pressed.iter().rev() {
@@ -1205,6 +1363,7 @@ impl WidgetTree {
             node.state.pressed = false;
             let id = node.id;
             self.mark_dirty(id);
+            self.retarget(*slot);
             events.push(WidgetEvent::Release(id));
         }
         if !hovered.is_empty() || !pressed.is_empty() {
@@ -1225,6 +1384,9 @@ impl WidgetTree {
         if !changed {
             return false;
         }
+        if let Some(&slot) = self.index.get(&id) {
+            self.retarget(slot);
+        }
         self.snapshot = None;
         self.mark_dirty(id);
         true
@@ -1242,11 +1404,13 @@ impl WidgetTree {
         for slot in hovered {
             if let Some(node) = self.nodes.get_mut(slot.index()) {
                 node.state.hovered = false;
+                node.shown = node.styles.resolve(node.state);
             }
         }
         for slot in pressed {
             if let Some(node) = self.nodes.get_mut(slot.index()) {
                 node.state.pressed = false;
+                node.shown = node.styles.resolve(node.state);
             }
         }
     }
@@ -1259,6 +1423,7 @@ impl WidgetTree {
             node.state.pressed = pressed;
             let id = node.id;
             self.mark_dirty(id);
+            self.retarget(slot);
         }
         if had_pressed {
             self.snapshot = None;
@@ -1493,7 +1658,7 @@ fn snapshot_widget(
     }
 
     let layout_box = &boxes[slot.index()];
-    let style = node.styles.resolve(node.state);
+    let style = node.style();
     let content_x = layout_box.x.saturating_add(
         node.layout
             .border_width

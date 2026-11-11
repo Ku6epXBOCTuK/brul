@@ -106,6 +106,7 @@
 //! сглаживание сведено к маске, цвет обычных глифов задаёт отрисовщик, а не
 //! движок текста.
 
+mod animation;
 mod atlas;
 mod color;
 mod gradient;
@@ -116,6 +117,7 @@ mod text;
 mod texture;
 mod widget;
 
+pub use animation::{Track, Tween, ease_out};
 pub use atlas::{Atlas, AtlasFormat, AtlasSlot};
 pub use color::Color;
 pub use gradient::{Gradient, Paint};
