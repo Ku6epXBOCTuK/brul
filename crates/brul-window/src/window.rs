@@ -27,6 +27,8 @@ pub struct WindowConfig {
     pub width: u32,
     pub height: u32,
     pub header_height: u32,
+    pub frameless: bool,
+    pub transparent: bool,
 }
 
 impl Default for WindowConfig {
@@ -36,6 +38,8 @@ impl Default for WindowConfig {
             width: 960,
             height: 640,
             header_height: 48,
+            frameless: true,
+            transparent: true,
         }
     }
 }
@@ -60,6 +64,21 @@ impl WindowConfig {
 pub enum ColorScheme {
     Light,
     Dark,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct WindowKey(pub u64);
+
+impl std::fmt::Display for WindowKey {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "window {}", self.0)
+    }
+}
+
+pub struct WindowSpec {
+    pub config: WindowConfig,
+    pub tree: Rc<RefCell<WidgetTree>>,
+    pub commands: Vec<WindowCommand>,
 }
 
 #[derive(Debug)]
@@ -118,6 +137,8 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowCommand {
     Exit,
+    Close,
+    Open(WindowKey),
     Drag,
     Every {
         interval: Duration,
@@ -163,25 +184,39 @@ pub fn run_tree_themed(
     result.map_err(|error| WindowError::stage("event loop", error))
 }
 
+pub fn run_windows(
+    initial: WindowKey,
+    create: impl FnMut(WindowKey, ColorScheme) -> WindowSpec + 'static,
+    handler: impl FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
+) -> Result<(), WindowError> {
+    crate::windows::run(initial, create, handler)
+}
+
 pub(crate) fn create_window(
     event_loop: &dyn ActiveEventLoop,
     config: &WindowConfig,
 ) -> Result<Arc<dyn Window>, WindowError> {
-    let size = LogicalSize::new(f64::from(config.width), f64::from(config.height));
-    let attributes = WindowAttributes::default()
-        .with_title(config.title.clone())
-        .with_surface_size(size)
-        .with_min_surface_size(size)
-        .with_max_surface_size(size)
-        .with_resizable(false)
-        .with_decorations(false)
-        .with_transparent(true)
-        .with_visible(false);
-
     event_loop
-        .create_window(attributes)
+        .create_window(attributes(config))
         .map(Arc::from)
         .map_err(|error| WindowError::stage("window creation", error))
+}
+
+pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
+    let size = LogicalSize::new(f64::from(config.width), f64::from(config.height));
+    let mut attributes = WindowAttributes::default()
+        .with_title(config.title.clone())
+        .with_surface_size(size)
+        .with_resizable(!config.frameless)
+        .with_decorations(!config.frameless)
+        .with_transparent(config.transparent)
+        .with_visible(false);
+    if config.frameless {
+        attributes = attributes
+            .with_min_surface_size(size)
+            .with_max_surface_size(size);
+    }
+    attributes
 }
 
 struct App {
@@ -350,6 +385,45 @@ mod tests {
             WindowError::stage("surface", "boom").to_string(),
             "surface: boom"
         );
+    }
+
+    #[test]
+    fn a_frameless_window_has_no_decorations_and_a_fixed_size() {
+        let config = WindowConfig {
+            width: 488,
+            height: 800,
+            transparent: true,
+            ..WindowConfig::default()
+        };
+
+        let attributes = super::attributes(&config);
+
+        assert!(!attributes.decorations);
+        assert!(!attributes.resizable);
+        assert!(attributes.transparent);
+        assert!(attributes.min_surface_size.is_some());
+        assert!(attributes.max_surface_size.is_some());
+    }
+
+    #[test]
+    fn a_decorated_window_is_resizable_without_a_size_cap() {
+        let config = WindowConfig {
+            title: "Settings".to_owned(),
+            width: 760,
+            height: 560,
+            frameless: false,
+            transparent: false,
+            ..WindowConfig::default()
+        };
+
+        let attributes = super::attributes(&config);
+
+        assert_eq!(attributes.title, "Settings");
+        assert!(attributes.decorations);
+        assert!(attributes.resizable);
+        assert!(!attributes.transparent);
+        assert!(attributes.min_surface_size.is_none());
+        assert!(attributes.max_surface_size.is_none());
     }
 
     #[test]

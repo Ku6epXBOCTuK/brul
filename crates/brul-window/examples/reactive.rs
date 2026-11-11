@@ -43,6 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         width: 420,
         height: 200,
         header_height: 64,
+        ..WindowConfig::default()
     };
     run_tree(config, tree, Vec::new(), move |events| {
         if events

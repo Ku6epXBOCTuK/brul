@@ -12,7 +12,9 @@ use winit::window::{Window, WindowId};
 use crate::gpu::Gpu;
 use crate::input::{Input, event_input, point, system_scheme, window_input};
 use crate::surface::{Renderer, Surface};
-use crate::window::{ColorScheme, WindowCommand, WindowConfig, WindowError, create_window};
+use crate::window::{
+    ColorScheme, WindowCommand, WindowConfig, WindowError, WindowKey, create_window,
+};
 
 type EventHandler = Box<dyn FnMut(&[WidgetEvent]) -> Vec<WindowCommand>>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
@@ -49,21 +51,31 @@ pub(crate) fn due(timers: &mut [Timer], now: Instant) -> Vec<WidgetEvent> {
     events
 }
 
+#[cfg(test)]
 fn wakeup(timers: &[Timer], frame: Option<Instant>) -> ControlFlow {
     let timer = timers.iter().map(|timer| timer.next).min();
-    let next = match (timer, frame) {
-        (Some(timer), Some(frame)) => Some(timer.min(frame)),
-        (timer, frame) => timer.or(frame),
-    };
+    wakeup_at(earliest(timer, frame))
+}
+
+pub(crate) fn wakeup_at(next: Option<Instant>) -> ControlFlow {
     match next {
         Some(next) => ControlFlow::WaitUntil(next),
         None => ControlFlow::Wait,
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Step {
+fn earliest(first: Option<Instant>, second: Option<Instant>) -> Option<Instant> {
+    match (first, second) {
+        (Some(first), Some(second)) => Some(first.min(second)),
+        (first, second) => first.or(second),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Step {
     Continue,
+    Close,
+    Open(WindowKey),
     Exit,
 }
 
@@ -85,47 +97,8 @@ pub(crate) struct TreeApp {
 
 impl ApplicationHandler for TreeApp {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
-        if self.window.is_some() {
-            return;
-        }
-
-        let window = match create_window(event_loop, &self.config) {
-            Ok(window) => window,
-            Err(error) => {
-                let step = self.fail(error);
-                return self.finish(event_loop, step);
-            }
-        };
-        let gpu = match Gpu::new(&window) {
-            Ok(gpu) => gpu,
-            Err(error) => {
-                let step = self.fail(error);
-                return self.finish(event_loop, step);
-            }
-        };
-        let scheme = system_scheme(event_loop.system_theme().as_ref());
-        self.tree = (self.build)(scheme);
-        let mut engine = TextEngine::new();
-        let size = window.surface_size();
-        let viewport = Size {
-            width: size.width,
-            height: size.height,
-        };
-        let layout =
-            self.tree
-                .borrow_mut()
-                .layout(&mut engine, viewport, window.scale_factor() as f32);
-        if let Err(error) = layout {
-            let step = self.fail(WindowError::stage("widgets", error));
-            return self.finish(event_loop, step);
-        }
-
-        self.window = Some(Arc::clone(&window));
-        self.renderer = Some(Box::new(gpu));
-        self.engine = Some(engine);
-        self.frame = Some(Frame::new(size.width.max(1), size.height.max(1)));
-        window.set_visible(true);
-        window.request_redraw();
+        let step = self.open(event_loop, None);
+        self.finish(event_loop, step);
     }
 
     fn window_event(
@@ -134,56 +107,14 @@ impl ApplicationHandler for TreeApp {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let Some(window) = self
-            .window
-            .as_ref()
-            .filter(|window| window.id() == window_id)
-        else {
-            return;
-        };
-        let window = Arc::clone(window);
-
-        let input = window_input(&event).or_else(|| event_input(&event));
-        match input {
-            Some(Input::Exit) => event_loop.exit(),
-            Some(Input::Redraw) => self.render(event_loop, &window),
-            Some(input) => {
-                let step = self.handle(&window, input);
-                self.finish(event_loop, step);
-            }
-            None => {}
-        }
+        let step = self.event(window_id, &event);
+        self.finish(event_loop, step);
     }
 
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
-        brul_reactive::flush();
-        if self.tree.borrow().snapshot_dirty()
-            && let Some(window) = &self.window
-        {
-            window.request_redraw();
-        }
-
-        let events = due(&mut self.timers, Instant::now());
-        if !events.is_empty()
-            && let Some(window) = self.window.clone()
-        {
-            let step = self.dispatch_events(&window, events);
-            self.finish(event_loop, step);
-        }
-
-        let frame = if self.tree.borrow().animating() {
-            let now = Instant::now();
-            if now >= self.next_frame {
-                self.next_frame = now + FRAME_INTERVAL;
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
-            }
-            Some(self.next_frame)
-        } else {
-            None
-        };
-        event_loop.set_control_flow(wakeup(&self.timers, frame));
+        let step = self.pump(Instant::now());
+        self.finish(event_loop, step);
+        event_loop.set_control_flow(wakeup_at(self.deadline()));
     }
 }
 
@@ -218,6 +149,116 @@ pub(crate) fn tree_app(
     app
 }
 impl TreeApp {
+    pub(crate) fn open(
+        &mut self,
+        event_loop: &dyn ActiveEventLoop,
+        tree: Option<Rc<RefCell<WidgetTree>>>,
+    ) -> Step {
+        if self.window.is_some() {
+            return Step::Continue;
+        }
+
+        let window = match create_window(event_loop, &self.config) {
+            Ok(window) => window,
+            Err(error) => return self.fail(error),
+        };
+        let gpu = match Gpu::new(&window) {
+            Ok(gpu) => gpu,
+            Err(error) => return self.fail(error),
+        };
+        self.tree = match tree {
+            Some(tree) => tree,
+            None => {
+                let scheme = system_scheme(event_loop.system_theme().as_ref());
+                (self.build)(scheme)
+            }
+        };
+        let mut engine = TextEngine::new();
+        let size = window.surface_size();
+        let viewport = Size {
+            width: size.width,
+            height: size.height,
+        };
+        let layout =
+            self.tree
+                .borrow_mut()
+                .layout(&mut engine, viewport, window.scale_factor() as f32);
+        if let Err(error) = layout {
+            return self.fail(WindowError::stage("widgets", error));
+        }
+
+        self.window = Some(Arc::clone(&window));
+        self.renderer = Some(Box::new(gpu));
+        self.engine = Some(engine);
+        self.frame = Some(Frame::new(size.width.max(1), size.height.max(1)));
+        window.set_visible(true);
+        window.request_redraw();
+        Step::Continue
+    }
+
+    pub(crate) fn event(&mut self, window_id: WindowId, event: &WindowEvent) -> Step {
+        let Some(window) = self
+            .window
+            .as_ref()
+            .filter(|window| window.id() == window_id)
+        else {
+            return Step::Continue;
+        };
+        let window = Arc::clone(window);
+
+        match window_input(event).or_else(|| event_input(event)) {
+            Some(Input::Exit) => Step::Close,
+            Some(Input::Redraw) => self.render(&window),
+            Some(input) => self.handle(&window, input),
+            None => Step::Continue,
+        }
+    }
+
+    pub(crate) fn pump(&mut self, now: Instant) -> Step {
+        brul_reactive::flush();
+        if self.tree.borrow().snapshot_dirty()
+            && let Some(window) = &self.window
+        {
+            window.request_redraw();
+        }
+
+        let mut step = Step::Continue;
+        let events = due(&mut self.timers, now);
+        if !events.is_empty()
+            && let Some(window) = self.window.clone()
+        {
+            step = self.dispatch_events(&window, events);
+        }
+
+        if self.tree.borrow().animating() && now >= self.next_frame {
+            self.next_frame = now + FRAME_INTERVAL;
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+        }
+        step
+    }
+
+    pub(crate) fn deadline(&self) -> Option<Instant> {
+        let timer = self.timers.iter().map(|timer| timer.next).min();
+        let frame = if self.tree.borrow().animating() {
+            Some(self.next_frame)
+        } else {
+            None
+        };
+        earliest(timer, frame)
+    }
+
+    pub(crate) fn window_id(&self) -> Option<WindowId> {
+        self.window.as_ref().map(|window| window.id())
+    }
+
+    pub(crate) fn focus(&self) {
+        if let Some(window) = &self.window {
+            window.focus_window();
+        }
+    }
+
     fn handle(&mut self, surface: &dyn Surface, input: Input) -> Step {
         match input {
             Input::Key { code, exit } => self.press_key(surface, code, exit),
@@ -232,7 +273,7 @@ impl TreeApp {
 
     fn window_action(&mut self, surface: &dyn Surface, input: Input) -> Step {
         match input {
-            Input::Exit => Step::Exit,
+            Input::Exit => Step::Close,
             Input::Theme(scheme) => self.change_theme(surface, scheme),
             _ => self.resize_to_surface(surface),
         }
@@ -240,7 +281,7 @@ impl TreeApp {
 
     fn press_key(&mut self, surface: &dyn Surface, code: String, exit: bool) -> Step {
         let step = self.dispatch_events(surface, vec![WidgetEvent::Key(code)]);
-        if exit { Step::Exit } else { step }
+        if exit { Step::Close } else { step }
     }
 
     fn move_pointer(&mut self, surface: &dyn Surface, x: f64, y: f64) -> Step {
@@ -299,7 +340,7 @@ impl TreeApp {
     }
 
     fn finish(&mut self, event_loop: &dyn ActiveEventLoop, step: Step) {
-        if step == Step::Exit {
+        if matches!(step, Step::Close | Step::Exit) {
             event_loop.exit();
         }
     }
@@ -338,6 +379,8 @@ impl TreeApp {
         for command in commands {
             match command {
                 WindowCommand::Exit => return Step::Exit,
+                WindowCommand::Close => return Step::Close,
+                WindowCommand::Open(key) => return Step::Open(key),
                 WindowCommand::Drag => surface.drag(),
                 WindowCommand::Every { interval, function } => {
                     self.timers.push(Timer::new(interval, function));
@@ -375,11 +418,11 @@ impl TreeApp {
         Step::Continue
     }
 
-    fn render(&mut self, event_loop: &dyn ActiveEventLoop, surface: &dyn Surface) {
+    fn render(&mut self, surface: &dyn Surface) -> Step {
         brul_reactive::flush();
-        if let Err(error) = self.render_frame(surface) {
-            let step = self.fail(WindowError::stage("widgets", error));
-            self.finish(event_loop, step);
+        match self.render_frame(surface) {
+            Ok(()) => Step::Continue,
+            Err(error) => self.fail(WindowError::stage("widgets", error)),
         }
     }
 
@@ -430,8 +473,10 @@ mod tests {
 
     use super::ColorScheme;
     use super::WindowCommand;
+    use super::WindowKey;
     use super::{
         EventHandler, Input, Renderer, Step, Surface, Timer, TreeApp, WindowConfig, due, wakeup,
+        wakeup_at,
     };
 
     struct FakeSurface {
@@ -613,6 +658,27 @@ mod tests {
     }
 
     #[test]
+    fn a_missing_deadline_waits_for_an_event() {
+        assert_eq!(wakeup_at(None), ControlFlow::Wait);
+        let app = tree_app(commands(Vec::new()));
+        assert_eq!(app.deadline(), None);
+    }
+
+    #[test]
+    fn a_window_deadline_is_its_next_timer() {
+        let now = Instant::now();
+        let mut app = tree_app(commands(Vec::new()));
+        app.timers.push(Timer {
+            next: now,
+            interval: Duration::from_secs(1),
+            function: "tick".to_owned(),
+        });
+
+        assert_eq!(app.deadline(), Some(now));
+        assert_eq!(wakeup_at(app.deadline()), ControlFlow::WaitUntil(now));
+    }
+
+    #[test]
     fn an_empty_event_list_changes_nothing() {
         let surface = FakeSurface::new(1.0);
         let mut app = tree_app(commands(Vec::new()));
@@ -641,6 +707,27 @@ mod tests {
 
         let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
         assert_eq!(step, Step::Exit);
+    }
+
+    #[test]
+    fn the_close_command_closes_the_window() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(vec![WindowCommand::Close]));
+        let widget = Widget::text("x").id();
+
+        let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(step, Step::Close);
+    }
+
+    #[test]
+    fn the_open_command_names_the_window() {
+        let surface = FakeSurface::new(1.0);
+        let key = WindowKey(7);
+        let mut app = tree_app(commands(vec![WindowCommand::Open(key)]));
+        let widget = Widget::text("x").id();
+
+        let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(step, Step::Open(key));
     }
 
     #[test]
@@ -720,7 +807,7 @@ mod tests {
         let code = "Escape".to_owned();
         assert_eq!(
             app.handle(&surface, Input::Key { code, exit: true }),
-            Step::Exit
+            Step::Close
         );
     }
 
@@ -766,11 +853,11 @@ mod tests {
     }
 
     #[test]
-    fn the_window_action_reports_an_exit() {
+    fn the_window_action_reports_a_close() {
         let surface = FakeSurface::new(1.0);
         let mut app = tree_app(commands(Vec::new()));
 
-        assert_eq!(app.window_action(&surface, Input::Exit), Step::Exit);
+        assert_eq!(app.window_action(&surface, Input::Exit), Step::Close);
     }
 
     #[test]
