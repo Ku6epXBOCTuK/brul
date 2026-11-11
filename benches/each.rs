@@ -1,11 +1,18 @@
 use std::hint::black_box;
 use std::time::Duration;
 
-use brul::{Component, Value, Variable};
+use brul::{Component, Value, Variable, VariableId};
 use brul_gui::{StyleSet, Widget, WidgetStyle};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 const BINDINGS: usize = 6;
+const NAMES: &[&str] = &["item", "position"];
+
+fn component() -> Component {
+    let mut component = Component::new();
+    component.set_names(NAMES);
+    component
+}
 
 fn item() -> Value {
     Value::Object(vec![
@@ -19,11 +26,11 @@ fn item() -> Value {
 fn push_row(component: &mut Component, position: f64) {
     component.push_build_scope(&[
         Variable {
-            name: "item",
+            name: VariableId::from_index(0),
             value: item(),
         },
         Variable {
-            name: "position",
+            name: VariableId::from_index(1),
             value: Value::Number(position),
         },
     ]);
@@ -51,7 +58,7 @@ fn group<'a>(
 
 fn each_row(c: &mut Criterion) {
     let mut group = group(c, "each_row");
-    let mut component = Component::new();
+    let mut component = component();
     group.bench_function(format!("scopes_{BINDINGS}_bindings"), |b| {
         b.iter(|| {
             push_row(&mut component, 0.0);
@@ -70,7 +77,7 @@ fn each_row(c: &mut Criterion) {
 fn build_scopes(c: &mut Criterion) {
     let mut group = group(c, "build_scopes");
     for depth in [1, 3] {
-        let mut component = Component::new();
+        let mut component = component();
         for level in 0..depth {
             push_row(&mut component, level as f64);
         }
@@ -83,10 +90,10 @@ fn build_scopes(c: &mut Criterion) {
 
 fn apply_row(c: &mut Criterion) {
     let mut group = group(c, "apply_row");
-    let mut scoped = Component::new();
+    let mut scoped = component();
     push_row(&mut scoped, 0.0);
     let scopes = scoped.build_scopes();
-    let mut component = Component::new();
+    let mut component = component();
     group.bench_function("declares", |b| {
         b.iter(|| {
             component.push_binding_scopes(&scopes);

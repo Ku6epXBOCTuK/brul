@@ -1,4 +1,6 @@
 use std::cell::OnceCell;
+use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::rc::Rc;
 
 use brul_reactive::Signal;
@@ -16,14 +18,32 @@ struct Property {
     value: Signal<Value>,
 }
 
+#[derive(Default)]
+struct Fnv(u64);
+
+impl Hasher for Fnv {
+    fn write(&mut self, bytes: &[u8]) {
+        self.0 = bytes.iter().fold(self.0, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        });
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+type Index = HashMap<&'static str, VariableId, BuildHasherDefault<Fnv>>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
-    pub name: &'static str,
+    pub name: VariableId,
     pub value: Value,
 }
 
 pub struct Component {
     names: &'static [&'static str],
+    index: Index,
     environment: Environment,
     properties: Vec<Property>,
     functions: Vec<Function>,
@@ -38,6 +58,7 @@ impl Default for Component {
     fn default() -> Self {
         Self {
             names: &[],
+            index: Index::default(),
             environment: Environment::default(),
             properties: Vec::new(),
             functions: Vec::new(),
@@ -57,6 +78,12 @@ impl Component {
 
     pub fn set_names(&mut self, names: &'static [&'static str]) {
         self.names = names;
+        self.index = names
+            .iter()
+            .enumerate()
+            .map(|(position, name)| (*name, VariableId::from_index(position as u32)))
+            .collect();
+        self.environment.set_names(names);
     }
 
     pub fn names(&self) -> &'static [&'static str] {
@@ -159,7 +186,10 @@ impl Component {
         }
         self.environment.push_frame();
         for (param, argument) in function.params.iter().zip(arguments) {
-            self.environment.declare(param, argument, false)?;
+            let id = self
+                .id(param)
+                .ok_or_else(|| Error::Undefined(param.to_owned()))?;
+            self.environment.declare(id, argument, false)?;
         }
         let result = execute(self, &function.body);
         self.environment.pop_frame();
@@ -167,7 +197,10 @@ impl Component {
     }
 
     pub fn declare(&mut self, name: &str, value: Value, constant: bool) -> Result<(), Error> {
-        self.environment.declare(name, value, constant)?;
+        let id = self
+            .id(name)
+            .ok_or_else(|| Error::Undefined(name.to_owned()))?;
+        self.environment.declare(id, value, constant)?;
         self.changed();
         Ok(())
     }
@@ -189,7 +222,9 @@ impl Component {
     }
 
     pub fn read(&self, name: &str) -> Result<Value, Error> {
-        if let Some(value) = self.environment.get(name) {
+        if let Some(id) = self.id(name)
+            && let Some(value) = self.environment.get(id)
+        {
             return Ok(value.clone());
         }
         if let Some(property) = self.property(name) {
@@ -199,12 +234,20 @@ impl Component {
     }
 
     pub fn read_id(&self, id: VariableId) -> Result<Value, Error> {
-        self.read(self.name(id))
+        if let Some(value) = self.environment.get(id) {
+            return Ok(value.clone());
+        }
+        if let Some(property) = self.property(self.name(id)) {
+            return Ok(property.value.get());
+        }
+        Err(Error::Undefined(self.name(id).to_owned()))
     }
 
     pub fn assign(&mut self, name: &str, value: Value) -> Result<(), Error> {
-        if self.environment.contains(name) {
-            self.environment.assign(name, value)?;
+        if let Some(id) = self.id(name)
+            && self.environment.contains(id)
+        {
+            self.environment.assign(id, value)?;
             self.changed();
             return Ok(());
         }
@@ -217,7 +260,18 @@ impl Component {
     }
 
     pub fn assign_id(&mut self, id: VariableId, value: Value) -> Result<(), Error> {
-        self.assign(self.name(id), value)
+        if self.environment.contains(id) {
+            self.environment.assign(id, value)?;
+            self.changed();
+            return Ok(());
+        }
+        let name = self.name(id);
+        if let Some(property) = self.property(name) {
+            property.value.set(value);
+            self.changed();
+            return Ok(());
+        }
+        Err(Error::Undefined(name.to_owned()))
     }
 
     pub fn assign_property(&mut self, name: &str, value: Value) -> Result<(), Error> {
@@ -244,5 +298,9 @@ impl Component {
             .get(id.index() as usize)
             .copied()
             .expect("variable id is in the name table")
+    }
+
+    pub fn id(&self, name: &str) -> Option<VariableId> {
+        self.index.get(name).copied()
     }
 }

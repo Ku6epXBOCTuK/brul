@@ -188,13 +188,14 @@ fn each_arm(
     out.push_str("        component.borrow_mut().push_build_scope(&[\n");
     let _ = writeln!(
         out,
-        "            brul::Variable {{ name: {:?}, value: item.clone() }},",
-        block.item
+        "            brul::Variable {{ name: brul::VariableId::from_index({}), value: item.clone() }},",
+        variable(block.item.as_str(), emit.names)
     );
     if let Some(index_name) = &block.index {
         let _ = writeln!(
             out,
-            "            brul::Variable {{ name: {index_name:?}, value: brul::Value::Number(position as f64) }},"
+            "            brul::Variable {{ name: brul::VariableId::from_index({}), value: brul::Value::Number(position as f64) }},",
+            variable(index_name.as_str(), emit.names)
         );
     }
     out.push_str("        ]);\n");
@@ -224,6 +225,13 @@ fn each_arm(
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
     Frame::root(theme, 3).inside(frame.direction(), frame.spacing())
+}
+
+fn variable(name: &str, names: &Names<'_>) -> u32 {
+    names
+        .get(name)
+        .expect("each variable is collected into the name table")
+        .index()
 }
 
 fn arm_header(index: usize, position: usize) -> String {

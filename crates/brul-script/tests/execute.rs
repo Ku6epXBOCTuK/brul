@@ -2,16 +2,24 @@ use brul_script::{Component, Error, Value, execute};
 use brul_syntax::ast::Position;
 use brul_syntax::script::parse;
 
+const NAMES: &[&str] = &["first", "second", "value", "inside", "after", "flag"];
+
+fn component() -> Component {
+    let mut component = Component::new();
+    component.set_names(NAMES);
+    component
+}
+
 fn run(source: &str) -> Result<Component, Error> {
     let program = parse(source).unwrap();
-    let mut component = Component::new();
+    let mut component = component();
     execute(&mut component, &program.statements)?;
     Ok(component)
 }
 
 fn run_error(source: &str) -> Error {
     let program = parse(source).unwrap();
-    let mut component = Component::new();
+    let mut component = component();
     execute(&mut component, &program.statements).unwrap_err()
 }
 

@@ -40,6 +40,7 @@ impl Session {
         brul::run_generated(
             generated::window(),
             generated::script(),
+            generated::names(),
             generated::view,
             self.theme,
             &seeds,

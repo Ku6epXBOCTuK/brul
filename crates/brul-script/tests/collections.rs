@@ -1,8 +1,16 @@
 use brul_script::{Component, Error, Value, eval};
 use brul_syntax::parser::parse_expression;
 
+const NAMES: &[&str] = &["browser", "values", "settings"];
+
+fn component() -> Component {
+    let mut component = Component::new();
+    component.set_names(NAMES);
+    component
+}
+
 fn evaluate(source: &str) -> Result<Value, Error> {
-    eval(&mut Component::new(), &parse_expression(source).unwrap())
+    eval(&mut component(), &parse_expression(source).unwrap())
 }
 
 fn failure(source: &str) -> Error {
@@ -59,7 +67,7 @@ fn fields_and_indexes_chain() {
 
 #[test]
 fn object_reads_string_key() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare(
             "browser",
@@ -140,7 +148,7 @@ fn template_rejects_other_types() {
 
 #[test]
 fn assignment_updates_array_elements() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare(
             "values",
@@ -171,7 +179,7 @@ fn assignment_updates_array_elements() {
 
 #[test]
 fn assignment_updates_object_fields() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare(
             "settings",
@@ -205,7 +213,7 @@ fn assignment_updates_object_fields() {
 
 #[test]
 fn assignment_to_missing_field_is_an_error() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare("settings", object(&[("a", Value::Number(1.0))]), false)
         .unwrap();

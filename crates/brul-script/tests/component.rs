@@ -5,6 +5,24 @@ use brul_reactive::{Effect, flush};
 use brul_script::{Component, Error, Value, Variable, VariableId, eval};
 use brul_syntax::parser::parse_expression;
 
+const NAMES: &[&str] = &[
+    "checked", "count", "limit", "label", "offset", "missing", "item", "row",
+];
+
+fn component() -> Component {
+    let mut component = Component::new();
+    component.set_names(NAMES);
+    component
+}
+
+fn id(name: &str) -> VariableId {
+    let index = NAMES
+        .iter()
+        .position(|candidate| *candidate == name)
+        .expect("name is in the table");
+    VariableId::from_index(index as u32)
+}
+
 fn evaluate(component: &mut Component, source: &str) -> Result<Value, Error> {
     eval(component, &parse_expression(source).unwrap())
 }
@@ -18,7 +36,7 @@ fn failure(component: &mut Component, source: &str) -> Error {
 
 #[test]
 fn property_reads_its_value() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare_property("checked", Value::Bool(false))
         .unwrap();
@@ -28,8 +46,7 @@ fn property_reads_its_value() {
 
 #[test]
 fn ids_address_the_same_bindings_as_names() {
-    let mut component = Component::new();
-    component.set_names(&["checked", "count"]);
+    let mut component = component();
     component
         .declare("count", Value::Number(2.0), false)
         .unwrap();
@@ -37,23 +54,17 @@ fn ids_address_the_same_bindings_as_names() {
         .declare_property("checked", Value::Bool(false))
         .unwrap();
 
-    assert_eq!(
-        component.read_id(VariableId::from_index(1)),
-        Ok(Value::Number(2.0))
-    );
-    assert_eq!(
-        component.read_id(VariableId::from_index(0)),
-        Ok(Value::Bool(false))
-    );
+    assert_eq!(component.read_id(id("count")), Ok(Value::Number(2.0)));
+    assert_eq!(component.read_id(id("checked")), Ok(Value::Bool(false)));
     component
-        .assign_id(VariableId::from_index(0), Value::Bool(true))
+        .assign_id(id("checked"), Value::Bool(true))
         .unwrap();
     assert_eq!(component.read("checked"), Ok(Value::Bool(true)));
 }
 
 #[test]
 fn variable_shadows_a_property() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare_property("count", Value::Number(1.0))
         .unwrap();
@@ -66,7 +77,7 @@ fn variable_shadows_a_property() {
 
 #[test]
 fn assignment_writes_a_property() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare_property("checked", Value::Bool(false))
         .unwrap();
@@ -80,7 +91,7 @@ fn assignment_writes_a_property() {
 
 #[test]
 fn assignment_writes_a_let_variable() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare("count", Value::Number(1.0), false)
         .unwrap();
@@ -94,7 +105,7 @@ fn assignment_writes_a_let_variable() {
 
 #[test]
 fn compound_assignment_reads_the_current_value() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare("count", Value::Number(1.0), false)
         .unwrap();
@@ -114,7 +125,7 @@ fn compound_assignment_reads_the_current_value() {
 
 #[test]
 fn assignment_respects_constants() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare("limit", Value::Number(1.0), true)
         .unwrap();
@@ -128,7 +139,7 @@ fn assignment_respects_constants() {
 
 #[test]
 fn unknown_names_are_undefined() {
-    let mut component = Component::new();
+    let mut component = component();
 
     assert_eq!(
         component.read("missing"),
@@ -142,7 +153,7 @@ fn unknown_names_are_undefined() {
 
 #[test]
 fn declaring_a_property_twice_is_rejected() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare_property("checked", Value::Bool(false))
         .unwrap();
@@ -155,7 +166,7 @@ fn declaring_a_property_twice_is_rejected() {
 
 #[test]
 fn evaluation_resolves_identifiers() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare("count", Value::Number(2.0), false)
         .unwrap();
@@ -175,9 +186,9 @@ fn evaluation_resolves_identifiers() {
 
 #[test]
 fn build_scopes_share_their_snapshot_until_the_stack_changes() {
-    let mut component = Component::new();
+    let mut component = component();
     component.push_build_scope(&[Variable {
-        name: "item",
+        name: id("item"),
         value: Value::Number(1.0),
     }]);
 
@@ -187,7 +198,7 @@ fn build_scopes_share_their_snapshot_until_the_stack_changes() {
     assert_eq!(first.len(), 1);
 
     component.push_build_scope(&[Variable {
-        name: "row",
+        name: id("row"),
         value: Value::Number(2.0),
     }]);
     let deeper = component.build_scopes();
@@ -203,7 +214,7 @@ fn build_scopes_share_their_snapshot_until_the_stack_changes() {
 
 #[test]
 fn reading_a_property_tracks_it() {
-    let component = Rc::new(RefCell::new(Component::new()));
+    let component = Rc::new(RefCell::new(component()));
     component
         .borrow_mut()
         .declare_property("checked", Value::Bool(false))

@@ -2,9 +2,17 @@ use brul_script::{Component, Error, Value, execute_program};
 use brul_syntax::ast::Position;
 use brul_syntax::script::parse;
 
+const NAMES: &[&str] = &["total", "n", "value", "step", "count", "a", "b"];
+
+fn component() -> Component {
+    let mut component = Component::new();
+    component.set_names(NAMES);
+    component
+}
+
 fn run(source: &str) -> Component {
     let program = parse(source).unwrap();
-    let mut component = Component::new();
+    let mut component = component();
     execute_program(&mut component, &program).unwrap();
     component
 }
@@ -41,7 +49,7 @@ fn local_declarations_do_not_leak_between_calls() {
 
 #[test]
 fn function_may_mutate_a_property() {
-    let mut component = Component::new();
+    let mut component = component();
     component
         .declare_property("count", Value::Number(0.0))
         .unwrap();
@@ -67,7 +75,7 @@ fn functions_are_registered_before_statements_run() {
 #[test]
 fn arity_mismatch_reports_the_call_position() {
     let program = parse("function pair(a, b) { }\npair(1);").unwrap();
-    let mut component = Component::new();
+    let mut component = component();
     let error = execute_program(&mut component, &program).unwrap_err();
     assert_eq!(
         error,
@@ -89,7 +97,7 @@ fn arity_mismatch_reports_the_call_position() {
 #[test]
 fn duplicate_function_is_rejected() {
     let program = parse("function run() { }\nfunction run() { }").unwrap();
-    let mut component = Component::new();
+    let mut component = component();
     assert_eq!(
         execute_program(&mut component, &program),
         Err(Error::FunctionRedeclared("run".to_owned()))
@@ -99,7 +107,7 @@ fn duplicate_function_is_rejected() {
 #[test]
 fn unknown_function_still_falls_through_to_the_host() {
     let program = parse("launchBrowser(1);").unwrap();
-    let mut component = Component::new();
+    let mut component = component();
     assert_eq!(
         execute_program(&mut component, &program),
         Err(Error::At(

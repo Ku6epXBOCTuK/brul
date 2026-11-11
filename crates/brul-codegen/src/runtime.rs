@@ -168,6 +168,7 @@ pub struct Instance<'a> {
     pub view: View,
     pub script: Option<&'a Program>,
     pub name: &'static str,
+    pub names: &'static [&'static str],
     pub props: &'a [PropArgument],
     pub defaults: &'a [PropArgument],
     pub events: &'a [ComponentEvent],
@@ -232,6 +233,7 @@ impl Host for EventHost {
 
 pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Built, String> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    component.borrow_mut().set_names(instance.names);
     start(&component, &instance)?;
     let given = declare_props(&component, parent, instance.props, instance.name)?;
     declare_defaults(&component, instance.defaults, &given, instance.name)?;
@@ -516,15 +518,23 @@ mod tests {
         Expr::new(ExprKind::Number(value), Position::default())
     }
 
-    fn declared(name: &str, value: Value) -> Component {
+    const NAMES: &[&str] = &["name", "visible", "x", "y", "title", "on", "off"];
+
+    fn component() -> Component {
         let mut component = Component::new();
+        component.set_names(NAMES);
+        component
+    }
+
+    fn declared(name: &str, value: Value) -> Component {
+        let mut component = component();
         component.declare(name, value, false).unwrap();
         component
     }
 
     #[test]
     fn text_binding_follows_the_component() {
-        let mut component = Component::new();
+        let mut component = component();
         component
             .declare("name", Value::String("hello".to_owned()), false)
             .unwrap();
@@ -828,7 +838,7 @@ mod tests {
     }
 
     fn declared_all() -> Rc<RefCell<Component>> {
-        let mut component = Component::new();
+        let mut component = component();
         for (name, value) in [
             ("title", Value::String("hi".to_owned())),
             ("on", Value::Bool(true)),
@@ -907,7 +917,7 @@ mod tests {
 
     #[test]
     fn a_binding_ignores_a_value_of_the_wrong_type() {
-        let mut component = Component::new();
+        let mut component = component();
         component
             .declare("title", Value::Number(1.0), false)
             .unwrap();

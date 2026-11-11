@@ -41,20 +41,27 @@ memo из одного сигнала и общий join, `many_subscribers` —
 - Команда: `cargo bench -p brul --bench read`.
 - Режим Criterion: 50 сэмплов, прогрев 1 с, измерение 3 с.
 
-| Сценарий               |   Время |
-| ---------------------- | ------: |
-| read/property_string   |  105 ns |
-| read/property_scalar   | 28.9 ns |
-| read/variable_in_frame | 17.2 ns |
-| binding/props_read     | 1.25 µs |
-| binding/frame_only     |  892 ns |
+| Сценарий                  |   Время |
+| ------------------------- | ------: |
+| read/property_string      |  120 ns |
+| read/property_string_id   |  106 ns |
+| read/property_scalar      | 40.7 ns |
+| read/property_scalar_id   | 28.4 ns |
+| read/variable_in_frame    | 22.2 ns |
+| read/variable_in_frame_id | 14.0 ns |
+| binding/props_read        | 1.12 µs |
+| binding/props_read_id     | 1.07 µs |
+| binding/frame_only        |  729 ns |
 
 `read/property_string` и `read/property_scalar` — чтение пропса без переменной в
 окружении, `read/variable_in_frame` — переменная в кадре биндинга,
 `binding/props_read` — кадр из двух переменных и три чтения пропсов внутри него,
-`binding/frame_only` — только кадр, контроль шума. До правки BRUL-222 чтение
-пропса стоило 203 ns и 103 ns: промах в окружении собирал `Error::Undefined` с
-копией имени, который тут же выбрасывался.
+`binding/frame_only` — только кадр, контроль шума. Строки `_id` читают по
+`VariableId` — так делает сгенерированный код; строки без суффикса идут через
+имя и платят за поиск в таблице имён. До BRUL-222 чтение пропса стоило 203 ns и
+103 ns: промах в окружении собирал `Error::Undefined` с копией имени. До
+BRUL-227 эти же сценарии стоили 105 ns, 28.9 ns, 17.2 ns, 1.25 µs и 892 ns, но
+искали переменную сравнением строк и выделяли `String` на каждый `declare`.
 
 ## Как обновлять
 

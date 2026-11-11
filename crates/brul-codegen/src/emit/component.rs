@@ -219,6 +219,7 @@ fn write(
         "{inner}    script: component{index}_script().as_ref(),"
     );
     let _ = writeln!(out, "{inner}    name: {name:?},");
+    let _ = writeln!(out, "{inner}    names: names(),");
     arguments(out, "props", &props, &inner, names);
     arguments(out, "defaults", &defaults, &inner, names);
     let _ = writeln!(out, "{inner}    events: &[");

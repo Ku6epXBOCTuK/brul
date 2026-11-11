@@ -1,4 +1,18 @@
-use brul_script::{Environment, Error, Value};
+use brul_script::{Environment, Error, Value, VariableId};
+
+const NAMES: &[&str] = &["selectedIndex", "url", "count", "limit", "selected"];
+
+fn environment() -> Environment {
+    Environment::new(NAMES)
+}
+
+fn id(name: &str) -> VariableId {
+    let index = NAMES
+        .iter()
+        .position(|candidate| *candidate == name)
+        .expect("name is in the table");
+    VariableId::from_index(index as u32)
+}
 
 #[test]
 fn value_reports_its_kind() {
@@ -10,24 +24,27 @@ fn value_reports_its_kind() {
 
 #[test]
 fn declares_and_reads_variables() {
-    let mut environment = Environment::new();
+    let mut environment = environment();
     environment
-        .declare("selectedIndex", Value::Number(0.0), false)
+        .declare(id("selectedIndex"), Value::Number(0.0), false)
         .unwrap();
     environment
-        .declare("url", Value::String("about:blank".to_owned()), false)
+        .declare(id("url"), Value::String("about:blank".to_owned()), false)
         .unwrap();
-    assert_eq!(environment.get("selectedIndex"), Some(&Value::Number(0.0)));
     assert_eq!(
-        environment.get("url"),
+        environment.get(id("selectedIndex")),
+        Some(&Value::Number(0.0))
+    );
+    assert_eq!(
+        environment.get(id("url")),
         Some(&Value::String("about:blank".to_owned()))
     );
 }
 
 #[test]
 fn unknown_variable_is_undefined() {
-    let environment = Environment::new();
-    assert_eq!(environment.get("missing"), None);
+    let environment = environment();
+    assert_eq!(environment.get(id("selected")), None);
     assert_eq!(
         Error::Undefined("missing".to_owned()).to_string(),
         "variable 'missing' is not defined"
@@ -36,52 +53,56 @@ fn unknown_variable_is_undefined() {
 
 #[test]
 fn mutable_variable_takes_a_new_value() {
-    let mut environment = Environment::new();
+    let mut environment = environment();
     environment
-        .declare("count", Value::Number(1.0), false)
+        .declare(id("count"), Value::Number(1.0), false)
         .unwrap();
-    environment.assign("count", Value::Number(2.0)).unwrap();
-    assert_eq!(environment.get("count"), Some(&Value::Number(2.0)));
+    environment.assign(id("count"), Value::Number(2.0)).unwrap();
+    assert_eq!(environment.get(id("count")), Some(&Value::Number(2.0)));
 }
 
 #[test]
 fn constant_rejects_assignment() {
-    let mut environment = Environment::new();
+    let mut environment = environment();
     environment
-        .declare("limit", Value::Number(10.0), true)
+        .declare(id("limit"), Value::Number(10.0), true)
         .unwrap();
     assert_eq!(
-        environment.assign("limit", Value::Number(11.0)),
+        environment.assign(id("limit"), Value::Number(11.0)),
         Err(Error::Constant("limit".to_owned()))
     );
-    assert_eq!(environment.get("limit"), Some(&Value::Number(10.0)));
+    assert_eq!(environment.get(id("limit")), Some(&Value::Number(10.0)));
 }
 
 #[test]
 fn assigning_an_unknown_variable_is_undefined() {
-    let mut environment = Environment::new();
+    let mut environment = environment();
     assert_eq!(
-        environment.assign("count", Value::Number(1.0)),
+        environment.assign(id("count"), Value::Number(1.0)),
         Err(Error::Undefined("count".to_owned()))
     );
 }
 
 #[test]
 fn duplicate_declaration_is_rejected() {
-    let mut environment = Environment::new();
+    let mut environment = environment();
     environment
-        .declare("count", Value::Number(1.0), false)
+        .declare(id("count"), Value::Number(1.0), false)
         .unwrap();
     assert_eq!(
-        environment.declare("count", Value::Number(2.0), false),
+        environment.declare(id("count"), Value::Number(2.0), false),
         Err(Error::Redeclared("count".to_owned()))
     );
 }
 
 #[test]
 fn null_round_trips() {
-    let mut environment = Environment::new();
-    environment.declare("selected", Value::Null, false).unwrap();
-    environment.assign("selected", Value::Bool(true)).unwrap();
-    assert_eq!(environment.get("selected"), Some(&Value::Bool(true)));
+    let mut environment = environment();
+    environment
+        .declare(id("selected"), Value::Null, false)
+        .unwrap();
+    environment
+        .assign(id("selected"), Value::Bool(true))
+        .unwrap();
+    assert_eq!(environment.get(id("selected")), Some(&Value::Bool(true)));
 }

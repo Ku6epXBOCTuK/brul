@@ -441,6 +441,10 @@ mod tests {
     use crate::run::generated_built;
     use crate::{Binding, BindingTarget, Component, HandlerEvent, script};
 
+    const NAMES: &[&str] = &[
+        "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code",
+    ];
+
     macro_rules! read {
         ($name:literal) => {{
             fn read(component: &mut Component) -> Result<Value, Error> {
@@ -523,8 +527,8 @@ mod tests {
                 value: Some(Expr::new(ExprKind::Bool(false), Position::default())),
             }],
         };
-        let (component, built) =
-            generated_built(structured_view, None, &[], Some(&program)).expect("launch succeeds");
+        let (component, built) = generated_built(structured_view, NAMES, None, &[], Some(&program))
+            .expect("launch succeeds");
         let parent = built.widget.id();
         let mut ui = Ui::assemble(component, built, structured_view, None, None);
         brul_reactive::flush();
@@ -614,7 +618,7 @@ mod tests {
             ],
         };
         let (component, built) =
-            generated_built(bound_view, None, &[], Some(&program)).expect("launch succeeds");
+            generated_built(bound_view, NAMES, None, &[], Some(&program)).expect("launch succeeds");
         let mut ui = Ui::assemble(component, built, bound_view, None, None);
         brul_reactive::flush();
         let assembled = brul_reactive::live_nodes();
@@ -636,8 +640,9 @@ mod tests {
         assert_eq!(brul_reactive::live_nodes(), assembled);
     }
 
-    fn declared(name: &str, value: Value) -> ComponentHandle {
+    fn declared(name: &'static str, value: Value) -> ComponentHandle {
         let mut component = Component::new();
+        component.set_names(NAMES);
         component.declare(name, value, false).expect("declared");
         Rc::new(RefCell::new(component))
     }
@@ -835,7 +840,8 @@ mod tests {
 
     #[test]
     fn a_theme_change_rebuilds_the_view() {
-        let (component, built) = generated_built(themed_view, None, &[], None).expect("launch");
+        let (component, built) =
+            generated_built(themed_view, NAMES, None, &[], None).expect("launch");
         let mut ui = Ui::assemble(component, built, themed_view, None, None);
         ui.set_theme("dark").expect("theme changes");
         assert_eq!(ui.theme.as_deref(), Some("dark"));
@@ -843,7 +849,8 @@ mod tests {
 
     #[test]
     fn a_failed_theme_change_keeps_the_previous_theme() {
-        let (component, built) = generated_built(rejecting_view, None, &[], None).expect("launch");
+        let (component, built) =
+            generated_built(rejecting_view, NAMES, None, &[], None).expect("launch");
         let mut ui = Ui::assemble(
             component,
             built,
@@ -862,6 +869,7 @@ mod tests {
 
     fn state_after(targets: [BindingTarget; 6]) -> (Vec<WidgetId>, WidgetTree) {
         let mut component = Component::new();
+        component.set_names(NAMES);
         component
             .declare("title", Value::String("hi".to_owned()), false)
             .unwrap();
@@ -920,6 +928,7 @@ mod tests {
 
     fn component_with(functions: Vec<script::Function>, declared: &[&str]) -> ComponentHandle {
         let mut component = Component::new();
+        component.set_names(NAMES);
         for name in declared {
             component
                 .declare(name, Value::Null, false)
@@ -1046,7 +1055,8 @@ mod tests {
 
     #[test]
     fn dispatch_applies_a_theme_command() {
-        let (component, built) = generated_built(themed_view, None, &[], None).expect("launch");
+        let (component, built) =
+            generated_built(themed_view, NAMES, None, &[], None).expect("launch");
         let mut ui = Ui::assemble(component, built, themed_view, None, None);
         ui.commands
             .borrow_mut()
@@ -1057,7 +1067,8 @@ mod tests {
 
     #[test]
     fn dispatch_logs_a_theme_the_view_rejects() {
-        let (component, built) = generated_built(rejecting_view, None, &[], None).expect("launch");
+        let (component, built) =
+            generated_built(rejecting_view, NAMES, None, &[], None).expect("launch");
         let mut ui = Ui::assemble(component, built, rejecting_view, None, None);
         ui.commands
             .borrow_mut()
@@ -1137,6 +1148,7 @@ mod tests {
                 view: child_view,
                 script: Some(&program),
                 name: "Child",
+                names: NAMES,
                 props: &[],
                 defaults: &[],
                 events: &events,
@@ -1159,7 +1171,8 @@ mod tests {
 
     #[test]
     fn a_handler_event_runs_after_the_handler_returns() {
-        let (component, built) = generated_built(raising_view, None, &[], None).expect("launch");
+        let (component, built) =
+            generated_built(raising_view, NAMES, None, &[], None).expect("launch");
         component
             .borrow_mut()
             .declare("label", Value::String(String::new()), false)

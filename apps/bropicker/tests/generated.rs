@@ -16,6 +16,7 @@ fn browser(name: &str, is_default: bool) -> Value {
 
 fn seeded() -> ComponentHandle {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    component.borrow_mut().set_names(generated::names());
     let mut state = component.borrow_mut();
     state
         .declare(

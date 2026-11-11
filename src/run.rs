@@ -10,23 +10,26 @@ use crate::{
 pub fn run_generated(
     config: WindowConfig,
     script: Option<script::Program>,
+    names: &'static [&'static str],
     view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
     theme: Option<&str>,
     seeds: &[(&str, Value)],
     host: Option<Box<dyn Host>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (component, built) = generated_built(view, theme, seeds, script.as_ref())?;
+    let (component, built) = generated_built(view, names, theme, seeds, script.as_ref())?;
     let ui = Ui::assemble(component, built, view, theme.map(str::to_owned), host);
     run_ui(config, theme.map(str::to_owned), ui)
 }
 
 pub(crate) fn generated_built(
     view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+    names: &'static [&'static str],
     theme: Option<&str>,
     seeds: &[(&str, Value)],
     script: Option<&script::Program>,
 ) -> Result<(ComponentHandle, Built), Box<dyn std::error::Error>> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    component.borrow_mut().set_names(names);
     for (name, value) in seeds {
         component.borrow_mut().declare(name, value.clone(), true)?;
     }
@@ -86,6 +89,8 @@ mod tests {
     use crate::ui::Ui;
     use crate::{Binding, BindingTarget, Built, ComponentHandle, Value};
 
+    const NAMES: &[&str] = &["name"];
+
     fn name(component: &mut crate::Component) -> Result<Value, crate::Error> {
         component.read("name")
     }
@@ -111,7 +116,7 @@ mod tests {
         script: Option<&script::Program>,
     ) -> (WidgetId, Ui) {
         let (component, built) =
-            generated_built(generated_view, theme, seeds, script).expect("launch succeeds");
+            generated_built(generated_view, NAMES, theme, seeds, script).expect("launch succeeds");
         let id = built.widget.id();
         (
             id,

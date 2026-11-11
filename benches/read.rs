@@ -1,8 +1,10 @@
 use std::hint::black_box;
 use std::time::Duration;
 
-use brul::{Component, Value, Variable};
+use brul::{Component, Value, Variable, VariableId};
 use criterion::{Criterion, criterion_group, criterion_main};
+
+const NAMES: &[&str] = &["item", "position", "icon", "name", "path", "selected"];
 
 fn item() -> Value {
     Value::Object(vec![
@@ -15,13 +17,14 @@ fn item() -> Value {
 
 fn row_scopes() -> std::rc::Rc<[Vec<Variable>]> {
     let mut scoped = Component::new();
+    scoped.set_names(NAMES);
     scoped.push_build_scope(&[
         Variable {
-            name: "item",
+            name: VariableId::from_index(0),
             value: item(),
         },
         Variable {
-            name: "position",
+            name: VariableId::from_index(1),
             value: Value::Number(0.0),
         },
     ]);
@@ -30,6 +33,7 @@ fn row_scopes() -> std::rc::Rc<[Vec<Variable>]> {
 
 fn prop_component() -> Component {
     let mut component = Component::new();
+    component.set_names(NAMES);
     component
         .declare_property("icon", Value::String("folder".to_owned()))
         .unwrap();
@@ -63,14 +67,24 @@ fn read(c: &mut Criterion) {
     group.bench_function("property_string", |b| {
         b.iter(|| black_box(property.read("name").unwrap()));
     });
+    group.bench_function("property_string_id", |b| {
+        b.iter(|| black_box(property.read_id(VariableId::from_index(3)).unwrap()));
+    });
     group.bench_function("property_scalar", |b| {
         b.iter(|| black_box(property.read("selected").unwrap()));
     });
+    group.bench_function("property_scalar_id", |b| {
+        b.iter(|| black_box(property.read_id(VariableId::from_index(5)).unwrap()));
+    });
     let scopes = row_scopes();
     let mut frame = Component::new();
+    frame.set_names(NAMES);
     frame.push_binding_scopes(&scopes);
     group.bench_function("variable_in_frame", |b| {
         b.iter(|| black_box(frame.read("position").unwrap()));
+    });
+    group.bench_function("variable_in_frame_id", |b| {
+        b.iter(|| black_box(frame.read_id(VariableId::from_index(1)).unwrap()));
     });
     group.finish();
 }
@@ -85,6 +99,15 @@ fn binding(c: &mut Criterion) {
             black_box(component.read("icon").unwrap());
             black_box(component.read("name").unwrap());
             black_box(component.read("path").unwrap());
+            component.pop_binding_scopes(scopes.len());
+        });
+    });
+    group.bench_function("props_read_id", |b| {
+        b.iter(|| {
+            component.push_binding_scopes(&scopes);
+            black_box(component.read_id(VariableId::from_index(2)).unwrap());
+            black_box(component.read_id(VariableId::from_index(3)).unwrap());
+            black_box(component.read_id(VariableId::from_index(4)).unwrap());
             component.pop_binding_scopes(scopes.len());
         });
     });
