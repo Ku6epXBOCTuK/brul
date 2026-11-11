@@ -3,6 +3,7 @@ rule! {
     pub enum Rule {
         File,
         Use,
+        Resource,
         Ident,
         String,
     }

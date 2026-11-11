@@ -1,5 +1,6 @@
-File   = { Use } ;
-Use    = "import" Ident "from" String ";" ;
+File     = { Use | Resource } ;
+Use      = "import" Ident "from" String ";" ;
+Resource = "resource" Ident "from" String ";" ;
 
 Ident  = letter { letter | digit | "_" } ;
 String = '"' { ? any character except '"' and newline ? } '"' ;

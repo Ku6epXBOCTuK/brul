@@ -4,14 +4,14 @@ use brul_syntax::markup::{self, Declaration, Window};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
 use brul_syntax::style::{self, Stylesheet};
-use brul_syntax::uses::{self, Use};
+use brul_syntax::uses::{self, Block};
 
 use crate::{error_at, padded, sfc_error};
 
 pub struct Source {
     pub window: Window,
     pub stylesheet: Stylesheet,
-    pub uses: Vec<Use>,
+    pub uses: Block,
     pub program: Option<Program>,
 }
 
@@ -40,7 +40,7 @@ pub fn parse(source: &str) -> Result<Source, Error> {
     };
     let uses = match sfc.uses {
         Some(block) => uses::parse(&padded(source, block))?,
-        None => Vec::new(),
+        None => Block::default(),
     };
     let program = match sfc.script {
         Some(block) => Some(script::parse(&padded(source, block))?),

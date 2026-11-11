@@ -807,3 +807,165 @@ window Demo (title: "demo") {
         "pub fn names() -> &'static [&'static str] {\n    &[\"browsers\", \"browser\", \"index\", \"selected\", \"step\"]\n}"
     ));
 }
+
+const PNG_SIGNATURE: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+#[test]
+fn emits_resource_and_image_with_tint() {
+    let dir = scratch(
+        "resource",
+        &[(
+            "window.brul",
+            r#"<style>
+.icon { tint: #336699; }
+</style>
+
+<use>
+    resource check from "./check.png";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Image (icon) { check }
+}
+</markup>
+"#,
+        )],
+    );
+    std::fs::write(dir.join("check.png"), PNG_SIGNATURE).unwrap();
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(
+        module.contains("pub fn resource_check() -> &'static [u8]"),
+        "{module}"
+    );
+    assert!(module.contains("include_bytes!("), "{module}");
+    assert!(
+        module.contains("brul_gui::Widget::image(brul_gui::Texture::from_png(resource_check())"),
+        "{module}"
+    );
+    assert!(
+        module.contains("tint: Some(brul_gui::Color::rgba(51, 102, 153, 255))"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn emits_component_resource_with_component_prefix() {
+    let dir = scratch(
+        "component-resource",
+        &[
+            (
+                "badge.brul",
+                r#"<use>
+    resource check from "./check.png";
+</use>
+
+<markup>
+component Badge {
+    Image (icon) { check }
+}
+</markup>
+"#,
+            ),
+            (
+                "window.brul",
+                r#"<use>
+    import Badge from "./badge.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Badge { }
+}
+</markup>
+"#,
+            ),
+        ],
+    );
+    std::fs::write(dir.join("check.png"), PNG_SIGNATURE).unwrap();
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(
+        module.contains("pub fn component0_resource_check() -> &'static [u8]"),
+        "{module}"
+    );
+    assert!(
+        module.contains("brul_gui::Texture::from_png(component0_resource_check())"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn rejects_broken_resources() {
+    let cases = [
+        ("no file", "", "cannot read resource './check.png'"),
+        (
+            "not png",
+            "plain text",
+            "resource './check.png' is not a PNG",
+        ),
+        ("duplicate", "", "resource 'check' is defined twice"),
+    ];
+    for (name, contents, expected) in cases {
+        let use_block = if name == "duplicate" {
+            "    resource check from \"./check.png\";\n    resource check from \"./check.png\";\n"
+        } else {
+            "    resource check from \"./check.png\";\n"
+        };
+        let dir = scratch(
+            name,
+            &[(
+                "window.brul",
+                &format!(
+                    "<use>\n{use_block}</use>\n\n<markup>\nwindow Demo (title: \"demo\") {{\n    Image {{ check }}\n}}\n</markup>\n"
+                ),
+            )],
+        );
+        match name {
+            "not png" => std::fs::write(dir.join("check.png"), contents).unwrap(),
+            "duplicate" => std::fs::write(dir.join("check.png"), PNG_SIGNATURE).unwrap(),
+            _ => {}
+        }
+        let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+        assert!(
+            error.message.contains(expected),
+            "{name}: {}",
+            error.message
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
+
+#[test]
+fn rejects_images_that_are_not_resource_names() {
+    let cases = [
+        (
+            "Image (icon) { \"check\" }",
+            "Image requires a single resource name",
+        ),
+        (
+            "Image (icon) { missing }",
+            "image source 'missing' is not a resource declared in <use>",
+        ),
+    ];
+    for (markup, expected) in cases {
+        let source =
+            format!("<markup>\nwindow Demo (title: \"demo\") {{\n    {markup}\n}}\n</markup>\n");
+        let error = emit::module(&source).unwrap_err();
+        assert_eq!(error.message, expected);
+    }
+}
+
+#[test]
+fn resource_without_a_file_path_is_rejected() {
+    let source = "<use>\n    resource check from \"./check.png\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Image { check }\n}\n</markup>\n";
+    let error = emit::module(source).unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("cannot resolve resource './check.png': source has no file path"),
+        "{}",
+        error.message
+    );
+}

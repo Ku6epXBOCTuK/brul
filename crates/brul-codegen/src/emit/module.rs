@@ -10,7 +10,7 @@ use crate::Definition;
 use crate::error_at;
 
 use super::Emit;
-use super::{events, names, script, view};
+use super::{events, names, resources, script, view};
 
 pub fn module(source: &str) -> Result<String, Error> {
     module_at(source, None)
@@ -46,6 +46,8 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
         &mut Emit {
             registry: &registry,
             imports: &registry.imports,
+            resources: &registry.resources,
+            resource_prefix: "",
             stylesheet: &parsed.stylesheet,
             names: &names,
             program: parsed.program.as_ref(),
@@ -53,19 +55,23 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
             next_structure: &mut next_structure,
         },
     )?;
+    out.push_str(&resources::functions("", &registry.resources));
     for index in 0..registry.definitions.len() {
         let definition = &registry.definitions[index];
         let root = definition_root(definition)?;
+        let prefix = format!("component{index}_");
         out.push('\n');
         out.push_str("#[allow(dead_code, unused_mut, unused_variables, clippy::let_and_return)]\n");
         view::view(
             &mut out,
-            &format!("component{index}_view"),
+            &format!("{prefix}view"),
             root,
             &[],
             &mut Emit {
                 registry: &registry,
                 imports: &definition.imports,
+                resources: &definition.resources,
+                resource_prefix: &prefix,
                 stylesheet: &definition.stylesheet,
                 names: &names,
                 program: definition.program.as_ref(),
@@ -74,9 +80,10 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
             },
         )?;
         out.push_str(&script::program(
-            &format!("component{index}_script"),
+            &format!("{prefix}script"),
             definition.program.as_ref(),
         ));
+        out.push_str(&resources::functions(&prefix, &definition.resources));
     }
     for function in &functions {
         out.push('\n');

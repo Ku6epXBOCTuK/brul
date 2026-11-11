@@ -74,6 +74,7 @@ fn kind(
             Ok(None)
         }
         "Text" => text_widget(out, element, &resolved.text),
+        "Image" => image_widget(out, element, emit),
         name => Err(error_at(
             element.position,
             format!("widget '{name}' is not generated yet"),
@@ -205,6 +206,37 @@ fn text_widget(
             "Text requires a single content expression",
         )),
     }
+}
+
+fn image_widget(
+    out: &mut String,
+    element: &Element,
+    emit: &Emit<'_>,
+) -> Result<Option<Expr>, Error> {
+    let [BlockItem::Expr(expression)] = element.block.items.as_slice() else {
+        return Err(error_at(
+            element.position,
+            "Image requires a single resource name",
+        ));
+    };
+    let ExprKind::Ident(name) = &expression.kind else {
+        return Err(error_at(
+            expression.position,
+            "Image requires a single resource name",
+        ));
+    };
+    if !emit.resources.iter().any(|resource| &resource.name == name) {
+        return Err(error_at(
+            expression.position,
+            format!("image source '{name}' is not a resource declared in <use>"),
+        ));
+    }
+    let _ = write!(
+        out,
+        "brul_gui::Widget::image(brul_gui::Texture::from_png({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
+        emit.resource_prefix
+    );
+    Ok(None)
 }
 
 fn parameters(

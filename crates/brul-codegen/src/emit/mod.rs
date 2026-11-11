@@ -2,7 +2,7 @@ use brul_script::Names;
 use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
 
-use crate::{Import, Registry};
+use crate::{Import, Registry, Resource};
 
 mod component;
 mod element;
@@ -10,6 +10,7 @@ mod events;
 mod expression;
 mod module;
 mod names;
+mod resources;
 mod script;
 mod structure;
 mod style;
@@ -29,6 +30,8 @@ pub(super) use element::items;
 pub(super) struct Emit<'a> {
     registry: &'a Registry,
     imports: &'a [Import],
+    resources: &'a [Resource],
+    resource_prefix: &'a str,
     stylesheet: &'a Stylesheet,
     names: &'a Names<'a>,
     program: Option<&'a Program>,

@@ -9,7 +9,7 @@ use brul_syntax::markup::{self, Component as Declaration, Declaration as Item};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
 use brul_syntax::style::{self, Stylesheet};
-use brul_syntax::uses::{self, Use};
+use brul_syntax::uses::{self, Block, Use};
 
 use crate::{error_at, padded, sfc_error};
 
@@ -18,6 +18,7 @@ pub struct Definition {
     pub path: PathBuf,
     pub component: Declaration,
     pub imports: Vec<Import>,
+    pub resources: Vec<Resource>,
     pub stylesheet: Rc<Stylesheet>,
     pub program: Option<Program>,
 }
@@ -28,21 +29,29 @@ pub struct Import {
     pub definition: usize,
 }
 
+pub struct Resource {
+    pub name: String,
+    pub path: PathBuf,
+}
+
 pub struct Registry {
     pub definitions: Vec<Definition>,
     pub imports: Vec<Import>,
+    pub resources: Vec<Resource>,
 }
 
-pub fn resolve(uses: &[Use], base: Option<&Path>) -> Result<Registry, Error> {
+pub fn resolve(uses: &Block, base: Option<&Path>) -> Result<Registry, Error> {
     let mut loader = Loader {
         definitions: Vec::new(),
         index: HashMap::new(),
         stack: Vec::new(),
     };
-    let imports = loader.imports(uses, base, None)?;
+    let imports = loader.imports(&uses.uses, base, None)?;
+    let resources = loader.resources(&uses.resources, base, None)?;
     Ok(Registry {
         definitions: loader.definitions,
         imports,
+        resources,
     })
 }
 
@@ -80,6 +89,47 @@ impl Loader {
         Ok(imports)
     }
 
+    fn resources(
+        &self,
+        resources: &[uses::Resource],
+        base: Option<&Path>,
+        origin: Option<&Path>,
+    ) -> Result<Vec<Resource>, Error> {
+        let mut resolved = Vec::new();
+        for item in resources {
+            if resolved
+                .iter()
+                .any(|existing: &Resource| existing.name == item.name)
+            {
+                return Err(at(
+                    origin,
+                    format!("resource '{}' is defined twice", item.name),
+                ));
+            }
+            let path = resource_path(base, &item.path, origin)?;
+            let path = fs::canonicalize(&path).map_err(|error| {
+                at(
+                    origin,
+                    format!("cannot read resource '{}': {error}", item.path),
+                )
+            })?;
+            let bytes = fs::read(&path).map_err(|error| {
+                at(
+                    origin,
+                    format!("cannot read resource '{}': {error}", item.path),
+                )
+            })?;
+            if !bytes.starts_with(&PNG) {
+                return Err(at(origin, format!("resource '{}' is not a PNG", item.path)));
+            }
+            resolved.push(Resource {
+                name: item.name.clone(),
+                path,
+            });
+        }
+        Ok(resolved)
+    }
+
     fn file(&mut self, path: &Path, origin: Option<&Path>) -> Result<usize, Error> {
         let path = fs::canonicalize(path)
             .map_err(|error| at(origin, format!("cannot read '{}': {error}", path.display())))?;
@@ -93,7 +143,8 @@ impl Loader {
             .map_err(|error| at(origin, format!("cannot read '{}': {error}", path.display())))?;
         self.stack.push(path.clone());
         let parsed = parse(&source, &path)?;
-        let imports = self.imports(&parsed.uses, path.parent(), Some(&path))?;
+        let imports = self.imports(&parsed.uses.uses, path.parent(), Some(&path))?;
+        let resources = self.resources(&parsed.uses.resources, path.parent(), Some(&path))?;
         self.stack.pop();
         let index = self.definitions.len();
         self.definitions.push(Definition {
@@ -101,6 +152,7 @@ impl Loader {
             path: path.clone(),
             component: parsed.component,
             imports,
+            resources,
             stylesheet: parsed.stylesheet,
             program: parsed.program,
         });
@@ -120,7 +172,7 @@ impl Loader {
 
 struct Parsed {
     component: Declaration,
-    uses: Vec<Use>,
+    uses: Block,
     stylesheet: Rc<Stylesheet>,
     program: Option<Program>,
 }
@@ -147,7 +199,7 @@ fn parse(source: &str, path: &Path) -> Result<Parsed, Error> {
         })?;
     let uses = match sfc.uses {
         Some(block) => uses::parse(&padded(source, block)).map_err(|error| named(path, error))?,
-        None => Vec::new(),
+        None => Block::default(),
     };
     let stylesheet = match sfc.style {
         Some(block) => {
@@ -170,6 +222,18 @@ fn parse(source: &str, path: &Path) -> Result<Parsed, Error> {
         stylesheet: Rc::new(stylesheet),
         program,
     })
+}
+
+const PNG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+fn resource_path(base: Option<&Path>, raw: &str, origin: Option<&Path>) -> Result<PathBuf, Error> {
+    let Some(base) = base else {
+        return Err(at(
+            origin,
+            format!("cannot resolve resource '{raw}': source has no file path"),
+        ));
+    };
+    Ok(base.join(raw))
 }
 
 fn file_path(base: Option<&Path>, raw: &str, origin: Option<&Path>) -> Result<PathBuf, Error> {
@@ -259,7 +323,7 @@ component Screen {
 </markup>
 "#;
         let parsed = parse(source, Path::new("screen.brul")).unwrap();
-        assert_eq!(parsed.uses.len(), 1);
-        assert_eq!(parsed.uses[0].name, "Card");
+        assert_eq!(parsed.uses.uses.len(), 1);
+        assert_eq!(parsed.uses.uses[0].name, "Card");
     }
 }

@@ -212,7 +212,8 @@ each (browsers as item, idx (item.index)) {
 
 - Всё в «Грамматике» выше + 4 встроенных виджета + 3 параметра-состояния +
   `visible`/`x`/`y`.
-- Импорт: одна форма `import Name from "./path";`.
+- Импорт: `import Name from "./path";`; ресурс:
+  `resource Name from "./path.png";`.
 
 ## Отложено (v3+)
 
