@@ -27,7 +27,7 @@ fn item() -> Value {
 }
 
 fn push_row(component: &mut Component, position: f64) {
-    component.push_build_scope(&[
+    component.push_build_scope(vec![
         Variable {
             name: VariableId::from_index(0),
             value: item(),

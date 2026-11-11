@@ -49,8 +49,8 @@ pub struct Component {
     functions: Vec<Function>,
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
-    build_scopes: Vec<Vec<Variable>>,
-    scopes_snapshot: OnceCell<Rc<[Vec<Variable>]>>,
+    build_scopes: Vec<Rc<[Variable]>>,
+    scopes_snapshot: OnceCell<Rc<[Rc<[Variable]>]>>,
     revision: Signal<u64>,
 }
 
@@ -115,14 +115,10 @@ impl Component {
         std::mem::take(&mut self.pending_every)
     }
 
-    pub fn push_build_scope(&mut self, variables: &[Variable]) {
-        self.environment.push_frame();
-        for variable in variables {
-            let _ = self
-                .environment
-                .declare(variable.name, variable.value.clone(), false);
-        }
-        self.build_scopes.push(variables.to_vec());
+    pub fn push_build_scope(&mut self, variables: Vec<Variable>) {
+        let scope: Rc<[Variable]> = variables.into();
+        self.environment.push_scope(Rc::clone(&scope));
+        self.build_scopes.push(scope);
         self.scopes_snapshot.take();
     }
 
@@ -132,16 +128,16 @@ impl Component {
         self.scopes_snapshot.take();
     }
 
-    pub fn build_scopes(&self) -> Rc<[Vec<Variable>]> {
+    pub fn build_scopes(&self) -> Rc<[Rc<[Variable]>]> {
         Rc::clone(
             self.scopes_snapshot
                 .get_or_init(|| Rc::from(self.build_scopes.clone())),
         )
     }
 
-    pub fn push_binding_scopes(&mut self, scopes: &Rc<[Vec<Variable>]>) {
-        for index in 0..scopes.len() {
-            self.environment.push_scope(scopes, index);
+    pub fn push_binding_scopes(&mut self, scopes: &Rc<[Rc<[Variable]>]>) {
+        for scope in scopes.iter() {
+            self.environment.push_scope(Rc::clone(scope));
         }
     }
 

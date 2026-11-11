@@ -15,10 +15,7 @@ struct Binding {
 #[derive(Debug, Clone, PartialEq)]
 enum Frame {
     Bindings(Vec<Binding>),
-    Scope {
-        scopes: Rc<[Vec<Variable>]>,
-        index: usize,
-    },
+    Scope(Rc<[Variable]>),
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -44,11 +41,8 @@ impl Environment {
         self.frames.push(Frame::Bindings(Vec::new()));
     }
 
-    pub fn push_scope(&mut self, scopes: &Rc<[Vec<Variable>]>, index: usize) {
-        self.frames.push(Frame::Scope {
-            scopes: Rc::clone(scopes),
-            index,
-        });
+    pub fn push_scope(&mut self, scope: Rc<[Variable]>) {
+        self.frames.push(Frame::Scope(scope));
     }
 
     pub fn pop_frame(&mut self) {
@@ -85,12 +79,10 @@ impl Environment {
         for frame in self.frames.iter_mut().rev() {
             let bindings = match frame {
                 Frame::Bindings(bindings) => bindings,
-                Frame::Scope { scopes, index }
-                    if scopes[*index].iter().any(|variable| variable.name == id) =>
-                {
+                Frame::Scope(scope) if scope.iter().any(|variable| variable.name == id) => {
                     return Err(Error::Constant(name.to_owned()));
                 }
-                Frame::Scope { .. } => continue,
+                Frame::Scope(_) => continue,
             };
             if let Some(binding) = bindings.iter_mut().find(|binding| binding.id == id) {
                 return binding.set(name, value);
@@ -112,10 +104,8 @@ impl Environment {
                         return Some(&binding.value);
                     }
                 }
-                Frame::Scope { scopes, index } => {
-                    if let Some(variable) =
-                        scopes[*index].iter().find(|variable| variable.name == id)
-                    {
+                Frame::Scope(scope) => {
+                    if let Some(variable) = scope.iter().find(|variable| variable.name == id) {
                         return Some(&variable.value);
                     }
                 }

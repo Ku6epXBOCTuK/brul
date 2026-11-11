@@ -328,7 +328,7 @@ window Demo (title: "demo") {
             "fn structure0_rebuild_0(component: &brul::ComponentHandle) -> brul::Rebuilt {"
         )
     );
-    assert!(module.contains("component.borrow_mut().push_build_scope(&["));
+    assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
     assert!(module.contains(
         "brul::Variable { name: brul::VariableId::from_index(1), value: item.clone() },"
     ));

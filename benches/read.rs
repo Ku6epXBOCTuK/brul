@@ -18,10 +18,10 @@ fn item() -> Value {
     )
 }
 
-fn row_scopes() -> std::rc::Rc<[Vec<Variable>]> {
+fn row_scopes() -> std::rc::Rc<[std::rc::Rc<[Variable]>]> {
     let mut scoped = Component::new();
     scoped.set_names(NAMES);
-    scoped.push_build_scope(&[
+    scoped.push_build_scope(vec![
         Variable {
             name: VariableId::from_index(0),
             value: item(),

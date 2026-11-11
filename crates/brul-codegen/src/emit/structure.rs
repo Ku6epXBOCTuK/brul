@@ -185,7 +185,7 @@ fn each_arm(
         "        other => return Err(format!(\"each expects Array, got {}\", other.type_name())),\n    };\n",
     );
     out.push_str("    for (position, item) in items.into_iter().enumerate() {\n");
-    out.push_str("        component.borrow_mut().push_build_scope(&[\n");
+    out.push_str("        component.borrow_mut().push_build_scope(vec![\n");
     let _ = writeln!(
         out,
         "            brul::Variable {{ name: brul::VariableId::from_index({}), value: item.clone() }},",

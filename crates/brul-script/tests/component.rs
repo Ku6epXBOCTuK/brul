@@ -187,7 +187,7 @@ fn evaluation_resolves_identifiers() {
 #[test]
 fn build_scopes_share_their_snapshot_until_the_stack_changes() {
     let mut component = component();
-    component.push_build_scope(&[Variable {
+    component.push_build_scope(vec![Variable {
         name: id("item"),
         value: Value::Number(1.0),
     }]);
@@ -197,7 +197,7 @@ fn build_scopes_share_their_snapshot_until_the_stack_changes() {
     assert!(Rc::ptr_eq(&first, &second));
     assert_eq!(first.len(), 1);
 
-    component.push_build_scope(&[Variable {
+    component.push_build_scope(vec![Variable {
         name: id("row"),
         value: Value::Number(2.0),
     }]);
@@ -245,10 +245,10 @@ fn reading_a_property_tracks_it() {
 #[test]
 fn a_scoped_variable_is_readable_but_not_assignable() {
     let mut component = component();
-    let scopes: Rc<[Vec<Variable>]> = Rc::from(vec![vec![Variable {
+    let scopes: Rc<[Rc<[Variable]>]> = Rc::from(vec![Rc::from(vec![Variable {
         name: id("item"),
         value: Value::Number(1.0),
-    }]]);
+    }])]);
 
     component.push_binding_scopes(&scopes);
     assert_eq!(component.read("item"), Ok(Value::Number(1.0)));

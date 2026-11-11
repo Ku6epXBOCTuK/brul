@@ -26,7 +26,7 @@ pub struct Context {
 pub struct Binding {
     pub widget: WidgetId,
     pub target: BindingTarget,
-    pub scopes: Rc<[Vec<Variable>]>,
+    pub scopes: Rc<[Rc<[Variable]>]>,
     pub component: ComponentHandle,
 }
 
@@ -48,7 +48,7 @@ pub struct PropBinding {
     pub name: VariableId,
     pub ty: PropType,
     pub expression: Expression,
-    pub scopes: Rc<[Vec<Variable>]>,
+    pub scopes: Rc<[Rc<[Variable]>]>,
     pub component: ComponentHandle,
 }
 
