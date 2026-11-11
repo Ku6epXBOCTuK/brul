@@ -14,7 +14,7 @@ use crate::names::VariableId;
 use crate::value::Value;
 
 struct Property {
-    name: String,
+    id: VariableId,
     value: Signal<Value>,
 }
 
@@ -205,12 +205,12 @@ impl Component {
         Ok(())
     }
 
-    pub fn declare_property(&mut self, name: &str, value: Value) -> Result<(), Error> {
-        if self.property(name).is_some() {
-            return Err(Error::Redeclared(name.to_owned()));
+    pub fn declare_property(&mut self, id: VariableId, value: Value) -> Result<(), Error> {
+        if self.property(id).is_some() {
+            return Err(Error::Redeclared(self.name(id).to_owned()));
         }
         self.properties.push(Property {
-            name: name.to_owned(),
+            id,
             value: Signal::new(value),
         });
         self.changed();
@@ -222,41 +222,27 @@ impl Component {
     }
 
     pub fn read(&self, name: &str) -> Result<Value, Error> {
-        if let Some(id) = self.id(name)
-            && let Some(value) = self.environment.get(id)
-        {
-            return Ok(value.clone());
+        match self.id(name) {
+            Some(id) => self.read_id(id),
+            None => Err(Error::Undefined(name.to_owned())),
         }
-        if let Some(property) = self.property(name) {
-            return Ok(property.value.get());
-        }
-        Err(Error::Undefined(name.to_owned()))
     }
 
     pub fn read_id(&self, id: VariableId) -> Result<Value, Error> {
         if let Some(value) = self.environment.get(id) {
             return Ok(value.clone());
         }
-        if let Some(property) = self.property(self.name(id)) {
+        if let Some(property) = self.property(id) {
             return Ok(property.value.get());
         }
         Err(Error::Undefined(self.name(id).to_owned()))
     }
 
     pub fn assign(&mut self, name: &str, value: Value) -> Result<(), Error> {
-        if let Some(id) = self.id(name)
-            && self.environment.contains(id)
-        {
-            self.environment.assign(id, value)?;
-            self.changed();
-            return Ok(());
+        match self.id(name) {
+            Some(id) => self.assign_id(id, value),
+            None => Err(Error::Undefined(name.to_owned())),
         }
-        if let Some(property) = self.property(name) {
-            property.value.set(value);
-            self.changed();
-            return Ok(());
-        }
-        Err(Error::Undefined(name.to_owned()))
     }
 
     pub fn assign_id(&mut self, id: VariableId, value: Value) -> Result<(), Error> {
@@ -265,39 +251,36 @@ impl Component {
             self.changed();
             return Ok(());
         }
-        let name = self.name(id);
-        if let Some(property) = self.property(name) {
+        if let Some(property) = self.property(id) {
             property.value.set(value);
             self.changed();
             return Ok(());
         }
-        Err(Error::Undefined(name.to_owned()))
+        Err(Error::Undefined(self.name(id).to_owned()))
     }
 
-    pub fn assign_property(&mut self, name: &str, value: Value) -> Result<(), Error> {
-        if let Some(property) = self.property(name) {
+    pub fn assign_property(&mut self, id: VariableId, value: Value) -> Result<(), Error> {
+        if let Some(property) = self.property(id) {
             property.value.set(value);
             self.changed();
             return Ok(());
         }
-        Err(Error::Undefined(name.to_owned()))
+        Err(Error::Undefined(self.name(id).to_owned()))
     }
 
     fn changed(&self) {
         self.revision.update(|revision| *revision += 1);
     }
 
-    fn property(&self, name: &str) -> Option<&Property> {
-        self.properties
-            .iter()
-            .find(|property| property.name == name)
+    fn property(&self, id: VariableId) -> Option<&Property> {
+        self.properties.iter().find(|property| property.id == id)
     }
 
-    fn name(&self, id: VariableId) -> &'static str {
+    pub fn name(&self, id: VariableId) -> &'static str {
         self.names
             .get(id.index() as usize)
             .copied()
-            .expect("variable id is in the name table")
+            .unwrap_or("<unknown>")
     }
 
     pub fn id(&self, name: &str) -> Option<VariableId> {

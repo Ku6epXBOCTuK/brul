@@ -419,7 +419,7 @@ pub(crate) fn apply_prop(prop: &PropBinding) {
     let value = (prop.expression)(&mut prop.component.borrow_mut()).ok();
     if let Some(value) = value
         && accepts_prop(&value, prop.ty)
-        && let Err(error) = prop.target.borrow_mut().assign_property(&prop.name, value)
+        && let Err(error) = prop.target.borrow_mut().assign_property(prop.name, value)
     {
         eprintln!("{error}");
     }
@@ -443,6 +443,7 @@ mod tests {
 
     const NAMES: &[&str] = &[
         "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code",
+        "accent", "missing",
     ];
 
     macro_rules! read {
@@ -654,10 +655,11 @@ mod tests {
         ty: PropType,
         expression: brul_codegen::runtime::Expression,
     ) -> PropBinding {
+        let name = target.borrow().id(name).expect("prop name is in the table");
         PropBinding {
             widget: Widget::text("").id(),
             target: Rc::clone(target),
-            name: name.to_owned(),
+            name,
             ty,
             expression,
             scopes: Vec::new().into(),
@@ -667,8 +669,10 @@ mod tests {
 
     fn child_with_property(name: &str, value: Value) -> ComponentHandle {
         let mut component = Component::new();
+        component.set_names(NAMES);
+        let id = component.id(name).expect("prop name is in the table");
         component
-            .declare_property(name, value)
+            .declare_property(id, value)
             .expect("declared property");
         Rc::new(RefCell::new(component))
     }

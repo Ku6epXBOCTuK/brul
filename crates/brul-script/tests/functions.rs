@@ -50,8 +50,9 @@ fn local_declarations_do_not_leak_between_calls() {
 #[test]
 fn function_may_mutate_a_property() {
     let mut component = component();
+    let count = component.id("count").expect("count is in the table");
     component
-        .declare_property("count", Value::Number(0.0))
+        .declare_property(count, Value::Number(0.0))
         .unwrap();
     let program = parse("function bump() { count = count + 1; } bump();").unwrap();
     execute_program(&mut component, &program).unwrap();

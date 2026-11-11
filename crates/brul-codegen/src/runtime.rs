@@ -4,7 +4,9 @@ use std::rc::Rc;
 
 use brul_gui::{Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Error as ScriptError, Host, Value, Variable, execute_program};
+use brul_script::{
+    Component, Error as ScriptError, Host, Value, Variable, VariableId, execute_program,
+};
 use brul_syntax::markup::PropType;
 use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
@@ -43,7 +45,7 @@ impl Binding {
 pub struct PropBinding {
     pub widget: WidgetId,
     pub target: ComponentHandle,
-    pub name: String,
+    pub name: VariableId,
     pub ty: PropType,
     pub expression: Expression,
     pub scopes: Rc<[Vec<Variable>]>,
@@ -158,7 +160,7 @@ pub struct Built {
 pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, String>;
 
 pub struct PropArgument {
-    pub name: &'static str,
+    pub name: VariableId,
     pub ty: PropType,
     pub expression: Expression,
 }
@@ -265,12 +267,12 @@ fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), Str
     }
 }
 
-fn declare_props<'a>(
+fn declare_props(
     component: &ComponentHandle,
     parent: &ComponentHandle,
-    props: &'a [PropArgument],
+    props: &[PropArgument],
     name: &str,
-) -> Result<Vec<&'a str>, String> {
+) -> Result<Vec<VariableId>, String> {
     let mut given = Vec::new();
     for argument in props {
         let value = evaluate_argument(parent, argument)?;
@@ -283,7 +285,7 @@ fn declare_props<'a>(
 fn declare_defaults(
     component: &ComponentHandle,
     defaults: &[PropArgument],
-    given: &[&str],
+    given: &[VariableId],
     name: &str,
 ) -> Result<(), String> {
     for argument in defaults {
@@ -307,7 +309,7 @@ fn bind(
         built.props.push(PropBinding {
             widget,
             target: Rc::clone(component),
-            name: argument.name.to_owned(),
+            name: argument.name,
             ty: argument.ty,
             expression: argument.expression,
             scopes: parent.borrow().build_scopes(),
@@ -330,9 +332,9 @@ fn assign(
     name: &str,
 ) -> Result<(), String> {
     if !accepts_prop(&value, argument.ty) {
+        let property = component.borrow().name(argument.name);
         return Err(format!(
-            "property '{}' of component '{name}' expects {}, got {}",
-            argument.name,
+            "property '{property}' of component '{name}' expects {}, got {}",
             prop_name(argument.ty),
             value.type_name()
         ));

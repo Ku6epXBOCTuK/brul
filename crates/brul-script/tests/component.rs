@@ -38,7 +38,7 @@ fn failure(component: &mut Component, source: &str) -> Error {
 fn property_reads_its_value() {
     let mut component = component();
     component
-        .declare_property("checked", Value::Bool(false))
+        .declare_property(id("checked"), Value::Bool(false))
         .unwrap();
 
     assert_eq!(component.read("checked"), Ok(Value::Bool(false)));
@@ -51,7 +51,7 @@ fn ids_address_the_same_bindings_as_names() {
         .declare("count", Value::Number(2.0), false)
         .unwrap();
     component
-        .declare_property("checked", Value::Bool(false))
+        .declare_property(id("checked"), Value::Bool(false))
         .unwrap();
 
     assert_eq!(component.read_id(id("count")), Ok(Value::Number(2.0)));
@@ -66,7 +66,7 @@ fn ids_address_the_same_bindings_as_names() {
 fn variable_shadows_a_property() {
     let mut component = component();
     component
-        .declare_property("count", Value::Number(1.0))
+        .declare_property(id("count"), Value::Number(1.0))
         .unwrap();
     component
         .declare("count", Value::Number(2.0), false)
@@ -79,7 +79,7 @@ fn variable_shadows_a_property() {
 fn assignment_writes_a_property() {
     let mut component = component();
     component
-        .declare_property("checked", Value::Bool(false))
+        .declare_property(id("checked"), Value::Bool(false))
         .unwrap();
 
     assert_eq!(
@@ -110,7 +110,7 @@ fn compound_assignment_reads_the_current_value() {
         .declare("count", Value::Number(1.0), false)
         .unwrap();
     component
-        .declare_property("offset", Value::Number(4.0))
+        .declare_property(id("offset"), Value::Number(4.0))
         .unwrap();
 
     assert_eq!(
@@ -155,11 +155,11 @@ fn unknown_names_are_undefined() {
 fn declaring_a_property_twice_is_rejected() {
     let mut component = component();
     component
-        .declare_property("checked", Value::Bool(false))
+        .declare_property(id("checked"), Value::Bool(false))
         .unwrap();
 
     assert_eq!(
-        component.declare_property("checked", Value::Bool(true)),
+        component.declare_property(id("checked"), Value::Bool(true)),
         Err(Error::Redeclared("checked".to_owned()))
     );
 }
@@ -171,7 +171,7 @@ fn evaluation_resolves_identifiers() {
         .declare("count", Value::Number(2.0), false)
         .unwrap();
     component
-        .declare_property("label", Value::String("items".to_owned()))
+        .declare_property(id("label"), Value::String("items".to_owned()))
         .unwrap();
 
     assert_eq!(
@@ -217,7 +217,7 @@ fn reading_a_property_tracks_it() {
     let component = Rc::new(RefCell::new(component()));
     component
         .borrow_mut()
-        .declare_property("checked", Value::Bool(false))
+        .declare_property(id("checked"), Value::Bool(false))
         .unwrap();
 
     let seen = Rc::new(RefCell::new(Vec::new()));

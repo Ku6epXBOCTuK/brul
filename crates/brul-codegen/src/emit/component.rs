@@ -253,9 +253,13 @@ fn arguments(
 ) {
     let _ = writeln!(out, "{inner}    {field}: &[");
     for (name, ty, value) in arguments {
+        let id = names
+            .get(name)
+            .expect("prop is collected into the name table")
+            .index();
         let _ = writeln!(
             out,
-            "{inner}        brul::PropArgument {{ name: {name:?}, ty: brul::PropType::{ty:?}, expression: {} }},",
+            "{inner}        brul::PropArgument {{ name: brul::VariableId::from_index({id}), ty: brul::PropType::{ty:?}, expression: {} }},",
             expression::closure(value, names)
         );
     }

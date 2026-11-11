@@ -35,16 +35,25 @@ fn prop_component() -> Component {
     let mut component = Component::new();
     component.set_names(NAMES);
     component
-        .declare_property("icon", Value::String("folder".to_owned()))
+        .declare_property(
+            VariableId::from_index(2),
+            Value::String("folder".to_owned()),
+        )
         .unwrap();
     component
-        .declare_property("name", Value::String("projects".to_owned()))
+        .declare_property(
+            VariableId::from_index(3),
+            Value::String("projects".to_owned()),
+        )
         .unwrap();
     component
-        .declare_property("path", Value::String("C:/projects".to_owned()))
+        .declare_property(
+            VariableId::from_index(4),
+            Value::String("C:/projects".to_owned()),
+        )
         .unwrap();
     component
-        .declare_property("selected", Value::Bool(false))
+        .declare_property(VariableId::from_index(5), Value::Bool(false))
         .unwrap();
     component
 }
