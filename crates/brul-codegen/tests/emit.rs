@@ -106,7 +106,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
             {
                 let widget0 = brul_gui::Widget::column(vec![])
                 .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(108, 140, 255, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255)), ..brul_gui::WidgetStyle::default() }));
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(108, 140, 255, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStylePatch { background: Some(brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255))), ..brul_gui::WidgetStylePatch::default() }));
                 widget0
             }
         }
@@ -114,7 +114,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
             {
                 let widget0 = brul_gui::Widget::column(vec![])
                 .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(108, 140, 255, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255)), ..brul_gui::WidgetStyle::default() }));
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(108, 140, 255, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStylePatch { background: Some(brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255))), ..brul_gui::WidgetStylePatch::default() }));
                 widget0
             }
         }
@@ -122,7 +122,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
             {
                 let widget0 = brul_gui::Widget::column(vec![])
                 .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(17, 34, 51, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255)), ..brul_gui::WidgetStyle::default() }));
+                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(17, 34, 51, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStylePatch { background: Some(brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255))), ..brul_gui::WidgetStylePatch::default() }));
                 widget0
             }
         }
@@ -194,7 +194,7 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(
-        module.contains("vertical_align: brul_gui::VerticalAlign::Center"),
+        module.contains("vertical_align: Some(brul_gui::VerticalAlign::Center)"),
         "{module}"
     );
 }
@@ -215,7 +215,7 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(
         module.contains(
-            r#"brul_gui::Widget::text_with_styles("hi", brul_gui::TextStyleSet::new(brul_gui::TextStyle { weight: 500, ..brul_gui::TextStyle::default() }).with(brul_gui::StyleState::Hovered, brul_gui::TextStyle { weight: 600, ..brul_gui::TextStyle::default() }))"#
+            r#"brul_gui::Widget::text_with_styles("hi", brul_gui::TextStyleSet::new(brul_gui::TextStyle { weight: 500, ..brul_gui::TextStyle::default() }).with(brul_gui::StyleState::Hovered, brul_gui::TextStylePatch { weight: Some(600), ..brul_gui::TextStylePatch::default() }))"#
         ),
         "{module}"
     );

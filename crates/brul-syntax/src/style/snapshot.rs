@@ -85,33 +85,60 @@ impl Stylesheet {
         state: Option<State>,
         theme: Option<&str>,
     ) -> Result<Snapshot, SnapshotError> {
-        let theme = match theme {
-            Some(name) => Some(
-                self.themes
-                    .iter()
-                    .find(|theme| theme.name == name)
-                    .ok_or_else(|| SnapshotError::UnknownTheme(name.to_string()))?,
-            ),
-            None => self.themes.first(),
-        };
+        let theme = self.theme(theme)?;
         let mut snapshot = Snapshot::default();
         for class in classes {
-            for rule in self.rules.iter().filter(|rule| rule.class == *class) {
-                if rule.state.is_none() {
-                    snapshot.merge(&rule.properties, theme)?;
-                    snapshot.merge_animations(&rule.animations);
-                }
+            for rule in self
+                .rules
+                .iter()
+                .filter(|rule| rule.class == *class && rule.state.is_none())
+            {
+                snapshot.merge(&rule.properties, theme)?;
+                snapshot.merge_animations(&rule.animations);
             }
         }
         if let Some(state) = state {
-            for class in classes {
-                for rule in self
-                    .rules
-                    .iter()
-                    .filter(|rule| rule.class == *class && rule.state == Some(state))
-                {
-                    snapshot.merge(&rule.properties, theme)?;
-                }
+            let stated = self.stated_in(classes, state, theme)?;
+            snapshot.merge(&stated.properties, theme)?;
+        }
+        Ok(snapshot)
+    }
+
+    pub fn stated(
+        &self,
+        classes: &[&str],
+        state: State,
+        theme: Option<&str>,
+    ) -> Result<Snapshot, SnapshotError> {
+        self.stated_in(classes, state, self.theme(theme)?)
+    }
+
+    fn theme(&self, name: Option<&str>) -> Result<Option<&Theme>, SnapshotError> {
+        match name {
+            Some(name) => self
+                .themes
+                .iter()
+                .find(|theme| theme.name == name)
+                .map(Some)
+                .ok_or_else(|| SnapshotError::UnknownTheme(name.to_string())),
+            None => Ok(self.themes.first()),
+        }
+    }
+
+    fn stated_in(
+        &self,
+        classes: &[&str],
+        state: State,
+        theme: Option<&Theme>,
+    ) -> Result<Snapshot, SnapshotError> {
+        let mut snapshot = Snapshot::default();
+        for class in classes {
+            for rule in self
+                .rules
+                .iter()
+                .filter(|rule| rule.class == *class && rule.state == Some(state))
+            {
+                snapshot.merge(&rule.properties, theme)?;
             }
         }
         Ok(snapshot)

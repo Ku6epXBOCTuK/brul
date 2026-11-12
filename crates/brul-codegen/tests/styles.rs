@@ -184,6 +184,25 @@ fn vertical_alignment_reaches_the_base_and_the_state() {
 }
 
 #[test]
+fn states_layer_instead_of_replacing_each_other() {
+    let resolved = resolved(
+        ".a { background: #000000; border: 1px #111111; } .a:selected { border-color: #ff0000; } .a:hover { background: #00ff00; }",
+    );
+
+    let style = resolved.styles.resolve(brul_gui::WidgetState {
+        hovered: true,
+        selected: true,
+        ..brul_gui::WidgetState::default()
+    });
+
+    assert_eq!(
+        style.background,
+        brul_gui::Paint::Color(brul_gui::Color::rgba(0, 255, 0, 255))
+    );
+    assert_eq!(style.border, brul_gui::Color::rgba(255, 0, 0, 255));
+}
+
+#[test]
 fn animations_become_transitions_on_the_style_set() {
     let resolved =
         resolved(".a { background: #000000; animate background: 300ms; animate opacity: 50ms; }");

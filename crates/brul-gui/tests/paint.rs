@@ -1,6 +1,7 @@
 use brul_gui::{
     Color, Dimension, Dirty, Frame, LayoutStyle, Padding, Paint, Shadow, Size, StyleSet,
-    StyleState, TextEngine, Texture, VerticalAlign, Widget, WidgetStyle, WidgetTree,
+    StyleState, TextEngine, Texture, VerticalAlign, Widget, WidgetStyle, WidgetStylePatch,
+    WidgetTree,
 };
 
 fn view(color: Color, width: u32, height: u32) -> Widget {
@@ -164,9 +165,9 @@ fn dirty_region_leaves_the_rest_of_the_frame_alone() {
         })
         .with(
             StyleState::Checked,
-            WidgetStyle {
-                background: Paint::Color(blue),
-                ..WidgetStyle::default()
+            WidgetStylePatch {
+                background: Some(Paint::Color(blue)),
+                ..WidgetStylePatch::default()
             },
         ),
     );
@@ -418,7 +419,14 @@ fn removing_a_hovered_shadow_clears_its_tail() {
             shadow: base_shadow,
             ..WidgetStyle::default()
         })
-        .with(StyleState::Hovered, hovered),
+        .with(
+            StyleState::Hovered,
+            WidgetStylePatch {
+                background: Some(hovered.background),
+                shadow: Some(hovered.shadow.color),
+                ..WidgetStylePatch::default()
+            },
+        ),
     );
     let child_id = child.id();
     let (mut tree, engine, mut frame) = painted(padded_root(child));

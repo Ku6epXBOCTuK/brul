@@ -1,6 +1,7 @@
 use brul_gui::{
     Align, Color, Dimension, Gradient, Justify, LayoutStyle, Paint, Shadow, StyleSet, StyleState,
-    TextAlign, TextStyle, TextStyleSet, Transitions, VerticalAlign, WidgetStyle,
+    TextAlign, TextStyle, TextStylePatch, TextStyleSet, Transitions, VerticalAlign, WidgetStyle,
+    WidgetStylePatch,
 };
 
 pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
@@ -56,13 +57,13 @@ pub(super) fn style_set(set: StyleSet) -> Option<String> {
     let transitions = set.transitions();
     let mut states = Vec::new();
     for state in StyleState::ALL {
-        let style = set.resolve(state.flags());
-        if style != base {
-            states.push(format!(
-                ".with(brul_gui::StyleState::{state:?}, {})",
-                widget_style(style)
-            ));
-        }
+        let Some(patch) = set.patch(state) else {
+            continue;
+        };
+        states.push(format!(
+            ".with(brul_gui::StyleState::{state:?}, {})",
+            widget_style_patch(patch)
+        ));
     }
     if base == WidgetStyle::default() && states.is_empty() && transitions.is_empty() {
         return None;
@@ -171,19 +172,70 @@ fn widget_style(style: WidgetStyle) -> String {
     }
 }
 
+fn widget_style_patch(patch: &WidgetStylePatch) -> String {
+    let mut fields = Vec::new();
+    if let Some(background) = patch.background {
+        fields.push(format!("background: Some({})", paint(background)));
+    }
+    if let Some(border) = patch.border {
+        fields.push(format!("border: Some({})", color(border)));
+    }
+    if let Some(text) = patch.text {
+        fields.push(format!("text: Some({})", color(text)));
+    }
+    if let Some(tint) = patch.tint {
+        fields.push(format!("tint: Some({})", color(tint)));
+    }
+    if let Some(opacity) = patch.opacity {
+        fields.push(format!("opacity: Some({opacity:?}f32)"));
+    }
+    if let Some(align) = patch.vertical_align {
+        fields.push(format!("vertical_align: Some({})", vertical_align(align)));
+    }
+    if let Some(clip) = patch.clip {
+        fields.push(format!("clip: Some({clip})"));
+    }
+    if let Some(shadow) = patch.shadow {
+        fields.push(format!("shadow: Some({})", color(shadow)));
+    }
+    if fields.is_empty() {
+        "brul_gui::WidgetStylePatch::default()".to_owned()
+    } else {
+        format!(
+            "brul_gui::WidgetStylePatch {{ {}, ..brul_gui::WidgetStylePatch::default() }}",
+            fields.join(", ")
+        )
+    }
+}
+
+fn text_style_patch(patch: &TextStylePatch) -> String {
+    let mut fields = Vec::new();
+    if let Some(weight) = patch.weight {
+        fields.push(format!("weight: Some({weight})"));
+    }
+    if let Some(align) = patch.align {
+        fields.push(format!("align: Some({})", text_align(align)));
+    }
+    if fields.is_empty() {
+        "brul_gui::TextStylePatch::default()".to_owned()
+    } else {
+        format!(
+            "brul_gui::TextStylePatch {{ {}, ..brul_gui::TextStylePatch::default() }}",
+            fields.join(", ")
+        )
+    }
+}
+
 pub(super) fn text_style_set(set: &TextStyleSet) -> Option<String> {
     let base = set.base();
     let mut states = Vec::new();
     for state in StyleState::ALL {
-        let Some(style) = set.state(state) else {
+        let Some(patch) = set.patch(state) else {
             continue;
         };
-        if style == base {
-            continue;
-        }
         states.push(format!(
             ".with(brul_gui::StyleState::{state:?}, {})",
-            text_style_expr(style)
+            text_style_patch(patch)
         ));
     }
     if *base == TextStyle::default() && states.is_empty() {

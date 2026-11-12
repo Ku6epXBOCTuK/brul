@@ -1,7 +1,7 @@
 use brul_gui::{
     Color, Dimension, Direction, LayoutStyle, Padding, Paint, Size, StyleSet, StyleState,
-    TextAlign, TextEngine, TextStyle, TextStyleSet, Texture, Widget, WidgetError, WidgetEvent,
-    WidgetId, WidgetState, WidgetStyle, WidgetTree,
+    TextAlign, TextEngine, TextStyle, TextStylePatch, TextStyleSet, Texture, Widget, WidgetError,
+    WidgetEvent, WidgetId, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -357,7 +357,13 @@ fn hover_switches_style_snapshot() {
     let hovered = style(Color::rgb(4, 5, 6));
     let view = Widget::column(vec![])
         .with_layout(fixed(50, 50))
-        .with_styles(StyleSet::new(base).with(StyleState::Hovered, hovered));
+        .with_styles(StyleSet::new(base).with(
+            StyleState::Hovered,
+            WidgetStylePatch {
+                background: Some(hovered.background),
+                ..WidgetStylePatch::default()
+            },
+        ));
     let id = view.id();
     let mut tree = WidgetTree::new(view);
     let mut engine = TextEngine::new();
@@ -394,9 +400,9 @@ fn hover_switches_style_snapshot() {
 fn hover_switches_the_text_variant_without_relayout() {
     let styles = TextStyleSet::new(TextStyle::default()).with(
         StyleState::Hovered,
-        TextStyle {
-            align: TextAlign::Right,
-            ..TextStyle::default()
+        TextStylePatch {
+            align: Some(TextAlign::Right),
+            ..TextStylePatch::default()
         },
     );
     let text = Widget::text_with_styles("wide text", styles).with_layout(fixed(80, 20));
@@ -524,7 +530,13 @@ fn checked_state_switches_style_and_toggles() {
     let checked = style(Color::rgb(7, 8, 9));
     let view = Widget::column(vec![])
         .with_layout(fixed(20, 20))
-        .with_styles(StyleSet::new(base).with(StyleState::Checked, checked));
+        .with_styles(StyleSet::new(base).with(
+            StyleState::Checked,
+            WidgetStylePatch {
+                background: Some(checked.background),
+                ..WidgetStylePatch::default()
+            },
+        ));
     let id = view.id();
     let mut tree = WidgetTree::new(view);
     let mut engine = TextEngine::new();

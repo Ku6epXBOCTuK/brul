@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use brul_gui::{
     Align, Color, Dimension, Justify, LayoutStyle, Padding, Paint, StyleSet, StyleState, TextStyle,
-    TextStyleSet, Transitions, VerticalAlign, WidgetStyle,
+    TextStylePatch, TextStyleSet, Transitions, VerticalAlign, WidgetStyle, WidgetStylePatch,
 };
 use brul_syntax::style::{Kind, Property, Side, Snapshot, State, Stylesheet, Value};
 
@@ -22,16 +22,15 @@ pub fn resolve(
     let mut styles = StyleSet::new(base_style).with_transitions(transitions(&base)?);
     let mut text = TextStyleSet::new(base_text.clone());
     for state in StyleState::ALL {
-        let state_snapshot = snapshot(stylesheet, classes, Some(syntax_state(state)), theme)?;
-        if state_snapshot == base {
-            continue;
+        let stated = stylesheet
+            .stated(classes, syntax_state(state), theme)
+            .map_err(|error| error.to_string())?;
+        let (patch, text_patch) = state_patch(&stated)?;
+        if patch != WidgetStylePatch::default() {
+            styles = styles.with(state, patch);
         }
-        let (style, state_text) = state_styles(&state_snapshot, base_style, &base_text)?;
-        if style != base_style {
-            styles = styles.with(state, style);
-        }
-        if state_text != base_text {
-            text = text.with(state, state_text);
+        if text_patch != TextStylePatch::default() {
+            text = text.with(state, text_patch);
         }
     }
     Ok(Resolved {
@@ -62,16 +61,27 @@ fn base_styles(snapshot: &Snapshot) -> Result<(LayoutStyle, WidgetStyle, TextSty
     Ok((layout, style, text))
 }
 
-fn state_styles(
-    snapshot: &Snapshot,
-    style: WidgetStyle,
-    text: &TextStyle,
-) -> Result<(WidgetStyle, TextStyle), String> {
-    let mut layout = LayoutStyle::default();
-    let mut style = style;
-    let mut text = text.clone();
+fn state_patch(snapshot: &Snapshot) -> Result<(WidgetStylePatch, TextStylePatch), String> {
+    let mut style = WidgetStylePatch::default();
+    let mut text = TextStylePatch::default();
     for property in snapshot.properties() {
-        apply(property, &mut layout, &mut style, &mut text)?;
+        let value = &property.value;
+        let kind = property.kind;
+        match kind {
+            Kind::Background => style.background = Some(background(value)?),
+            Kind::BorderColor => style.border = Some(paint(value, kind)?),
+            Kind::Color => style.text = Some(paint(value, kind)?),
+            Kind::Tint => style.tint = Some(paint(value, kind)?),
+            Kind::Opacity => style.opacity = Some(number(value, kind)? as f32),
+            Kind::Clip => style.clip = Some(flag(value, kind)?),
+            Kind::ShadowColor => style.shadow = Some(paint(value, kind)?),
+            Kind::VerticalAlign => {
+                style.vertical_align = Some(vertical_align(keyword(value, kind)?))
+            }
+            Kind::TextAlign => text.align = Some(text_align(keyword(value, kind)?)),
+            Kind::FontWeight => text.weight = Some(number(value, kind)? as u16),
+            _ => {}
+        }
     }
     Ok((style, text))
 }

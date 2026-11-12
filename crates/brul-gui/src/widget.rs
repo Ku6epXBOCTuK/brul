@@ -11,7 +11,7 @@ use crate::layout::{
     self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, ScrollOffset, Size,
 };
 use crate::rect::{ClipRect, Shadow};
-use crate::text::{TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
+use crate::text::{TextAlign, TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
 use crate::texture::Texture;
 
 static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
@@ -76,6 +76,47 @@ impl Default for WidgetStyle {
             clip: false,
             scroll: false,
             shadow: Shadow::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WidgetStylePatch {
+    pub background: Option<Paint>,
+    pub border: Option<Color>,
+    pub text: Option<Color>,
+    pub tint: Option<Color>,
+    pub opacity: Option<f32>,
+    pub vertical_align: Option<VerticalAlign>,
+    pub clip: Option<bool>,
+    pub shadow: Option<Color>,
+}
+
+impl WidgetStyle {
+    fn apply(&mut self, patch: &WidgetStylePatch) {
+        if let Some(background) = patch.background {
+            self.background = background;
+        }
+        if let Some(border) = patch.border {
+            self.border = border;
+        }
+        if let Some(text) = patch.text {
+            self.text = text;
+        }
+        if let Some(tint) = patch.tint {
+            self.tint = Some(tint);
+        }
+        if let Some(opacity) = patch.opacity {
+            self.opacity = opacity;
+        }
+        if let Some(align) = patch.vertical_align {
+            self.vertical_align = align;
+        }
+        if let Some(clip) = patch.clip {
+            self.clip = clip;
+        }
+        if let Some(color) = patch.shadow {
+            self.shadow.color = color;
         }
     }
 }
@@ -149,11 +190,11 @@ impl Transitions {
 pub struct StyleSet {
     base: WidgetStyle,
     transitions: Transitions,
-    hovered: Option<WidgetStyle>,
-    pressed: Option<WidgetStyle>,
-    checked: Option<WidgetStyle>,
-    selected: Option<WidgetStyle>,
-    disabled: Option<WidgetStyle>,
+    hovered: Option<WidgetStylePatch>,
+    pressed: Option<WidgetStylePatch>,
+    checked: Option<WidgetStylePatch>,
+    selected: Option<WidgetStylePatch>,
+    disabled: Option<WidgetStylePatch>,
 }
 
 impl StyleSet {
@@ -169,13 +210,13 @@ impl StyleSet {
         self
     }
 
-    pub fn with(mut self, state: StyleState, style: WidgetStyle) -> Self {
+    pub fn with(mut self, state: StyleState, patch: WidgetStylePatch) -> Self {
         match state {
-            StyleState::Hovered => self.hovered = Some(style),
-            StyleState::Pressed => self.pressed = Some(style),
-            StyleState::Checked => self.checked = Some(style),
-            StyleState::Selected => self.selected = Some(style),
-            StyleState::Disabled => self.disabled = Some(style),
+            StyleState::Hovered => self.hovered = Some(patch),
+            StyleState::Pressed => self.pressed = Some(patch),
+            StyleState::Checked => self.checked = Some(patch),
+            StyleState::Selected => self.selected = Some(patch),
+            StyleState::Disabled => self.disabled = Some(patch),
         }
         self
     }
@@ -184,26 +225,33 @@ impl StyleSet {
         self.base
     }
 
+    pub fn patch(&self, state: StyleState) -> Option<&WidgetStylePatch> {
+        match state {
+            StyleState::Hovered => self.hovered.as_ref(),
+            StyleState::Pressed => self.pressed.as_ref(),
+            StyleState::Checked => self.checked.as_ref(),
+            StyleState::Selected => self.selected.as_ref(),
+            StyleState::Disabled => self.disabled.as_ref(),
+        }
+    }
+
     pub fn transitions(&self) -> Transitions {
         self.transitions
     }
 
     pub fn resolve(&self, state: WidgetState) -> WidgetStyle {
         let mut style = self.base;
-        if state.selected {
-            style = self.selected.unwrap_or(style);
-        }
-        if state.checked {
-            style = self.checked.unwrap_or(style);
-        }
-        if state.hovered {
-            style = self.hovered.unwrap_or(style);
-        }
-        if state.pressed {
-            style = self.pressed.unwrap_or(style);
-        }
-        if state.disabled {
-            style = self.disabled.unwrap_or(style);
+        let layers = [
+            (state.selected, self.selected),
+            (state.checked, self.checked),
+            (state.hovered, self.hovered),
+            (state.pressed, self.pressed),
+            (state.disabled, self.disabled),
+        ];
+        for (active, patch) in layers {
+            if let (true, Some(patch)) = (active, patch) {
+                style.apply(&patch);
+            }
         }
         style
     }
@@ -293,14 +341,20 @@ fn tween_tint(from: Option<Color>, to: Option<Color>, progress: f32) -> Option<C
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TextStylePatch {
+    pub weight: Option<u16>,
+    pub align: Option<TextAlign>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextStyleSet {
     base: TextStyle,
-    hovered: Option<TextStyle>,
-    pressed: Option<TextStyle>,
-    checked: Option<TextStyle>,
-    selected: Option<TextStyle>,
-    disabled: Option<TextStyle>,
+    hovered: Option<TextStylePatch>,
+    pressed: Option<TextStylePatch>,
+    checked: Option<TextStylePatch>,
+    selected: Option<TextStylePatch>,
+    disabled: Option<TextStylePatch>,
 }
 
 impl TextStyleSet {
@@ -311,13 +365,13 @@ impl TextStyleSet {
         }
     }
 
-    pub fn with(mut self, state: StyleState, style: TextStyle) -> Self {
+    pub fn with(mut self, state: StyleState, patch: TextStylePatch) -> Self {
         match state {
-            StyleState::Hovered => self.hovered = Some(style),
-            StyleState::Pressed => self.pressed = Some(style),
-            StyleState::Checked => self.checked = Some(style),
-            StyleState::Selected => self.selected = Some(style),
-            StyleState::Disabled => self.disabled = Some(style),
+            StyleState::Hovered => self.hovered = Some(patch),
+            StyleState::Pressed => self.pressed = Some(patch),
+            StyleState::Checked => self.checked = Some(patch),
+            StyleState::Selected => self.selected = Some(patch),
+            StyleState::Disabled => self.disabled = Some(patch),
         }
         self
     }
@@ -326,7 +380,7 @@ impl TextStyleSet {
         &self.base
     }
 
-    pub fn state(&self, state: StyleState) -> Option<&TextStyle> {
+    pub fn patch(&self, state: StyleState) -> Option<&TextStylePatch> {
         match state {
             StyleState::Hovered => self.hovered.as_ref(),
             StyleState::Pressed => self.pressed.as_ref(),
@@ -338,20 +392,23 @@ impl TextStyleSet {
 
     pub fn resolve(&self, state: WidgetState) -> TextStyle {
         let mut style = self.base.clone();
-        if state.selected {
-            style = self.selected.clone().unwrap_or(style);
-        }
-        if state.checked {
-            style = self.checked.clone().unwrap_or(style);
-        }
-        if state.hovered {
-            style = self.hovered.clone().unwrap_or(style);
-        }
-        if state.pressed {
-            style = self.pressed.clone().unwrap_or(style);
-        }
-        if state.disabled {
-            style = self.disabled.clone().unwrap_or(style);
+        let layers = [
+            (state.selected, self.selected),
+            (state.checked, self.checked),
+            (state.hovered, self.hovered),
+            (state.pressed, self.pressed),
+            (state.disabled, self.disabled),
+        ];
+        for (active, patch) in layers {
+            let Some(patch) = patch.filter(|_| active) else {
+                continue;
+            };
+            if let Some(weight) = patch.weight {
+                style.weight = weight;
+            }
+            if let Some(align) = patch.align {
+                style.align = align;
+            }
         }
         style
     }
@@ -1557,15 +1614,13 @@ impl Pass<'_> {
                         self.scale,
                     )?);
                     for state in StyleState::ALL {
-                        let Some(style) = styles.state(state) else {
-                            continue;
-                        };
-                        if style == styles.base() {
+                        let style = styles.resolve(state.flags());
+                        if style == *styles.base() {
                             continue;
                         }
                         variants = variants.with(
                             state,
-                            self.engine.layout(content, style, max_width, self.scale)?,
+                            self.engine.layout(content, &style, max_width, self.scale)?,
                         );
                     }
                     self.texts.insert(

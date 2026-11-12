@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use brul_gui::{
     Color, Dimension, LayoutStyle, Paint, Size, StyleSet, StyleState, TextEngine, Widget,
-    WidgetStyle, WidgetTree,
+    WidgetStyle, WidgetStylePatch, WidgetTree,
 };
 use brul_reactive::{Effect, Signal, batch};
 
@@ -24,9 +24,9 @@ fn signal_change_reaches_widget_state_snapshot_and_dirty_set() {
             })
             .with(
                 StyleState::Checked,
-                WidgetStyle {
-                    background: Paint::Color(checked),
-                    ..WidgetStyle::default()
+                WidgetStylePatch {
+                    background: Some(Paint::Color(checked)),
+                    ..WidgetStylePatch::default()
                 },
             ),
         );

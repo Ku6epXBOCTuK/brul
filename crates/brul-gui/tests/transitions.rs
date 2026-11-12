@@ -31,7 +31,13 @@ fn hover_tree() -> (WidgetTree, brul_gui::WidgetId) {
         .with_layout(fixed(50, 50))
         .with_styles(
             StyleSet::new(base)
-                .with(StyleState::Hovered, hovered)
+                .with(
+                    StyleState::Hovered,
+                    brul_gui::WidgetStylePatch {
+                        background: Some(hovered.background),
+                        ..brul_gui::WidgetStylePatch::default()
+                    },
+                )
                 .with_transitions(transitions),
         );
     let id = view.id();

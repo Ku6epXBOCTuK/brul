@@ -15,9 +15,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         radius: 12,
         ..WidgetStyle::default()
     };
-    let active = WidgetStyle {
-        background: Paint::Color(Color::rgb(34, 197, 94)),
-        ..base
+    let active = brul_gui::WidgetStylePatch {
+        background: Some(Paint::Color(Color::rgb(34, 197, 94))),
+        ..brul_gui::WidgetStylePatch::default()
     };
     let checkbox = Widget::column(vec![Widget::text("Click me")])
         .with_layout(LayoutStyle {
