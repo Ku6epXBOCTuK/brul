@@ -4,8 +4,6 @@ use brul_syntax::style::Stylesheet;
 
 use crate::{Import, Registry, Resource};
 
-use palette::Palette;
-
 mod classes;
 mod component;
 mod element;
@@ -13,7 +11,6 @@ mod events;
 mod expression;
 mod module;
 mod names;
-mod palette;
 mod resources;
 mod script;
 mod structure;
@@ -95,10 +92,6 @@ impl<'a> Frame<'a> {
 }
 
 impl<'a> Emit<'a> {
-    pub(super) fn palette(&self, theme: Option<&str>) -> Palette<'a> {
-        Palette::new(self.stylesheet, theme)
-    }
-
     pub(super) fn default_theme(&self) -> Option<&'a str> {
         self.stylesheet
             .themes

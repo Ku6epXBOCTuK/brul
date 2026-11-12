@@ -14,7 +14,7 @@ window Demo (title: "demo") {
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     component.borrow_mut().set_names(names());
-    let palette = palette(theme)?;
+    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
@@ -41,13 +41,23 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     })
 }
 
-#[allow(dead_code)]
-pub struct Palette {}
-fn palette(theme: Option<&str>) -> Result<Palette, String> {
-    match theme {
-        None => Ok(Palette {}),
-        Some(theme) => Err(format!("unknown theme '{theme}'")),
-    }
+fn styles() -> &'static brul::style::Stylesheet {
+    use brul::style as s;
+
+    static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
+        themes: vec![],
+        rules: vec![],
+    });
+    &STYLES
+}
+
+fn styled(
+    widget: brul::gui::Widget,
+    classes: &[&str],
+    theme: Option<&str>,
+) -> Result<brul::gui::Widget, String> {
+    brul::gui::style::styled(widget, styles(), classes, theme)
+        .map_err(|error| error.to_string())
 }
 
 pub fn window() -> brul::WindowConfig {
@@ -105,15 +115,13 @@ window Styled (title: "styled") {
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     component.borrow_mut().set_names(names());
-    let palette = palette(theme)?;
+    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = brul::gui::Widget::column(vec![])
-            .with_layout(brul::gui::LayoutStyle { width: brul::gui::Dimension::Px(10), ..brul::gui::LayoutStyle::default() })
-            .with_styles(brul::gui::StyleSet::new(brul::gui::WidgetStyle { background: brul::gui::Paint::Color(palette.accent), ..brul::gui::WidgetStyle::default() }).with(brul::gui::StyleState::Checked, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color::rgba(255, 0, 0, 255))), ..brul::gui::WidgetStylePatch::default() }));
+            let widget0 = styled(brul::gui::Widget::column(vec![]), &["box"], theme)?;
             widget0
         }
     };
@@ -125,16 +133,48 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     })
 }
 
-#[allow(dead_code)]
-pub struct Palette {
-    accent: brul::gui::Color,
+fn styles() -> &'static brul::style::Stylesheet {
+    use brul::style as s;
+
+    static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
+        themes: vec![
+            s::Theme { name: "dark".into(), properties: vec![
+                s::ThemeEntry { key: "accent".into(), value: s::Value::Color(s::Color::rgba(108, 140, 255, 255)) },
+            ] },
+            s::Theme { name: "light".into(), properties: vec![
+                s::ThemeEntry { key: "accent".into(), value: s::Value::Color(s::Color::rgba(17, 34, 51, 255)) },
+            ] },
+        ],
+        rules: vec![
+            s::ClassRule {
+                class: "box".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Width, value: s::Value::Px(10.0) },
+                    s::Property { kind: s::Kind::Background, value: s::Value::ThemeRef("accent".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "box".into(),
+                state: Some(s::State::Checked),
+                properties: vec![
+                    s::Property { kind: s::Kind::Background, value: s::Value::Color(s::Color::rgba(255, 0, 0, 255)) },
+                ],
+                animations: vec![],
+            },
+        ],
+    });
+    &STYLES
 }
-fn palette(theme: Option<&str>) -> Result<Palette, String> {
-    match theme {
-        None | Some("dark") => Ok(Palette { accent: brul::gui::Color::rgba(108, 140, 255, 255) }),
-        Some("light") => Ok(Palette { accent: brul::gui::Color::rgba(17, 34, 51, 255) }),
-        Some(theme) => Err(format!("unknown theme '{theme}'")),
-    }
+
+fn styled(
+    widget: brul::gui::Widget,
+    classes: &[&str],
+    theme: Option<&str>,
+) -> Result<brul::gui::Widget, String> {
+    brul::gui::style::styled(widget, styles(), classes, theme)
+        .map_err(|error| error.to_string())
 }
 
 pub fn window() -> brul::WindowConfig {
@@ -203,9 +243,10 @@ window Demo (title: "demo") {
         "{module}"
     );
     assert!(
-        module.contains("\"tone\" => Some(brul::gui::Class {"),
+        module.contains("brul::gui::style::class(styles(), name, None).ok()"),
         "{module}"
     );
+    assert!(module.contains("class: \"tone\".into()"), "{module}");
 }
 
 #[test]
@@ -241,10 +282,8 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let module = emit::module(source).expect("module");
-    assert!(
-        module.contains("vertical_align: Some(brul::gui::VerticalAlign::Center)"),
-        "{module}"
-    );
+    assert!(module.contains("s::Kind::VerticalAlign"), "{module}");
+    assert!(module.contains("state: Some(s::State::Hover)"), "{module}");
 }
 
 #[test]
@@ -262,9 +301,17 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(
-        module.contains(
-            r#"brul::gui::Widget::text_with_styles("hi", brul::gui::TextStyleSet::new(brul::gui::TextStyle { weight: 500, ..brul::gui::TextStyle::default() }).with(brul::gui::StyleState::Hovered, brul::gui::TextStylePatch { weight: Some(600), ..brul::gui::TextStylePatch::default() }))"#
-        ),
+        module.contains("styled(brul::gui::Widget::text(\"hi\"), &[\"a\"], theme)?"),
+        "{module}"
+    );
+    assert!(
+        module
+            .contains("s::Property { kind: s::Kind::FontWeight, value: s::Value::Number(500.0) }"),
+        "{module}"
+    );
+    assert!(
+        module
+            .contains("s::Property { kind: s::Kind::FontWeight, value: s::Value::Number(600.0) }"),
         "{module}"
     );
 }
@@ -354,7 +401,7 @@ window Demo (title: "demo") {
         "fn structure0_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let palette = palette(theme)?;"
+        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;"
     ));
     assert!(module.contains("brul::Value::Bool(true) => vec!["));
     assert!(module.contains("brul::Value::Bool(false) => vec!["));
@@ -379,7 +426,7 @@ window Demo (title: "demo") {
         "fn structure0_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let palette = palette(theme)?;"
+        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;"
     ));
     assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
     assert!(module.contains(
@@ -945,7 +992,7 @@ fn emits_a_linear_gradient_background() {
     let module = emit::module(source).unwrap();
     assert!(
         module.contains(
-            "background: brul::gui::Paint::Gradient(brul::gui::Gradient::Linear { angle: 90.0f32, from: brul::gui::Color::rgba(255, 0, 0, 255), to: brul::gui::Color::rgba(0, 0, 255, 255) })"
+            "s::Value::Gradient(s::Gradient { angle: 90.0, from: s::GradientColor::Color(s::Color::rgba(255, 0, 0, 255)), to: s::GradientColor::Color(s::Color::rgba(0, 0, 255, 255)) })"
         ),
         "{module}"
     );
@@ -985,7 +1032,7 @@ window Demo (title: "demo") {
         "{module}"
     );
     assert!(
-        module.contains("tint: Some(brul::gui::Color::rgba(51, 102, 153, 255))"),
+        module.contains("s::Property { kind: s::Kind::Tint, value: s::Value::Color(s::Color::rgba(51, 102, 153, 255)) }"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1125,22 +1172,28 @@ fn emits_image_value_binding() {
 fn emits_clip_only_when_it_is_set() {
     let clipped = "<style>\n.panel { clip: true; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (panel) { }\n}\n</markup>\n";
     let module = emit::module(clipped).unwrap();
-    assert!(module.contains("clip: true"), "{module}");
+    assert!(
+        module.contains("kind: s::Kind::Clip, value: s::Value::Bool(true)"),
+        "{module}"
+    );
 
     let plain = "<style>\n.panel { radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (panel) { }\n}\n</markup>\n";
     let module = emit::module(plain).unwrap();
-    assert!(!module.contains("clip:"), "{module}");
+    assert!(!module.contains("s::Kind::Clip"), "{module}");
 }
 
 #[test]
 fn emits_scroll_only_when_it_is_set() {
     let scrolling = "<style>\n.list { scroll: true; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (list) { }\n}\n</markup>\n";
     let module = emit::module(scrolling).unwrap();
-    assert!(module.contains("scroll: true"), "{module}");
+    assert!(
+        module.contains("kind: s::Kind::Scroll, value: s::Value::Bool(true)"),
+        "{module}"
+    );
 
     let plain = "<style>\n.list { radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (list) { }\n}\n</markup>\n";
     let module = emit::module(plain).unwrap();
-    assert!(!module.contains("scroll:"), "{module}");
+    assert!(!module.contains("s::Kind::Scroll"), "{module}");
 }
 
 #[test]

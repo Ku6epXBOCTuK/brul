@@ -2,8 +2,6 @@ use std::fmt::Write;
 
 use brul_syntax::style::Stylesheet;
 
-use crate::styles;
-
 pub(super) fn name(prefix: &str, theme: Option<&str>) -> String {
     match theme {
         Some(theme) => format!(
@@ -35,11 +33,7 @@ pub(super) fn table(prefix: &str, stylesheet: &Stylesheet) -> String {
     out
 }
 
-pub(super) fn tables(
-    out: &mut String,
-    prefix: &str,
-    stylesheet: &Stylesheet,
-) -> Result<(), String> {
+pub(super) fn tables(out: &mut String, prefix: &str, stylesheet: &Stylesheet) {
     let mut themes: Vec<Option<&str>> = stylesheet
         .themes
         .iter()
@@ -51,24 +45,9 @@ pub(super) fn tables(
     for theme in themes {
         let _ = writeln!(
             out,
-            "\n#[allow(dead_code)]\nfn {}(name: &str) -> Option<brul::gui::Class> {{\n    match name {{",
-            name(prefix, theme)
+            "\n#[allow(dead_code)]\nfn {}(name: &str) -> Option<brul::gui::Class> {{\n    brul::gui::style::class({prefix}styles(), name, {:?}).ok()\n}}",
+            name(prefix, theme),
+            theme
         );
-        let mut seen: Vec<&str> = Vec::new();
-        for rule in &stylesheet.rules {
-            if rule.state.is_some() || seen.contains(&rule.class.as_str()) {
-                continue;
-            }
-            seen.push(&rule.class);
-            let contribution = styles::class(stylesheet, &rule.class, theme)?;
-            let _ = writeln!(
-                out,
-                "        {:?} => Some({}),",
-                rule.class,
-                super::style::class(&contribution)
-            );
-        }
-        out.push_str("        _ => None,\n    }\n}\n");
     }
-    Ok(())
 }

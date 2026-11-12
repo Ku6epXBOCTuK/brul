@@ -23,7 +23,7 @@ pub(super) fn view(
     out.push_str("    component.borrow_mut().set_names(names());\n");
     let _ = writeln!(
         out,
-        "    let palette = {}palette(theme)?;",
+        "    brul::gui::style::check_theme({}styles(), theme).map_err(|error| error.to_string())?;",
         emit.resource_prefix
     );
     out.push_str("    let mut bindings = Vec::new();\n");

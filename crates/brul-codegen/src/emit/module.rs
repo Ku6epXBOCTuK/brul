@@ -11,7 +11,7 @@ use crate::Definition;
 use crate::error_at;
 
 use super::Emit;
-use super::{classes, events, names, palette, resources, script, view};
+use super::{classes, events, names, resources, script, style, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
 
@@ -98,11 +98,9 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<Module, Error> {
         configs.push(config);
     }
     if dynamic_classes {
-        classes::tables(&mut head, "", &parsed.stylesheet)
-            .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
+        classes::tables(&mut head, "", &parsed.stylesheet);
     }
-    palette::functions(&mut head, "Palette", "palette", &parsed.stylesheet)
-        .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
+    style::stylesheet(&mut head, "", &parsed.stylesheet);
     head.push_str(&resources::functions("", &registry.resources));
 
     let mut files = Vec::new();
@@ -135,16 +133,9 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<Module, Error> {
             },
         )?;
         if dynamic_classes {
-            classes::tables(&mut body, &prefix, &definition.stylesheet)
-                .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
+            classes::tables(&mut body, &prefix, &definition.stylesheet);
         }
-        palette::functions(
-            &mut body,
-            &format!("Component{index}Palette"),
-            &format!("{prefix}palette"),
-            &definition.stylesheet,
-        )
-        .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
+        style::stylesheet(&mut body, &prefix, &definition.stylesheet);
         body.push_str(&script::program(
             &format!("{prefix}script"),
             definition.program.as_ref(),

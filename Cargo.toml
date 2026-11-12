@@ -14,6 +14,7 @@ brul-gui = { workspace = true }
 brul-macros = { workspace = true }
 brul-reactive = { workspace = true }
 brul-script = { workspace = true }
+brul-style = { workspace = true }
 brul-syntax = { workspace = true }
 brul-window = { workspace = true }
 tracing = { workspace = true }

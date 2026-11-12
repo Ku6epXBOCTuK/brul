@@ -190,7 +190,7 @@ fn arm_header(index: usize, emit: &Emit<'_>) -> String {
     format!(
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 fn structure{index}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
-    let palette = {}palette(theme)?;
+    brul::gui::style::check_theme({}styles(), theme).map_err(|error| error.to_string())?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();

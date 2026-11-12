@@ -201,6 +201,7 @@ dependencies = [
  "brul-macros",
  "brul-reactive",
  "brul-script",
+ "brul-style",
  "brul-syntax",
  "brul-window",
  "criterion",

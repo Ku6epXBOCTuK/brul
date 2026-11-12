@@ -1,6 +1,5 @@
 use std::fmt::Write;
 
-use brul_gui::TextStyleSet;
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
@@ -12,8 +11,6 @@ use crate::styles;
 use super::Emit;
 use super::Frame;
 use super::classes;
-use super::palette::Palette;
-use super::style::{layout, style_set, text_style_set};
 use super::{component, events, expression, structure};
 use crate::runtime::HandlerEvent;
 
@@ -31,8 +28,7 @@ pub(super) fn widget(
     {
         return component::component(out, element, index, emit, frame, counter);
     }
-    let resolved = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
-        .map_err(|message| error_at(element.position, message))?;
+    let classes = classes(element);
     let events = events::widget(element, emit.program)?;
     let name = format!("widget{}", *counter);
     *counter += 1;
@@ -40,14 +36,22 @@ pub(super) fn widget(
     let inner = "    ".repeat(frame.depth() + 1);
     let _ = writeln!(out, "{pad}{{");
     let _ = write!(out, "{inner}let {name} = ");
-    let content = kind(out, element, &resolved, emit, frame, counter)?;
-    modifiers(
-        out,
-        &resolved,
-        events.drag,
-        &inner,
-        &emit.palette(frame.theme()),
-    );
+    let styled = !classes.is_empty();
+    if styled {
+        let _ = write!(out, "{}styled(", emit.resource_prefix);
+    }
+    let content = kind(out, element, emit, frame, counter)?;
+    if styled {
+        let list = classes
+            .iter()
+            .map(|class| format!("{class:?}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = write!(out, ", &[{list}], theme)?");
+    }
+    if events.drag {
+        out.push_str(".draggable(true)");
+    }
     out.push_str(";\n");
     content_binding(out, content, &name, &inner, emit.names);
     parameters(out, element, &name, &inner, emit.names, emit)?;
@@ -76,17 +80,16 @@ enum Content {
 fn kind(
     out: &mut String,
     element: &Element,
-    resolved: &styles::Resolved,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<Option<Content>, Error> {
     match element.name.as_str() {
         "View" | "Row" | "Column" => {
-            container(out, element, resolved, emit, frame, counter)?;
+            container(out, element, emit, frame, counter)?;
             Ok(None)
         }
-        "Text" => Ok(text_widget(out, element, &resolved.text)?.map(Content::Text)),
+        "Text" => Ok(text_widget(out, element)?.map(Content::Text)),
         "Image" => Ok(image_widget(out, element, emit)?.map(Content::Image)),
         name => Err(error_at(
             element.position,
@@ -98,7 +101,6 @@ fn kind(
 fn container(
     out: &mut String,
     element: &Element,
-    resolved: &styles::Resolved,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
@@ -111,29 +113,15 @@ fn container(
     }
     let direction = if row { "Row" } else { "Column" };
     let _ = writeln!(out, "brul::gui::Widget::{call}(vec![");
-    let children = frame.deeper(2).inside(direction, resolved.layout.spacing);
+    let spacing = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
+        .map_err(|message| error_at(element.position, message))?
+        .layout
+        .spacing;
+    let children = frame.deeper(2).inside(direction, spacing);
     items(out, &element.block, emit, children, counter)?;
     let inner = "    ".repeat(frame.depth() + 1);
     let _ = write!(out, "{inner}])");
     Ok(())
-}
-
-fn modifiers(
-    out: &mut String,
-    resolved: &styles::Resolved,
-    drag: bool,
-    inner: &str,
-    palette: &Palette<'_>,
-) {
-    if let Some(layout) = layout(resolved.layout) {
-        let _ = write!(out, "\n{inner}.with_layout({layout})");
-    }
-    if let Some(styles) = style_set(resolved.styles.clone(), palette) {
-        let _ = write!(out, "\n{inner}.with_styles({styles})");
-    }
-    if drag {
-        let _ = write!(out, "\n{inner}.draggable(true)");
-    }
 }
 
 fn content_binding(
@@ -204,30 +192,14 @@ pub(crate) fn items(
     Ok(())
 }
 
-fn text_widget(
-    out: &mut String,
-    element: &Element,
-    styles: &TextStyleSet,
-) -> Result<Option<Expr>, Error> {
-    let styles = text_style_set(styles);
+fn text_widget(out: &mut String, element: &Element) -> Result<Option<Expr>, Error> {
     match element.block.items.as_slice() {
         [BlockItem::Expr(expression)] => {
             let ExprKind::String(content) = &expression.kind else {
-                let _ = match &styles {
-                    Some(styles) => {
-                        write!(out, "brul::gui::Widget::text_with_styles(\"\", {styles})")
-                    }
-                    None => write!(out, "brul::gui::Widget::text(\"\")"),
-                };
+                out.push_str("brul::gui::Widget::text(\"\")");
                 return Ok(Some(expression.clone()));
             };
-            let _ = match &styles {
-                Some(styles) => write!(
-                    out,
-                    "brul::gui::Widget::text_with_styles({content:?}, {styles})"
-                ),
-                None => write!(out, "brul::gui::Widget::text({content:?})"),
-            };
+            let _ = write!(out, "brul::gui::Widget::text({content:?})");
             Ok(None)
         }
         _ => Err(error_at(

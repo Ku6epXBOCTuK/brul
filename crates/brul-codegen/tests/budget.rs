@@ -2,9 +2,9 @@ use std::path::Path;
 
 use brul_codegen::emit;
 
-const LINES: usize = 284;
-const FUNCTIONS: usize = 15;
-const BYTES: usize = 18_365;
+const LINES: usize = 379;
+const FUNCTIONS: usize = 18;
+const BYTES: usize = 17_494;
 
 #[test]
 fn fixed_markup_stays_within_the_output_budget() {

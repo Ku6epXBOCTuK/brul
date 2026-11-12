@@ -6,6 +6,12 @@ pub struct Stylesheet {
     pub rules: Vec<ClassRule>,
 }
 
+impl Stylesheet {
+    pub fn has_theme(&self, name: &str) -> bool {
+        self.themes.iter().any(|theme| theme.name == name)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
     pub name: String,

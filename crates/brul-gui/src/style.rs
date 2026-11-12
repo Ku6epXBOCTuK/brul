@@ -45,6 +45,28 @@ impl From<SnapshotError> for StyleError {
     }
 }
 
+pub fn check_theme(stylesheet: &Stylesheet, theme: Option<&str>) -> Result<(), StyleError> {
+    match theme {
+        Some(name) if !stylesheet.has_theme(name) => {
+            Err(SnapshotError::UnknownTheme(name.to_owned()).into())
+        }
+        _ => Ok(()),
+    }
+}
+
+pub fn styled(
+    widget: crate::Widget,
+    stylesheet: &Stylesheet,
+    classes: &[&str],
+    theme: Option<&str>,
+) -> Result<crate::Widget, StyleError> {
+    let resolved = resolve(stylesheet, classes, theme)?;
+    Ok(widget
+        .with_layout(resolved.layout)
+        .with_styles(resolved.styles)
+        .with_text_styles(resolved.text))
+}
+
 pub fn resolve(
     stylesheet: &Stylesheet,
     classes: &[&str],

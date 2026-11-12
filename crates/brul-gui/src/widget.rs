@@ -737,6 +737,16 @@ impl Widget {
         self
     }
 
+    pub fn with_text_styles(mut self, styles: TextStyleSet) -> Self {
+        if let WidgetData::Text {
+            styles: current, ..
+        } = &mut self.data
+        {
+            **current = styles;
+        }
+        self
+    }
+
     pub fn with_offset(mut self, x: i32, y: i32) -> Self {
         self.offset = Some(Offset { x, y });
         self
