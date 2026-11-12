@@ -6,7 +6,7 @@ use std::rc::Rc;
 use bropicker::launcher::{Launcher, Runner};
 use bropicker::{
     BrowserEntry, Config, Theme, config::icon_for, config::is_known_browser, default_path,
-    demo_browsers, detect_browsers, generated,
+    demo_browsers, detect_browsers, domain_of, generated,
 };
 use brul::{Host, Value};
 
@@ -26,6 +26,7 @@ impl Session {
             .unwrap_or(0);
         vec![
             ("url", Value::String(self.url.clone().into())),
+            ("domain", Value::String(domain_of(&self.url).into())),
             ("browsers", browsers_value(&config)),
             ("remembered", remembered_value(&config)),
             ("selected", Value::Number(selected as f64)),
@@ -505,6 +506,7 @@ mod tests {
                 .expect("seed")
         };
         assert!(matches!(get("selected"), Value::Number(selected) if selected == 1.0));
+        assert!(matches!(get("domain"), Value::String(domain) if domain.as_ref() == "github.com"));
         assert!(matches!(get("remember"), Value::Bool(false)));
         assert!(matches!(get("alwaysAsk"), Value::Bool(false)));
         assert!(matches!(get("browsers"), Value::Array(browsers) if browsers.len() == 2));

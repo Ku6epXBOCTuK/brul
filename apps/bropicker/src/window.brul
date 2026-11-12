@@ -2,6 +2,7 @@
     let selectedIndex = selected;
     let rememberChoice = remember;
     let alwaysAskChoice = alwaysAsk;
+    let rememberLabel = `Запомнить выбор для ${domain}`;
 
     function launch(i) {
         selectedIndex = i;
@@ -93,11 +94,13 @@
                                     on clicked: launch) { }
                     }
                 }
-                Row (footer) {
-                    CheckRow (label: "Remember choice", checked: rememberChoice,
+                Column (choices) {
+                    CheckRow (label: rememberLabel, checked: rememberChoice,
                             on toggled: toggleRemember) { }
-                    CheckRow (label: "Always ask", checked: alwaysAskChoice,
+                    CheckRow (label: "Всегда спрашивать", checked: alwaysAskChoice,
                             on toggled: toggleAlwaysAsk) { }
+                }
+                Row (footer) {
                     Text (settings-button, on click: openSettings) { "Settings" }
                 }
             }
@@ -250,6 +253,11 @@
         spacing: 0px;
         padding-left: 12px;
         padding-right: 12px;
+    }
+    .choices {
+        width: 100%;
+        padding: 12px 0px 8px 4px;
+        spacing: 8px;
     }
     .footer {
         width: 100%;

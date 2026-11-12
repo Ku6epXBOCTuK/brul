@@ -30,6 +30,9 @@ fn seeded() -> ComponentHandle {
         .declare("url", Value::String("https://example.com".into()), false)
         .expect("url seed");
     state
+        .declare("domain", Value::String("example.com".into()), false)
+        .expect("domain seed");
+    state
         .declare(
             "browsers",
             Value::Array(vec![browser("first", true), browser("second", false)].into()),
@@ -182,7 +185,7 @@ fn view_builds_the_picker_layout() {
     assert_eq!(key.widget, None);
     assert_eq!(key.function, "handleKey");
 
-    assert_eq!(bindings.len(), 13);
+    assert_eq!(bindings.len(), 15);
     assert_eq!(props.len(), 18);
 
     let mut root: Vec<_> = widget.into_children();
@@ -190,7 +193,7 @@ fn view_builds_the_picker_layout() {
     let card = root.remove(0);
     assert_eq!(card.kind(), WidgetKind::View);
     let mut children: Vec<_> = card.into_children();
-    assert_eq!(children.len(), 4);
+    assert_eq!(children.len(), 5);
     assert!(
         children
             .iter()

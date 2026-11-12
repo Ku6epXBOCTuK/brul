@@ -5,6 +5,10 @@
     }
 </script>
 
+<use>
+    resource check from "../assets/icons/check.png";
+</use>
+
 <markup>
     component CheckRow {
         prop label: String = "";
@@ -12,7 +16,11 @@
         event toggled();
 
         Row (check-row, on click: toggle) {
-            View (checkbox, checked: checked) { }
+            View (checkbox, checked: checked) {
+                Row (checkbox-body) {
+                    Image (check-mark, visible: checked) { check }
+                }
+            }
             Text (label) { label }
         }
     }
@@ -21,31 +29,45 @@
 <style>
     theme dark {
         accent: #60a5fa;
-        item: #232831;
         border: #333a46;
         muted: #98a2b3;
     }
     theme light {
         accent: #2563eb;
-        item: #eef1f6;
         border: #d6dce5;
         muted: #647080;
     }
-    .check-row { spacing: 8px; align-items: center; }
+    .check-row {
+        width: 100%;
+        height: 28px;
+        spacing: 12px;
+        padding-left: 12px;
+        align-items: center;
+    }
     .checkbox {
-        width: 16px;
-        height: 16px;
-        background: theme.item;
-        border: 1px theme.border;
-        radius: 4px;
+        width: 20px;
+        height: 20px;
+        background: transparent;
+        border: 2px theme.border;
+        radius: 6px;
     }
     .checkbox:checked {
         background: theme.accent;
         border-color: theme.accent;
     }
+    .checkbox-body {
+        width: 100%;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+    }
+    .check-mark {
+        width: 12px;
+        height: 12px;
+        tint: #ffffff;
+    }
     .label {
         color: theme.muted;
-        font-size: 12px;
-        font-weight: 500;
+        font-size: 16px;
     }
 </style>
