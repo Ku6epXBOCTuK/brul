@@ -189,6 +189,7 @@ dependencies = [
  "brul",
  "brul-codegen",
  "brul-gui",
+ "brul-macros",
  "serde",
  "toml",
 ]
@@ -228,6 +229,15 @@ dependencies = [
  "cosmic-text",
  "image",
  "resvg",
+]
+
+[[package]]
+name = "brul-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

@@ -8,10 +8,11 @@ use std::rc::Rc;
 use bropicker::launcher::{Launcher, Runner};
 use bropicker::{
     BrowserEntry, Config, Theme, config::icon_for, config::is_known_browser, default_path,
-    demo_browsers, detect_browsers, domain_of, generated,
+    demo_browsers, domain_of, generated,
 };
+use brul::Value;
 use brul::logging::{error, info};
-use brul::{Host, Value};
+use brul_macros::{command, host};
 
 struct Session {
     url: String,
@@ -89,96 +90,60 @@ impl<R: Runner> LauncherHost<R> {
             error!(%error, "config save failed");
         }
     }
-
-    fn launch(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
-        let index = match arguments {
-            [Value::Number(index)] if index.fract() == 0.0 && *index >= 0.0 => *index as usize,
-            [value] => {
-                return Err(brul::Error::Argument {
-                    name: "launchBrowser",
-                    expected: "a browser index",
-                    found: value.type_name(),
-                });
-            }
-            _ => {
-                return Err(brul::Error::Arity {
-                    name: "launchBrowser".to_owned(),
-                    expected: "one",
-                });
-            }
-        };
-        let browser = self.config.borrow().browsers.get(index).cloned();
-        let Some(browser) = browser else {
-            error!(index, "browser is not configured");
-            return Ok(Value::Bool(false));
-        };
-        info!(browser = %browser.name, domain = %domain_of(&self.url), "launching");
-        if let Err(error) = self.launcher.launch(&browser, &self.url) {
-            error!(browser = %browser.name, %error, "browser launch failed");
-            return Ok(Value::Bool(false));
-        }
-        Ok(Value::Bool(true))
-    }
-
-    fn remove_browser(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
-        let name = text(arguments, "removeBrowser")?;
-        info!(browser = %name, "removing browser");
-        self.config
-            .borrow_mut()
-            .browsers
-            .retain(|browser| browser.name != name);
-        self.save();
-        Ok(browsers_value(&self.config.borrow()))
-    }
-
-    fn remove_remembered(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
-        let domain = text(arguments, "removeRemembered")?;
-        info!(%domain, "removing a remembered domain");
-        self.config.borrow_mut().remembered.remove(domain);
-        self.save();
-        Ok(remembered_value(&self.config.borrow()))
-    }
-
-    fn detect(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
-        if !arguments.is_empty() {
-            return Err(brul::Error::Arity {
-                name: "detectBrowsers".to_owned(),
-                expected: "no",
-            });
-        }
-        let detected = detect_browsers();
-        info!(count = detected.len(), "detected browsers");
-        self.config.borrow_mut().add_detected(detected);
-        self.save();
-        Ok(browsers_value(&self.config.borrow()))
-    }
 }
 
-impl<R: Runner> Host for LauncherHost<R> {
-    fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, brul::Error> {
-        match name {
-            "launchBrowser" => self.launch(arguments),
-            "removeBrowser" => self.remove_browser(arguments),
-            "removeRemembered" => self.remove_remembered(arguments),
-            "detectBrowsers" => self.detect(arguments),
-            _ => Err(brul::Error::UnknownFunction(name.to_owned())),
-        }
+#[command]
+fn launch_browser<R: Runner>(
+    host: &mut LauncherHost<R>,
+    index: usize,
+) -> Result<Value, brul::Error> {
+    let browser = host.config.borrow().browsers.get(index).cloned();
+    let Some(browser) = browser else {
+        error!(index, "browser is not configured");
+        return Ok(Value::Bool(false));
+    };
+    info!(browser = %browser.name, domain = %domain_of(&host.url), "launching");
+    if let Err(error) = host.launcher.launch(&browser, &host.url) {
+        error!(browser = %browser.name, %error, "browser launch failed");
+        return Ok(Value::Bool(false));
     }
+    Ok(Value::Bool(true))
 }
 
-fn text<'a>(arguments: &'a [Value], name: &'static str) -> Result<&'a str, brul::Error> {
-    match arguments {
-        [Value::String(value)] => Ok(value),
-        [value] => Err(brul::Error::Argument {
-            name,
-            expected: "String",
-            found: value.type_name(),
-        }),
-        _ => Err(brul::Error::Arity {
-            name: name.to_owned(),
-            expected: "one",
-        }),
-    }
+#[command]
+fn remove_browser<R: Runner>(host: &mut LauncherHost<R>, name: &str) -> Result<Value, brul::Error> {
+    info!(browser = %name, "removing browser");
+    host.config
+        .borrow_mut()
+        .browsers
+        .retain(|browser| browser.name != name);
+    host.save();
+    Ok(browsers_value(&host.config.borrow()))
+}
+
+#[command]
+fn remove_remembered<R: Runner>(
+    host: &mut LauncherHost<R>,
+    domain: &str,
+) -> Result<Value, brul::Error> {
+    info!(%domain, "removing a remembered domain");
+    host.config.borrow_mut().remembered.remove(domain);
+    host.save();
+    Ok(remembered_value(&host.config.borrow()))
+}
+
+#[command]
+fn detect_browsers<R: Runner>(host: &mut LauncherHost<R>) -> Result<Value, brul::Error> {
+    let detected = bropicker::detect_browsers();
+    info!(count = detected.len(), "detected browsers");
+    host.config.borrow_mut().add_detected(detected);
+    host.save();
+    Ok(browsers_value(&host.config.borrow()))
+}
+
+host! {
+    LauncherHost<R: Runner>:
+    launch_browser, remove_browser, remove_remembered, detect_browsers
 }
 
 fn browsers_value(config: &Config) -> Value {
@@ -300,6 +265,7 @@ fn manifest_dir() -> Option<&'static Path> {
 mod tests {
     use super::*;
     use bropicker::{CommandSpec, LaunchError};
+    use brul::Host;
     use std::cell::RefCell;
     use std::rc::Rc;
 
