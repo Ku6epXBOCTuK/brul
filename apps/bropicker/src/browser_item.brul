@@ -1,4 +1,6 @@
 <script>
+    let tones = ["tone-first", "tone-second", "tone-third", "tone-fourth"];
+
     function choose() {
         clicked(index);
     }
@@ -23,18 +25,7 @@
             View (panel, on click: choose, selected: selected) {
                 Row (body) {
                     View (plate) {
-                        if (index % 4 == 0) {
-                            View (plate-tint, tone-first, x: 0, y: 0) { }
-                        }
-                        if (index % 4 == 1) {
-                            View (plate-tint, tone-second, x: 0, y: 0) { }
-                        }
-                        if (index % 4 == 2) {
-                            View (plate-tint, tone-third, x: 0, y: 0) { }
-                        }
-                        if (index % 4 == 3) {
-                            View (plate-tint, tone-fourth, x: 0, y: 0) { }
-                        }
+                        View (plate-tint, class: tones[index % 4], x: 0, y: 0) { }
                         Row (plate-body) {
                             if (emoji != "") {
                                 Text (plate-emoji) { emoji }

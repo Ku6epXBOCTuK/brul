@@ -179,7 +179,7 @@ fn view_builds_the_picker_layout() {
         props,
     } = built;
 
-    assert_eq!(structures.len(), 21);
+    assert_eq!(structures.len(), 13);
     assert_eq!(
         structures.iter().filter(|structure| structure.each).count(),
         1
@@ -193,7 +193,7 @@ fn view_builds_the_picker_layout() {
     assert_eq!(key.widget, None);
     assert_eq!(key.function, "handleKey");
 
-    assert_eq!(bindings.len(), 15);
+    assert_eq!(bindings.len(), 17);
     assert_eq!(props.len(), 18);
 
     let mut root: Vec<_> = widget.into_children();
@@ -269,7 +269,7 @@ fn assert_nested_values(structures: &[brul::Structure]) {
         .iter()
         .filter(|structure| !structure.each)
         .collect();
-    assert_eq!(nested.len(), 20);
+    assert_eq!(nested.len(), 12);
     for structure in nested {
         let value = (structure.value)(&mut structure.component.borrow_mut())
             .expect("nested structure value");
