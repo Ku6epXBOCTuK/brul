@@ -1,6 +1,13 @@
 generate-rules:
     cargo run -p brul-syntax --bin rules
 
+register-bropicker:
+    cargo build --release -p bropicker
+    powershell -NoProfile -ExecutionPolicy Bypass -File apps/bropicker/tools/register.ps1
+
+unregister-bropicker:
+    powershell -NoProfile -ExecutionPolicy Bypass -File apps/bropicker/tools/register.ps1 -Uninstall
+
 check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
