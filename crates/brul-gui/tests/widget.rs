@@ -1,7 +1,7 @@
 use brul_gui::{
-    Color, Dimension, Direction, LayoutStyle, Padding, Paint, Size, StyleSet, StyleState,
-    TextAlign, TextEngine, TextStyle, TextStylePatch, TextStyleSet, Texture, Widget, WidgetError,
-    WidgetEvent, WidgetId, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Class, Color, Dimension, Direction, LayoutPatch, LayoutStyle, Padding, Paint, Size, StyleSet,
+    StyleState, TextAlign, TextEngine, TextStyle, TextStylePatch, TextStyleSet, Texture, Widget,
+    WidgetError, WidgetEvent, WidgetId, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -657,6 +657,77 @@ fn set_image_replaces_the_texture_and_relayouts() {
         .expect("node");
 
     assert_eq!((node.width, node.height), (2, 3));
+}
+
+#[test]
+fn a_class_restyles_a_built_widget_without_relayout() {
+    let view = Widget::column(Vec::new())
+        .with_layout(fixed(50, 50))
+        .with_styles(StyleSet::new(style(Color::rgb(1, 2, 3))));
+    let id = view.id();
+    let mut tree = WidgetTree::new(view);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 100,
+        height: 100,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+
+    let class = Class {
+        style: WidgetStylePatch {
+            background: Some(Paint::Color(Color::rgb(9, 8, 7))),
+            ..WidgetStylePatch::default()
+        },
+        ..Class::default()
+    };
+    assert!(tree.apply_class(id, Some(&class)));
+    assert!(!tree.layout_dirty());
+    assert!(!tree.apply_class(id, Some(&class)));
+
+    let node = tree.snapshot().expect("snapshot").node(id).cloned();
+    assert_eq!(
+        node.expect("node").style.background,
+        Paint::Color(Color::rgb(9, 8, 7))
+    );
+
+    assert!(tree.apply_class(id, None));
+    let node = tree.snapshot().expect("snapshot").node(id).cloned();
+    assert_eq!(
+        node.expect("node").style.background,
+        Paint::Color(Color::rgb(1, 2, 3))
+    );
+}
+
+#[test]
+fn a_class_carrying_a_layout_relayouts_the_widget() {
+    let view = Widget::column(Vec::new()).with_layout(fixed(50, 50));
+    let id = view.id();
+    let mut tree = WidgetTree::new(view);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 100,
+        height: 100,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+
+    let class = Class {
+        layout: LayoutPatch {
+            width: Some(Dimension::Px(80)),
+            ..LayoutPatch::default()
+        },
+        ..Class::default()
+    };
+    assert!(tree.apply_class(id, Some(&class)));
+    assert!(tree.layout_dirty());
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+
+    let node = tree.snapshot().expect("snapshot").node(id).cloned();
+    assert_eq!(node.expect("node").width, 80);
+
+    assert!(tree.apply_class(id, None));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let node = tree.snapshot().expect("snapshot").node(id).cloned();
+    assert_eq!(node.expect("node").width, 50);
 }
 
 #[test]

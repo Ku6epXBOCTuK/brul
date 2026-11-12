@@ -69,6 +69,60 @@ pub struct LayoutStyle {
     pub align: Align,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LayoutPatch {
+    pub width: Option<Dimension>,
+    pub height: Option<Dimension>,
+    pub padding: Option<Padding>,
+    pub border_width: Option<u32>,
+    pub spacing: Option<u32>,
+    pub stretch: Option<f32>,
+    pub justify: Option<Justify>,
+    pub align: Option<Align>,
+}
+
+impl LayoutPatch {
+    pub fn is_empty(&self) -> bool {
+        self.width.is_none()
+            && self.height.is_none()
+            && self.padding.is_none()
+            && self.border_width.is_none()
+            && self.spacing.is_none()
+            && self.stretch.is_none()
+            && self.justify.is_none()
+            && self.align.is_none()
+    }
+}
+
+impl LayoutStyle {
+    pub fn apply(&mut self, patch: &LayoutPatch) {
+        if let Some(width) = patch.width {
+            self.width = width;
+        }
+        if let Some(height) = patch.height {
+            self.height = height;
+        }
+        if let Some(padding) = patch.padding {
+            self.padding = padding;
+        }
+        if let Some(border_width) = patch.border_width {
+            self.border_width = border_width;
+        }
+        if let Some(spacing) = patch.spacing {
+            self.spacing = spacing;
+        }
+        if let Some(stretch) = patch.stretch {
+            self.stretch = stretch;
+        }
+        if let Some(justify) = patch.justify {
+            self.justify = justify;
+        }
+        if let Some(align) = patch.align {
+            self.align = align;
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Offset {
     pub x: i32,

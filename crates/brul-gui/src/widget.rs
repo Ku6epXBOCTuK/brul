@@ -8,7 +8,8 @@ use crate::Color;
 use crate::animation::{Track, Tween};
 use crate::gradient::Paint;
 use crate::layout::{
-    self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset, ScrollOffset, Size,
+    self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutPatch, LayoutStyle, Offset,
+    ScrollOffset, Size,
 };
 use crate::rect::{ClipRect, Shadow};
 use crate::text::{TextAlign, TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
@@ -118,6 +119,21 @@ impl WidgetStyle {
         if let Some(color) = patch.shadow {
             self.shadow.color = color;
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Class {
+    pub layout: LayoutPatch,
+    pub style: WidgetStylePatch,
+    pub text: TextStylePatch,
+}
+
+impl Class {
+    pub fn is_empty(&self) -> bool {
+        self.layout.is_empty()
+            && self.style == WidgetStylePatch::default()
+            && self.text == TextStylePatch::default()
     }
 }
 
@@ -237,6 +253,10 @@ impl StyleSet {
 
     pub fn transitions(&self) -> Transitions {
         self.transitions
+    }
+
+    pub fn merge(&mut self, patch: &WidgetStylePatch) {
+        self.base.apply(patch);
     }
 
     pub fn resolve(&self, state: WidgetState) -> WidgetStyle {
@@ -387,6 +407,15 @@ impl TextStyleSet {
             StyleState::Checked => self.checked.as_ref(),
             StyleState::Selected => self.selected.as_ref(),
             StyleState::Disabled => self.disabled.as_ref(),
+        }
+    }
+
+    pub fn merge(&mut self, patch: &TextStylePatch) {
+        if let Some(weight) = patch.weight {
+            self.base.weight = weight;
+        }
+        if let Some(align) = patch.align {
+            self.base.align = align;
         }
     }
 
@@ -679,6 +708,7 @@ struct Node {
     data: NodeData,
     layout: LayoutStyle,
     styles: StyleSet,
+    class: Option<Class>,
     state: WidgetState,
     offset: Option<Offset>,
     draggable: bool,
@@ -711,8 +741,24 @@ impl Node {
     fn style(&self) -> WidgetStyle {
         match &self.transition {
             Some(transition) => transition.style(),
-            None => self.styles.resolve(self.state),
+            None => self.styles().resolve(self.state),
         }
+    }
+
+    fn styles(&self) -> StyleSet {
+        let mut styles = self.styles.clone();
+        if let Some(class) = &self.class {
+            styles.merge(&class.style);
+        }
+        styles
+    }
+
+    fn layout_style(&self) -> LayoutStyle {
+        let mut layout = self.layout;
+        if let Some(class) = &self.class {
+            layout.apply(&class.layout);
+        }
+        layout
     }
 }
 
@@ -850,6 +896,7 @@ impl WidgetTree {
             data,
             layout,
             styles,
+            class: None,
             state,
             offset,
             draggable,
@@ -1176,9 +1223,10 @@ impl WidgetTree {
     }
 
     fn retarget(&mut self, slot: Slot) {
+        let styles = self.nodes[slot.index()].styles();
         let node = &mut self.nodes[slot.index()];
-        let durations = node.styles.transitions();
-        let target = node.styles.resolve(node.state);
+        let durations = styles.transitions();
+        let target = styles.resolve(node.state);
         let from = match node.transition.take() {
             Some(transition) if transition.to != target => transition.style(),
             Some(transition) => {
@@ -1209,6 +1257,32 @@ impl WidgetTree {
 
     pub fn set_disabled(&mut self, id: WidgetId, disabled: bool) -> bool {
         self.update_state(id, |state| state.disabled = disabled)
+    }
+
+    pub fn apply_class(&mut self, id: WidgetId, class: Option<&Class>) -> bool {
+        let Some(&slot) = self.index.get(&id) else {
+            return false;
+        };
+        let class = class.copied().filter(|class| !class.is_empty());
+        let node = &mut self.nodes[slot.index()];
+        if node.class == class {
+            return false;
+        }
+        let layout = node.layout_style();
+        let text = node.class.map(|class| class.text).unwrap_or_default();
+        node.class = class;
+        let relayout = node.layout_style() != layout
+            || node.class.map(|class| class.text).unwrap_or_default() != text;
+        if relayout {
+            self.stale.insert(slot);
+            self.texts.remove(&id);
+            self.invalidate_layout();
+            return true;
+        }
+        self.retarget(slot);
+        self.snapshot = None;
+        self.mark_dirty(id);
+        true
     }
 
     pub fn set_visible(&mut self, id: WidgetId, visible: bool) -> bool {
@@ -1563,28 +1637,31 @@ impl Pass<'_> {
         available_width: Option<u32>,
     ) -> Result<LayoutNode, WidgetError> {
         let node = &self.tree[slot.index()];
+        let layout_style = node.layout_style();
         self.order.push(slot);
         if let (Some(cached), false) = (self.cached, self.blocked[slot.index()])
             && let Some(previous) = cached.get(slot.index())
         {
             let size = Size {
-                width: previous.width.saturating_sub(layout::inset_x(&node.layout)),
+                width: previous
+                    .width
+                    .saturating_sub(layout::inset_x(&layout_style)),
                 height: previous
                     .height
-                    .saturating_sub(layout::inset_y(&node.layout)),
+                    .saturating_sub(layout::inset_y(&layout_style)),
             };
             self.frozen.push((slot, previous.clone()));
-            let layout_node = LayoutNode::leaf(size.width, size.height).with_style(node.layout);
+            let layout_node = LayoutNode::leaf(size.width, size.height).with_style(layout_style);
             return Ok(match node.offset {
                 Some(offset) => layout_node.with_offset(offset.x, offset.y),
                 None => layout_node,
             });
         }
 
-        let resolved = layout::resolve(node.layout.width, available_width)?;
+        let resolved = layout::resolve(layout_style.width, available_width)?;
         let content_width = resolved
             .or(available_width)
-            .map(|width| width.saturating_sub(layout::inset_x(&node.layout)));
+            .map(|width| width.saturating_sub(layout::inset_x(&layout_style)));
 
         let layout_node = match &node.data {
             NodeData::View { direction } => {
@@ -1600,6 +1677,10 @@ impl Pass<'_> {
                 }
             }
             NodeData::Text { content, styles } => {
+                let mut styles = (**styles).clone();
+                if let Some(class) = &node.class {
+                    styles.merge(&class.text);
+                }
                 let max_width = content_width.map(|width| width as f32 / self.scale);
                 let cached = self.texts.get(&node.id).filter(|cached| {
                     cached.width == content_width
@@ -1645,7 +1726,7 @@ impl Pass<'_> {
             NodeData::Image(texture) => LayoutNode::leaf(texture.width(), texture.height()),
         };
 
-        let layout_node = layout_node.with_style(node.layout);
+        let layout_node = layout_node.with_style(layout_style);
         Ok(match node.offset {
             Some(offset) => layout_node.with_offset(offset.x, offset.y),
             None => layout_node,
@@ -1717,23 +1798,24 @@ fn snapshot_widget(
     }
 
     let layout_box = &boxes[slot.index()];
+    let layout_style = node.layout_style();
     let style = node.style();
     let content_x = layout_box.x.saturating_add(
-        node.layout
+        layout_style
             .border_width
-            .saturating_add(node.layout.padding.left) as i32,
+            .saturating_add(layout_style.padding.left) as i32,
     );
     let content_y = layout_box.y.saturating_add(
-        node.layout
+        layout_style
             .border_width
-            .saturating_add(node.layout.padding.top) as i32,
+            .saturating_add(layout_style.padding.top) as i32,
     );
     let content_width = layout_box
         .width
-        .saturating_sub(layout::inset_x(&node.layout));
+        .saturating_sub(layout::inset_x(&layout_style));
     let content_height = layout_box
         .height
-        .saturating_sub(layout::inset_y(&node.layout));
+        .saturating_sub(layout::inset_y(&layout_style));
     let text = match &node.data {
         NodeData::Text { .. } => texts
             .get(&node.id)
@@ -1752,7 +1834,7 @@ fn snapshot_widget(
         y: layout_box.y,
         width: layout_box.width,
         height: layout_box.height,
-        border_width: node.layout.border_width,
+        border_width: layout_style.border_width,
         content_x,
         content_y,
         content_width,

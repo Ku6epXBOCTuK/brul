@@ -122,8 +122,8 @@ pub use atlas::{Atlas, AtlasFormat, AtlasSlot};
 pub use color::Color;
 pub use gradient::{Gradient, Paint};
 pub use layout::{
-    Align, Dimension, Direction, Justify, LayoutBox, LayoutError, LayoutNode, LayoutStyle, Offset,
-    Padding, Size, layout,
+    Align, Dimension, Direction, Justify, LayoutBox, LayoutError, LayoutNode, LayoutPatch,
+    LayoutStyle, Offset, Padding, Size, layout,
 };
 pub use paint::Frame;
 pub use rect::{ClipRect, Rect, RectSample, Shadow};
@@ -132,7 +132,7 @@ pub use text::{
 };
 pub use texture::{Texture, TextureError};
 pub use widget::{
-    Dirty, StyleSet, StyleState, TextStylePatch, TextStyleSet, Transitions, Widget, WidgetError,
-    WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode, WidgetState,
-    WidgetStyle, WidgetStylePatch, WidgetTree,
+    Class, Dirty, StyleSet, StyleState, TextStylePatch, TextStyleSet, Transitions, Widget,
+    WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode,
+    WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };
