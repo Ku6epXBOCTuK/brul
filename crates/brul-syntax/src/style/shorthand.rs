@@ -1,8 +1,8 @@
+use brul_style::{Kind, Property, Side, Type, Value};
+
 use crate::cursor::Cursor;
 use crate::error::Error;
-use crate::style::ast::{Property, Value};
-use crate::style::properties::{Kind, Side};
-use crate::style::value::{self, Type};
+use crate::style::value;
 
 pub struct Shorthand {
     pub name: &'static str,

@@ -1,9 +1,7 @@
 use std::fmt;
 
-use crate::style::ast::{
-    Animation, Gradient, GradientColor, Property, State, Stylesheet, Theme, Value,
-};
-use crate::style::properties::Kind;
+use crate::ast::{Animation, Gradient, GradientColor, Property, State, Stylesheet, Theme, Value};
+use crate::properties::Kind;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Snapshot {

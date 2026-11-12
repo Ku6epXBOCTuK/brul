@@ -49,6 +49,7 @@ brul-gui = { path = 'crates\brul-gui' }
 brul-macros = { path = 'crates\brul-macros' }
 brul-reactive = { path = 'crates\brul-reactive' }
 brul-script = { path = 'crates\brul-script' }
+brul-style = { path = 'crates\brul-style' }
 brul-syntax = { path = 'crates\brul-syntax' }
 brul-window = { path = 'crates\brul-window' }
 cosmic-text = "0.19.0"

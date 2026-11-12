@@ -255,9 +255,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "brul-style"
+version = "0.1.0"
+
+[[package]]
 name = "brul-syntax"
 version = "0.1.0"
 dependencies = [
+ "brul-style",
  "pest",
  "pest_derive",
 ]

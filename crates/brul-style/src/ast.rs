@@ -1,4 +1,4 @@
-use crate::style::properties::Kind;
+use crate::properties::Kind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stylesheet {

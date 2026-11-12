@@ -1,10 +1,12 @@
+use brul_style::validate::{self, PropertyAt, RuleAt, ThemeAt, ThemeKeyAt};
+use brul_style::{
+    Animation, ClassRule, Kind, Property, State, Stylesheet, Theme, ThemeEntry, Type,
+};
+
 use crate::cursor::Cursor;
 use crate::error::Error;
-use crate::style::ast::{Animation, ClassRule, Property, State, Stylesheet, Theme, ThemeEntry};
-use crate::style::properties::Kind;
 use crate::style::shorthand;
-use crate::style::validate::{self, PropertyAt, RuleAt, ThemeAt, ThemeKeyAt};
-use crate::style::value::{self, Type};
+use crate::style::value;
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
     let mut parser = Parser::new(source);
@@ -27,9 +29,10 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
             positions.push(position);
         }
     }
-    validate::themes(source, &themes, &theme_positions)?;
-    validate::refs(source, &themes, &rules, &positions)?;
-    validate::states(source, &rules, &positions)?;
+    let report = |error: brul_style::ValidationError| Error::at(source, error.at, error.message);
+    validate::themes(&themes, &theme_positions).map_err(report)?;
+    validate::refs(&themes, &rules, &positions).map_err(report)?;
+    validate::states(&rules, &positions).map_err(report)?;
     Ok(Stylesheet { themes, rules })
 }
 
@@ -195,7 +198,7 @@ impl<'a> Parser<'a> {
         let at = self.cursor.value_start();
         let key = self.cursor.ident()?;
         self.cursor.expect(':')?;
-        let value = Type::ThemeKey.parse(&mut self.cursor, false, &key)?;
+        let value = value::value(&mut self.cursor, false, Type::ThemeKey, &key)?;
         self.cursor.expect(';')?;
         Ok((
             ThemeEntry {

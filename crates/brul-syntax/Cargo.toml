@@ -7,5 +7,6 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+brul-style = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }

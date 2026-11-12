@@ -1,5 +1,5 @@
 use self::StatePolicy::{Forbidden, TextWeight, Visual};
-use crate::style::value::Type;
+use crate::ty::Type;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {

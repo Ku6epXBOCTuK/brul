@@ -12,6 +12,7 @@ brul-codegen           загрузка и кодоген DSL: resolve/import, �
 brul-gui               примитивы, текст, лейаут и виджеты
 brul-reactive          сигналы/memo/effect — минимальное ядро
 brul-script            интерпретатор AST: значения, окружение, выполнение на компоненте
+brul-style             модель стиля: свойства, значения, правила и каскад
 brul-syntax            SFC-сплиттер, лексер и парсеры DSL в AST
 brul-window            winit+wgpu: окно, цикл событий, ввод
 apps/bropicker         MVP: переключатель браузеров

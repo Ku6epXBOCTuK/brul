@@ -1,6 +1,27 @@
-use crate::error::Error;
-use crate::style::ast::{ClassRule, GradientColor, Theme, ThemeEntry, Value};
-use crate::style::properties::{Kind, StatePolicy, ThemeType};
+use std::fmt;
+
+use crate::ast::{ClassRule, GradientColor, Theme, ThemeEntry, Value};
+use crate::properties::{Kind, StatePolicy, ThemeType};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidationError {
+    pub at: usize,
+    pub message: String,
+}
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ValidationError {}
+
+impl ValidationError {
+    fn at(at: usize, message: String) -> Self {
+        Self { at, message }
+    }
+}
 
 pub struct PropertyAt {
     pub at: usize,
@@ -22,18 +43,16 @@ pub struct ThemeAt {
     pub properties: Vec<ThemeKeyAt>,
 }
 
-pub fn themes(source: &str, themes: &[Theme], positions: &[ThemeAt]) -> Result<(), Error> {
+pub fn themes(themes: &[Theme], positions: &[ThemeAt]) -> Result<(), ValidationError> {
     for (index, (theme, position)) in themes.iter().zip(positions).enumerate() {
         if themes[..index].iter().any(|other| other.name == theme.name) {
-            return Err(Error::at(
-                source,
+            return Err(ValidationError::at(
                 position.name_at,
                 format!("duplicate theme '{}'", theme.name),
             ));
         }
         if let Some(key) = duplicate_key(position) {
-            return Err(Error::at(
-                source,
+            return Err(ValidationError::at(
                 key.at,
                 format!("duplicate theme key '{}'", key.key),
             ));
@@ -46,15 +65,13 @@ pub fn themes(source: &str, themes: &[Theme], positions: &[ThemeAt]) -> Result<(
         for (key_at, entry) in position.properties.iter().zip(&theme.properties) {
             match find_key(first, &key_at.key) {
                 None => {
-                    return Err(Error::at(
-                        source,
+                    return Err(ValidationError::at(
                         key_at.at,
                         format!("theme '{}' has unknown key '{}'", theme.name, key_at.key),
                     ));
                 }
                 Some(base) if key_type(&base.value) != key_type(&entry.value) => {
-                    return Err(Error::at(
-                        source,
+                    return Err(ValidationError::at(
                         key_at.at,
                         format!(
                             "theme '{}' has a different type for '{}'",
@@ -67,8 +84,7 @@ pub fn themes(source: &str, themes: &[Theme], positions: &[ThemeAt]) -> Result<(
         }
         for base in &first.properties {
             if find_key(theme, &base.key).is_none() {
-                return Err(Error::at(
-                    source,
+                return Err(ValidationError::at(
                     position.name_at,
                     format!("theme '{}' is missing key '{}'", theme.name, base.key),
                 ));
@@ -79,11 +95,10 @@ pub fn themes(source: &str, themes: &[Theme], positions: &[ThemeAt]) -> Result<(
 }
 
 pub fn refs(
-    source: &str,
     themes: &[Theme],
     rules: &[ClassRule],
     positions: &[RuleAt],
-) -> Result<(), Error> {
+) -> Result<(), ValidationError> {
     let Some(declared) = themes.first() else {
         return Ok(());
     };
@@ -94,19 +109,12 @@ pub fn refs(
                     let Some(expected) = property.kind.theme_type() else {
                         continue;
                     };
-                    check(source, declared, key, expected, property.kind, at.at)?;
+                    check(declared, key, expected, property.kind, at.at)?;
                 }
                 Value::Gradient(gradient) => {
                     for stop in [&gradient.from, &gradient.to] {
                         if let GradientColor::Theme(key) = stop {
-                            check(
-                                source,
-                                declared,
-                                key,
-                                ThemeType::Color,
-                                property.kind,
-                                at.at,
-                            )?;
+                            check(declared, key, ThemeType::Color, property.kind, at.at)?;
                         }
                     }
                 }
@@ -117,7 +125,7 @@ pub fn refs(
     Ok(())
 }
 
-pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result<(), Error> {
+pub fn states(rules: &[ClassRule], positions: &[RuleAt]) -> Result<(), ValidationError> {
     for (rule, position) in rules.iter().zip(positions) {
         let Some(state) = rule.state else {
             continue;
@@ -126,8 +134,7 @@ pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result
             .iter()
             .any(|other| other.state.is_none() && other.class == rule.class);
         if !base {
-            return Err(Error::at(
-                source,
+            return Err(ValidationError::at(
                 position.class_at,
                 format!(
                     "state '.{}:{}' needs a base '.{}'",
@@ -138,17 +145,15 @@ pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result
             ));
         }
         if let Some(at) = position.animations.first() {
-            return Err(Error::at(
-                source,
+            return Err(ValidationError::at(
                 at.at,
-                "animate cannot be used in a state",
+                "animate cannot be used in a state".to_string(),
             ));
         }
         for (property, at) in rule.properties.iter().zip(&position.properties) {
             match property.kind.in_state() {
                 StatePolicy::Forbidden => {
-                    return Err(Error::at(
-                        source,
+                    return Err(ValidationError::at(
                         at.at,
                         format!(
                             "property '{}' cannot change in a state",
@@ -165,10 +170,10 @@ pub fn states(source: &str, rules: &[ClassRule], positions: &[RuleAt]) -> Result
                             && base.properties.iter().any(|item| item.kind == Kind::Height)
                     });
                     if !fixed {
-                        return Err(Error::at(
-                            source,
+                        return Err(ValidationError::at(
                             at.at,
-                            "font-weight in a state needs width and height in the base class",
+                            "font-weight in a state needs width and height in the base class"
+                                .to_string(),
                         ));
                     }
                 }
@@ -183,17 +188,18 @@ fn find_key<'a>(theme: &'a Theme, key: &str) -> Option<&'a ThemeEntry> {
 }
 
 fn check(
-    source: &str,
     declared: &Theme,
     key: &str,
     expected: ThemeType,
     property: Kind,
     at: usize,
-) -> Result<(), Error> {
+) -> Result<(), ValidationError> {
     match find_key(declared, key).and_then(|entry| key_type(&entry.value)) {
-        None => Err(Error::at(source, at, format!("unknown theme key '{key}'"))),
-        Some(actual) if actual != expected => Err(Error::at(
-            source,
+        None => Err(ValidationError::at(
+            at,
+            format!("unknown theme key '{key}'"),
+        )),
+        Some(actual) if actual != expected => Err(ValidationError::at(
             at,
             format!(
                 "theme key '{key}' is {}, but '{}' expects {}",

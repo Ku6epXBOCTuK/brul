@@ -1,71 +1,52 @@
+use brul_style::{Color, Gradient, GradientColor, Type, Value};
+
 use crate::cursor::Cursor;
 use crate::error::Error;
-use crate::style::ast::{Color, Gradient, GradientColor, Value};
-
-#[derive(Clone, Copy)]
-pub enum Type {
-    ThemeKey,
-    Number,
-    Px,
-    SignedPx,
-    Length,
-    Color,
-    Paint,
-    String,
-    Bool,
-    Keywords(&'static [&'static str]),
-    NumberRange(f64, f64),
-    NumberIn(&'static [f64]),
-}
 
 pub fn value(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<Value, Error> {
     if theme && cursor.eat_keyword("theme") {
         cursor.expect('.')?;
         return Ok(Value::ThemeRef(cursor.ident()?));
     }
-    ty.parse(cursor, theme, name)
+    parse(cursor, theme, ty, name)
 }
 
-impl Type {
-    pub fn parse(self, cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
-        match self {
-            Type::Number | Type::Px | Type::SignedPx | Type::Length => {
-                self.number_value(cursor, name)
-            }
-            Type::Color | Type::Paint => self.paint_value(cursor, theme, name),
-            Type::Bool => boolean(cursor, name).map(Value::Bool),
-            Type::ThemeKey => theme_key(cursor, name),
-            Type::String => string(cursor, name).map(Value::String),
-            Type::Keywords(names) => keyword(cursor, name, names),
-            Type::NumberRange(min, max) => number_in(
-                cursor,
-                format!("expected number from {min} to {max} for '{name}'"),
-                |value| (min..=max).contains(&value),
-            ),
-            Type::NumberIn(values) => number_in(
-                cursor,
-                format!("expected one of {} for '{name}'", list(values)),
-                |value| values.contains(&value),
-            ),
-        }
+fn parse(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<Value, Error> {
+    match ty {
+        Type::Number | Type::Px | Type::SignedPx | Type::Length => number_value(ty, cursor, name),
+        Type::Color | Type::Paint => paint_value(ty, cursor, theme, name),
+        Type::Bool => boolean(cursor, name).map(Value::Bool),
+        Type::ThemeKey => theme_key(cursor, name),
+        Type::String => string(cursor, name).map(Value::String),
+        Type::Keywords(names) => keyword(cursor, name, names),
+        Type::NumberRange(min, max) => number_in(
+            cursor,
+            format!("expected number from {min} to {max} for '{name}'"),
+            |value| (min..=max).contains(&value),
+        ),
+        Type::NumberIn(values) => number_in(
+            cursor,
+            format!("expected one of {} for '{name}'", list(values)),
+            |value| values.contains(&value),
+        ),
     }
+}
 
-    fn number_value(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
-        match self {
-            Type::Number => number(cursor, &expected(name, "number")).map(Value::Number),
-            Type::Px => px(cursor, name).map(Value::Px),
-            Type::SignedPx => signed_px(cursor, name).map(Value::Px),
-            Type::Length => length(cursor, name),
-            _ => unreachable!("parse sends only number types here"),
-        }
+fn number_value(ty: Type, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+    match ty {
+        Type::Number => number(cursor, &expected(name, "number")).map(Value::Number),
+        Type::Px => px(cursor, name).map(Value::Px),
+        Type::SignedPx => signed_px(cursor, name).map(Value::Px),
+        Type::Length => length(cursor, name),
+        _ => unreachable!("parse sends only number types here"),
     }
+}
 
-    fn paint_value(self, cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
-        match self {
-            Type::Color => color(cursor, name).map(Value::Color),
-            Type::Paint => paint(cursor, theme, name),
-            _ => unreachable!("parse sends only paint types here"),
-        }
+fn paint_value(ty: Type, cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
+    match ty {
+        Type::Color => color(cursor, name).map(Value::Color),
+        Type::Paint => paint(cursor, theme, name),
+        _ => unreachable!("parse sends only paint types here"),
     }
 }
 
