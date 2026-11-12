@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -409,7 +409,13 @@ pub fn prop_name(ty: PropType) -> &'static str {
     }
 }
 
-pub type Textures = Rc<RefCell<HashMap<PathBuf, Rc<Texture>>>>;
+#[derive(Default)]
+pub struct TextureCache {
+    loaded: HashMap<PathBuf, Rc<Texture>>,
+    failed: HashSet<PathBuf>,
+}
+
+pub type Textures = Rc<RefCell<TextureCache>>;
 
 pub struct Bindings {
     _scope: EffectScope,
@@ -509,31 +515,43 @@ fn texture(
 }
 
 fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
+    if textures.borrow().failed.contains(source) {
+        return None;
+    }
     let key = match fs::canonicalize(source) {
         Ok(key) => key,
         Err(error) => {
             error!(path = %source.display(), %error, "cannot read image");
+            textures.borrow_mut().failed.insert(source.to_path_buf());
             return None;
         }
     };
-    if let Some(texture) = textures.borrow().get(&key) {
+    if let Some(texture) = textures.borrow().loaded.get(&key) {
         return Some(Rc::clone(texture));
+    }
+    if textures.borrow().failed.contains(&key) {
+        return None;
     }
     let bytes = match fs::read(&key) {
         Ok(bytes) => bytes,
         Err(error) => {
             error!(path = %source.display(), %error, "cannot read image");
+            textures.borrow_mut().failed.insert(key);
             return None;
         }
     };
     match Texture::from_png(&bytes) {
         Ok(texture) => {
             let texture = Rc::new(texture);
-            textures.borrow_mut().insert(key, Rc::clone(&texture));
+            textures
+                .borrow_mut()
+                .loaded
+                .insert(key, Rc::clone(&texture));
             Some(texture)
         }
         Err(error) => {
             error!(path = %source.display(), %error, "cannot decode image");
+            textures.borrow_mut().failed.insert(key);
             None
         }
     }
@@ -1093,7 +1111,7 @@ mod tests {
 
         assert!(Rc::ptr_eq(&first, &second));
         assert!(first.width() > 1);
-        assert_eq!(textures.borrow().len(), 1);
+        assert_eq!(textures.borrow().loaded.len(), 1);
     }
 
     #[test]
@@ -1101,7 +1119,16 @@ mod tests {
         let (binding, textures) = image_binding(Value::Image("no-such-image.png".into()));
 
         assert!(matches!(evaluate(&binding, &textures), Write::Image(None)));
-        assert!(textures.borrow().is_empty());
+        assert!(textures.borrow().loaded.is_empty());
+    }
+
+    #[test]
+    fn an_image_binding_remembers_a_missing_file() {
+        let (binding, textures) = image_binding(Value::Image("no-such-image.png".into()));
+
+        evaluate(&binding, &textures);
+        assert!(matches!(evaluate(&binding, &textures), Write::Image(None)));
+        assert_eq!(textures.borrow().failed.len(), 1);
     }
 
     #[test]
