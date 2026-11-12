@@ -248,7 +248,7 @@ fn image_keeps_texture_size() {
     let node = snapshot.node(image_id).expect("image");
 
     assert_eq!((node.width, node.height), (2, 1));
-    assert!(node.texture.is_some());
+    assert!(node.image.is_some());
 }
 
 #[test]
@@ -646,8 +646,8 @@ fn set_image_replaces_the_texture_and_relayouts() {
 
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
     let texture = std::rc::Rc::new(Texture::from_rgba(2, 3, &[0u8; 24]).expect("texture"));
-    assert!(tree.set_image(id, std::rc::Rc::clone(&texture)));
-    assert!(!tree.set_image(id, texture));
+    assert!(tree.set_image(id, brul_gui::Image::Raster(std::rc::Rc::clone(&texture))));
+    assert!(!tree.set_image(id, brul_gui::Image::Raster(texture)));
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let node = tree
         .snapshot()

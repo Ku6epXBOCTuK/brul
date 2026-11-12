@@ -110,6 +110,7 @@ mod animation;
 mod atlas;
 mod color;
 mod gradient;
+mod image;
 mod layout;
 mod paint;
 mod rect;
@@ -121,6 +122,7 @@ pub use animation::{Track, Tween, ease_out};
 pub use atlas::{Atlas, AtlasFormat, AtlasSlot};
 pub use color::Color;
 pub use gradient::{Gradient, Paint};
+pub use image::{Image, Vector};
 pub use layout::{
     Align, Dimension, Direction, Justify, LayoutBox, LayoutError, LayoutNode, LayoutPatch,
     LayoutStyle, Offset, Padding, Size, layout,

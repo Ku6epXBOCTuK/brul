@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use brul_gui::{Class, Texture, Widget, WidgetId, WidgetTree};
+use brul_gui::{Class, Image, Texture, Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{
     Component, Error as ScriptError, Host, Value, Variable, VariableId, execute_program,
@@ -416,7 +416,7 @@ pub fn prop_name(ty: PropType) -> &'static str {
 
 #[derive(Default)]
 pub struct TextureCache {
-    loaded: HashMap<PathBuf, Rc<Texture>>,
+    loaded: HashMap<PathBuf, Image>,
     failed: HashSet<PathBuf>,
 }
 
@@ -446,7 +446,7 @@ impl Bindings {
 
 pub enum Write {
     Text(Option<String>),
-    Image(Option<Rc<Texture>>),
+    Image(Option<Image>),
     Checked(Option<bool>),
     Selected(Option<bool>),
     Disabled(Option<bool>),
@@ -545,15 +545,15 @@ fn texture(
     component: &RefCell<Component>,
     expression: Expression,
     textures: &Textures,
-) -> Option<Rc<Texture>> {
+) -> Option<Image> {
     match &value(component, expression)? {
         Value::Image(path) => load_texture(Path::new(path.as_ref()), textures),
-        Value::Null => Some(Rc::new(Texture::empty())),
+        Value::Null => Some(Image::Raster(Rc::new(Texture::empty()))),
         _ => None,
     }
 }
 
-fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
+fn load_texture(source: &Path, textures: &Textures) -> Option<Image> {
     if textures.borrow().failed.contains(source) {
         return None;
     }
@@ -565,8 +565,8 @@ fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
             return None;
         }
     };
-    if let Some(texture) = textures.borrow().loaded.get(&key) {
-        return Some(Rc::clone(texture));
+    if let Some(image) = textures.borrow().loaded.get(&key) {
+        return Some(image.clone());
     }
     if textures.borrow().failed.contains(&key) {
         return None;
@@ -579,14 +579,10 @@ fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
             return None;
         }
     };
-    match Texture::from_png(&bytes) {
-        Ok(texture) => {
-            let texture = Rc::new(texture);
-            textures
-                .borrow_mut()
-                .loaded
-                .insert(key, Rc::clone(&texture));
-            Some(texture)
+    match Image::from_bytes(&bytes) {
+        Ok(image) => {
+            textures.borrow_mut().loaded.insert(key, image.clone());
+            Some(image)
         }
         Err(error) => {
             error!(path = %source.display(), %error, "cannot decode image");
@@ -596,7 +592,7 @@ fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
     }
 }
 
-pub fn set_texture(tree: &mut WidgetTree, widget: WidgetId, value: Option<Rc<Texture>>) {
+pub fn set_texture(tree: &mut WidgetTree, widget: WidgetId, value: Option<Image>) {
     if let Some(value) = value {
         tree.set_image(widget, value);
     }
@@ -1217,7 +1213,7 @@ mod tests {
             panic!("the fixture must load");
         };
 
-        assert!(Rc::ptr_eq(&first, &second));
+        assert!(first.ptr_eq(&second));
         assert!(first.width() > 1);
         assert_eq!(textures.borrow().loaded.len(), 1);
     }

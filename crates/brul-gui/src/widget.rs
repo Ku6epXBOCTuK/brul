@@ -1,19 +1,18 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use crate::Color;
 use crate::animation::{Track, Tween};
 use crate::gradient::Paint;
+use crate::image::Image;
 use crate::layout::{
     self, Direction, LayoutBox, LayoutError, LayoutNode, LayoutPatch, LayoutStyle, Offset,
     ScrollOffset, Size,
 };
 use crate::rect::{ClipRect, Shadow};
 use crate::text::{TextAlign, TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
-use crate::texture::Texture;
 
 static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
 
@@ -462,7 +461,7 @@ enum WidgetData {
         content: String,
         styles: Box<TextStyleSet>,
     },
-    Image(Rc<Texture>),
+    Image(Image),
 }
 
 impl Widget {
@@ -529,8 +528,8 @@ impl Widget {
         })
     }
 
-    pub fn image(texture: impl Into<Rc<Texture>>) -> Self {
-        Self::new(WidgetData::Image(texture.into()))
+    pub fn image(image: impl Into<Image>) -> Self {
+        Self::new(WidgetData::Image(image.into()))
     }
 
     fn new(data: WidgetData) -> Self {
@@ -626,7 +625,7 @@ pub struct WidgetSnapshotNode {
     pub state: WidgetState,
     pub style: WidgetStyle,
     pub text: Option<TextLayout>,
-    pub texture: Option<Rc<Texture>>,
+    pub image: Option<Image>,
     pub clips: Vec<ClipRect>,
 }
 
@@ -726,7 +725,7 @@ enum NodeData {
         content: String,
         styles: Box<TextStyleSet>,
     },
-    Image(Rc<Texture>),
+    Image(Image),
 }
 
 impl Node {
@@ -884,7 +883,7 @@ impl WidgetTree {
             WidgetData::Text { content, styles } => {
                 (NodeData::Text { content, styles }, Vec::new())
             }
-            WidgetData::Image(texture) => (NodeData::Image(texture), Vec::new()),
+            WidgetData::Image(image) => (NodeData::Image(image), Vec::new()),
         };
         let mut slots = Vec::with_capacity(children.len());
         for child in children {
@@ -936,7 +935,7 @@ impl WidgetTree {
                 content: std::mem::take(content),
                 styles: Box::new(std::mem::take(&mut **styles)),
             },
-            NodeData::Image(texture) => WidgetData::Image(Rc::clone(texture)),
+            NodeData::Image(image) => WidgetData::Image(image.clone()),
         };
         let widget = Widget {
             id: node.id,
@@ -1313,17 +1312,17 @@ impl WidgetTree {
         true
     }
 
-    pub fn set_image(&mut self, id: WidgetId, texture: Rc<Texture>) -> bool {
+    pub fn set_image(&mut self, id: WidgetId, image: Image) -> bool {
         let Some(&slot) = self.index.get(&id) else {
             return false;
         };
         let NodeData::Image(current) = &mut self.nodes[slot.index()].data else {
             return false;
         };
-        if Rc::ptr_eq(current, &texture) {
+        if current.ptr_eq(&image) {
             return false;
         }
-        *current = texture;
+        *current = image;
         self.stale.insert(slot);
         self.invalidate_layout();
         true
@@ -1723,7 +1722,7 @@ impl Pass<'_> {
                     .size;
                 LayoutNode::leaf(size.width, size.height)
             }
-            NodeData::Image(texture) => LayoutNode::leaf(texture.width(), texture.height()),
+            NodeData::Image(image) => LayoutNode::leaf(image.width(), image.height()),
         };
 
         let layout_node = layout_node.with_style(layout_style);
@@ -1822,8 +1821,8 @@ fn snapshot_widget(
             .map(|cached| cached.variants.resolve(node.state)),
         _ => None,
     };
-    let texture = match &node.data {
-        NodeData::Image(texture) => Some(Rc::clone(texture)),
+    let image = match &node.data {
+        NodeData::Image(image) => Some(image.clone()),
         _ => None,
     };
 
@@ -1842,7 +1841,7 @@ fn snapshot_widget(
         state: node.state,
         style,
         text,
-        texture,
+        image,
         clips: clips.to_vec(),
     });
 

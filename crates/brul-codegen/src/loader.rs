@@ -119,8 +119,11 @@ impl Loader {
                     format!("cannot read resource '{}': {error}", item.path),
                 )
             })?;
-            if !bytes.starts_with(&PNG) {
-                return Err(at(origin, format!("resource '{}' is not a PNG", item.path)));
+            if !bytes.starts_with(&PNG) && !is_svg(&bytes) {
+                return Err(at(
+                    origin,
+                    format!("resource '{}' is neither PNG nor SVG", item.path),
+                ));
             }
             resolved.push(Resource {
                 name: item.name.clone(),
@@ -225,6 +228,13 @@ fn parse(source: &str, path: &Path) -> Result<Parsed, Error> {
 }
 
 const PNG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+fn is_svg(bytes: &[u8]) -> bool {
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(512)]);
+    head.trim_start_matches('\u{feff}')
+        .trim_start()
+        .starts_with('<')
+}
 
 fn resource_path(base: Option<&Path>, raw: &str, origin: Option<&Path>) -> Result<PathBuf, Error> {
     let Some(base) = base else {

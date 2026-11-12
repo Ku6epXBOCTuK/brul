@@ -240,7 +240,7 @@ fn image_widget(
     {
         let _ = write!(
             out,
-            "brul_gui::Widget::image(brul_gui::Texture::from_png({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
+            "brul_gui::Widget::image(brul_gui::Image::from_bytes({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
             emit.resource_prefix
         );
         return Ok(None);

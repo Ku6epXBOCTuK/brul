@@ -11,7 +11,7 @@ pub enum TextureError {
 impl fmt::Display for TextureError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Decode(message) => write!(formatter, "failed to decode PNG: {message}"),
+            Self::Decode(message) => write!(formatter, "failed to decode an image: {message}"),
             Self::InvalidRgba => formatter.write_str("invalid RGBA data"),
         }
     }

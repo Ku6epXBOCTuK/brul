@@ -955,11 +955,42 @@ window Demo (title: "demo") {
     );
     assert!(module.contains("include_bytes!("), "{module}");
     assert!(
-        module.contains("brul_gui::Widget::image(brul_gui::Texture::from_png(resource_check())"),
+        module.contains("brul_gui::Widget::image(brul_gui::Image::from_bytes(resource_check())"),
         "{module}"
     );
     assert!(
         module.contains("tint: Some(brul_gui::Color::rgba(51, 102, 153, 255))"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn emits_a_svg_resource() {
+    let dir = scratch(
+        "svg-resource",
+        &[(
+            "window.brul",
+            r#"<use>
+    resource icon from "./icon.svg";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Image (icon) { icon }
+}
+</markup>
+"#,
+        )],
+    );
+    std::fs::write(
+        dir.join("icon.svg"),
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8"/></svg>"#,
+    )
+    .unwrap();
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(
+        module.contains("brul_gui::Widget::image(brul_gui::Image::from_bytes(resource_icon())"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1005,7 +1036,7 @@ window Demo (title: "demo") {
         "{module}"
     );
     assert!(
-        module.contains("brul_gui::Texture::from_png(component0_resource_check())"),
+        module.contains("brul_gui::Image::from_bytes(component0_resource_check())"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1018,7 +1049,7 @@ fn rejects_broken_resources() {
         (
             "not png",
             "plain text",
-            "resource './check.png' is not a PNG",
+            "resource './check.png' is neither PNG nor SVG",
         ),
         ("duplicate", "", "resource 'check' is defined twice"),
     ];

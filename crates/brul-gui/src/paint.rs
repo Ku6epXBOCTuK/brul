@@ -1,7 +1,9 @@
 use crate::atlas::{Atlas, AtlasFormat};
 use crate::rect::{ClipRect, Rect, RectSample};
 use crate::widget::Dirty;
-use crate::{Color, Texture, WidgetSnapshot, WidgetSnapshotNode};
+use crate::{Color, Image, WidgetSnapshot, WidgetSnapshotNode};
+
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct Frame {
@@ -91,8 +93,8 @@ impl Frame {
                 }
             }
             crate::WidgetKind::Image => {
-                if let Some(texture) = &node.texture {
-                    self.paint_image(node, texture, opacity, clip);
+                if let Some(image) = &node.image {
+                    self.paint_image(node, image, opacity, clip);
                 }
             }
             crate::WidgetKind::View => {}
@@ -196,16 +198,20 @@ impl Frame {
         }
     }
 
-    fn paint_image(
-        &mut self,
-        node: &WidgetSnapshotNode,
-        texture: &Texture,
-        opacity: f32,
-        clip: Clip,
-    ) {
+    fn paint_image(&mut self, node: &WidgetSnapshotNode, image: &Image, opacity: f32, clip: Clip) {
         if node.content_width == 0 || node.content_height == 0 {
             return;
         }
+        let (texture, tint) = match image {
+            Image::Raster(texture) => (Rc::clone(texture), node.style.tint),
+            Image::Vector(vector) => {
+                let current = node.style.tint.unwrap_or(node.style.text);
+                match vector.raster(node.content_width, node.content_height, current) {
+                    Some(texture) => (texture, None),
+                    None => return,
+                }
+            }
+        };
         let Some(area) = Clip::new(
             i64::from(node.content_x),
             i64::from(node.content_y),
@@ -229,7 +235,7 @@ impl Frame {
                 let Some(mut color) = texture.color_at(source_x, source_y) else {
                     continue;
                 };
-                if let Some(tint) = node.style.tint {
+                if let Some(tint) = tint {
                     color = color.multiply(tint);
                 }
                 self.blend(x as i32, y as i32, color, opacity);
