@@ -47,11 +47,24 @@ pub(crate) struct CommandHost {
     pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
     pub(crate) app: Option<Box<dyn Host>>,
     pub(crate) windows: Rc<HashMap<String, WindowKey>>,
+    pub(crate) theme: Rc<RefCell<Option<String>>>,
 }
 
 impl Host for CommandHost {
     fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
         tracing::debug!(name, arguments = arguments.len(), "host call");
+        if name == "theme" {
+            if !arguments.is_empty() {
+                return Err(Error::Arity {
+                    name: name.to_owned(),
+                    expected: "no",
+                });
+            }
+            return Ok(match &*self.theme.borrow() {
+                Some(theme) => Value::String(theme.clone().into()),
+                None => Value::Null,
+            });
+        }
         if name == "set_theme" {
             if arguments.len() != 1 {
                 return Err(Error::Arity {
@@ -137,11 +150,12 @@ impl Ui {
         host: Option<Box<dyn Host>>,
     ) -> Self {
         let commands = Rc::new(RefCell::new(Vec::new()));
-        let ui = Self::assemble_with(component, built, view, theme, Rc::clone(&commands));
+        let ui = Self::assemble_with(component, built, view, theme.clone(), Rc::clone(&commands));
         ui.component.borrow_mut().set_host(CommandHost {
             commands,
             app: host,
             windows: Rc::new(HashMap::new()),
+            theme: Rc::new(RefCell::new(theme)),
         });
         ui
     }
@@ -773,9 +787,29 @@ mod tests {
                 commands: Rc::clone(&commands),
                 app,
                 windows: Rc::new(HashMap::new()),
+                theme: Rc::new(RefCell::new(None)),
             },
             commands,
         )
+    }
+
+    #[test]
+    fn theme_reports_the_shown_theme() {
+        let (mut host, _) = command_host(None);
+        assert_eq!(host.call("theme", &[]), Ok(Value::Null));
+
+        *host.theme.borrow_mut() = Some("dark".to_owned());
+        assert_eq!(
+            host.call("theme", &[]),
+            Ok(Value::String("dark".to_owned().into()))
+        );
+        assert_eq!(
+            host.call("theme", &[Value::String("dark".into())]),
+            Err(Error::Arity {
+                name: "theme".to_owned(),
+                expected: "no",
+            })
+        );
     }
 
     struct Recorder {
@@ -856,6 +890,7 @@ mod tests {
             commands: Rc::clone(&commands),
             app: None,
             windows: Rc::new(windows),
+            theme: Rc::new(RefCell::new(None)),
         };
 
         assert_eq!(
@@ -880,8 +915,8 @@ mod tests {
     fn an_unknown_command_without_a_host_is_an_error() {
         let (mut host, _commands) = command_host(None);
         assert_eq!(
-            host.call("theme", &[]),
-            Err(Error::UnknownFunction("theme".to_owned()))
+            host.call("appCommand", &[]),
+            Err(Error::UnknownFunction("appCommand".to_owned()))
         );
         assert_eq!(host.every(16.0, "tick"), Err(Error::Unsupported("every")));
     }
@@ -893,11 +928,11 @@ mod tests {
             calls: Rc::clone(&calls),
         };
         let (mut host, _commands) = command_host(Some(Box::new(recorder)));
-        assert_eq!(host.call("theme", &[]), Ok(Value::Null));
+        assert_eq!(host.call("appCommand", &[]), Ok(Value::Null));
         assert_eq!(host.every(16.0, "tick"), Ok(()));
         assert_eq!(
             *calls.borrow(),
-            vec!["theme".to_owned(), "tick@16".to_owned()]
+            vec!["appCommand".to_owned(), "tick@16".to_owned()]
         );
     }
 

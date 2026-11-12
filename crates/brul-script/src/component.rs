@@ -101,6 +101,10 @@ impl Component {
         }
     }
 
+    pub fn touch(&self) {
+        self.changed();
+    }
+
     pub fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
         match &mut self.host {
             Some(host) => host.every(interval_ms, function),

@@ -42,14 +42,16 @@ pub fn run_generated(
         .map(|(index, window)| (window.name.to_owned(), WindowKey(index as u64)))
         .collect();
     let commands = Rc::new(RefCell::new(Vec::new()));
+    let shown = Rc::new(RefCell::new(theme.map(str::to_owned)));
     component.borrow_mut().set_host(CommandHost {
         commands: Rc::clone(&commands),
         app: host,
         windows: Rc::new(keys),
+        theme: Rc::clone(&shown),
     });
     let pending = std::mem::take(&mut *commands.borrow_mut());
     let runtime = Rc::new(RefCell::new(Runtime::new(
-        windows, component, commands, theme, pending,
+        windows, component, commands, theme, shown, pending,
     )));
 
     let creator = Rc::clone(&runtime);
@@ -100,6 +102,7 @@ struct Runtime {
     commands: Rc<RefCell<Vec<WindowCommand>>>,
     fixed_theme: Option<String>,
     theme: Option<String>,
+    shown: Rc<RefCell<Option<String>>>,
     pending: Vec<WindowCommand>,
 }
 
@@ -109,6 +112,7 @@ impl Runtime {
         component: ComponentHandle,
         commands: Rc<RefCell<Vec<WindowCommand>>>,
         fixed_theme: Option<&str>,
+        shown: Rc<RefCell<Option<String>>>,
         pending: Vec<WindowCommand>,
     ) -> Self {
         let mut runtime = Self {
@@ -118,6 +122,7 @@ impl Runtime {
             commands,
             fixed_theme: fixed_theme.map(str::to_owned),
             theme: None,
+            shown,
             pending,
         };
         let pending = std::mem::take(&mut runtime.pending);
@@ -139,12 +144,18 @@ impl Runtime {
     fn apply_theme(&mut self, theme: &str) {
         tracing::info!(theme, "applying theme");
         self.theme = Some(theme.to_owned());
+        *self.shown.borrow_mut() = Some(theme.to_owned());
         for ui in self.uis.values_mut() {
             if let Err(error) = ui.set_theme(theme)
                 && !error.message.contains("unknown theme")
             {
                 tracing::error!(%error, "theme change failed");
             }
+        }
+        self.component.borrow_mut().touch();
+        brul_reactive::flush();
+        for ui in self.uis.values_mut() {
+            ui.settle();
         }
     }
 
@@ -165,6 +176,7 @@ impl Runtime {
             (def.config.clone(), def.view)
         };
         let theme = self.theme_for(scheme);
+        *self.shown.borrow_mut() = Some(theme.clone());
         if let Some(ui) = self.uis.get_mut(&key) {
             tracing::debug!(%key, %theme, "reusing window");
             if let Err(error) = ui.set_theme(&theme)
@@ -172,6 +184,9 @@ impl Runtime {
             {
                 tracing::error!(%error, "theme change failed");
             }
+            self.component.borrow_mut().touch();
+            brul_reactive::flush();
+            ui.settle();
             return Ok(WindowSpec {
                 config,
                 tree: Rc::clone(&ui.tree),
@@ -237,10 +252,12 @@ pub(crate) fn scheme_theme(fixed: Option<&str>, scheme: ColorScheme) -> &str {
 mod tests {
     use super::*;
 
+    use std::collections::HashMap;
+
     use brul_gui::{Widget, WidgetEvent, WidgetId};
     use brul_syntax::ast::{Expr, ExprKind, Position};
 
-    use crate::ui::Ui;
+    use crate::ui::{CommandHost, Ui};
     use crate::{Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, Value};
 
     const NAMES: &[&str] = &["name"];
@@ -281,6 +298,7 @@ mod tests {
             component,
             Rc::new(RefCell::new(Vec::new())),
             theme,
+            Rc::new(RefCell::new(theme.map(str::to_owned))),
             Vec::new(),
         )
     }
@@ -369,6 +387,68 @@ mod tests {
         }
     }
 
+    thread_local! {
+        static SEEN: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    }
+
+    fn theme_text(component: &mut crate::Component) -> Result<Value, crate::Error> {
+        let theme = component.call("theme", &[])?;
+        let name = match &theme {
+            Value::String(name) => name.to_string(),
+            _ => "none".to_owned(),
+        };
+        SEEN.with(|seen| seen.borrow_mut().push(name));
+        Ok(theme)
+    }
+
+    fn theme_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+        let widget = Widget::text("");
+        let id = widget.id();
+        Ok(Built {
+            widget,
+            bindings: vec![Binding::new(component, id, BindingTarget::Text(theme_text))],
+            handlers: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn a_theme_change_rereads_the_theme_from_the_script() {
+        let component = generated_component(NAMES, None, &[]).expect("component");
+        let commands = Rc::new(RefCell::new(Vec::new()));
+        let shown = Rc::new(RefCell::new(None));
+        component.borrow_mut().set_host(CommandHost {
+            commands: Rc::clone(&commands),
+            app: None,
+            windows: Rc::new(HashMap::new()),
+            theme: Rc::clone(&shown),
+        });
+        let defs = vec![WindowDef {
+            name: "Only",
+            config: WindowConfig::default(),
+            view: theme_view,
+        }];
+        let mut runtime = Runtime::new(defs, component, commands, None, shown, Vec::new());
+
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("window");
+        assert_eq!(
+            SEEN.with(|seen| seen.borrow().last().cloned()),
+            Some("dark".to_owned())
+        );
+
+        runtime
+            .commands
+            .borrow_mut()
+            .push(WindowCommand::SetTheme("light".to_owned()));
+        runtime.dispatch(WindowKey(0), &[]);
+        assert_eq!(
+            SEEN.with(|seen| seen.borrow().last().cloned()),
+            Some("light".to_owned())
+        );
+    }
+
     #[test]
     fn closing_a_window_drops_its_ui() {
         let mut runtime = runtime(None);
@@ -436,6 +516,7 @@ mod tests {
             commands: Rc::clone(&commands),
             app: None,
             windows: Rc::new(keys),
+            theme: Rc::new(RefCell::new(None)),
         });
         let defs = vec![
             WindowDef {
@@ -449,7 +530,14 @@ mod tests {
                 view: settings_view,
             },
         ];
-        let mut runtime = Runtime::new(defs, component, commands, None, Vec::new());
+        let mut runtime = Runtime::new(
+            defs,
+            component,
+            commands,
+            None,
+            Rc::new(RefCell::new(None)),
+            Vec::new(),
+        );
         runtime
             .create(WindowKey(0), ColorScheme::Dark)
             .expect("picker");
