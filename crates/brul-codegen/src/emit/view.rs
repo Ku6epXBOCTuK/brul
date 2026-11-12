@@ -23,7 +23,6 @@ pub(super) fn view(
     out.push_str("    component.borrow_mut().set_names(names());\n");
     out.push_str("    let mut bindings = Vec::new();\n");
     out.push_str("    let mut handlers = Vec::new();\n");
-    out.push_str("    let mut structures = Vec::new();\n");
     out.push_str("    let mut props = Vec::new();\n");
     out.push_str("    let widget = match theme {\n");
     branch(out, "None", root, emit, None)?;
@@ -49,7 +48,6 @@ pub(super) fn view(
     out.push_str("        widget,\n");
     out.push_str("        bindings,\n");
     out.push_str("        handlers,\n");
-    out.push_str("        structures,\n");
     out.push_str("        props,\n");
     out.push_str("    })\n}\n");
     Ok(())

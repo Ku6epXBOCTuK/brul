@@ -158,7 +158,6 @@ impl Ui {
             bindings,
             handlers,
             props,
-            structures,
         } = built;
         for (interval_ms, function) in component.borrow_mut().take_every() {
             if interval_ms.is_finite() && interval_ms > 0.0 {
@@ -194,7 +193,7 @@ impl Ui {
         };
         ui.bind(bindings);
         ui.bind_props(props);
-        ui.bind_structures(structures);
+        ui.bind_structures(runtime::take_structures());
         ui
     }
 
@@ -276,12 +275,13 @@ impl Ui {
     }
 
     fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
-        let built = (self.view)(self.theme.as_deref(), &self.component).map_err(|message| {
-            brul_syntax::error::Error {
-                message,
-                line: 1,
-                column: 1,
-            }
+        let _ = runtime::take_structures();
+        let built = (self.view)(self.theme.as_deref(), &self.component);
+        let structures = runtime::take_structures();
+        let built = built.map_err(|message| brul_syntax::error::Error {
+            message,
+            line: 1,
+            column: 1,
         })?;
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
@@ -295,7 +295,7 @@ impl Ui {
         self.scope = EffectScope::new();
         self.bind(built.bindings);
         self.bind_props(built.props);
-        self.bind_structures(built.structures);
+        self.bind_structures(structures);
         Ok(())
     }
 
@@ -382,7 +382,9 @@ impl Ui {
             component
                 .borrow_mut()
                 .push_binding_scopes(&structure.scopes);
+            let _ = runtime::take_structures();
             let rebuilt = (structure.rebuild)(self.theme.as_deref(), &component);
+            let added = runtime::take_structures();
             component.borrow_mut().pop_binding_scopes(count);
             let (built, rebuilt_rows) = match rebuilt {
                 Ok(result) => result,
@@ -395,7 +397,6 @@ impl Ui {
                 widget,
                 bindings: added_bindings,
                 handlers: added_handlers,
-                structures: added,
                 props: added_props,
             } = built;
             let children = if structure.each {
@@ -534,7 +535,6 @@ mod tests {
                 widget,
                 bindings: Vec::new(),
                 handlers: Vec::new(),
-                structures: Vec::new(),
                 props: Vec::new(),
             },
             Vec::new(),
@@ -546,19 +546,11 @@ mod tests {
             return Err("unknown theme".to_owned());
         }
         let widget = Widget::view(Direction::Column, Vec::new());
-        let parent = widget.id();
+        runtime::register_structure(component, widget.id(), false, shown, rebuild_shown);
         Ok(Built {
             widget,
             bindings: Vec::new(),
             handlers: Vec::new(),
-            structures: vec![Structure {
-                parent,
-                each: false,
-                component: Rc::clone(component),
-                scopes: component.borrow().build_scopes(),
-                value: shown,
-                rebuild: rebuild_shown,
-            }],
             props: Vec::new(),
         })
     }
@@ -605,19 +597,11 @@ mod tests {
             return Err("unknown theme".to_owned());
         }
         let holder = Widget::view(Direction::Column, Vec::new());
-        let parent = holder.id();
+        runtime::register_structure(component, holder.id(), false, shown, rebuild_bound);
         Ok(Built {
             widget: holder,
             bindings: Vec::new(),
             handlers: Vec::new(),
-            structures: vec![Structure {
-                parent,
-                each: false,
-                component: Rc::clone(component),
-                scopes: component.borrow().build_scopes(),
-                value: shown,
-                rebuild: rebuild_bound,
-            }],
             props: Vec::new(),
         })
     }
@@ -649,7 +633,6 @@ mod tests {
                 widget: Widget::view(Direction::Column, children),
                 bindings,
                 handlers: Vec::new(),
-                structures: Vec::new(),
                 props: Vec::new(),
             },
             Vec::new(),
@@ -923,7 +906,6 @@ mod tests {
             widget: Widget::text(theme.unwrap_or("none")),
             bindings: Vec::new(),
             handlers: Vec::new(),
-            structures: Vec::new(),
             props: Vec::new(),
         })
     }
@@ -978,7 +960,6 @@ mod tests {
             widget,
             bindings: vec![binding(component, id, BindingTarget::Image(icon))],
             handlers: Vec::new(),
-            structures: Vec::new(),
             props: Vec::new(),
         })
     }
@@ -1120,7 +1101,6 @@ mod tests {
             widget,
             bindings: Vec::new(),
             handlers: handlers(id),
-            structures: Vec::new(),
             props: Vec::new(),
         };
         (
@@ -1262,7 +1242,6 @@ mod tests {
                 HandlerEvent::Click,
                 "raise",
             )],
-            structures: Vec::new(),
             props: Vec::new(),
         })
     }
@@ -1304,7 +1283,6 @@ mod tests {
                 BindingTarget::Text(read!("label")),
             )],
             handlers: child.handlers,
-            structures: Vec::new(),
             props: Vec::new(),
         })
     }

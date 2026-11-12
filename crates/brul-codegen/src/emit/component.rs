@@ -236,7 +236,7 @@ fn write(
     }
     let _ = writeln!(out, "{inner}    ],");
     let _ = writeln!(out, "{inner}}})?;");
-    for field in ["bindings", "handlers", "structures", "props"] {
+    for field in ["bindings", "handlers", "props"] {
         let _ = writeln!(out, "{inner}{field}.extend(built.{field});");
     }
     let _ = writeln!(out, "{inner}let {widget} = built.widget;");

@@ -180,6 +180,7 @@ impl Runtime {
         }
 
         tracing::info!(%key, %theme, "creating window");
+        let _ = crate::take_structures();
         let built = view(self.fixed_theme.as_deref(), &self.component)?;
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
@@ -258,7 +259,6 @@ mod tests {
             widget,
             bindings: vec![Binding::new(component, id, BindingTarget::Text(name))],
             handlers: Vec::new(),
-            structures: Vec::new(),
             props: Vec::new(),
         })
     }
@@ -385,7 +385,6 @@ mod tests {
             widget,
             bindings: Vec::new(),
             handlers: vec![Handler::new(component, None, HandlerEvent::Key, function)],
-            structures: Vec::new(),
             props: Vec::new(),
         })
     }

@@ -101,6 +101,7 @@ fn the_window_table_lists_every_declared_window() {
 fn the_settings_window_has_two_lists_and_its_own_key_handler() {
     let component = seeded();
     let built = (generated::windows()[1].view)(None, &component).expect("settings view");
+    let structures = brul::take_structures();
 
     let key = built
         .handlers
@@ -109,11 +110,7 @@ fn the_settings_window_has_two_lists_and_its_own_key_handler() {
         .expect("key handler");
     assert_eq!(key.function, "handleSettingsKey");
     assert_eq!(
-        built
-            .structures
-            .iter()
-            .filter(|structure| structure.each)
-            .count(),
+        structures.iter().filter(|structure| structure.each).count(),
         2
     );
 }
@@ -122,11 +119,12 @@ fn the_settings_window_has_two_lists_and_its_own_key_handler() {
 fn both_windows_read_the_same_browsers_signal() {
     let component = seeded();
     let windows = generated::windows();
-    let picker = (windows[0].view)(None, &component).expect("picker view");
-    let settings = (windows[1].view)(None, &component).expect("settings view");
-    let each = |built: &Built| {
-        built
-            .structures
+    let _ = (windows[0].view)(None, &component).expect("picker view");
+    let picker = brul::take_structures();
+    let _ = (windows[1].view)(None, &component).expect("settings view");
+    let settings = brul::take_structures();
+    let each = |structures: &[brul::Structure]| {
+        structures
             .iter()
             .find(|structure| structure.each)
             .expect("each structure")
@@ -173,11 +171,11 @@ fn markup_script_block_is_emitted() {
 fn view_builds_the_picker_layout() {
     let component = seeded();
     let built = generated::view(None, &component).expect("generated view");
+    let structures = brul::take_structures();
     let Built {
         widget,
         bindings,
         handlers,
-        structures,
         props,
     } = built;
 
@@ -225,10 +223,10 @@ fn view_builds_the_picker_layout() {
 #[test]
 fn structure_values_read_the_declared_seeds() {
     let component = seeded();
-    let built = generated::view(None, &component).expect("generated view");
+    let _ = generated::view(None, &component).expect("generated view");
+    let structures = brul::take_structures();
 
-    let each = built
-        .structures
+    let each = structures
         .iter()
         .find(|structure| structure.each)
         .expect("each structure");
@@ -243,31 +241,31 @@ fn structure_values_read_the_declared_seeds() {
 #[test]
 fn structure_rebuild_rebuilds_rows() {
     let component = seeded();
-    let built = generated::view(None, &component).expect("generated view");
+    let _ = generated::view(None, &component).expect("generated view");
+    let structures = brul::take_structures();
 
-    let each = built
-        .structures
+    let each = structures
         .iter()
         .find(|structure| structure.each)
         .expect("each structure");
     let (rebuilt, rows) = (each.rebuild)(None, &component).expect("rebuild");
+    let rebuilt_structures = brul::take_structures();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].key, Some(Value::String("first".into())));
     assert_eq!(rows[0].count, 1);
-    assert_nested_values(&rebuilt);
+    assert_nested_values(&rebuilt_structures);
     assert_eq!(rebuilt.widget.into_children().len(), 2);
 }
 
 #[test]
 fn component_structure_values_read_their_own_component() {
     let component = seeded();
-    let built = generated::view(None, &component).expect("generated view");
-    assert_nested_values(&built);
+    let _ = generated::view(None, &component).expect("generated view");
+    assert_nested_values(&brul::take_structures());
 }
 
-fn assert_nested_values(built: &Built) {
-    let nested: Vec<_> = built
-        .structures
+fn assert_nested_values(structures: &[brul::Structure]) {
+    let nested: Vec<_> = structures
         .iter()
         .filter(|structure| !structure.each)
         .collect();

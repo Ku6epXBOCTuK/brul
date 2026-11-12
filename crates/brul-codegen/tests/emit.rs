@@ -16,7 +16,6 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     component.borrow_mut().set_names(names());
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
-    let mut structures = Vec::new();
     let mut props = Vec::new();
     let widget = match theme {
         None => {
@@ -40,7 +39,6 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
         widget,
         bindings,
         handlers,
-        structures,
         props,
     })
 }
@@ -102,7 +100,6 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     component.borrow_mut().set_names(names());
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
-    let mut structures = Vec::new();
     let mut props = Vec::new();
     let widget = match theme {
         None => {
@@ -135,7 +132,6 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
         widget,
         bindings,
         handlers,
-        structures,
         props,
     })
 }
@@ -320,7 +316,7 @@ window Demo (title: "demo") {
     assert!(module.contains("brul::Value::Bool(true) => vec!["));
     assert!(module.contains("brul::Value::Bool(false) => vec!["));
     assert!(module.contains(
-        "structures.push(brul::Structure { parent: widget1.id(), each: false, component: std::rc::Rc::clone(component), scopes: component.borrow().build_scopes(), value: structure0_value, rebuild: structure0_rebuild });"
+        "brul::register_structure(component, widget1.id(), false, structure0_value, structure0_rebuild);"
     ));
     assert!(module.contains(r#""if condition expects Bool, got {}""#));
 }
@@ -353,7 +349,9 @@ window Demo (title: "demo") {
     ));
     assert!(module.contains("let key = structure0_key(&mut component.borrow_mut()).ok();"));
     assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count });"));
-    assert!(module.contains("each: true, component: std::rc::Rc::clone(component)"));
+    assert!(module.contains(
+        "brul::register_structure(component, widget1.id(), true, structure0_value, structure0_rebuild);"
+    ));
 }
 
 #[test]

@@ -124,12 +124,11 @@ fn inline(out: &mut String, index: usize, each: bool, frame: Frame<'_>, counter:
     );
     let _ = writeln!(out, "{inner}bindings.extend(built.bindings);");
     let _ = writeln!(out, "{inner}handlers.extend(built.handlers);");
-    let _ = writeln!(out, "{inner}structures.extend(built.structures);");
     let _ = writeln!(out, "{inner}props.extend(built.props);");
     let _ = writeln!(out, "{inner}let {name} = built.widget;");
     let _ = writeln!(
         out,
-        "{inner}structures.push(brul::Structure {{ parent: {name}.id(), each: {each}, component: std::rc::Rc::clone(component), scopes: component.borrow().build_scopes(), value: structure{index}_value, rebuild: structure{index}_rebuild }});"
+        "{inner}brul::register_structure(component, {name}.id(), {each}, structure{index}_value, structure{index}_rebuild);"
     );
     let _ = writeln!(out, "{inner}{name}");
     let _ = write!(out, "{pad}}}");
@@ -240,7 +239,6 @@ fn arm_header(index: usize, position: usize) -> String {
 fn structure{index}_rebuild_{position}(component: &brul::ComponentHandle) -> brul::Rebuilt {{
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
-    let mut structures = Vec::new();
     let mut props = Vec::new();
     let mut rows = Vec::new();
 "
@@ -254,7 +252,5 @@ fn widget(out: &mut String, frame: Frame<'_>) {
         out,
         "    let widget = brul_gui::Widget::view(brul_gui::Direction::{direction}, children)\n        .with_layout(brul_gui::LayoutStyle {{ spacing: {spacing}, ..Default::default() }});"
     );
-    out.push_str(
-        "    Ok((brul::Built { widget, bindings, handlers, structures, props }, rows))\n}\n",
-    );
+    out.push_str("    Ok((brul::Built { widget, bindings, handlers, props }, rows))\n}\n");
 }

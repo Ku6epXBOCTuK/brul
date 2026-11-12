@@ -159,8 +159,48 @@ pub struct Built {
     pub widget: Widget,
     pub bindings: Vec<Binding>,
     pub handlers: Vec<Handler>,
-    pub structures: Vec<Structure>,
     pub props: Vec<PropBinding>,
+}
+
+thread_local! {
+    static STRUCTURES: RefCell<Vec<(ComponentHandle, Vec<Structure>)>> = const { RefCell::new(Vec::new()) };
+}
+
+pub fn register_structure(
+    component: &ComponentHandle,
+    parent: WidgetId,
+    each: bool,
+    value: StructureValue,
+    rebuild: StructureRebuild,
+) {
+    let structure = Structure {
+        parent,
+        each,
+        component: Rc::clone(component),
+        scopes: component.borrow().build_scopes(),
+        value,
+        rebuild,
+    };
+    STRUCTURES.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        match registry
+            .iter_mut()
+            .find(|(owner, _)| Rc::ptr_eq(owner, component))
+        {
+            Some((_, structures)) => structures.push(structure),
+            None => registry.push((Rc::clone(component), vec![structure])),
+        }
+    });
+}
+
+pub fn take_structures() -> Vec<Structure> {
+    STRUCTURES.with(|registry| {
+        registry
+            .borrow_mut()
+            .drain(..)
+            .flat_map(|(_, structures)| structures)
+            .collect()
+    })
 }
 
 pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, String>;
