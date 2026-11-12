@@ -82,15 +82,17 @@ fn dispatcher(index: usize, emit: &Emit<'_>) -> String {
     let _ = writeln!(
         out,
         "fn structure{index}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
-    match theme {{
-        None => structure{index}_rebuild_0(component),"
+    match theme {{"
     );
-    for (position, theme) in emit.stylesheet.themes.iter().enumerate() {
+    for (position, theme) in themes(emit).iter().enumerate() {
+        let pattern = match theme {
+            Some(theme) if position == 0 => format!("None | Some({theme:?})"),
+            Some(theme) => format!("Some({theme:?})"),
+            None => "None".to_owned(),
+        };
         let _ = writeln!(
             out,
-            "        Some({:?}) => structure{index}_rebuild_{}(component),",
-            theme.name,
-            position + 1
+            "        {pattern} => structure{index}_rebuild_{position}(component),"
         );
     }
     let _ = writeln!(
@@ -101,14 +103,17 @@ fn dispatcher(index: usize, emit: &Emit<'_>) -> String {
 }
 
 fn themes(emit: &Emit<'_>) -> Vec<Option<String>> {
-    std::iter::once(None)
-        .chain(
-            emit.stylesheet
-                .themes
-                .iter()
-                .map(|theme| Some(theme.name.clone())),
-        )
-        .collect()
+    let themes: Vec<Option<String>> = emit
+        .stylesheet
+        .themes
+        .iter()
+        .map(|theme| Some(theme.name.clone()))
+        .collect();
+    if themes.is_empty() {
+        vec![None]
+    } else {
+        themes
+    }
 }
 
 fn inline(out: &mut String, index: usize, each: bool, frame: Frame<'_>, counter: &mut usize) {
@@ -223,7 +228,9 @@ fn each_arm(
 }
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
-    Frame::root(theme, 3).inside(frame.direction(), frame.spacing())
+    Frame::root(theme, 3)
+        .baked()
+        .inside(frame.direction(), frame.spacing())
 }
 
 fn variable(name: &str, names: &Names<'_>) -> u32 {

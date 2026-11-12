@@ -19,13 +19,14 @@ pub(super) fn tables(
     prefix: &str,
     stylesheet: &Stylesheet,
 ) -> Result<(), String> {
-    let mut themes: Vec<Option<&str>> = vec![None];
-    themes.extend(
-        stylesheet
-            .themes
-            .iter()
-            .map(|theme| Some(theme.name.as_str())),
-    );
+    let mut themes: Vec<Option<&str>> = stylesheet
+        .themes
+        .iter()
+        .map(|theme| Some(theme.name.as_str()))
+        .collect();
+    if themes.is_empty() {
+        themes.push(None);
+    }
     for theme in themes {
         let _ = writeln!(
             out,

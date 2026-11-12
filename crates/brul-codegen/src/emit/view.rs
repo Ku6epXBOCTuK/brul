@@ -25,16 +25,26 @@ pub(super) fn view(
     out.push_str("    let mut handlers = Vec::new();\n");
     out.push_str("    let mut props = Vec::new();\n");
     out.push_str("    let widget = match theme {\n");
-    branch(out, "None", root, emit, None)?;
-    let themes: Vec<String> = emit
+    let themes: Vec<&str> = emit
         .stylesheet
         .themes
         .iter()
-        .map(|theme| theme.name.clone())
+        .map(|theme| theme.name.as_str())
         .collect();
-    for theme in themes {
-        let pattern = format!("Some({theme:?})");
-        branch(out, &pattern, root, emit, Some(&theme))?;
+    match themes.split_first() {
+        Some((first, rest)) => {
+            branch(
+                out,
+                &format!("None | Some({first:?})"),
+                root,
+                emit,
+                Some(first),
+            )?;
+            for theme in rest {
+                branch(out, &format!("Some({theme:?})"), root, emit, Some(theme))?;
+            }
+        }
+        None => branch(out, "None", root, emit, None)?,
     }
     out.push_str("        Some(theme) => return Err(format!(\"unknown theme '{theme}'\")),\n");
     out.push_str("    };\n");

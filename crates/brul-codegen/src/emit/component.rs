@@ -206,13 +206,13 @@ fn write(
     *counter += 1;
     let pad = "    ".repeat(frame.depth());
     let inner = "    ".repeat(frame.depth() + 1);
-    let theme = frame.theme_expression();
+    let theme = frame.theme_field();
     let _ = writeln!(out, "{pad}{{");
     let _ = writeln!(
         out,
         "{inner}let built = brul::instance(component, brul::Instance {{"
     );
-    let _ = writeln!(out, "{inner}    theme: {theme},");
+    let _ = writeln!(out, "{inner}    {theme},");
     let _ = writeln!(out, "{inner}    view: component{index}_view,");
     let _ = writeln!(
         out,

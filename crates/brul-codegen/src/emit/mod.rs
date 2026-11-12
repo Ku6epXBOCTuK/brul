@@ -44,6 +44,7 @@ pub(super) struct Emit<'a> {
 #[derive(Clone, Copy)]
 pub(super) struct Frame<'a> {
     theme: Option<&'a str>,
+    runtime: bool,
     direction: &'a str,
     spacing: u32,
     depth: usize,
@@ -53,9 +54,17 @@ impl<'a> Frame<'a> {
     pub(super) fn root(theme: Option<&'a str>, depth: usize) -> Self {
         Self {
             theme,
+            runtime: true,
             direction: "Column",
             spacing: 0,
             depth,
+        }
+    }
+
+    pub(super) fn baked(self) -> Self {
+        Self {
+            runtime: false,
+            ..self
         }
     }
 
@@ -91,9 +100,20 @@ impl<'a> Frame<'a> {
     }
 
     pub(super) fn theme_expression(&self) -> String {
+        if self.runtime {
+            return "theme".to_owned();
+        }
         match self.theme {
             Some(name) => format!("Some({name:?})"),
             None => "None".to_owned(),
+        }
+    }
+
+    pub(super) fn theme_field(&self) -> String {
+        if self.runtime {
+            "theme".to_owned()
+        } else {
+            format!("theme: {}", self.theme_expression())
         }
     }
 }

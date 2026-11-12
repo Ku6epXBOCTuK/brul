@@ -102,15 +102,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = match theme {
-        None => {
-            {
-                let widget0 = brul_gui::Widget::column(vec![])
-                .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(brul_gui::Color::rgba(108, 140, 255, 255)), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStylePatch { background: Some(brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255))), ..brul_gui::WidgetStylePatch::default() }));
-                widget0
-            }
-        }
-        Some("dark") => {
+        None | Some("dark") => {
             {
                 let widget0 = brul_gui::Widget::column(vec![])
                 .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
