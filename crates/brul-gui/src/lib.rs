@@ -114,6 +114,7 @@ mod image;
 mod layout;
 mod paint;
 mod rect;
+pub mod style;
 mod text;
 mod texture;
 mod widget;
@@ -134,7 +135,7 @@ pub use text::{
 };
 pub use texture::{Texture, TextureError};
 pub use widget::{
-    Class, Dirty, StyleSet, StyleState, TextStylePatch, TextStyleSet, Transitions, Widget,
+    Class, Dirty, Layers, StyleSet, StyleState, TextStylePatch, TextStyleSet, Transitions, Widget,
     WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode,
     WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };

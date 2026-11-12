@@ -1,6 +1,6 @@
 use brul_gui::{
-    Align, Class, Color, Dimension, Gradient, Justify, LayoutPatch, LayoutStyle, Paint, Shadow,
-    StyleSet, StyleState, TextAlign, TextStyle, TextStylePatch, TextStyleSet, Transitions,
+    Align, Class, Color, Dimension, Gradient, Justify, Layers, LayoutPatch, LayoutStyle, Paint,
+    Shadow, StyleSet, StyleState, TextAlign, TextStyle, TextStylePatch, TextStyleSet, Transitions,
     VerticalAlign, WidgetStyle, WidgetStylePatch,
 };
 
@@ -177,11 +177,46 @@ fn widget_style(style: WidgetStyle, palette: &Palette<'_>) -> String {
 
 pub(super) fn class(value: &Class) -> String {
     format!(
-        "brul::gui::Class {{ layout: {}, style: {}, text: {} }}",
+        "brul::gui::Class {{ layout: {}, style: {}, text: {}, transitions: {} }}",
         layout_patch(&value.layout),
-        widget_style_patch(&value.style, &Palette::empty()),
-        text_style_patch(&value.text)
+        style_layers(&value.style),
+        text_layers(&value.text),
+        transitions_expr(value.transitions)
     )
+}
+
+fn style_layers(layers: &Layers<WidgetStylePatch>) -> String {
+    let mut out = format!(
+        "brul::gui::Layers::new({})",
+        widget_style_patch(&layers.base(), &Palette::empty())
+    );
+    for state in StyleState::ALL {
+        let Some(patch) = layers.patch(state) else {
+            continue;
+        };
+        out.push_str(&format!(
+            ".with(brul::gui::StyleState::{state:?}, {})",
+            widget_style_patch(&patch, &Palette::empty())
+        ));
+    }
+    out
+}
+
+fn text_layers(layers: &Layers<TextStylePatch>) -> String {
+    let mut out = format!(
+        "brul::gui::Layers::new({})",
+        text_style_patch(&layers.base())
+    );
+    for state in StyleState::ALL {
+        let Some(patch) = layers.patch(state) else {
+            continue;
+        };
+        out.push_str(&format!(
+            ".with(brul::gui::StyleState::{state:?}, {})",
+            text_style_patch(&patch)
+        ));
+    }
+    out
 }
 
 fn layout_patch(patch: &LayoutPatch) -> String {

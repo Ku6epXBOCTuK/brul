@@ -7,6 +7,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+brul-style = { workspace = true }
 cosmic-text = { workspace = true }
 image = { workspace = true, features = ["png"] }
 resvg = { workspace = true }

@@ -1,7 +1,10 @@
+use std::time::Duration;
+
 use brul_gui::{
-    Class, Color, Dimension, Direction, LayoutPatch, LayoutStyle, Padding, Paint, Size, StyleSet,
-    StyleState, TextAlign, TextEngine, TextStyle, TextStylePatch, TextStyleSet, Texture, Widget,
-    WidgetError, WidgetEvent, WidgetId, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Class, Color, Dimension, Direction, Layers, LayoutPatch, LayoutStyle, Padding, Paint, Size,
+    StyleSet, StyleState, TextAlign, TextEngine, TextStyle, TextStylePatch, TextStyleSet, Texture,
+    Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetState, WidgetStyle,
+    WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -674,10 +677,10 @@ fn a_class_restyles_a_built_widget_without_relayout() {
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
 
     let class = Class {
-        style: WidgetStylePatch {
+        style: Layers::new(WidgetStylePatch {
             background: Some(Paint::Color(Color::rgb(9, 8, 7))),
             ..WidgetStylePatch::default()
-        },
+        }),
         ..Class::default()
     };
     assert!(tree.apply_class(id, Some(&class)));
@@ -696,6 +699,46 @@ fn a_class_restyles_a_built_widget_without_relayout() {
         node.expect("node").style.background,
         Paint::Color(Color::rgb(1, 2, 3))
     );
+}
+
+#[test]
+fn a_class_carries_state_patches_and_transitions() {
+    let base = style(Color::rgb(1, 2, 3));
+    let hovered = Paint::Color(Color::rgb(4, 5, 6));
+    let view = Widget::column(Vec::new())
+        .with_layout(fixed(50, 50))
+        .with_styles(StyleSet::new(base));
+    let id = view.id();
+    let mut tree = WidgetTree::new(view);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 50,
+        height: 50,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+
+    let class = Class {
+        style: Layers::new(WidgetStylePatch::default()).with(
+            StyleState::Hovered,
+            WidgetStylePatch {
+                background: Some(hovered),
+                ..WidgetStylePatch::default()
+            },
+        ),
+        transitions: Transitions {
+            background: Some(Duration::from_millis(100)),
+            ..Transitions::default()
+        },
+        ..Class::default()
+    };
+    assert!(tree.apply_class(id, Some(&class)));
+    tree.pointer_moved(10, 10).expect("move");
+    let node = tree.snapshot().expect("snapshot").node(id).cloned();
+    assert_eq!(node.expect("node").style.background, base.background);
+
+    tree.advance(Duration::from_millis(200));
+    let node = tree.snapshot().expect("snapshot").node(id).cloned();
+    assert_eq!(node.expect("node").style.background, hovered);
 }
 
 #[test]

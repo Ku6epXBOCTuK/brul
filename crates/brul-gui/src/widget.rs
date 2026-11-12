@@ -92,6 +92,35 @@ pub struct WidgetStylePatch {
     pub shadow: Option<Color>,
 }
 
+impl WidgetStylePatch {
+    pub(crate) fn merge(&mut self, other: &Self) {
+        if other.background.is_some() {
+            self.background = other.background;
+        }
+        if other.border.is_some() {
+            self.border = other.border;
+        }
+        if other.text.is_some() {
+            self.text = other.text;
+        }
+        if other.tint.is_some() {
+            self.tint = other.tint;
+        }
+        if other.opacity.is_some() {
+            self.opacity = other.opacity;
+        }
+        if other.vertical_align.is_some() {
+            self.vertical_align = other.vertical_align;
+        }
+        if other.clip.is_some() {
+            self.clip = other.clip;
+        }
+        if other.shadow.is_some() {
+            self.shadow = other.shadow;
+        }
+    }
+}
+
 impl WidgetStyle {
     fn apply(&mut self, patch: &WidgetStylePatch) {
         if let Some(background) = patch.background {
@@ -122,17 +151,84 @@ impl WidgetStyle {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Layers<P> {
+    base: P,
+    hovered: Option<P>,
+    pressed: Option<P>,
+    checked: Option<P>,
+    selected: Option<P>,
+    disabled: Option<P>,
+}
+
+impl<P: Copy> Layers<P> {
+    pub fn new(base: P) -> Self {
+        Self {
+            base,
+            hovered: None,
+            pressed: None,
+            checked: None,
+            selected: None,
+            disabled: None,
+        }
+    }
+
+    pub fn with(mut self, state: StyleState, patch: P) -> Self {
+        *self.slot_mut(state) = Some(patch);
+        self
+    }
+
+    pub fn base(&self) -> P {
+        self.base
+    }
+
+    pub fn patch(&self, state: StyleState) -> Option<P> {
+        *self.slot(state)
+    }
+
+    fn slot(&self, state: StyleState) -> &Option<P> {
+        match state {
+            StyleState::Hovered => &self.hovered,
+            StyleState::Pressed => &self.pressed,
+            StyleState::Checked => &self.checked,
+            StyleState::Selected => &self.selected,
+            StyleState::Disabled => &self.disabled,
+        }
+    }
+
+    fn slot_mut(&mut self, state: StyleState) -> &mut Option<P> {
+        match state {
+            StyleState::Hovered => &mut self.hovered,
+            StyleState::Pressed => &mut self.pressed,
+            StyleState::Checked => &mut self.checked,
+            StyleState::Selected => &mut self.selected,
+            StyleState::Disabled => &mut self.disabled,
+        }
+    }
+}
+
+impl<P: Copy + Default + PartialEq> Layers<P> {
+    pub fn is_empty(&self) -> bool {
+        self.base == P::default()
+            && StyleState::ALL
+                .iter()
+                .all(|state| self.slot(*state).is_none())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Class {
     pub layout: LayoutPatch,
-    pub style: WidgetStylePatch,
-    pub text: TextStylePatch,
+    pub style: Layers<WidgetStylePatch>,
+    pub text: Layers<TextStylePatch>,
+    pub transitions: Transitions,
 }
 
 impl Class {
     pub fn is_empty(&self) -> bool {
         self.layout.is_empty()
-            && self.style == WidgetStylePatch::default()
-            && self.text == TextStylePatch::default()
+            && self.style.is_empty()
+            && self.text.is_empty()
+            && self.transitions.is_empty()
     }
 }
 
@@ -199,6 +295,27 @@ impl Transitions {
             && self.opacity.is_none()
             && self.shadow.is_none()
     }
+
+    fn merge(&mut self, other: Self) {
+        if other.background.is_some() {
+            self.background = other.background;
+        }
+        if other.border.is_some() {
+            self.border = other.border;
+        }
+        if other.text.is_some() {
+            self.text = other.text;
+        }
+        if other.tint.is_some() {
+            self.tint = other.tint;
+        }
+        if other.opacity.is_some() {
+            self.opacity = other.opacity;
+        }
+        if other.shadow.is_some() {
+            self.shadow = other.shadow;
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -256,6 +373,30 @@ impl StyleSet {
 
     pub fn merge(&mut self, patch: &WidgetStylePatch) {
         self.base.apply(patch);
+    }
+
+    pub(crate) fn apply_layers(
+        &mut self,
+        layers: &Layers<WidgetStylePatch>,
+        transitions: Transitions,
+    ) {
+        self.base.apply(&layers.base());
+        for state in StyleState::ALL {
+            if let Some(patch) = layers.patch(state) {
+                self.state_mut(state).get_or_insert_default().merge(&patch);
+            }
+        }
+        self.transitions.merge(transitions);
+    }
+
+    fn state_mut(&mut self, state: StyleState) -> &mut Option<WidgetStylePatch> {
+        match state {
+            StyleState::Hovered => &mut self.hovered,
+            StyleState::Pressed => &mut self.pressed,
+            StyleState::Checked => &mut self.checked,
+            StyleState::Selected => &mut self.selected,
+            StyleState::Disabled => &mut self.disabled,
+        }
     }
 
     pub fn resolve(&self, state: WidgetState) -> WidgetStyle {
@@ -366,6 +507,17 @@ pub struct TextStylePatch {
     pub align: Option<TextAlign>,
 }
 
+impl TextStylePatch {
+    fn merge(&mut self, other: &Self) {
+        if other.weight.is_some() {
+            self.weight = other.weight;
+        }
+        if other.align.is_some() {
+            self.align = other.align;
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextStyleSet {
     base: TextStyle,
@@ -415,6 +567,25 @@ impl TextStyleSet {
         }
         if let Some(align) = patch.align {
             self.base.align = align;
+        }
+    }
+
+    pub(crate) fn apply_layers(&mut self, layers: &Layers<TextStylePatch>) {
+        self.merge(&layers.base());
+        for state in StyleState::ALL {
+            if let Some(patch) = layers.patch(state) {
+                self.state_mut(state).get_or_insert_default().merge(&patch);
+            }
+        }
+    }
+
+    fn state_mut(&mut self, state: StyleState) -> &mut Option<TextStylePatch> {
+        match state {
+            StyleState::Hovered => &mut self.hovered,
+            StyleState::Pressed => &mut self.pressed,
+            StyleState::Checked => &mut self.checked,
+            StyleState::Selected => &mut self.selected,
+            StyleState::Disabled => &mut self.disabled,
         }
     }
 
@@ -747,7 +918,7 @@ impl Node {
     fn styles(&self) -> StyleSet {
         let mut styles = self.styles.clone();
         if let Some(class) = &self.class {
-            styles.merge(&class.style);
+            styles.apply_layers(&class.style, class.transitions);
         }
         styles
     }
@@ -1678,7 +1849,7 @@ impl Pass<'_> {
             NodeData::Text { content, styles } => {
                 let mut styles = (**styles).clone();
                 if let Some(class) = &node.class {
-                    styles.merge(&class.text);
+                    styles.apply_layers(&class.text);
                 }
                 let max_width = content_width.map(|width| width as f32 / self.scale);
                 let cached = self.texts.get(&node.id).filter(|cached| {

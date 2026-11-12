@@ -225,6 +225,7 @@ name = "brul-gui"
 version = "0.1.0"
 dependencies = [
  "brul-reactive",
+ "brul-style",
  "cosmic-text",
  "image",
  "resvg",

@@ -452,7 +452,7 @@ pub enum Write {
     Disabled(Option<bool>),
     Visible(Option<bool>),
     Offset(Option<i32>, Option<i32>),
-    Class(Option<Class>),
+    Class(Option<Box<Class>>),
 }
 
 pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
@@ -491,7 +491,7 @@ pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {
         Write::Visible(value) => set_flag(tree, widget, value, WidgetTree::set_visible),
         Write::Offset(x, y) => set_offset(tree, widget, x, y),
         Write::Class(value) => {
-            tree.apply_class(widget, value.as_ref());
+            tree.apply_class(widget, value.as_deref());
         }
     }
 }
@@ -522,7 +522,7 @@ fn class_value(
     component: &RefCell<Component>,
     table: ClassTable,
     expression: Expression,
-) -> Option<Class> {
+) -> Option<Box<Class>> {
     let name = match value(component, expression)? {
         Value::Null => return None,
         value => value.as_text()?.to_owned(),
@@ -538,7 +538,7 @@ fn class_value(
             }
         });
     }
-    found
+    found.map(Box::new)
 }
 
 fn texture(
