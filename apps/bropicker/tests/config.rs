@@ -66,7 +66,7 @@ fn empty_config_has_safe_defaults() {
     assert_eq!(config.theme, Theme::System);
     assert!(config.browsers.is_empty());
     assert!(config.settings.remember_choice);
-    assert!(config.settings.always_ask);
+    assert!(!config.settings.always_ask);
     assert!(config.resolve("https://example.com").is_none());
 }
 

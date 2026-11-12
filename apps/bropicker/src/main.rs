@@ -107,7 +107,29 @@ fn launch_browser<R: Runner>(
         error!(browser = %browser.name, %error, "browser launch failed");
         return Ok(Value::Bool(false));
     }
+    if host.config.borrow().settings.remember_choice {
+        host.config
+            .borrow_mut()
+            .remembered
+            .insert(domain_of(&host.url), browser.name.clone());
+        host.save();
+    }
     Ok(Value::Bool(true))
+}
+
+#[command]
+fn save_settings<R: Runner>(
+    host: &mut LauncherHost<R>,
+    remember: bool,
+    always_ask: bool,
+) -> Result<Value, brul::Error> {
+    {
+        let mut config = host.config.borrow_mut();
+        config.settings.remember_choice = remember;
+        config.settings.always_ask = always_ask;
+    }
+    host.save();
+    Ok(Value::Null)
 }
 
 #[command]
@@ -143,7 +165,7 @@ fn detect_browsers<R: Runner>(host: &mut LauncherHost<R>) -> Result<Value, brul:
 
 host! {
     LauncherHost<R: Runner>:
-    launch_browser, remove_browser, remove_remembered, detect_browsers
+    launch_browser, save_settings, remove_browser, remove_remembered, detect_browsers
 }
 
 fn browsers_value(config: &Config) -> Value {
@@ -194,7 +216,26 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn Error>> {
     let config = Config::load_default()?;
-    session(std::env::args().nth(1), config).run(Launcher::new())
+    let url = std::env::args().nth(1);
+    if let Some(url) = url.as_deref()
+        && let Some(browser) = auto_browser(&config, url)
+    {
+        match Launcher::new().launch(browser, url) {
+            Ok(()) => {
+                info!(browser = %browser.name, %url, "opened the remembered browser");
+                return Ok(());
+            }
+            Err(error) => error!(browser = %browser.name, %error, "automatic launch failed"),
+        }
+    }
+    session(url, config).run(Launcher::new())
+}
+
+fn auto_browser<'a>(config: &'a Config, url: &str) -> Option<&'a BrowserEntry> {
+    config
+        .resolve(url)
+        .filter(|resolution| resolution.auto_launch)
+        .map(|resolution| resolution.browser)
 }
 
 fn entry_value(browser: &BrowserEntry) -> Value {
@@ -267,6 +308,7 @@ mod tests {
     use bropicker::{CommandSpec, LaunchError};
     use brul::Host;
     use std::cell::RefCell;
+    use std::collections::HashMap;
     use std::rc::Rc;
 
     struct Recording {
@@ -448,6 +490,72 @@ mod tests {
             Ok(Value::Bool(false))
         ));
         assert_eq!(commands.borrow().len(), 1);
+    }
+
+    #[test]
+    fn a_launch_remembers_the_domain_until_the_choice_is_off() {
+        let (mut host, _) = host(Ok(()));
+        host.config.borrow_mut().settings.remember_choice = true;
+        host.call("launchBrowser", &[Value::Number(1.0)])
+            .expect("launched");
+        assert_eq!(
+            host.config
+                .borrow()
+                .remembered
+                .get("example.com")
+                .map(String::as_str),
+            Some("Chrome")
+        );
+
+        host.config.borrow_mut().settings.remember_choice = false;
+        host.config.borrow_mut().remembered.clear();
+        host.call("launchBrowser", &[Value::Number(0.0)])
+            .expect("launched");
+        assert!(host.config.borrow().remembered.is_empty());
+    }
+
+    #[test]
+    fn a_failed_launch_remembers_nothing() {
+        let (mut host, _) = host(Err(LaunchError::EmptyUrl));
+        call(&mut host, &[Value::Number(0.0)]).expect("call");
+        assert!(host.config.borrow().remembered.is_empty());
+    }
+
+    #[test]
+    fn both_checkboxes_are_saved() {
+        let (mut host, _) = host(Ok(()));
+        host.call("saveSettings", &[Value::Bool(false), Value::Bool(true)])
+            .expect("saved");
+        assert!(!host.config.borrow().settings.remember_choice);
+        assert!(host.config.borrow().settings.always_ask);
+    }
+
+    #[test]
+    fn a_remembered_domain_skips_the_picker() {
+        let config = Config {
+            browsers: vec![browser("Firefox", "firefox", true)],
+            remembered: HashMap::from([("example.com".to_string(), "Firefox".to_string())]),
+            ..Config::default()
+        };
+        assert_eq!(
+            auto_browser(&config, "https://example.com/page").map(|browser| browser.name.as_str()),
+            Some("Firefox")
+        );
+    }
+
+    #[test]
+    fn asking_always_keeps_the_picker() {
+        let config = Config {
+            browsers: vec![browser("Firefox", "firefox", true)],
+            remembered: HashMap::from([("example.com".to_string(), "Firefox".to_string())]),
+            settings: bropicker::Settings {
+                remember_choice: true,
+                always_ask: true,
+            },
+            ..Config::default()
+        };
+        assert!(auto_browser(&config, "https://example.com/page").is_none());
+        assert!(auto_browser(&config, "https://other.example/page").is_none());
     }
 
     #[test]

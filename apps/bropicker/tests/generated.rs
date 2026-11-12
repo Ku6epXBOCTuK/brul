@@ -70,6 +70,21 @@ fn seeded() -> ComponentHandle {
     component
 }
 
+type Calls = Rc<RefCell<Vec<(String, Vec<Value>)>>>;
+
+struct RecordingHost {
+    calls: Calls,
+}
+
+impl brul::Host for RecordingHost {
+    fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, brul::Error> {
+        self.calls
+            .borrow_mut()
+            .push((name.to_owned(), arguments.to_vec()));
+        Ok(Value::Null)
+    }
+}
+
 #[test]
 fn window_config_comes_from_the_markup() {
     let config = generated::window();
@@ -141,6 +156,38 @@ fn both_windows_read_the_same_browsers_signal() {
 
     let value = (each(&picker).value)(&mut component.borrow_mut()).expect("value");
     assert!(matches!(value, Value::Array(items) if items.len() == 1));
+}
+
+#[test]
+fn the_checkboxes_save_their_state() {
+    let component = seeded();
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    component.borrow_mut().set_host(RecordingHost {
+        calls: Rc::clone(&calls),
+    });
+
+    component
+        .borrow_mut()
+        .call_function("toggleRemember", Vec::new())
+        .expect("remembering is toggled");
+    component
+        .borrow_mut()
+        .call_function("toggleAlwaysAsk", Vec::new())
+        .expect("asking is toggled");
+
+    assert_eq!(
+        *calls.borrow(),
+        [
+            (
+                "saveSettings".to_string(),
+                vec![Value::Bool(false), Value::Bool(false)]
+            ),
+            (
+                "saveSettings".to_string(),
+                vec![Value::Bool(false), Value::Bool(true)]
+            ),
+        ]
+    );
 }
 
 #[test]

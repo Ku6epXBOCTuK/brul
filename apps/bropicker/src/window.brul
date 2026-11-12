@@ -21,10 +21,12 @@
 
     function toggleRemember() {
         rememberChoice = !rememberChoice;
+        saveSettings(rememberChoice, alwaysAskChoice);
     }
 
     function toggleAlwaysAsk() {
         alwaysAskChoice = !alwaysAskChoice;
+        saveSettings(rememberChoice, alwaysAskChoice);
     }
 
     function closeOnEscape(ev) {

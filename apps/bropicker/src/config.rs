@@ -148,7 +148,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             remember_choice: true,
-            always_ask: true,
+            always_ask: false,
         }
     }
 }
