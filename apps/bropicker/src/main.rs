@@ -17,7 +17,6 @@ struct Session {
     url: String,
     config: Rc<RefCell<Config>>,
     theme: Option<&'static str>,
-    dark: bool,
 }
 
 impl Session {
@@ -36,7 +35,6 @@ impl Session {
             ("selected", Value::Number(selected as f64)),
             ("remember", Value::Bool(config.settings.remember_choice)),
             ("alwaysAsk", Value::Bool(config.settings.always_ask)),
-            ("dark", Value::Bool(self.dark)),
         ]
     }
 
@@ -63,40 +61,15 @@ fn session(url: Option<String>, mut config: Config) -> Session {
     if config.browsers.is_empty() {
         config.browsers = demo_browsers();
     }
-    let (theme, dark) = match config.theme {
-        Theme::Light => (Some("light"), false),
-        Theme::Dark => (Some("dark"), true),
-        Theme::System => (None, system_dark()),
+    let theme = match config.theme {
+        Theme::Light => Some("light"),
+        Theme::Dark => Some("dark"),
+        Theme::System => None,
     };
     Session {
         url: url.unwrap_or_else(|| "https://github.com/".to_string()),
         config: Rc::new(RefCell::new(config)),
         theme,
-        dark,
-    }
-}
-
-fn system_dark() -> bool {
-    let output = std::process::Command::new("reg")
-        .args([
-            "query",
-            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-            "/v",
-            "AppsUseLightTheme",
-        ])
-        .output();
-    let Ok(output) = output else {
-        return true;
-    };
-    let text = String::from_utf8_lossy(&output.stdout);
-    !apps_use_light(&text).unwrap_or(false)
-}
-
-fn apps_use_light(output: &str) -> Option<bool> {
-    match output.split_whitespace().last()? {
-        "0x1" => Some(true),
-        "0x0" => Some(false),
-        _ => None,
     }
 }
 
@@ -547,33 +520,6 @@ mod tests {
             };
             assert_eq!(session(None, config).theme, expected);
         }
-    }
-
-    #[test]
-    fn session_knows_whether_the_chosen_theme_is_dark() {
-        let dark = Config {
-            theme: Theme::Dark,
-            ..Config::default()
-        };
-        assert!(session(None, dark).dark);
-        let light = Config {
-            theme: Theme::Light,
-            ..Config::default()
-        };
-        assert!(!session(None, light).dark);
-    }
-
-    #[test]
-    fn the_registry_value_says_whether_the_apps_are_light() {
-        assert_eq!(
-            apps_use_light("    AppsUseLightTheme    REG_DWORD    0x1\n"),
-            Some(true)
-        );
-        assert_eq!(
-            apps_use_light("    AppsUseLightTheme    REG_DWORD    0x0\n"),
-            Some(false)
-        );
-        assert_eq!(apps_use_light("no value"), None);
     }
 
     #[test]

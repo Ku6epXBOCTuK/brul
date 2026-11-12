@@ -3,7 +3,6 @@
     let rememberChoice = remember;
     let alwaysAskChoice = alwaysAsk;
     let rememberLabel = `Запомнить выбор для ${domain}`;
-    let darkTheme = dark;
 
     function launch(i) {
         selectedIndex = i;
@@ -17,8 +16,7 @@
     }
 
     function toggleTheme() {
-        darkTheme = !darkTheme;
-        set_theme(darkTheme ? "dark" : "light");
+        set_theme(theme() == "dark" ? "light" : "dark");
     }
 
     function toggleRemember() {
