@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use bropicker::launcher::{Launcher, Runner};
@@ -290,10 +290,37 @@ fn entry_value(browser: &BrowserEntry) -> Value {
 }
 
 fn asset_path(relative: &str) -> String {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(relative)
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+        .unwrap_or_default();
+    resolve_asset(Path::new(relative), &exe_dir, manifest_dir())
         .display()
         .to_string()
+}
+
+fn resolve_asset(relative: &Path, exe_dir: &Path, source_dir: Option<&Path>) -> PathBuf {
+    let installed = exe_dir.join(relative);
+    if installed.is_file() {
+        return installed;
+    }
+    if let Some(source_dir) = source_dir {
+        let source = source_dir.join(relative);
+        if source.is_file() {
+            return source;
+        }
+    }
+    installed
+}
+
+#[cfg(debug_assertions)]
+fn manifest_dir() -> Option<&'static Path> {
+    Some(Path::new(env!("CARGO_MANIFEST_DIR")))
+}
+
+#[cfg(not(debug_assertions))]
+fn manifest_dir() -> Option<&'static Path> {
+    None
 }
 
 #[cfg(test)]
@@ -601,6 +628,30 @@ mod tests {
             Value::Image(path) => path.to_string(),
             other => panic!("an entry carries an image, found {}", other.type_name()),
         }
+    }
+
+    #[test]
+    fn assets_are_resolved_next_to_the_executable_with_a_source_fallback() {
+        let root = std::env::temp_dir().join(format!("bropicker-assets-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let exe = root.join("installed");
+        let source = root.join("source");
+        let relative = Path::new("assets/logos/firefox_48x48.png");
+        let installed = exe.join(relative);
+        let fallback = source.join(relative);
+        std::fs::create_dir_all(installed.parent().expect("parent")).expect("installed dir");
+        std::fs::create_dir_all(fallback.parent().expect("parent")).expect("source dir");
+        std::fs::write(&installed, b"installed").expect("installed asset");
+        std::fs::write(&fallback, b"source").expect("source asset");
+
+        assert_eq!(resolve_asset(relative, &exe, Some(&source)), installed);
+
+        std::fs::remove_file(&installed).expect("installed asset");
+        assert_eq!(resolve_asset(relative, &exe, Some(&source)), fallback);
+
+        std::fs::remove_file(&fallback).expect("source asset");
+        assert_eq!(resolve_asset(relative, &exe, Some(&source)), installed);
+        std::fs::remove_dir_all(root).expect("scratch directory");
     }
 
     #[test]
