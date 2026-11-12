@@ -2,7 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use brul_style::{
-    GradientColor, Kind, Property, Side, Snapshot, SnapshotError, State, Stylesheet, Value,
+    GradientColor, Kind, Property, Side, Snapshot, SnapshotError, State, Stylesheet, Type, Value,
 };
 
 use crate::widget::{
@@ -158,21 +158,19 @@ fn state_patch(snapshot: &Snapshot) -> Result<(WidgetStylePatch, TextStylePatch)
     let mut style = WidgetStylePatch::default();
     let mut text = TextStylePatch::default();
     for property in snapshot.properties() {
-        let value = &property.value;
         let kind = property.kind;
+        let value = read(&property.value, kind)?;
         match kind {
-            Kind::Background => style.background = Some(background(value)?),
-            Kind::BorderColor => style.border = Some(paint(value, kind)?),
-            Kind::Color => style.text = Some(paint(value, kind)?),
-            Kind::Tint => style.tint = Some(paint(value, kind)?),
-            Kind::Opacity => style.opacity = Some(number(value, kind)? as f32),
-            Kind::Clip => style.clip = Some(flag(value, kind)?),
-            Kind::ShadowColor => style.shadow = Some(paint(value, kind)?),
-            Kind::VerticalAlign => {
-                style.vertical_align = Some(vertical_align(keyword(value, kind)?))
-            }
-            Kind::TextAlign => text.align = Some(text_align(keyword(value, kind)?)),
-            Kind::FontWeight => text.weight = Some(number(value, kind)? as u16),
+            Kind::Background => style.background = Some(value.paint()),
+            Kind::BorderColor => style.border = Some(value.color()),
+            Kind::Color => style.text = Some(value.color()),
+            Kind::Tint => style.tint = Some(value.color()),
+            Kind::Opacity => style.opacity = Some(value.number() as f32),
+            Kind::Clip => style.clip = Some(value.flag()),
+            Kind::ShadowColor => style.shadow = Some(value.color()),
+            Kind::VerticalAlign => style.vertical_align = Some(vertical_align(value.keyword())),
+            Kind::TextAlign => text.align = Some(text_align(value.keyword())),
+            Kind::FontWeight => text.weight = Some(value.number() as u16),
             _ => {}
         }
     }
@@ -201,45 +199,139 @@ fn transitions(snapshot: &Snapshot) -> Result<Transitions, StyleError> {
     Ok(transitions)
 }
 
+enum Read<'a> {
+    Px(u32),
+    SignedPx(i32),
+    Number(f64),
+    Length(Dimension),
+    Color(Color),
+    Paint(Paint),
+    Text(&'a str),
+    Keyword(&'a str),
+    Flag(bool),
+}
+
+impl<'a> Read<'a> {
+    fn px(self) -> u32 {
+        match self {
+            Read::Px(value) => value,
+            _ => unreachable!("the spec type gives px"),
+        }
+    }
+
+    fn signed_px(self) -> i32 {
+        match self {
+            Read::SignedPx(value) => value,
+            _ => unreachable!("the spec type gives signed px"),
+        }
+    }
+
+    fn number(self) -> f64 {
+        match self {
+            Read::Number(value) => value,
+            _ => unreachable!("the spec type gives a number"),
+        }
+    }
+
+    fn length(self) -> Dimension {
+        match self {
+            Read::Length(value) => value,
+            _ => unreachable!("the spec type gives a length"),
+        }
+    }
+
+    fn color(self) -> Color {
+        match self {
+            Read::Color(value) => value,
+            _ => unreachable!("the spec type gives a color"),
+        }
+    }
+
+    fn paint(self) -> Paint {
+        match self {
+            Read::Paint(value) => value,
+            _ => unreachable!("the spec type gives a paint"),
+        }
+    }
+
+    fn text(self) -> &'a str {
+        match self {
+            Read::Text(value) => value,
+            _ => unreachable!("the spec type gives a string"),
+        }
+    }
+
+    fn keyword(self) -> &'a str {
+        match self {
+            Read::Keyword(value) => value,
+            _ => unreachable!("the spec type gives a keyword"),
+        }
+    }
+
+    fn flag(self) -> bool {
+        match self {
+            Read::Flag(value) => value,
+            _ => unreachable!("the spec type gives a flag"),
+        }
+    }
+}
+
+fn read<'a>(value: &'a Value, kind: Kind) -> Result<Read<'a>, StyleError> {
+    match kind.spec().ty {
+        Type::Px => Ok(Read::Px(px_value(value, kind)?)),
+        Type::SignedPx => Ok(Read::SignedPx(signed_px(value, kind)?)),
+        Type::Number | Type::NumberRange(..) | Type::NumberIn(..) => {
+            Ok(Read::Number(number(value, kind)?))
+        }
+        Type::Length => Ok(Read::Length(dimension(value, kind)?)),
+        Type::Color => Ok(Read::Color(paint(value, kind)?)),
+        Type::Paint => Ok(Read::Paint(background(value)?)),
+        Type::String => Ok(Read::Text(string(value, kind)?)),
+        Type::Bool => Ok(Read::Flag(flag(value, kind)?)),
+        Type::Keywords(_) => Ok(Read::Keyword(keyword(value, kind)?)),
+        Type::ThemeKey => Err(expected(kind, "a theme key")),
+    }
+}
+
 fn apply(
     property: &Property,
     layout: &mut LayoutStyle,
     style: &mut WidgetStyle,
     text: &mut TextStyle,
 ) -> Result<(), StyleError> {
-    let value = &property.value;
     let kind = property.kind;
+    let value = read(&property.value, kind)?;
     match kind {
-        Kind::Width => layout.width = dimension(value, kind)?,
-        Kind::Height => layout.height = dimension(value, kind)?,
-        Kind::Stretch => layout.stretch = number(value, kind)? as f32,
+        Kind::Width => layout.width = value.length(),
+        Kind::Height => layout.height = value.length(),
+        Kind::Stretch => layout.stretch = value.number() as f32,
         Kind::PaddingSide(side) => {
-            *edge(&mut layout.padding, side) = px_value(value, kind)?;
+            *edge(&mut layout.padding, side) = value.px();
         }
-        Kind::Spacing => layout.spacing = px_value(value, kind)?,
-        Kind::BorderWidth => layout.border_width = px_value(value, kind)?,
-        Kind::JustifyContent => layout.justify = justify(keyword(value, kind)?),
-        Kind::AlignItems => layout.align = align(keyword(value, kind)?),
-        Kind::Background => style.background = background(value)?,
-        Kind::BorderColor => style.border = paint(value, kind)?,
-        Kind::Color => style.text = paint(value, kind)?,
-        Kind::Tint => style.tint = Some(paint(value, kind)?),
-        Kind::Radius => style.radius = px_value(value, kind)?,
-        Kind::Opacity => style.opacity = number(value, kind)? as f32,
-        Kind::Clip => style.clip = flag(value, kind)?,
-        Kind::Scroll => style.scroll = flag(value, kind)?,
-        Kind::ShadowOffsetX => style.shadow.x = signed_px(value, kind)?,
-        Kind::ShadowOffsetY => style.shadow.y = signed_px(value, kind)?,
-        Kind::ShadowBlur => style.shadow.blur = px_value(value, kind)?,
-        Kind::ShadowColor => style.shadow.color = paint(value, kind)?,
+        Kind::Spacing => layout.spacing = value.px(),
+        Kind::BorderWidth => layout.border_width = value.px(),
+        Kind::JustifyContent => layout.justify = justify(value.keyword()),
+        Kind::AlignItems => layout.align = align(value.keyword()),
+        Kind::Background => style.background = value.paint(),
+        Kind::BorderColor => style.border = value.color(),
+        Kind::Color => style.text = value.color(),
+        Kind::Tint => style.tint = Some(value.color()),
+        Kind::Radius => style.radius = value.px(),
+        Kind::Opacity => style.opacity = value.number() as f32,
+        Kind::Clip => style.clip = value.flag(),
+        Kind::Scroll => style.scroll = value.flag(),
+        Kind::ShadowOffsetX => style.shadow.x = value.signed_px(),
+        Kind::ShadowOffsetY => style.shadow.y = value.signed_px(),
+        Kind::ShadowBlur => style.shadow.blur = value.px(),
+        Kind::ShadowColor => style.shadow.color = value.color(),
         Kind::FontSize => {
-            text.font_size = px_value(value, kind)? as f32;
+            text.font_size = value.px() as f32;
             text.line_height = text.font_size * 1.2;
         }
-        Kind::FontFamily => text.family = Some(string(value, kind)?.to_owned()),
-        Kind::TextAlign => text.align = text_align(keyword(value, kind)?),
-        Kind::VerticalAlign => style.vertical_align = vertical_align(keyword(value, kind)?),
-        Kind::FontWeight => text.weight = number(value, kind)? as u16,
+        Kind::FontFamily => text.family = Some(value.text().to_owned()),
+        Kind::TextAlign => text.align = text_align(value.keyword()),
+        Kind::VerticalAlign => style.vertical_align = vertical_align(value.keyword()),
+        Kind::FontWeight => text.weight = value.number() as u16,
     }
     Ok(())
 }
