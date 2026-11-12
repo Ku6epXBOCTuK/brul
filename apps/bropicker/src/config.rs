@@ -239,6 +239,15 @@ impl Config {
         let path = path.as_ref();
         let source = toml::to_string_pretty(self)
             .map_err(|error| ConfigError::Invalid(error.to_string()))?;
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent).map_err(|error| ConfigError::Read {
+                path: parent.to_path_buf(),
+                message: error.to_string(),
+            })?;
+        }
+
         std::fs::write(path, source).map_err(|error| ConfigError::Read {
             path: path.to_path_buf(),
             message: error.to_string(),
@@ -362,18 +371,18 @@ impl Config {
 }
 
 pub fn default_path() -> PathBuf {
-    path_from(
-        std::env::var("BP_CONFIG").ok().as_deref(),
-        std::env::var("APPDATA").ok().as_deref(),
-    )
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .ok();
+    path_from(std::env::var("BP_CONFIG").ok().as_deref(), home.as_deref())
 }
 
-fn path_from(override_path: Option<&str>, appdata: Option<&str>) -> PathBuf {
+fn path_from(override_path: Option<&str>, home: Option<&str>) -> PathBuf {
     if let Some(path) = override_path {
         return PathBuf::from(path);
     }
-    if let Some(appdata) = appdata {
-        return PathBuf::from(appdata).join("bropicker").join("config.toml");
+    if let Some(home) = home {
+        return PathBuf::from(home).join(".config").join("bropicker.toml");
     }
     PathBuf::from("config.toml")
 }
@@ -415,12 +424,12 @@ mod tests {
     }
 
     #[test]
-    fn default_path_uses_appdata_without_an_override() {
+    fn default_path_uses_the_home_directory_without_an_override() {
         assert_eq!(
-            path_from(None, Some("roaming")),
-            PathBuf::from("roaming")
-                .join("bropicker")
-                .join("config.toml")
+            path_from(None, Some("profile")),
+            PathBuf::from("profile")
+                .join(".config")
+                .join("bropicker.toml")
         );
     }
 
@@ -468,6 +477,17 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert_eq!(loaded, config);
+    }
+
+    #[test]
+    fn saving_creates_the_config_directory() {
+        let root = temp_file("nested");
+        let path = root.join(".config").join("bropicker.toml");
+
+        Config::default().save(&path).expect("save config");
+
+        assert!(path.exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
