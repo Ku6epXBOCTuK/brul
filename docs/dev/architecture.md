@@ -179,8 +179,8 @@ runner оставляет запуск проверяемым без реаль�
 ### Окно пикера
 
 `bropicker/src/window.brul` собирает сцену 488×800 и подключает
-`browser_item.brul` и `check_row.brul` блоком `<use>`. `build.rs` отдаёт файлы
-`brul_codegen::emit::split_module_file`: корень и модуль `bc_<stem>` на каждый
+`browser_item.brul` и `check_row.brul` блоком `<use>`. `build.rs` — один вызов
+`brul::build::app("src/window.brul")`: корень и модуль `bc_<stem>` на каждый
 подключённый `.brul` ложатся в `OUT_DIR` и включаются в бинарь; `main.rs`
 запускает его через `brul::run_generated`. Начальные значения приходят
 seed-объектами из конфига, клик по строке пишет `selectedIndex` и зовёт хост

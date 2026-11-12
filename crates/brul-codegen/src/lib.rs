@@ -1,5 +1,6 @@
 //! Загрузка `.brul`: разбор SFC, реестр компонентов, аргументы окна.
 
+pub mod build;
 mod diagnostics;
 pub mod emit;
 mod loader;
