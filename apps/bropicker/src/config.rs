@@ -108,7 +108,7 @@ pub fn icon_for(name: &str) -> &'static str {
     KNOWN_ICONS
         .iter()
         .find(|(keyword, _)| name.contains(keyword))
-        .map_or("assets/icons/globe.png", |(_, icon)| icon)
+        .map_or("assets/icons/globe.svg", |(_, icon)| icon)
 }
 
 pub fn detect_browsers() -> Vec<BrowserEntry> {
@@ -549,7 +549,7 @@ mod tests {
         assert_eq!(icon_for("Google Chrome"), "assets/logos/chrome_48x48.png");
         assert_eq!(icon_for("Яндекс Браузер"), "assets/logos/yandex_48x48.png");
         assert_eq!(icon_for("Yandex"), "assets/logos/yandex_48x48.png");
-        assert_eq!(icon_for("Netscape"), "assets/icons/globe.png");
+        assert_eq!(icon_for("Netscape"), "assets/icons/globe.svg");
         assert!(is_known_browser("Brave"));
         assert!(!is_known_browser("Netscape"));
     }

@@ -54,10 +54,10 @@
     import BrowserItem from "./browser_item.brul";
     import CheckRow from "./check_row.brul";
     import SettingsRow from "./settings_row.brul";
-    resource globe from "../assets/icons/globe.png";
-    resource external_link from "../assets/icons/external_link.png";
-    resource sun from "../assets/icons/sun.png";
-    resource cog from "../assets/icons/cog.png";
+    resource globe from "../assets/icons/globe.svg";
+    resource external_link from "../assets/icons/external_link.svg";
+    resource sun from "../assets/icons/sun.svg";
+    resource cog from "../assets/icons/cog.svg";
 </use>
 
 <markup>

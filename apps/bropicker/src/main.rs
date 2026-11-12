@@ -613,7 +613,7 @@ mod tests {
         assert_eq!(field(&firefox, "masked"), &Value::Bool(false));
 
         let netscape = entry_value(&netscape);
-        assert_eq!(icon_of(&netscape), asset_path("assets/icons/globe.png"));
+        assert_eq!(icon_of(&netscape), asset_path("assets/icons/globe.svg"));
         assert_eq!(field(&netscape, "masked"), &Value::Bool(true));
     }
 
