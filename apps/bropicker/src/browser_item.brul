@@ -30,11 +30,8 @@
                             if (emoji != "") {
                                 Text (plate-emoji) { emoji }
                             }
-                            if (emoji == "" && masked) {
-                                Image (plate-icon, plate-icon-masked) { icon }
-                            }
-                            if (emoji == "" && !masked) {
-                                Image (plate-icon) { icon }
+                            if (emoji == "") {
+                                Image (plate-icon, class: masked ? "plate-icon-masked" : "") { icon }
                             }
                         }
                     }

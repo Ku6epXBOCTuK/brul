@@ -211,7 +211,7 @@ pub fn operation(expression: &Expr, names: &Names<'_>) -> String {
             then_branch,
             else_branch,
         } => format!(
-            "match ({}) {{ brul::Value::Bool(true) => {}, brul::Value::Bool(false) => {}, other => return Err(brul::Error::Expected {{ operation: \"?:\", expected: \"Bool\", found: other.type_name() }}), }}",
+            "match {} {{ brul::Value::Bool(true) => {}, brul::Value::Bool(false) => {}, other => return Err(brul::Error::Expected {{ operation: \"?:\", expected: \"Bool\", found: other.type_name() }}), }}",
             operation(condition, names),
             operation(then_branch, names),
             operation(else_branch, names)
@@ -260,7 +260,7 @@ fn every(arguments: &[Expr], names: &Names<'_>) -> String {
         );
     };
     format!(
-        "match ({}) {{ brul::Value::Number(interval) => {{ component.every(interval, {function:?})?; brul::Value::Null }}, other => return Err(brul::Error::Argument {{ name: \"every\", expected: \"Number\", found: other.type_name() }}), }}",
+        "match {} {{ brul::Value::Number(interval) => {{ component.every(interval, {function:?})?; brul::Value::Null }}, other => return Err(brul::Error::Argument {{ name: \"every\", expected: \"Number\", found: other.type_name() }}), }}",
         operation(interval, names)
     )
 }

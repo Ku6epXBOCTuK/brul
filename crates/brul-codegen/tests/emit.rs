@@ -674,6 +674,8 @@ fn emits_value_calls() {
     assert!(operated("every(100, 5)").contains("expected: \"function name\""));
     assert!(operated("a.b()").contains("Unsupported(\"method call\")"));
     assert!(operated("a ? b : c").contains("expected: \"Bool\""));
+    assert!(!operated("a ? b : c").contains("match ("));
+    assert!(!operated("every(100, tick)").contains("match ("));
 }
 
 #[test]
