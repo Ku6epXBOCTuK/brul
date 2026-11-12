@@ -79,15 +79,6 @@ pub fn demo_browsers() -> Vec<BrowserEntry> {
     .collect()
 }
 
-const CANDIDATES: &[(&str, &str)] = &[
-    ("Firefox", "firefox.exe"),
-    ("Chrome", "chrome.exe"),
-    ("Edge", "msedge.exe"),
-    ("Brave", "brave.exe"),
-    ("Opera", "opera.exe"),
-    ("Vivaldi", "vivaldi.exe"),
-];
-
 const KNOWN_ICONS: &[(&str, &str)] = &[
     ("firefox", "assets/logos/firefox_48x48.png"),
     ("chrome", "assets/logos/chrome_48x48.png"),
@@ -112,29 +103,78 @@ pub fn icon_for(name: &str) -> &'static str {
 }
 
 pub fn detect_browsers() -> Vec<BrowserEntry> {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    detect_in(&path, |path| path.exists())
+    from_registry(registered_browsers(), |path| path.exists())
 }
 
-fn detect_in(path: &std::ffi::OsStr, exists: impl Fn(&Path) -> bool) -> Vec<BrowserEntry> {
-    let directories: Vec<PathBuf> = std::env::split_paths(path).collect();
-    CANDIDATES
-        .iter()
-        .filter_map(|(name, exe)| {
-            let path = directories
-                .iter()
-                .map(|directory| directory.join(exe))
-                .find(|path| exists(path))?;
-            Some(BrowserEntry {
-                name: (*name).to_string(),
-                path: path.display().to_string(),
-                flags: String::new(),
-                icon: String::new(),
-                emoji: String::new(),
-                is_default: false,
-            })
-        })
-        .collect()
+fn from_registry(
+    entries: Vec<(String, String)>,
+    exists: impl Fn(&Path) -> bool,
+) -> Vec<BrowserEntry> {
+    let mut browsers: Vec<BrowserEntry> = Vec::new();
+    for (name, command) in entries {
+        let Some(path) = command_path(&command) else {
+            continue;
+        };
+        if !exists(Path::new(path)) {
+            continue;
+        }
+        if browsers
+            .iter()
+            .any(|known| known.path.eq_ignore_ascii_case(path))
+        {
+            continue;
+        }
+        browsers.push(BrowserEntry {
+            name,
+            path: path.to_string(),
+            flags: String::new(),
+            icon: String::new(),
+            emoji: String::new(),
+            is_default: false,
+        });
+    }
+    browsers
+}
+
+#[cfg(windows)]
+fn registered_browsers() -> Vec<(String, String)> {
+    use winreg::RegKey;
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+
+    let mut browsers = Vec::new();
+    for hive in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
+        let Ok(clients) = RegKey::predef(hive).open_subkey(r"SOFTWARE\Clients\StartMenuInternet")
+        else {
+            continue;
+        };
+        for client in clients.enum_keys().flatten() {
+            let Ok(key) = clients.open_subkey(&client) else {
+                continue;
+            };
+            let name: String = key.get_value("").unwrap_or(client);
+            let command: String = key
+                .open_subkey(r"shell\open\command")
+                .and_then(|command| command.get_value(""))
+                .unwrap_or_default();
+            browsers.push((name, command));
+        }
+    }
+    browsers
+}
+
+#[cfg(not(windows))]
+fn registered_browsers() -> Vec<(String, String)> {
+    Vec::new()
+}
+
+fn command_path(command: &str) -> Option<&str> {
+    let command = command.trim();
+    let path = match command.strip_prefix('"') {
+        Some(quoted) => quoted.split_once('"')?.0,
+        None => command.split_whitespace().next()?,
+    }
+    .trim();
+    (!path.is_empty()).then_some(path)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -491,22 +531,59 @@ mod tests {
     }
 
     #[test]
-    fn detection_finds_a_candidate_on_the_path() {
-        let directories = std::env::join_paths([PathBuf::from("C:/one"), PathBuf::from("C:/two")])
-            .expect("path list");
-        let wanted = PathBuf::from("C:/two").join("chrome.exe");
-
-        let found = detect_in(&directories, |path| path == wanted);
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].name, "Chrome");
-        assert_eq!(found[0].path, wanted.display().to_string());
+    fn a_quoted_command_yields_the_executable_path() {
+        assert_eq!(
+            command_path(r#""C:\Program Files\Mozilla Firefox\firefox.exe" -osint -url "%1""#),
+            Some(r"C:\Program Files\Mozilla Firefox\firefox.exe")
+        );
     }
 
     #[test]
-    fn detection_skips_candidates_that_are_not_installed() {
-        let directories = std::env::join_paths([PathBuf::from("C:/empty")]).expect("path list");
-        assert!(detect_in(&directories, |_| false).is_empty());
+    fn an_unquoted_command_yields_the_executable_path() {
+        assert_eq!(
+            command_path(r"C:\tools\app.exe --other"),
+            Some(r"C:\tools\app.exe")
+        );
+    }
+
+    #[test]
+    fn a_command_without_an_executable_is_ignored() {
+        assert_eq!(command_path(""), None);
+        assert_eq!(command_path("   "), None);
+        assert_eq!(command_path(r#"" %1"#), None);
+    }
+
+    #[test]
+    fn a_registered_browser_keeps_its_name_and_needs_its_file() {
+        let entries = vec![
+            (
+                "Browser".to_string(),
+                r#""C:\browsers\browser.exe" "%1""#.to_string(),
+            ),
+            ("Gone".to_string(), r"C:\missing\gone.exe".to_string()),
+            ("Nameless".to_string(), String::new()),
+        ];
+
+        let found = from_registry(entries, |path| {
+            path == Path::new(r"C:\browsers\browser.exe")
+        });
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "Browser");
+        assert_eq!(found[0].path, r"C:\browsers\browser.exe");
+    }
+
+    #[test]
+    fn a_browser_registered_by_both_hives_is_listed_once() {
+        let entries = vec![
+            ("Firefox".to_string(), r"C:\Firefox\firefox.exe".to_string()),
+            ("Firefox".to_string(), r"C:\FIREFOX\FIREFOX.EXE".to_string()),
+        ];
+
+        let found = from_registry(entries, |_| true);
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].path, r"C:\Firefox\firefox.exe");
     }
 
     #[test]

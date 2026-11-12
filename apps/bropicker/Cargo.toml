@@ -15,5 +15,8 @@ brul-macros = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true }
+
 [build-dependencies]
 brul-codegen = { workspace = true }
