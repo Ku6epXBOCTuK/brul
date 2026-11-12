@@ -14,6 +14,7 @@ struct Session {
     url: String,
     config: Rc<RefCell<Config>>,
     theme: Option<&'static str>,
+    dark: bool,
 }
 
 impl Session {
@@ -32,6 +33,7 @@ impl Session {
             ("selected", Value::Number(selected as f64)),
             ("remember", Value::Bool(config.settings.remember_choice)),
             ("alwaysAsk", Value::Bool(config.settings.always_ask)),
+            ("dark", Value::Bool(self.dark)),
         ]
     }
 
@@ -58,15 +60,40 @@ fn session(url: Option<String>, mut config: Config) -> Session {
     if config.browsers.is_empty() {
         config.browsers = demo_browsers();
     }
-    let theme = match config.theme {
-        Theme::Light => Some("light"),
-        Theme::Dark => Some("dark"),
-        Theme::System => None,
+    let (theme, dark) = match config.theme {
+        Theme::Light => (Some("light"), false),
+        Theme::Dark => (Some("dark"), true),
+        Theme::System => (None, system_dark()),
     };
     Session {
         url: url.unwrap_or_else(|| "https://github.com/".to_string()),
         config: Rc::new(RefCell::new(config)),
         theme,
+        dark,
+    }
+}
+
+fn system_dark() -> bool {
+    let output = std::process::Command::new("reg")
+        .args([
+            "query",
+            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+            "/v",
+            "AppsUseLightTheme",
+        ])
+        .output();
+    let Ok(output) = output else {
+        return true;
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    !apps_use_light(&text).unwrap_or(false)
+}
+
+fn apps_use_light(output: &str) -> Option<bool> {
+    match output.split_whitespace().last()? {
+        "0x1" => Some(true),
+        "0x0" => Some(false),
+        _ => None,
     }
 }
 
@@ -107,12 +134,13 @@ impl<R: Runner> LauncherHost<R> {
         let browser = self.config.borrow().browsers.get(index).cloned();
         let Some(browser) = browser else {
             eprintln!("launch: browser {index} is not configured");
-            return Ok(Value::Null);
+            return Ok(Value::Bool(false));
         };
         if let Err(error) = self.launcher.launch(&browser, &self.url) {
             eprintln!("launch: {error}");
+            return Ok(Value::Bool(false));
         }
-        Ok(Value::Null)
+        Ok(Value::Bool(true))
     }
 
     fn remove_browser(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
@@ -414,7 +442,7 @@ mod tests {
         let (mut host, commands) = host(Ok(()));
         assert!(matches!(
             call(&mut host, &[Value::Number(9.0)]),
-            Ok(Value::Null)
+            Ok(Value::Bool(false))
         ));
         assert!(commands.borrow().is_empty());
     }
@@ -424,7 +452,7 @@ mod tests {
         let (mut host, commands) = host(Ok(()));
         assert!(matches!(
             call(&mut host, &[Value::Number(1.0)]),
-            Ok(Value::Null)
+            Ok(Value::Bool(true))
         ));
         let commands = commands.borrow();
         assert_eq!(commands.len(), 1);
@@ -437,7 +465,7 @@ mod tests {
         let (mut host, commands) = host(Err(LaunchError::EmptyUrl));
         assert!(matches!(
             call(&mut host, &[Value::Number(0.0)]),
-            Ok(Value::Null)
+            Ok(Value::Bool(false))
         ));
         assert_eq!(commands.borrow().len(), 1);
     }
@@ -478,6 +506,33 @@ mod tests {
             };
             assert_eq!(session(None, config).theme, expected);
         }
+    }
+
+    #[test]
+    fn session_knows_whether_the_chosen_theme_is_dark() {
+        let dark = Config {
+            theme: Theme::Dark,
+            ..Config::default()
+        };
+        assert!(session(None, dark).dark);
+        let light = Config {
+            theme: Theme::Light,
+            ..Config::default()
+        };
+        assert!(!session(None, light).dark);
+    }
+
+    #[test]
+    fn the_registry_value_says_whether_the_apps_are_light() {
+        assert_eq!(
+            apps_use_light("    AppsUseLightTheme    REG_DWORD    0x1\n"),
+            Some(true)
+        );
+        assert_eq!(
+            apps_use_light("    AppsUseLightTheme    REG_DWORD    0x0\n"),
+            Some(false)
+        );
+        assert_eq!(apps_use_light("no value"), None);
     }
 
     #[test]

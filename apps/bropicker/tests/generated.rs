@@ -64,6 +64,9 @@ fn seeded() -> ComponentHandle {
     state
         .declare("alwaysAsk", Value::Bool(false), true)
         .expect("alwaysAsk seed");
+    state
+        .declare("dark", Value::Bool(true), true)
+        .expect("dark seed");
     drop(state);
     let script = generated::script().expect("script block");
     brul::execute_program(&mut component.borrow_mut(), &script).expect("script");
@@ -148,7 +151,14 @@ fn both_windows_read_the_same_browsers_signal() {
 #[test]
 fn markup_script_block_is_emitted() {
     let script = generated::script().expect("script block");
-    for name in ["launch", "toggleRemember", "toggleAlwaysAsk", "handleKey"] {
+    for name in [
+        "launch",
+        "openSelected",
+        "toggleTheme",
+        "toggleRemember",
+        "toggleAlwaysAsk",
+        "handleKey",
+    ] {
         assert!(
             script
                 .functions
@@ -177,7 +187,7 @@ fn view_builds_the_picker_layout() {
         1
     );
 
-    assert_eq!(handlers.len(), 6);
+    assert_eq!(handlers.len(), 8);
     let key = handlers
         .iter()
         .find(|handler| handler.event == HandlerEvent::Key)
