@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bropicker::generated;
+use brul::gui::WidgetKind;
 use brul::{Built, Component, ComponentHandle, HandlerEvent, Value};
-use brul_gui::WidgetKind;
 
 fn browser(name: &str, is_default: bool) -> Value {
     Value::Object(

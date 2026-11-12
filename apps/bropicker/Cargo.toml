@@ -10,8 +10,6 @@ workspace = true
 
 [dependencies]
 brul = { workspace = true }
-brul-gui = { workspace = true }
-brul-macros = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true }
 
@@ -19,4 +17,4 @@ toml = { workspace = true }
 winreg = { workspace = true }
 
 [build-dependencies]
-brul-codegen = { workspace = true }
+brul = { workspace = true }

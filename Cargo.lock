@@ -187,9 +187,6 @@ name = "bropicker"
 version = "0.1.0"
 dependencies = [
  "brul",
- "brul-codegen",
- "brul-gui",
- "brul-macros",
  "serde",
  "toml",
  "winreg",
@@ -201,6 +198,7 @@ version = "0.1.0"
 dependencies = [
  "brul-codegen",
  "brul-gui",
+ "brul-macros",
  "brul-reactive",
  "brul-script",
  "brul-syntax",

@@ -51,7 +51,7 @@ pub(super) fn tables(
     for theme in themes {
         let _ = writeln!(
             out,
-            "\n#[allow(dead_code)]\nfn {}(name: &str) -> Option<brul_gui::Class> {{\n    match name {{",
+            "\n#[allow(dead_code)]\nfn {}(name: &str) -> Option<brul::gui::Class> {{\n    match name {{",
             name(prefix, theme)
         );
         let mut seen: Vec<&str> = Vec::new();

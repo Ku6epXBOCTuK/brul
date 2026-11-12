@@ -12,7 +12,7 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let source = root.join("src").join("window.brul");
-    let module = brul_codegen::emit::split_module_file(&source)?;
+    let module = brul::build::split_module_file(&source)?;
     let output = PathBuf::from(env::var("OUT_DIR")?);
     fs::write(output.join("view.rs"), &module.root)?;
     for file in &module.files {

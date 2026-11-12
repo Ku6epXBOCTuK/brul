@@ -12,7 +12,7 @@ use bropicker::{
 };
 use brul::Value;
 use brul::logging::{error, info};
-use brul_macros::{command, host};
+use brul::{command, host};
 
 struct Session {
     url: String,

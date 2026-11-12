@@ -205,7 +205,7 @@ fn widget(out: &mut String, frame: Frame<'_>) {
     let spacing = frame.spacing();
     let _ = writeln!(
         out,
-        "    let widget = brul_gui::Widget::view(brul_gui::Direction::{direction}, children)\n        .with_layout(brul_gui::LayoutStyle {{ spacing: {spacing}, ..Default::default() }});"
+        "    let widget = brul::gui::Widget::view(brul::gui::Direction::{direction}, children)\n        .with_layout(brul::gui::LayoutStyle {{ spacing: {spacing}, ..Default::default() }});"
     );
     out.push_str("    Ok((brul::Built { widget, bindings, handlers, props }, rows))\n}\n");
 }

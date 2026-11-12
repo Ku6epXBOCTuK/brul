@@ -106,11 +106,11 @@ fn container(
     let row = element.name == "Row";
     let call = if row { "row" } else { "column" };
     if element.block.items.is_empty() {
-        let _ = write!(out, "brul_gui::Widget::{call}(vec![])");
+        let _ = write!(out, "brul::gui::Widget::{call}(vec![])");
         return Ok(());
     }
     let direction = if row { "Row" } else { "Column" };
-    let _ = writeln!(out, "brul_gui::Widget::{call}(vec![");
+    let _ = writeln!(out, "brul::gui::Widget::{call}(vec![");
     let children = frame.deeper(2).inside(direction, resolved.layout.spacing);
     items(out, &element.block, emit, children, counter)?;
     let inner = "    ".repeat(frame.depth() + 1);
@@ -215,18 +215,18 @@ fn text_widget(
             let ExprKind::String(content) = &expression.kind else {
                 let _ = match &styles {
                     Some(styles) => {
-                        write!(out, "brul_gui::Widget::text_with_styles(\"\", {styles})")
+                        write!(out, "brul::gui::Widget::text_with_styles(\"\", {styles})")
                     }
-                    None => write!(out, "brul_gui::Widget::text(\"\")"),
+                    None => write!(out, "brul::gui::Widget::text(\"\")"),
                 };
                 return Ok(Some(expression.clone()));
             };
             let _ = match &styles {
                 Some(styles) => write!(
                     out,
-                    "brul_gui::Widget::text_with_styles({content:?}, {styles})"
+                    "brul::gui::Widget::text_with_styles({content:?}, {styles})"
                 ),
-                None => write!(out, "brul_gui::Widget::text({content:?})"),
+                None => write!(out, "brul::gui::Widget::text({content:?})"),
             };
             Ok(None)
         }
@@ -253,12 +253,12 @@ fn image_widget(
     {
         let _ = write!(
             out,
-            "brul_gui::Widget::image(brul_gui::Image::from_bytes({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
+            "brul::gui::Widget::image(brul::gui::Image::from_bytes({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
             emit.resource_prefix
         );
         return Ok(None);
     }
-    out.push_str("brul_gui::Widget::image(brul_gui::Texture::empty())");
+    out.push_str("brul::gui::Widget::image(brul::gui::Texture::empty())");
     Ok(Some(expression.clone()))
 }
 

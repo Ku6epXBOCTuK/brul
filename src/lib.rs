@@ -6,11 +6,17 @@ pub mod logging;
 mod run;
 mod ui;
 
+pub mod build {
+    pub use brul_codegen::emit::{GeneratedFile, Module, split_module_file};
+}
+
 pub use brul_codegen::runtime::{
     Binding, BindingTarget, Built, ComponentEvent, ComponentHandle, Handler, HandlerEvent,
     Instance, PropArgument, PropBinding, Rebuilt, RowInfo, Structure, View, instance,
     register_structure, take_structures,
 };
+pub use brul_gui as gui;
+pub use brul_macros::{command, host};
 pub use brul_script::eval;
 pub use brul_script::{Component, Error, Host, Value, Variable, VariableId, execute_program};
 pub use brul_syntax::ast;

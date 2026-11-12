@@ -91,7 +91,7 @@ pub(super) fn functions(
         let _ = writeln!(out, "\n#[allow(dead_code)]\npub struct {structure} {{");
         for field in &fields {
             let name = &field.name;
-            let _ = writeln!(out, "    {name}: brul_gui::Color,");
+            let _ = writeln!(out, "    {name}: brul::gui::Color,");
         }
         out.push_str("}\n");
     }
@@ -118,7 +118,7 @@ pub(super) fn functions(
                     .find(|entry| entry.key == field.key)
                     .and_then(|entry| match entry.value {
                         Value::Color(color) => Some(format!(
-                            "{name}: brul_gui::Color::rgba({}, {}, {}, {})",
+                            "{name}: brul::gui::Color::rgba({}, {}, {}, {})",
                             color.r, color.g, color.b, color.a
                         )),
                         _ => None,

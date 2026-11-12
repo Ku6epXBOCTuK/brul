@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 brul-codegen = { workspace = true }
 brul-gui = { workspace = true }
+brul-macros = { workspace = true }
 brul-reactive = { workspace = true }
 brul-script = { workspace = true }
 brul-syntax = { workspace = true }

@@ -28,7 +28,7 @@ pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
     }
     if padding != default.padding {
         fields.push(format!(
-            "padding: brul_gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }}",
+            "padding: brul::gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }}",
             padding.left, padding.top, padding.right, padding.bottom
         ));
     }
@@ -49,7 +49,7 @@ pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
     }
     (!fields.is_empty()).then(|| {
         format!(
-            "brul_gui::LayoutStyle {{ {}, ..brul_gui::LayoutStyle::default() }}",
+            "brul::gui::LayoutStyle {{ {}, ..brul::gui::LayoutStyle::default() }}",
             fields.join(", ")
         )
     })
@@ -64,14 +64,14 @@ pub(super) fn style_set(set: StyleSet, palette: &Palette<'_>) -> Option<String> 
             continue;
         };
         states.push(format!(
-            ".with(brul_gui::StyleState::{state:?}, {})",
+            ".with(brul::gui::StyleState::{state:?}, {})",
             widget_style_patch(patch, palette)
         ));
     }
     if base == WidgetStyle::default() && states.is_empty() && transitions.is_empty() {
         return None;
     }
-    let mut out = format!("brul_gui::StyleSet::new({})", widget_style(base, palette));
+    let mut out = format!("brul::gui::StyleSet::new({})", widget_style(base, palette));
     if !transitions.is_empty() {
         out.push_str(&format!(
             ".with_transitions({})",
@@ -105,10 +105,10 @@ fn transitions_expr(value: Transitions) -> String {
         })
         .collect();
     if fields.is_empty() {
-        "brul_gui::Transitions::default()".to_owned()
+        "brul::gui::Transitions::default()".to_owned()
     } else {
         format!(
-            "brul_gui::Transitions {{ {}, ..brul_gui::Transitions::default() }}",
+            "brul::gui::Transitions {{ {}, ..brul::gui::Transitions::default() }}",
             fields.join(", ")
         )
     }
@@ -166,10 +166,10 @@ fn widget_style(style: WidgetStyle, palette: &Palette<'_>) -> String {
         fields.push(format!("shadow: {}", shadow(shadow_value, palette)));
     }
     if fields.is_empty() {
-        "brul_gui::WidgetStyle::default()".to_owned()
+        "brul::gui::WidgetStyle::default()".to_owned()
     } else {
         format!(
-            "brul_gui::WidgetStyle {{ {}, ..brul_gui::WidgetStyle::default() }}",
+            "brul::gui::WidgetStyle {{ {}, ..brul::gui::WidgetStyle::default() }}",
             fields.join(", ")
         )
     }
@@ -177,7 +177,7 @@ fn widget_style(style: WidgetStyle, palette: &Palette<'_>) -> String {
 
 pub(super) fn class(value: &Class) -> String {
     format!(
-        "brul_gui::Class {{ layout: {}, style: {}, text: {} }}",
+        "brul::gui::Class {{ layout: {}, style: {}, text: {} }}",
         layout_patch(&value.layout),
         widget_style_patch(&value.style, &Palette::empty()),
         text_style_patch(&value.text)
@@ -194,7 +194,7 @@ fn layout_patch(patch: &LayoutPatch) -> String {
     }
     if let Some(padding) = patch.padding {
         fields.push(format!(
-            "padding: Some(brul_gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }})",
+            "padding: Some(brul::gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }})",
             padding.left, padding.top, padding.right, padding.bottom
         ));
     }
@@ -214,10 +214,10 @@ fn layout_patch(patch: &LayoutPatch) -> String {
         fields.push(format!("align: Some({})", align(value)));
     }
     if fields.is_empty() {
-        "brul_gui::LayoutPatch::default()".to_owned()
+        "brul::gui::LayoutPatch::default()".to_owned()
     } else {
         format!(
-            "brul_gui::LayoutPatch {{ {}, ..brul_gui::LayoutPatch::default() }}",
+            "brul::gui::LayoutPatch {{ {}, ..brul::gui::LayoutPatch::default() }}",
             fields.join(", ")
         )
     }
@@ -250,10 +250,10 @@ fn widget_style_patch(patch: &WidgetStylePatch, palette: &Palette<'_>) -> String
         fields.push(format!("shadow: Some({})", color(shadow, palette)));
     }
     if fields.is_empty() {
-        "brul_gui::WidgetStylePatch::default()".to_owned()
+        "brul::gui::WidgetStylePatch::default()".to_owned()
     } else {
         format!(
-            "brul_gui::WidgetStylePatch {{ {}, ..brul_gui::WidgetStylePatch::default() }}",
+            "brul::gui::WidgetStylePatch {{ {}, ..brul::gui::WidgetStylePatch::default() }}",
             fields.join(", ")
         )
     }
@@ -268,10 +268,10 @@ fn text_style_patch(patch: &TextStylePatch) -> String {
         fields.push(format!("align: Some({})", text_align(align)));
     }
     if fields.is_empty() {
-        "brul_gui::TextStylePatch::default()".to_owned()
+        "brul::gui::TextStylePatch::default()".to_owned()
     } else {
         format!(
-            "brul_gui::TextStylePatch {{ {}, ..brul_gui::TextStylePatch::default() }}",
+            "brul::gui::TextStylePatch {{ {}, ..brul::gui::TextStylePatch::default() }}",
             fields.join(", ")
         )
     }
@@ -285,14 +285,14 @@ pub(super) fn text_style_set(set: &TextStyleSet) -> Option<String> {
             continue;
         };
         states.push(format!(
-            ".with(brul_gui::StyleState::{state:?}, {})",
+            ".with(brul::gui::StyleState::{state:?}, {})",
             text_style_patch(patch)
         ));
     }
     if *base == TextStyle::default() && states.is_empty() {
         return None;
     }
-    let mut out = format!("brul_gui::TextStyleSet::new({})", text_style_expr(base));
+    let mut out = format!("brul::gui::TextStyleSet::new({})", text_style_expr(base));
     for state in states {
         out.push_str(&state);
     }
@@ -326,10 +326,10 @@ fn text_style_expr(style: &TextStyle) -> String {
         fields.push(format!("align: {}", text_align(*align_value)));
     }
     if fields.is_empty() {
-        "brul_gui::TextStyle::default()".to_owned()
+        "brul::gui::TextStyle::default()".to_owned()
     } else {
         format!(
-            "brul_gui::TextStyle {{ {}, ..brul_gui::TextStyle::default() }}",
+            "brul::gui::TextStyle {{ {}, ..brul::gui::TextStyle::default() }}",
             fields.join(", ")
         )
     }
@@ -337,49 +337,49 @@ fn text_style_expr(style: &TextStyle) -> String {
 
 fn dimension(value: Dimension) -> String {
     match value {
-        Dimension::Auto => "brul_gui::Dimension::Auto".to_owned(),
-        Dimension::Px(value) => format!("brul_gui::Dimension::Px({value})"),
-        Dimension::Percent(value) => format!("brul_gui::Dimension::Percent({value:?}f32)"),
+        Dimension::Auto => "brul::gui::Dimension::Auto".to_owned(),
+        Dimension::Px(value) => format!("brul::gui::Dimension::Px({value})"),
+        Dimension::Percent(value) => format!("brul::gui::Dimension::Percent({value:?}f32)"),
     }
 }
 
 fn justify(value: Justify) -> String {
     match value {
-        Justify::Start => "brul_gui::Justify::Start".to_owned(),
-        Justify::Center => "brul_gui::Justify::Center".to_owned(),
-        Justify::End => "brul_gui::Justify::End".to_owned(),
-        Justify::SpaceBetween => "brul_gui::Justify::SpaceBetween".to_owned(),
+        Justify::Start => "brul::gui::Justify::Start".to_owned(),
+        Justify::Center => "brul::gui::Justify::Center".to_owned(),
+        Justify::End => "brul::gui::Justify::End".to_owned(),
+        Justify::SpaceBetween => "brul::gui::Justify::SpaceBetween".to_owned(),
     }
 }
 
 fn align(value: Align) -> String {
     match value {
-        Align::Start => "brul_gui::Align::Start".to_owned(),
-        Align::Center => "brul_gui::Align::Center".to_owned(),
-        Align::End => "brul_gui::Align::End".to_owned(),
-        Align::Stretch => "brul_gui::Align::Stretch".to_owned(),
+        Align::Start => "brul::gui::Align::Start".to_owned(),
+        Align::Center => "brul::gui::Align::Center".to_owned(),
+        Align::End => "brul::gui::Align::End".to_owned(),
+        Align::Stretch => "brul::gui::Align::Stretch".to_owned(),
     }
 }
 
 fn text_align(value: TextAlign) -> String {
     match value {
-        TextAlign::Left => "brul_gui::TextAlign::Left".to_owned(),
-        TextAlign::Center => "brul_gui::TextAlign::Center".to_owned(),
-        TextAlign::Right => "brul_gui::TextAlign::Right".to_owned(),
+        TextAlign::Left => "brul::gui::TextAlign::Left".to_owned(),
+        TextAlign::Center => "brul::gui::TextAlign::Center".to_owned(),
+        TextAlign::Right => "brul::gui::TextAlign::Right".to_owned(),
     }
 }
 
 fn vertical_align(value: VerticalAlign) -> String {
     match value {
-        VerticalAlign::Top => "brul_gui::VerticalAlign::Top".to_owned(),
-        VerticalAlign::Center => "brul_gui::VerticalAlign::Center".to_owned(),
-        VerticalAlign::Bottom => "brul_gui::VerticalAlign::Bottom".to_owned(),
+        VerticalAlign::Top => "brul::gui::VerticalAlign::Top".to_owned(),
+        VerticalAlign::Center => "brul::gui::VerticalAlign::Center".to_owned(),
+        VerticalAlign::Bottom => "brul::gui::VerticalAlign::Bottom".to_owned(),
     }
 }
 
 fn shadow(value: Shadow, palette: &Palette<'_>) -> String {
     format!(
-        "brul_gui::Shadow {{ x: {}, y: {}, blur: {}, color: {} }}",
+        "brul::gui::Shadow {{ x: {}, y: {}, blur: {}, color: {} }}",
         value.x,
         value.y,
         value.blur,
@@ -389,9 +389,9 @@ fn shadow(value: Shadow, palette: &Palette<'_>) -> String {
 
 fn paint(value: Paint, palette: &Palette<'_>) -> String {
     match value {
-        Paint::Color(value) => format!("brul_gui::Paint::Color({})", color(value, palette)),
+        Paint::Color(value) => format!("brul::gui::Paint::Color({})", color(value, palette)),
         Paint::Gradient(Gradient::Linear { angle, from, to }) => format!(
-            "brul_gui::Paint::Gradient(brul_gui::Gradient::Linear {{ angle: {angle:?}f32, from: {}, to: {} }})",
+            "brul::gui::Paint::Gradient(brul::gui::Gradient::Linear {{ angle: {angle:?}f32, from: {}, to: {} }})",
             color(from, palette),
             color(to, palette)
         ),
@@ -403,7 +403,7 @@ fn color(value: Color, palette: &Palette<'_>) -> String {
         return format!("palette.{}", palette_field(key));
     }
     format!(
-        "brul_gui::Color::rgba({}, {}, {}, {})",
+        "brul::gui::Color::rgba({}, {}, {}, {})",
         value.r, value.g, value.b, value.a
     )
 }
@@ -426,7 +426,7 @@ mod tests {
         assert_eq!(
             style_set(set, &Palette::empty()).as_deref(),
             Some(
-                "brul_gui::StyleSet::new(brul_gui::WidgetStyle::default()).with_transitions(brul_gui::Transitions { background: Some(std::time::Duration::from_millis(300)), ..brul_gui::Transitions::default() })"
+                "brul::gui::StyleSet::new(brul::gui::WidgetStyle::default()).with_transitions(brul::gui::Transitions { background: Some(std::time::Duration::from_millis(300)), ..brul::gui::Transitions::default() })"
             )
         );
     }
@@ -443,7 +443,7 @@ mod tests {
     fn shadow_is_emitted_only_when_it_differs_from_default() {
         assert_eq!(
             widget_style(WidgetStyle::default(), &Palette::empty()),
-            "brul_gui::WidgetStyle::default()"
+            "brul::gui::WidgetStyle::default()"
         );
         let style = WidgetStyle {
             shadow: Shadow {
@@ -457,7 +457,7 @@ mod tests {
 
         assert_eq!(
             widget_style(style, &Palette::empty()),
-            "brul_gui::WidgetStyle { shadow: brul_gui::Shadow { x: -2, y: 10, blur: 15, color: brul_gui::Color::rgba(59, 130, 246, 64) }, ..brul_gui::WidgetStyle::default() }"
+            "brul::gui::WidgetStyle { shadow: brul::gui::Shadow { x: -2, y: 10, blur: 15, color: brul::gui::Color::rgba(59, 130, 246, 64) }, ..brul::gui::WidgetStyle::default() }"
         );
     }
 
@@ -475,7 +475,7 @@ mod tests {
         assert!(
             constants
                 .iter()
-                .all(|constant| constant.starts_with("brul_gui::Justify::"))
+                .all(|constant| constant.starts_with("brul::gui::Justify::"))
         );
         constants.sort_unstable();
         constants.dedup();

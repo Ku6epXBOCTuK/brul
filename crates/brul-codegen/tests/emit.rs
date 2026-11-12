@@ -20,13 +20,13 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = brul_gui::Widget::row(vec![
+            let widget0 = brul::gui::Widget::row(vec![
                 {
-                    let widget1 = brul_gui::Widget::text("a");
+                    let widget1 = brul::gui::Widget::text("a");
                     widget1
                 },
                 {
-                    let widget2 = brul_gui::Widget::column(vec![]);
+                    let widget2 = brul::gui::Widget::column(vec![]);
                     widget2
                 },
             ]);
@@ -111,9 +111,9 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = brul_gui::Widget::column(vec![])
-            .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-            .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(palette.accent), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStylePatch { background: Some(brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255))), ..brul_gui::WidgetStylePatch::default() }));
+            let widget0 = brul::gui::Widget::column(vec![])
+            .with_layout(brul::gui::LayoutStyle { width: brul::gui::Dimension::Px(10), ..brul::gui::LayoutStyle::default() })
+            .with_styles(brul::gui::StyleSet::new(brul::gui::WidgetStyle { background: brul::gui::Paint::Color(palette.accent), ..brul::gui::WidgetStyle::default() }).with(brul::gui::StyleState::Checked, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color::rgba(255, 0, 0, 255))), ..brul::gui::WidgetStylePatch::default() }));
             widget0
         }
     };
@@ -127,12 +127,12 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
 
 #[allow(dead_code)]
 pub struct Palette {
-    accent: brul_gui::Color,
+    accent: brul::gui::Color,
 }
 fn palette(theme: Option<&str>) -> Result<Palette, String> {
     match theme {
-        None | Some("dark") => Ok(Palette { accent: brul_gui::Color::rgba(108, 140, 255, 255) }),
-        Some("light") => Ok(Palette { accent: brul_gui::Color::rgba(17, 34, 51, 255) }),
+        None | Some("dark") => Ok(Palette { accent: brul::gui::Color::rgba(108, 140, 255, 255) }),
+        Some("light") => Ok(Palette { accent: brul::gui::Color::rgba(17, 34, 51, 255) }),
         Some(theme) => Err(format!("unknown theme '{theme}'")),
     }
 }
@@ -174,7 +174,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let module = emit::module(source).expect("module");
-    assert!(module.contains(r#"let widget0 = brul_gui::Widget::text("");"#));
+    assert!(module.contains(r#"let widget0 = brul::gui::Widget::text("");"#));
     assert!(module.contains(
         r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read_id(brul::VariableId::from_index(0))?; Ok(value) })));"#
     ));
@@ -199,11 +199,11 @@ window Demo (title: "demo") {
         "{module}"
     );
     assert!(
-        module.contains("fn class_none(name: &str) -> Option<brul_gui::Class>"),
+        module.contains("fn class_none(name: &str) -> Option<brul::gui::Class>"),
         "{module}"
     );
     assert!(
-        module.contains("\"tone\" => Some(brul_gui::Class {"),
+        module.contains("\"tone\" => Some(brul::gui::Class {"),
         "{module}"
     );
 }
@@ -242,7 +242,7 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(
-        module.contains("vertical_align: Some(brul_gui::VerticalAlign::Center)"),
+        module.contains("vertical_align: Some(brul::gui::VerticalAlign::Center)"),
         "{module}"
     );
 }
@@ -263,7 +263,7 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(
         module.contains(
-            r#"brul_gui::Widget::text_with_styles("hi", brul_gui::TextStyleSet::new(brul_gui::TextStyle { weight: 500, ..brul_gui::TextStyle::default() }).with(brul_gui::StyleState::Hovered, brul_gui::TextStylePatch { weight: Some(600), ..brul_gui::TextStylePatch::default() }))"#
+            r#"brul::gui::Widget::text_with_styles("hi", brul::gui::TextStyleSet::new(brul::gui::TextStyle { weight: 500, ..brul::gui::TextStyle::default() }).with(brul::gui::StyleState::Hovered, brul::gui::TextStylePatch { weight: Some(600), ..brul::gui::TextStylePatch::default() }))"#
         ),
         "{module}"
     );
@@ -330,7 +330,7 @@ window Demo (title: "demo") {
     assert!(module.contains(
         r#"handlers.push(brul::Handler::new(component, Some(widget1.id()), brul::HandlerEvent::Enter, "toggle"));"#
     ));
-    assert!(module.contains("brul_gui::Widget::column(vec!["));
+    assert!(module.contains("brul::gui::Widget::column(vec!["));
     assert!(module.contains(".draggable(true);"));
     assert!(!module.contains("HandlerEvent::Drag"));
 }
@@ -945,7 +945,7 @@ fn emits_a_linear_gradient_background() {
     let module = emit::module(source).unwrap();
     assert!(
         module.contains(
-            "background: brul_gui::Paint::Gradient(brul_gui::Gradient::Linear { angle: 90.0f32, from: brul_gui::Color::rgba(255, 0, 0, 255), to: brul_gui::Color::rgba(0, 0, 255, 255) })"
+            "background: brul::gui::Paint::Gradient(brul::gui::Gradient::Linear { angle: 90.0f32, from: brul::gui::Color::rgba(255, 0, 0, 255), to: brul::gui::Color::rgba(0, 0, 255, 255) })"
         ),
         "{module}"
     );
@@ -981,11 +981,11 @@ window Demo (title: "demo") {
     );
     assert!(module.contains("include_bytes!("), "{module}");
     assert!(
-        module.contains("brul_gui::Widget::image(brul_gui::Image::from_bytes(resource_check())"),
+        module.contains("brul::gui::Widget::image(brul::gui::Image::from_bytes(resource_check())"),
         "{module}"
     );
     assert!(
-        module.contains("tint: Some(brul_gui::Color::rgba(51, 102, 153, 255))"),
+        module.contains("tint: Some(brul::gui::Color::rgba(51, 102, 153, 255))"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1016,7 +1016,7 @@ window Demo (title: "demo") {
     .unwrap();
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(
-        module.contains("brul_gui::Widget::image(brul_gui::Image::from_bytes(resource_icon())"),
+        module.contains("brul::gui::Widget::image(brul::gui::Image::from_bytes(resource_icon())"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1062,7 +1062,7 @@ window Demo (title: "demo") {
         "{module}"
     );
     assert!(
-        module.contains("brul_gui::Image::from_bytes(component0_resource_check())"),
+        module.contains("brul::gui::Image::from_bytes(component0_resource_check())"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1115,7 +1115,7 @@ fn emits_image_value_binding() {
         "<markup>\nwindow Demo (title: \"demo\") {\n    Image (icon) { icon }\n}\n</markup>\n";
     let module = emit::module(source).unwrap();
     assert!(
-        module.contains("brul_gui::Widget::image(brul_gui::Texture::empty())"),
+        module.contains("brul::gui::Widget::image(brul::gui::Texture::empty())"),
         "{module}"
     );
     assert!(module.contains("brul::BindingTarget::Image("), "{module}");
