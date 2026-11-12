@@ -1,7 +1,7 @@
 use brul_gui::{
-    Align, Color, Dimension, Gradient, Justify, LayoutStyle, Paint, Shadow, StyleSet, StyleState,
-    TextAlign, TextStyle, TextStylePatch, TextStyleSet, Transitions, VerticalAlign, WidgetStyle,
-    WidgetStylePatch,
+    Align, Class, Color, Dimension, Gradient, Justify, LayoutPatch, LayoutStyle, Paint, Shadow,
+    StyleSet, StyleState, TextAlign, TextStyle, TextStylePatch, TextStyleSet, Transitions,
+    VerticalAlign, WidgetStyle, WidgetStylePatch,
 };
 
 pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
@@ -167,6 +167,54 @@ fn widget_style(style: WidgetStyle) -> String {
     } else {
         format!(
             "brul_gui::WidgetStyle {{ {}, ..brul_gui::WidgetStyle::default() }}",
+            fields.join(", ")
+        )
+    }
+}
+
+pub(super) fn class(value: &Class) -> String {
+    format!(
+        "brul_gui::Class {{ layout: {}, style: {}, text: {} }}",
+        layout_patch(&value.layout),
+        widget_style_patch(&value.style),
+        text_style_patch(&value.text)
+    )
+}
+
+fn layout_patch(patch: &LayoutPatch) -> String {
+    let mut fields = Vec::new();
+    if let Some(width) = patch.width {
+        fields.push(format!("width: Some({})", dimension(width)));
+    }
+    if let Some(height) = patch.height {
+        fields.push(format!("height: Some({})", dimension(height)));
+    }
+    if let Some(padding) = patch.padding {
+        fields.push(format!(
+            "padding: Some(brul_gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }})",
+            padding.left, padding.top, padding.right, padding.bottom
+        ));
+    }
+    if let Some(border_width) = patch.border_width {
+        fields.push(format!("border_width: Some({border_width})"));
+    }
+    if let Some(spacing) = patch.spacing {
+        fields.push(format!("spacing: Some({spacing})"));
+    }
+    if let Some(stretch) = patch.stretch {
+        fields.push(format!("stretch: Some({stretch:?}f32)"));
+    }
+    if let Some(value) = patch.justify {
+        fields.push(format!("justify: Some({})", justify(value)));
+    }
+    if let Some(value) = patch.align {
+        fields.push(format!("align: Some({})", align(value)));
+    }
+    if fields.is_empty() {
+        "brul_gui::LayoutPatch::default()".to_owned()
+    } else {
+        format!(
+            "brul_gui::LayoutPatch {{ {}, ..brul_gui::LayoutPatch::default() }}",
             fields.join(", ")
         )
     }

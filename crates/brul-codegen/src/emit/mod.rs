@@ -4,6 +4,7 @@ use brul_syntax::style::Stylesheet;
 
 use crate::{Import, Registry, Resource};
 
+mod classes;
 mod component;
 mod element;
 mod events;
@@ -37,6 +38,7 @@ pub(super) struct Emit<'a> {
     program: Option<&'a Program>,
     functions: &'a mut Vec<String>,
     next_structure: &'a mut usize,
+    dynamic_classes: &'a mut bool,
 }
 
 #[derive(Clone, Copy)]

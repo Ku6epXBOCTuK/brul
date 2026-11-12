@@ -11,6 +11,7 @@ use crate::styles;
 
 use super::Emit;
 use super::Frame;
+use super::classes;
 use super::style::{layout, style_set, text_style_set};
 use super::{component, events, expression, structure};
 use crate::runtime::HandlerEvent;
@@ -42,7 +43,7 @@ pub(super) fn widget(
     modifiers(out, &resolved, events.drag, &inner);
     out.push_str(";\n");
     content_binding(out, content, &name, &inner, emit.names);
-    parameters(out, element, &name, &inner, emit.names)?;
+    parameters(out, element, &name, &inner, emit.names, emit, frame.theme())?;
     handler_bindings(out, &events.handlers, &name, &inner);
     let _ = writeln!(out, "{inner}{name}");
     let _ = write!(out, "{pad}}}");
@@ -254,9 +255,12 @@ fn parameters(
     name: &str,
     pad: &str,
     names: &Names<'_>,
+    emit: &mut Emit<'_>,
+    theme: Option<&str>,
 ) -> Result<(), Error> {
     let mut x = None;
     let mut y = None;
+    let mut class = None;
     for arg in &element.args {
         let Arg::Named {
             name: parameter,
@@ -270,6 +274,10 @@ fn parameters(
             "selected" => "brul::BindingTarget::Selected",
             "disabled" => "brul::BindingTarget::Disabled",
             "visible" => "brul::BindingTarget::Visible",
+            "class" => {
+                class = Some(value);
+                continue;
+            }
             "x" => {
                 x = Some(value);
                 continue;
@@ -297,6 +305,15 @@ fn parameters(
         let _ = writeln!(
             out,
             "{pad}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Offset {{ x: {x}, y: {y} }}));"
+        );
+    }
+    if let Some(value) = class {
+        *emit.dynamic_classes = true;
+        let _ = writeln!(
+            out,
+            "{pad}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {}, expression: {} }}));",
+            classes::name(emit.resource_prefix, theme),
+            expression::closure(value, names)
         );
     }
     Ok(())

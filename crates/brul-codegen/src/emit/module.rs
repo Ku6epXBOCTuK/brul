@@ -10,7 +10,7 @@ use crate::Definition;
 use crate::error_at;
 
 use super::Emit;
-use super::{events, names, resources, script, view};
+use super::{classes, events, names, resources, script, view};
 
 pub fn module(source: &str) -> Result<String, Error> {
     module_at(source, None)
@@ -37,6 +37,7 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
     out.push_str("#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n");
 
     let mut configs = Vec::new();
+    let mut dynamic_classes = false;
     for (index, window) in parsed.windows.iter().enumerate() {
         let (config, window_handlers) = crate::arguments(window)?;
         let window_handlers = events::window(&window_handlers, parsed.program.as_ref())?;
@@ -60,9 +61,14 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
                 program: parsed.program.as_ref(),
                 functions: &mut functions,
                 next_structure: &mut next_structure,
+                dynamic_classes: &mut dynamic_classes,
             },
         )?;
         configs.push(config);
+    }
+    if dynamic_classes {
+        classes::tables(&mut out, "", &parsed.stylesheet)
+            .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
     }
     out.push_str(&resources::functions("", &registry.resources));
     for index in 0..registry.definitions.len() {
@@ -71,6 +77,7 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
         let prefix = format!("component{index}_");
         out.push('\n');
         out.push_str("#[allow(dead_code, unused_mut, unused_variables, clippy::let_and_return)]\n");
+        let mut dynamic_classes = false;
         view::view(
             &mut out,
             &format!("{prefix}view"),
@@ -86,8 +93,13 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
                 program: definition.program.as_ref(),
                 functions: &mut functions,
                 next_structure: &mut next_structure,
+                dynamic_classes: &mut dynamic_classes,
             },
         )?;
+        if dynamic_classes {
+            classes::tables(&mut out, &prefix, &definition.stylesheet)
+                .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
+        }
         out.push_str(&script::program(
             &format!("{prefix}script"),
             definition.program.as_ref(),

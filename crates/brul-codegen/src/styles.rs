@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use brul_gui::{
-    Align, Color, Dimension, Justify, LayoutStyle, Padding, Paint, StyleSet, StyleState, TextStyle,
-    TextStylePatch, TextStyleSet, Transitions, VerticalAlign, WidgetStyle, WidgetStylePatch,
+    Align, Class, Color, Dimension, Justify, LayoutPatch, LayoutStyle, Padding, Paint, StyleSet,
+    StyleState, TextStyle, TextStylePatch, TextStyleSet, Transitions, VerticalAlign, WidgetStyle,
+    WidgetStylePatch,
 };
 use brul_syntax::style::{Kind, Property, Side, Snapshot, State, Stylesheet, Value};
 
@@ -38,6 +39,31 @@ pub fn resolve(
         styles,
         text,
     })
+}
+
+pub fn class(stylesheet: &Stylesheet, name: &str, theme: Option<&str>) -> Result<Class, String> {
+    let base = snapshot(stylesheet, &[name], None, theme)?;
+    let (layout, _, _) = base_styles(&base)?;
+    let (style, text) = state_patch(&base)?;
+    Ok(Class {
+        layout: layout_patch(&layout),
+        style,
+        text,
+    })
+}
+
+fn layout_patch(layout: &LayoutStyle) -> LayoutPatch {
+    let default = LayoutStyle::default();
+    LayoutPatch {
+        width: (layout.width != default.width).then_some(layout.width),
+        height: (layout.height != default.height).then_some(layout.height),
+        padding: (layout.padding != default.padding).then_some(layout.padding),
+        border_width: (layout.border_width != default.border_width).then_some(layout.border_width),
+        spacing: (layout.spacing != default.spacing).then_some(layout.spacing),
+        stretch: (layout.stretch != default.stretch).then_some(layout.stretch),
+        justify: (layout.justify != default.justify).then_some(layout.justify),
+        align: (layout.align != default.align).then_some(layout.align),
+    }
 }
 
 fn snapshot(

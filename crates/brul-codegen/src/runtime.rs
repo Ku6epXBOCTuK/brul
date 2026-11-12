@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use brul_gui::{Texture, Widget, WidgetId, WidgetTree};
+use brul_gui::{Class, Texture, Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{
     Component, Error as ScriptError, Host, Value, Variable, VariableId, execute_program,
@@ -118,6 +118,7 @@ impl Handler {
 }
 
 pub type Expression = fn(&mut Component) -> Result<Value, ScriptError>;
+pub type ClassTable = fn(&str) -> Option<Class>;
 
 #[derive(Debug, Clone)]
 pub enum BindingTarget {
@@ -130,6 +131,10 @@ pub enum BindingTarget {
     Offset {
         x: Option<Expression>,
         y: Option<Expression>,
+    },
+    Class {
+        table: ClassTable,
+        expression: Expression,
     },
 }
 
@@ -447,6 +452,7 @@ pub enum Write {
     Disabled(Option<bool>),
     Visible(Option<bool>),
     Offset(Option<i32>, Option<i32>),
+    Class(Option<Class>),
 }
 
 pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
@@ -467,6 +473,9 @@ pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
         BindingTarget::Offset { x, y } => {
             Write::Offset(offset_value(component, *x), offset_value(component, *y))
         }
+        BindingTarget::Class { table, expression } => {
+            Write::Class(class_value(component, *table, *expression))
+        }
     };
     binding.component.borrow_mut().pop_binding_scopes(count);
     write
@@ -481,6 +490,9 @@ pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {
         Write::Disabled(value) => set_flag(tree, widget, value, WidgetTree::set_disabled),
         Write::Visible(value) => set_flag(tree, widget, value, WidgetTree::set_visible),
         Write::Offset(x, y) => set_offset(tree, widget, x, y),
+        Write::Class(value) => {
+            tree.apply_class(widget, value.as_ref());
+        }
     }
 }
 
@@ -500,6 +512,33 @@ fn string(component: &RefCell<Component>, expression: Expression) -> Option<Stri
 
 fn flag(component: &RefCell<Component>, expression: Expression) -> Option<bool> {
     value(component, expression)?.as_flag()
+}
+
+thread_local! {
+    static UNKNOWN_CLASSES: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
+}
+
+fn class_value(
+    component: &RefCell<Component>,
+    table: ClassTable,
+    expression: Expression,
+) -> Option<Class> {
+    let name = match value(component, expression)? {
+        Value::Null => return None,
+        value => value.as_text()?.to_owned(),
+    };
+    if name.is_empty() {
+        return None;
+    }
+    let found = table(&name);
+    if found.is_none() {
+        UNKNOWN_CLASSES.with(|seen| {
+            if seen.borrow_mut().insert(name.clone()) {
+                error!(class = %name, "unknown class");
+            }
+        });
+    }
+    found
 }
 
 fn texture(
@@ -963,6 +1002,75 @@ mod tests {
                 .reason(),
             ScriptError::DivisionByZero.reason()
         );
+    }
+
+    #[test]
+    fn a_class_binding_applies_the_named_class() {
+        let mut declared = component();
+        declared
+            .declare("title", Value::String("wide".into()), false)
+            .unwrap();
+        let component = Rc::new(RefCell::new(declared));
+        let (ids, tree) = six_widgets();
+        let binding = Binding {
+            widget: ids[0],
+            target: BindingTarget::Class {
+                table: class_table,
+                expression: expr!("title"),
+            },
+            scopes: Vec::new().into(),
+            component: Rc::clone(&component),
+        };
+
+        let _bindings = Bindings::new(&[binding], &tree, &Textures::default());
+        let mut engine = brul_gui::TextEngine::new();
+        tree.borrow_mut()
+            .layout(
+                &mut engine,
+                brul_gui::Size {
+                    width: 200,
+                    height: 200,
+                },
+                1.0,
+            )
+            .expect("layout");
+        let mut tree = tree.borrow_mut();
+        let node = tree.snapshot().expect("snapshot").node(ids[0]).cloned();
+        assert_eq!(node.expect("node").width, 40);
+    }
+
+    #[test]
+    fn a_class_binding_ignores_an_unknown_name() {
+        let mut declared = component();
+        declared
+            .declare("title", Value::String("missing".into()), false)
+            .unwrap();
+        let component = Rc::new(RefCell::new(declared));
+        let (ids, _tree) = six_widgets();
+        let binding = Binding {
+            widget: ids[0],
+            target: BindingTarget::Class {
+                table: class_table,
+                expression: expr!("title"),
+            },
+            scopes: Vec::new().into(),
+            component,
+        };
+
+        assert!(matches!(
+            evaluate(&binding, &Textures::default()),
+            Write::Class(None)
+        ));
+    }
+
+    fn class_table(name: &str) -> Option<brul_gui::Class> {
+        (name == "wide").then(|| brul_gui::Class {
+            layout: brul_gui::LayoutPatch {
+                width: Some(brul_gui::Dimension::Px(40)),
+                ..brul_gui::LayoutPatch::default()
+            },
+            ..brul_gui::Class::default()
+        })
     }
 
     fn declared_all() -> Rc<RefCell<Component>> {

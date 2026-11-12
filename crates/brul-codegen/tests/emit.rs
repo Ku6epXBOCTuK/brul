@@ -180,6 +180,53 @@ window Demo (title: "demo") {
 }
 
 #[test]
+fn emits_a_dynamic_class_binding_and_its_table() {
+    let source = r#"<style>
+.tone { background: linear-gradient(135deg, #fb923c, #ef4444); }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (class: tone) { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+
+    assert!(
+        module.contains("brul::BindingTarget::Class { table: class_none, expression: "),
+        "{module}"
+    );
+    assert!(
+        module.contains("fn class_none(name: &str) -> Option<brul_gui::Class>"),
+        "{module}"
+    );
+    assert!(
+        module.contains("\"tone\" => Some(brul_gui::Class {"),
+        "{module}"
+    );
+}
+
+#[test]
+fn emits_no_class_table_without_a_dynamic_class() {
+    let module = emit::module(
+        r#"<style>
+.tone { background: #ff0000; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (tone) { }
+}
+</markup>
+"#,
+    )
+    .expect("module");
+
+    assert!(!module.contains("fn class_none"), "{module}");
+}
+
+#[test]
 fn emits_vertical_alignment_for_a_text_state() {
     let source = r#"<style>
 .a { width: 20px; height: 20px; vertical-align: top; }
