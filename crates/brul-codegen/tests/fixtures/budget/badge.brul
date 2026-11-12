@@ -1,0 +1,30 @@
+<script>
+    function pick() {
+        clicked();
+    }
+</script>
+
+<markup>
+    component Badge {
+        prop label: String = "";
+        prop active: Bool = false;
+        event clicked();
+
+        Row (badge, on click: pick, selected: active) {
+            Text (badge-label) { label }
+            View (dot) { }
+        }
+    }
+</markup>
+
+<style>
+    .badge {
+        height: 20px;
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 4px;
+    }
+    .badge:hover { background: #ff0000; }
+    .badge-label { font-size: 11px; vertical-align: center; }
+    .dot { width: 6px; height: 6px; }
+</style>

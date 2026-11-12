@@ -1,0 +1,56 @@
+<script>
+    let items = [];
+    let kind = "";
+
+    function toggle() {
+        toggle_label();
+    }
+</script>
+
+<use>
+    import Badge from "./badge.brul";
+</use>
+
+<markup>
+    window Picker (title: "picker", width: 800, on key: toggle) {
+        Column (root, on drag: dragWindow) {
+            Text (heading) { "picker" }
+            Row (bar) {
+                View (class: kind) { }
+                if (kind != "") {
+                    Text (hint) { "on" }
+                } else {
+                    Text (hint) { "off" }
+                }
+            }
+            each (items as item) {
+                Text (row) { item }
+            }
+            Badge (label: "badge", active: kind != "", on clicked: toggle) { }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        accent: #6c8cff;
+        surface: #111111;
+    }
+    theme light {
+        accent: #112233;
+        surface: #eeeeee;
+    }
+    .root {
+        width: 100%;
+        padding: 8px;
+        background: theme.surface;
+    }
+    .bar { spacing: 4px; align-items: center; }
+    .bar:hover { background: theme.accent; }
+    .hint {
+        font-size: 12px;
+        color: theme.accent;
+        vertical-align: center;
+    }
+    .row { padding-top: 2px; }
+</style>
