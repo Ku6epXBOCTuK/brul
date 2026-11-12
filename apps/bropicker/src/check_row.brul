@@ -17,9 +17,7 @@
 
         Row (check-row, on click: toggle) {
             View (checkbox, checked: checked) {
-                Row (checkbox-body) {
-                    Image (check-mark, visible: checked) { check }
-                }
+                Image (check-mark, visible: checked) { check }
             }
             Text (label) { label }
         }
@@ -50,16 +48,12 @@
         background: transparent;
         border: 2px theme.border;
         radius: 6px;
+        align-items: center;
+        justify-content: center;
     }
     .checkbox:checked {
         background: theme.accent;
         border-color: theme.accent;
-    }
-    .checkbox-body {
-        width: 100%;
-        height: 100%;
-        align-items: center;
-        justify-content: center;
     }
     .check-mark {
         width: 12px;

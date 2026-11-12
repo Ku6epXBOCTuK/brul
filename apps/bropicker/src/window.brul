@@ -27,13 +27,7 @@
         alwaysAskChoice = !alwaysAskChoice;
     }
 
-    function handleKey(ev) {
-        if (ev.code == "Escape") {
-            exit();
-        }
-    }
-
-    function handleSettingsKey(ev) {
+    function closeOnEscape(ev) {
         if (ev.code == "Escape") {
             exit();
         }
@@ -73,30 +67,26 @@
         height: 800,
         frameless: true,
         transparent: true,
-        on key: handleKey
+        on key: closeOnEscape
     ) {
         Column (root) {
             Column (card) {
                 Column (header, on drag: dragWindow) {
                     Row (header-top) {
                         View (app-icon) {
-                            Row (app-icon-row) {
-                                Image (app-icon-image) { globe }
-                            }
+                            Image (app-icon-image) { globe }
                         }
                         Column (header-titles) {
                             Text (title) { "Выбрать браузер" }
                             Text (subtitle) { "Для открытия ссылки" }
                         }
                     }
-                    View (url-field) {
-                        Row (url-row) {
-                            Image (url-icon) { external_link }
-                            Text (url-text) { url }
-                        }
+                    Row (url-field) {
+                        Image (url-icon) { external_link }
+                        Text (url-text) { url }
                     }
                 }
-                View (header-rule) { }
+                View (rule) { }
                 Column (list) {
                     each (browsers as browser, index (browser.name)) {
                         BrowserItem (index: index, icon: browser.icon, emoji: browser.emoji,
@@ -113,13 +103,13 @@
                             on toggled: toggleAlwaysAsk) { }
                 }
                 Column (footer) {
-                    View (footer-rule) { }
+                    View (rule) { }
                     Row (footer-content) {
                         Row (footer-actions) {
-                            View (theme-button, on click: toggleTheme) {
+                            View (icon-button, on click: toggleTheme) {
                                 Image (footer-icon) { sun }
                             }
-                            View (settings-button, on click: openSettings) {
+                            View (icon-button, on click: openSettings) {
                                 Image (footer-icon) { cog }
                             }
                         }
@@ -137,7 +127,7 @@
         title: "bropicker - settings",
         width: 760,
         height: 560,
-        on key: handleSettingsKey
+        on key: closeOnEscape
     ) {
         Column (settings-root) {
             Text (settings-title) { "Settings" }
@@ -224,13 +214,9 @@
         width: 48px;
         height: 48px;
         radius: 12px;
-        background: linear-gradient(135deg, #3b82f6, #06b6d4);
-    }
-    .app-icon-row {
-        width: 100%;
-        height: 100%;
         align-items: center;
         justify-content: center;
+        background: linear-gradient(135deg, #3b82f6, #06b6d4);
     }
     .app-icon-image {
         width: 24px;
@@ -247,17 +233,13 @@
     .url-field {
         width: 100%;
         height: 44px;
-        background: theme.surface-elevated;
-        border: 1px theme.border;
-        radius: 12px;
-    }
-    .url-row {
-        width: 100%;
-        height: 100%;
         padding-left: 16px;
         padding-right: 16px;
         spacing: 8px;
         align-items: center;
+        background: theme.surface-elevated;
+        border: 1px theme.border;
+        radius: 12px;
     }
     .url-icon {
         width: 16px;
@@ -269,7 +251,7 @@
         font-size: 14px;
         font-family: "Consolas";
     }
-    .header-rule {
+    .rule {
         width: 100%;
         height: 1px;
         background: theme.border;
@@ -291,11 +273,6 @@
         width: 100%;
         height: 49px;
     }
-    .footer-rule {
-        width: 100%;
-        height: 1px;
-        background: theme.border;
-    }
     .footer-content {
         width: 100%;
         stretch: 1;
@@ -309,11 +286,7 @@
         spacing: 16px;
         align-items: center;
     }
-    .theme-button {
-        width: 24px;
-        height: 24px;
-    }
-    .settings-button {
+    .icon-button {
         width: 24px;
         height: 24px;
     }

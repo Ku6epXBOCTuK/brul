@@ -24,15 +24,11 @@
         View (item) {
             View (panel, on click: choose, selected: selected) {
                 Row (body) {
-                    View (plate) {
-                        View (plate-tint, class: tones[index % 4], x: 0, y: 0) { }
-                        Row (plate-body) {
-                            if (emoji != "") {
-                                Text (plate-emoji) { emoji }
-                            }
-                            if (emoji == "") {
-                                Image (plate-icon, class: masked ? "plate-icon-masked" : "") { icon }
-                            }
+                    View (plate, class: tones[index % 4]) {
+                        if (emoji != "") {
+                            Text (plate-emoji) { emoji }
+                        } else {
+                            Image (plate-icon, class: masked ? "plate-icon-masked" : "") { icon }
                         }
                     }
                     Row (details) {
@@ -43,18 +39,11 @@
                             }
                         }
                     }
-                    if (selected) {
-                        View (tail, tail-selected) {
-                            Row (tail-row) {
-                                Image (tail-check) { check }
-                            }
-                        }
-                    }
-                    if (!selected) {
-                        View (tail) {
-                            Row (tail-row) {
-                                Text (tail-chevron) { "›" }
-                            }
+                    View (tail, class: selected ? "tail-selected" : "") {
+                        if (selected) {
+                            Image (tail-check) { check }
+                        } else {
+                            Text (tail-chevron) { "›" }
                         }
                     }
                 }
@@ -137,22 +126,13 @@
         width: 48px;
         height: 48px;
         radius: 12px;
-    }
-    .plate-tint {
-        width: 100%;
-        height: 100%;
-        radius: 12px;
+        align-items: center;
+        justify-content: center;
     }
     .tone-first { background: linear-gradient(135deg, theme.plate-warm-from, theme.plate-warm-to); }
     .tone-second { background: linear-gradient(135deg, theme.plate-rose-from, theme.plate-rose-to); }
     .tone-third { background: linear-gradient(135deg, theme.plate-cyan-from, theme.plate-cyan-to); }
     .tone-fourth { background: linear-gradient(135deg, theme.plate-violet-from, theme.plate-violet-to); }
-    .plate-body {
-        width: 100%;
-        height: 100%;
-        align-items: center;
-        justify-content: center;
-    }
     .plate-emoji {
         font-size: 26px;
         text-align: center;
@@ -189,14 +169,10 @@
         height: 32px;
         background: theme.icon-backplate;
         radius: 16px;
-    }
-    .tail-selected { background: theme.accent; }
-    .tail-row {
-        width: 100%;
-        height: 100%;
         align-items: center;
         justify-content: center;
     }
+    .tail-selected { background: theme.accent; }
     .tail-check {
         width: 16px;
         height: 16px;

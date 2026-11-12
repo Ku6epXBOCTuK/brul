@@ -105,7 +105,7 @@ fn the_settings_window_has_two_lists_and_its_own_key_handler() {
         .iter()
         .find(|handler| handler.event == HandlerEvent::Key)
         .expect("key handler");
-    assert_eq!(key.function, "handleSettingsKey");
+    assert_eq!(key.function, "closeOnEscape");
     assert_eq!(
         structures.iter().filter(|structure| structure.each).count(),
         2
@@ -152,7 +152,7 @@ fn markup_script_block_is_emitted() {
         "toggleTheme",
         "toggleRemember",
         "toggleAlwaysAsk",
-        "handleKey",
+        "closeOnEscape",
     ] {
         assert!(
             script
@@ -183,7 +183,7 @@ fn the_picker_view_builds_with_its_handlers_and_bindings() {
         .find(|handler| handler.event == HandlerEvent::Key)
         .expect("key handler");
     assert_eq!(key.widget, None);
-    assert_eq!(key.function, "handleKey");
+    assert_eq!(key.function, "closeOnEscape");
 
     assert!(!bindings.is_empty());
     assert!(!props.is_empty());
