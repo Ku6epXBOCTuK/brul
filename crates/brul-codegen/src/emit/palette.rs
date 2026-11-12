@@ -63,6 +63,18 @@ pub(super) fn functions(
     function: &str,
     stylesheet: &Stylesheet,
 ) -> Result<(), String> {
+    for theme in &stylesheet.themes {
+        if let Some(entry) = theme
+            .properties
+            .iter()
+            .find(|entry| !matches!(entry.value, Value::Color(_)))
+        {
+            return Err(format!(
+                "theme '{}' has a non-colour value for '{}'; themes carry colours only",
+                theme.name, entry.key
+            ));
+        }
+    }
     let mut fields: Vec<Field> = Vec::new();
     for key in keys(stylesheet) {
         let name = palette_field(key);
@@ -73,19 +85,23 @@ pub(super) fn functions(
         }
         fields.push(Field { key, name });
     }
-    if stylesheet.themes.is_empty() {
-        return Ok(());
+    if fields.is_empty() {
+        let _ = writeln!(out, "\n#[allow(dead_code)]\npub struct {structure} {{}}");
+    } else {
+        let _ = writeln!(out, "\n#[allow(dead_code)]\npub struct {structure} {{");
+        for field in &fields {
+            let name = &field.name;
+            let _ = writeln!(out, "    {name}: brul_gui::Color,");
+        }
+        out.push_str("}\n");
     }
-    let _ = write!(out, "\n#[allow(dead_code)]\npub struct {structure} {{\n");
-    for field in &fields {
-        let name = &field.name;
-        let _ = writeln!(out, "    {name}: brul_gui::Color,");
-    }
-    out.push_str("}\n");
     let _ = writeln!(
         out,
         "fn {function}(theme: Option<&str>) -> Result<{structure}, String> {{\n    match theme {{"
     );
+    if stylesheet.themes.is_empty() {
+        let _ = writeln!(out, "        None => Ok({structure} {{}}),");
+    }
     for (position, theme) in stylesheet.themes.iter().enumerate() {
         let pattern = if position == 0 {
             format!("None | Some({:?})", theme.name)
@@ -126,14 +142,11 @@ fn keys(stylesheet: &Stylesheet) -> Vec<&str> {
     first
         .properties
         .iter()
-        .filter(|entry| matches!(entry.value, Value::Color(_)))
         .filter(|entry| {
-            stylesheet.themes.iter().all(|theme| {
-                theme
-                    .properties
-                    .iter()
-                    .any(|other| other.key == entry.key && matches!(other.value, Value::Color(_)))
-            })
+            stylesheet
+                .themes
+                .iter()
+                .all(|theme| theme.properties.iter().any(|other| other.key == entry.key))
         })
         .map(|entry| entry.key.as_str())
         .collect()

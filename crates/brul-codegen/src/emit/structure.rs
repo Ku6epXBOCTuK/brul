@@ -21,12 +21,8 @@ pub(super) fn structure_if(
     *emit.next_structure += 1;
     emit.functions
         .push(value_function(index, &block.condition, emit.names));
-    emit.functions.push(dispatcher(index, emit));
-    let themes = themes(emit);
-    for (position, theme) in themes.iter().enumerate() {
-        let arm = rebuild_arm(index, position, theme.as_deref(), block, emit, frame)?;
-        emit.functions.push(arm);
-    }
+    let arm = rebuild_arm(index, block, emit, frame)?;
+    emit.functions.push(arm);
     inline(out, index, false, frame, counter);
     Ok(())
 }
@@ -45,12 +41,8 @@ pub(super) fn structure_each(
     if let Some(key) = &block.key {
         emit.functions.push(key_function(index, key, emit.names));
     }
-    emit.functions.push(dispatcher(index, emit));
-    let themes = themes(emit);
-    for (position, theme) in themes.iter().enumerate() {
-        let arm = each_arm(index, position, theme.as_deref(), block, emit, frame)?;
-        emit.functions.push(arm);
-    }
+    let arm = each_arm(index, block, emit, frame)?;
+    emit.functions.push(arm);
     inline(out, index, true, frame, counter);
     Ok(())
 }
@@ -77,45 +69,6 @@ fn key_function(index: usize, key: &brul_syntax::ast::Expr, names: &Names<'_>) -
     )
 }
 
-fn dispatcher(index: usize, emit: &Emit<'_>) -> String {
-    let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "fn structure{index}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
-    match theme {{"
-    );
-    for (position, theme) in themes(emit).iter().enumerate() {
-        let pattern = match theme {
-            Some(theme) if position == 0 => format!("None | Some({theme:?})"),
-            Some(theme) => format!("Some({theme:?})"),
-            None => "None".to_owned(),
-        };
-        let _ = writeln!(
-            out,
-            "        {pattern} => structure{index}_rebuild_{position}(theme, component),"
-        );
-    }
-    let _ = writeln!(
-        out,
-        "        Some(theme) => Err(format!(\"unknown theme '{{theme}}'\")),\n    }}\n}}"
-    );
-    out
-}
-
-fn themes(emit: &Emit<'_>) -> Vec<Option<String>> {
-    let themes: Vec<Option<String>> = emit
-        .stylesheet
-        .themes
-        .iter()
-        .map(|theme| Some(theme.name.clone()))
-        .collect();
-    if themes.is_empty() {
-        vec![None]
-    } else {
-        themes
-    }
-}
-
 fn inline(out: &mut String, index: usize, each: bool, frame: Frame<'_>, counter: &mut usize) {
     let pad = "    ".repeat(frame.depth());
     let inner = "    ".repeat(frame.depth() + 1);
@@ -140,14 +93,12 @@ fn inline(out: &mut String, index: usize, each: bool, frame: Frame<'_>, counter:
 
 fn rebuild_arm(
     index: usize,
-    position: usize,
-    theme: Option<&str>,
     block: &IfBlock,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
 ) -> Result<String, Error> {
-    let arm = arm_frame(theme, frame);
-    let mut out = arm_header(index, position, emit);
+    let arm = arm_frame(emit.default_theme(), frame);
+    let mut out = arm_header(index, emit);
     let _ = writeln!(
         out,
         "    let condition = structure{index}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let children = match condition {{"
@@ -170,14 +121,12 @@ fn rebuild_arm(
 
 fn each_arm(
     index: usize,
-    position: usize,
-    theme: Option<&str>,
     block: &EachBlock,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
 ) -> Result<String, Error> {
-    let arm = arm_frame(theme, frame);
-    let mut out = arm_header(index, position, emit);
+    let arm = arm_frame(emit.default_theme(), frame);
+    let mut out = arm_header(index, emit);
     out.push_str("    let mut children = Vec::new();\n");
     let _ = writeln!(
         out,
@@ -237,24 +186,18 @@ fn variable(name: &str, names: &Names<'_>) -> u32 {
         .index()
 }
 
-fn arm_header(index: usize, position: usize, emit: &Emit<'_>) -> String {
-    let mut out = format!(
+fn arm_header(index: usize, emit: &Emit<'_>) -> String {
+    format!(
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-fn structure{index}_rebuild_{position}(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
+fn structure{index}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
+    let palette = {}palette(theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let mut rows = Vec::new();
-"
-    );
-    if emit.has_themes() {
-        let _ = writeln!(
-            out,
-            "    let palette = {}palette(theme)?;",
-            emit.resource_prefix
-        );
-    }
-    out
+",
+        emit.resource_prefix
+    )
 }
 
 fn widget(out: &mut String, frame: Frame<'_>) {

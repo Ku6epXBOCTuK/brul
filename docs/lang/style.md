@@ -157,18 +157,16 @@ theme light {
   accent: #3b82f6;
   surface-main: #ffffff;
   text-main: #0f172a;
-  radius: 12px;
 }
 theme dark {
   accent: #3b82f6;
   surface-main: #0f172a;
   text-main: #ffffff;
-  radius: 12px;
 }
 ```
 
-- Ключи тем — произвольные `kebab-case` идентификаторы; значения — `Color` или
-  длина (`px`).
+- Ключи тем — произвольные `kebab-case` идентификаторы; значения — только
+  `Color`. Длины и шрифты в теме — позже.
 - Активная тема — рантайм-состояние; переключение — `set_theme("dark")`
   (встроенная функция скрипта). Цвета тем приходят из палитры, которую
   сгенерированный код выбирает по имени темы, поэтому переключение мгновенное.
@@ -284,7 +282,6 @@ theme light {
   border-main: #e2e8f0;
   text-main: #0f172a;
   text-muted: #64748b;
-  radius: 12px;
 }
 theme dark {
   accent: #3b82f6;
@@ -294,7 +291,6 @@ theme dark {
   border-main: #334155;
   text-main: #ffffff;
   text-muted: #94a3b8;
-  radius: 12px;
 }
 ```
 

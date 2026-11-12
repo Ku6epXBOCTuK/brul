@@ -50,7 +50,7 @@ pub(super) fn widget(
     );
     out.push_str(";\n");
     content_binding(out, content, &name, &inner, emit.names);
-    parameters(out, element, &name, &inner, emit.names, emit, frame.theme())?;
+    parameters(out, element, &name, &inner, emit.names, emit)?;
     handler_bindings(out, &events.handlers, &name, &inner);
     let _ = writeln!(out, "{inner}{name}");
     let _ = write!(out, "{pad}}}");
@@ -269,7 +269,6 @@ fn parameters(
     pad: &str,
     names: &Names<'_>,
     emit: &mut Emit<'_>,
-    theme: Option<&str>,
 ) -> Result<(), Error> {
     let mut x = None;
     let mut y = None;
@@ -322,10 +321,10 @@ fn parameters(
     }
     if let Some(value) = class {
         *emit.dynamic_classes = true;
+        let table = classes::table(emit.resource_prefix, emit.stylesheet);
         let _ = writeln!(
             out,
-            "{pad}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {}, expression: {} }}));",
-            classes::name(emit.resource_prefix, theme),
+            "{pad}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
             expression::closure(value, names)
         );
     }

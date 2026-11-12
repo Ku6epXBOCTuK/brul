@@ -99,7 +99,10 @@ impl<'a> Emit<'a> {
         Palette::new(self.stylesheet, theme)
     }
 
-    pub(super) fn has_themes(&self) -> bool {
-        !self.stylesheet.themes.is_empty()
+    pub(super) fn default_theme(&self) -> Option<&'a str> {
+        self.stylesheet
+            .themes
+            .first()
+            .map(|theme| theme.name.as_str())
     }
 }

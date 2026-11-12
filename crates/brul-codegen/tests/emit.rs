@@ -14,26 +14,24 @@ window Demo (title: "demo") {
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     component.borrow_mut().set_names(names());
+    let palette = palette(theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let widget = match theme {
-        None => {
-            {
-                let widget0 = brul_gui::Widget::row(vec![
-                    {
-                        let widget1 = brul_gui::Widget::text("a");
-                        widget1
-                    },
-                    {
-                        let widget2 = brul_gui::Widget::column(vec![]);
-                        widget2
-                    },
-                ]);
-                widget0
-            }
+    let widget = {
+        {
+            let widget0 = brul_gui::Widget::row(vec![
+                {
+                    let widget1 = brul_gui::Widget::text("a");
+                    widget1
+                },
+                {
+                    let widget2 = brul_gui::Widget::column(vec![]);
+                    widget2
+                },
+            ]);
+            widget0
         }
-        Some(theme) => return Err(format!("unknown theme '{theme}'")),
     };
     Ok(brul::Built {
         widget,
@@ -41,6 +39,15 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
         handlers,
         props,
     })
+}
+
+#[allow(dead_code)]
+pub struct Palette {}
+fn palette(theme: Option<&str>) -> Result<Palette, String> {
+    match theme {
+        None => Ok(Palette {}),
+        Some(theme) => Err(format!("unknown theme '{theme}'")),
+    }
 }
 
 pub fn window() -> brul::WindowConfig {
@@ -98,29 +105,17 @@ window Styled (title: "styled") {
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     component.borrow_mut().set_names(names());
+    let palette = palette(theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let widget = match theme {
-        None | Some("dark") => {
-            let palette = palette(theme)?;
-            {
-                let widget0 = brul_gui::Widget::column(vec![])
-                .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(palette.accent), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStylePatch { background: Some(brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255))), ..brul_gui::WidgetStylePatch::default() }));
-                widget0
-            }
+    let widget = {
+        {
+            let widget0 = brul_gui::Widget::column(vec![])
+            .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
+            .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(palette.accent), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStylePatch { background: Some(brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255))), ..brul_gui::WidgetStylePatch::default() }));
+            widget0
         }
-        Some("light") => {
-            let palette = palette(theme)?;
-            {
-                let widget0 = brul_gui::Widget::column(vec![])
-                .with_layout(brul_gui::LayoutStyle { width: brul_gui::Dimension::Px(10), ..brul_gui::LayoutStyle::default() })
-                .with_styles(brul_gui::StyleSet::new(brul_gui::WidgetStyle { background: brul_gui::Paint::Color(palette.accent), ..brul_gui::WidgetStyle::default() }).with(brul_gui::StyleState::Checked, brul_gui::WidgetStylePatch { background: Some(brul_gui::Paint::Color(brul_gui::Color::rgba(255, 0, 0, 255))), ..brul_gui::WidgetStylePatch::default() }));
-                widget0
-            }
-        }
-        Some(theme) => return Err(format!("unknown theme '{theme}'")),
     };
     Ok(brul::Built {
         widget,
@@ -359,13 +354,8 @@ window Demo (title: "demo") {
         "fn structure0_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {"
+        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let palette = palette(theme)?;"
     ));
-    assert!(
-        module.contains(
-            "fn structure0_rebuild_0(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {"
-        )
-    );
     assert!(module.contains("brul::Value::Bool(true) => vec!["));
     assert!(module.contains("brul::Value::Bool(false) => vec!["));
     assert!(module.contains(
@@ -388,11 +378,9 @@ window Demo (title: "demo") {
     assert!(module.contains(
         "fn structure0_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
-    assert!(
-        module.contains(
-            "fn structure0_rebuild_0(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {"
-        )
-    );
+    assert!(module.contains(
+        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let palette = palette(theme)?;"
+    ));
     assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
     assert!(module.contains(
         "brul::Variable { name: brul::VariableId::from_index(1), value: item.clone() },"

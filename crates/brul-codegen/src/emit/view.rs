@@ -21,33 +21,24 @@ pub(super) fn view(
         "pub fn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {{"
     );
     out.push_str("    component.borrow_mut().set_names(names());\n");
+    let _ = writeln!(
+        out,
+        "    let palette = {}palette(theme)?;",
+        emit.resource_prefix
+    );
     out.push_str("    let mut bindings = Vec::new();\n");
     out.push_str("    let mut handlers = Vec::new();\n");
     out.push_str("    let mut props = Vec::new();\n");
-    out.push_str("    let widget = match theme {\n");
-    let themes: Vec<&str> = emit
-        .stylesheet
-        .themes
-        .iter()
-        .map(|theme| theme.name.as_str())
-        .collect();
-    match themes.split_first() {
-        Some((first, rest)) => {
-            branch(
-                out,
-                &format!("None | Some({first:?})"),
-                root,
-                emit,
-                Some(first),
-            )?;
-            for theme in rest {
-                branch(out, &format!("Some({theme:?})"), root, emit, Some(theme))?;
-            }
-        }
-        None => branch(out, "None", root, emit, None)?,
-    }
-    out.push_str("        Some(theme) => return Err(format!(\"unknown theme '{theme}'\")),\n");
-    out.push_str("    };\n");
+    out.push_str("    let widget = {\n");
+    let mut counter = 0;
+    widget(
+        out,
+        root,
+        emit,
+        Frame::root(emit.default_theme(), 2),
+        &mut counter,
+    )?;
+    out.push_str("\n    };\n");
     for (event, handler) in handlers {
         let _ = writeln!(
             out,
@@ -60,26 +51,5 @@ pub(super) fn view(
     out.push_str("        handlers,\n");
     out.push_str("        props,\n");
     out.push_str("    })\n}\n");
-    Ok(())
-}
-
-fn branch(
-    out: &mut String,
-    pattern: &str,
-    root: &Element,
-    emit: &mut Emit<'_>,
-    theme: Option<&str>,
-) -> Result<(), Error> {
-    let mut counter = 0;
-    let _ = writeln!(out, "        {pattern} => {{");
-    if emit.has_themes() {
-        let _ = writeln!(
-            out,
-            "            let palette = {}palette(theme)?;",
-            emit.resource_prefix
-        );
-    }
-    widget(out, root, emit, Frame::root(theme, 3), &mut counter)?;
-    out.push_str("\n        }\n");
     Ok(())
 }

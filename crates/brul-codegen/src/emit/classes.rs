@@ -14,6 +14,27 @@ pub(super) fn name(prefix: &str, theme: Option<&str>) -> String {
     }
 }
 
+pub(super) fn table(prefix: &str, stylesheet: &Stylesheet) -> String {
+    let Some(first) = stylesheet.themes.first() else {
+        return name(prefix, None);
+    };
+    let first_name = name(prefix, Some(&first.name));
+    let mut out = format!(
+        "match theme {{ None | Some({:?}) => {first_name}",
+        first.name
+    );
+    for theme in &stylesheet.themes[1..] {
+        let _ = write!(
+            out,
+            ", Some({:?}) => {}",
+            theme.name,
+            name(prefix, Some(&theme.name))
+        );
+    }
+    let _ = write!(out, ", Some(_) => {first_name} }}");
+    out
+}
+
 pub(super) fn tables(
     out: &mut String,
     prefix: &str,
