@@ -86,8 +86,9 @@
                 View (header-rule) { }
                 Column (list) {
                     each (browsers as browser, index (browser.name)) {
-                        BrowserItem (index: index, icon: browser.icon, name: browser.name,
-                                    path: browser.path, isDefault: browser.isDefault,
+                        BrowserItem (index: index, icon: browser.icon, emoji: browser.emoji,
+                                    masked: browser.masked, name: browser.name,
+                                    isDefault: browser.isDefault,
                                     selected: index == selectedIndex,
                                     on clicked: launch) { }
                     }
@@ -246,7 +247,7 @@
     .list {
         width: 100%;
         stretch: 1;
-        spacing: 8px;
+        spacing: 0px;
         padding-left: 12px;
         padding-right: 12px;
     }

@@ -88,6 +88,29 @@ const CANDIDATES: &[(&str, &str)] = &[
     ("Vivaldi", "vivaldi.exe"),
 ];
 
+const KNOWN_ICONS: &[(&str, &str)] = &[
+    ("firefox", "assets/logos/firefox_48x48.png"),
+    ("chrome", "assets/logos/chrome_48x48.png"),
+    ("opera", "assets/logos/opera_48x48.png"),
+    ("brave", "assets/logos/brave_48x48.png"),
+    ("яндекс", "assets/logos/yandex_48x48.png"),
+    ("yandex", "assets/logos/yandex_48x48.png"),
+];
+
+pub fn is_known_browser(name: &str) -> bool {
+    KNOWN_ICONS
+        .iter()
+        .any(|(keyword, _)| name.to_lowercase().contains(keyword))
+}
+
+pub fn icon_for(name: &str) -> &'static str {
+    let name = name.to_lowercase();
+    KNOWN_ICONS
+        .iter()
+        .find(|(keyword, _)| name.contains(keyword))
+        .map_or("assets/icons/globe.png", |(_, icon)| icon)
+}
+
 pub fn detect_browsers() -> Vec<BrowserEntry> {
     let path = std::env::var_os("PATH").unwrap_or_default();
     detect_in(&path, |path| path.exists())
@@ -495,6 +518,20 @@ mod tests {
 
         assert_eq!(config.browsers.len(), 2);
         assert_eq!(config.browsers[1].path, "C:/Chrome/chrome.exe");
+    }
+
+    #[test]
+    fn known_browsers_map_to_their_logos() {
+        assert_eq!(
+            icon_for("Mozilla Firefox"),
+            "assets/logos/firefox_48x48.png"
+        );
+        assert_eq!(icon_for("Google Chrome"), "assets/logos/chrome_48x48.png");
+        assert_eq!(icon_for("Яндекс Браузер"), "assets/logos/yandex_48x48.png");
+        assert_eq!(icon_for("Yandex"), "assets/logos/yandex_48x48.png");
+        assert_eq!(icon_for("Netscape"), "assets/icons/globe.png");
+        assert!(is_known_browser("Brave"));
+        assert!(!is_known_browser("Netscape"));
     }
 
     #[test]

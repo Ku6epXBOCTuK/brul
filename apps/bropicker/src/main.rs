@@ -5,7 +5,8 @@ use std::rc::Rc;
 
 use bropicker::launcher::{Launcher, Runner};
 use bropicker::{
-    BrowserEntry, Config, Theme, default_path, demo_browsers, detect_browsers, generated,
+    BrowserEntry, Config, Theme, config::icon_for, config::is_known_browser, default_path,
+    demo_browsers, detect_browsers, generated,
 };
 use brul::{Host, Value};
 
@@ -216,19 +217,21 @@ fn run() -> Result<(), Box<dyn Error>> {
 }
 
 fn entry_value(browser: &BrowserEntry) -> Value {
-    let icon = if browser.emoji.is_empty() {
-        browser
-            .name
-            .chars()
-            .next()
-            .map(|character| character.to_uppercase().to_string())
-            .unwrap_or_default()
+    let icon = if browser.icon.is_empty() {
+        asset_path(icon_for(&browser.name))
     } else {
-        browser.emoji.clone()
+        browser.icon.clone()
     };
+    let masked =
+        browser.icon.is_empty() && browser.emoji.is_empty() && !is_known_browser(&browser.name);
     Value::Object(
         vec![
-            ("icon".to_string(), Value::String(icon.into())),
+            ("icon".to_string(), Value::Image(icon.into())),
+            (
+                "emoji".to_string(),
+                Value::String(browser.emoji.clone().into()),
+            ),
+            ("masked".to_string(), Value::Bool(masked)),
             (
                 "name".to_string(),
                 Value::String(browser.name.clone().into()),
@@ -241,6 +244,13 @@ fn entry_value(browser: &BrowserEntry) -> Value {
         ]
         .into(),
     )
+}
+
+fn asset_path(relative: &str) -> String {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(relative)
+        .display()
+        .to_string()
 }
 
 #[cfg(test)]
@@ -504,27 +514,54 @@ mod tests {
         );
     }
 
-    fn icon_of(value: &Value) -> String {
+    fn field<'a>(value: &'a Value, key: &str) -> &'a Value {
         let Value::Object(fields) = value else {
             panic!("an entry is an object");
         };
-        let icon = fields.iter().find(|(key, _)| key == "icon");
-        match icon {
-            Some((_, Value::String(icon))) => icon.to_string(),
-            _ => panic!("an entry carries an icon"),
+        fields
+            .iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value)
+            .expect("field")
+    }
+
+    fn icon_of(value: &Value) -> String {
+        match field(value, "icon") {
+            Value::Image(path) => path.to_string(),
+            other => panic!("an entry carries an image, found {}", other.type_name()),
         }
     }
 
     #[test]
-    fn entry_value_uses_the_emoji_and_falls_back_to_the_initial() {
-        let mut marked = browser("firefox", "firefox", true);
-        marked.emoji = "\u{1f525}".to_string();
-        let mut plain = browser("chrome", "chrome", false);
-        plain.emoji = String::new();
-        let nameless = browser("", "chrome", false);
+    fn entry_value_maps_known_browsers_to_their_logos() {
+        let firefox = browser("Firefox", "firefox", true);
+        let netscape = browser("Netscape", "netscape", false);
 
-        assert_eq!(icon_of(&entry_value(&marked)), "\u{1f525}");
-        assert_eq!(icon_of(&entry_value(&plain)), "C");
-        assert_eq!(icon_of(&entry_value(&nameless)), "");
+        let firefox = entry_value(&firefox);
+        assert_eq!(
+            icon_of(&firefox),
+            asset_path("assets/logos/firefox_48x48.png")
+        );
+        assert_eq!(field(&firefox, "masked"), &Value::Bool(false));
+
+        let netscape = entry_value(&netscape);
+        assert_eq!(icon_of(&netscape), asset_path("assets/icons/globe.png"));
+        assert_eq!(field(&netscape, "masked"), &Value::Bool(true));
+    }
+
+    #[test]
+    fn entry_value_keeps_a_custom_icon_and_an_emoji() {
+        let mut custom = browser("Custom", "custom", false);
+        custom.icon = "C:/icons/custom.png".to_string();
+        let mut marked = browser("Netscape", "netscape", false);
+        marked.emoji = "\u{1f525}".to_string();
+
+        let custom = entry_value(&custom);
+        assert_eq!(icon_of(&custom), "C:/icons/custom.png");
+        assert_eq!(field(&custom, "masked"), &Value::Bool(false));
+
+        let marked = entry_value(&marked);
+        assert_eq!(field(&marked, "emoji"), &Value::String("\u{1f525}".into()));
+        assert_eq!(field(&marked, "masked"), &Value::Bool(false));
     }
 }

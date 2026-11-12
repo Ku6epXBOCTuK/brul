@@ -8,10 +8,9 @@ use brul_gui::WidgetKind;
 fn browser(name: &str, is_default: bool) -> Value {
     Value::Object(
         vec![
-            (
-                "icon".to_owned(),
-                Value::String(name[..1].to_uppercase().into()),
-            ),
+            ("icon".to_owned(), Value::Image("C:/icon.png".into())),
+            ("emoji".to_owned(), Value::String("".into())),
+            ("masked".to_owned(), Value::Bool(true)),
             ("name".to_owned(), Value::String(name.into())),
             (
                 "path".to_owned(),
@@ -169,7 +168,7 @@ fn view_builds_the_picker_layout() {
         props,
     } = built;
 
-    assert_eq!(structures.len(), 3);
+    assert_eq!(structures.len(), 21);
     assert_eq!(
         structures.iter().filter(|structure| structure.each).count(),
         1
@@ -184,7 +183,7 @@ fn view_builds_the_picker_layout() {
     assert_eq!(key.function, "handleKey");
 
     assert_eq!(bindings.len(), 13);
-    assert_eq!(props.len(), 16);
+    assert_eq!(props.len(), 18);
 
     let mut root: Vec<_> = widget.into_children();
     assert_eq!(root.len(), 1);
