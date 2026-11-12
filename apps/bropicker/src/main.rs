@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::cell::RefCell;
 use std::error::Error;
 use std::path::PathBuf;
@@ -242,6 +244,11 @@ fn remembered_value(config: &Config) -> Value {
 
 fn main() {
     brul::logging::init();
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        error!(panic = %info, "panic");
+        default(info);
+    }));
     if let Err(error) = run() {
         error!(%error, "bropicker failed");
     }
