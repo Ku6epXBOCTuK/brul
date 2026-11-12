@@ -179,17 +179,17 @@ runner оставляет запуск проверяемым без реаль�
 ### Окно пикера
 
 `bropicker/src/window.brul` собирает сцену 488×800 и подключает
-`browser_item.brul` и `check_row.brul` блоком `<use>`. `build.rs` отдаёт файл
-`brul_codegen::emit::module_file`, модуль попадает в `OUT_DIR` и включается в
-бинарь; `main.rs` запускает его через `brul::run_generated`. Начальные значения
-приходят seed-объектами из конфига, клик по строке пишет `selectedIndex` и зовёт
-хост `launchBrowser`, который запускает URL через
-`bropicker::launcher::Launcher`. Чекбоксы пишут `[settings]` через хост
-`saveSettings`, а успешный запуск с включённым «Запомнить выбор» добавляет домен
-в `[remembered]`. При запуске с URL `main.rs` сначала спрашивает
-`Config::resolve`: если браузер известен и `auto_launch` разрешён, окно не
-создаётся. Esc приходит в `handleKey` обычной клавишей и закрывает окно через
-`exit()`.
+`browser_item.brul` и `check_row.brul` блоком `<use>`. `build.rs` отдаёт файлы
+`brul_codegen::emit::split_module_file`: корень и модуль `bc_<stem>` на каждый
+подключённый `.brul` ложатся в `OUT_DIR` и включаются в бинарь; `main.rs`
+запускает его через `brul::run_generated`. Начальные значения приходят
+seed-объектами из конфига, клик по строке пишет `selectedIndex` и зовёт хост
+`launchBrowser`, который запускает URL через `bropicker::launcher::Launcher`.
+Чекбоксы пишут `[settings]` через хост `saveSettings`, а успешный запуск с
+включённым «Запомнить выбор» добавляет домен в `[remembered]`. При запуске с URL
+`main.rs` сначала спрашивает `Config::resolve`: если браузер известен и
+`auto_launch` разрешён, окно не создаётся. Esc приходит в `handleKey` обычной
+клавишей и закрывает окно через `exit()`.
 
 `run_generated` создаёт один `Component` и по `Ui` на каждое открытое окно: у
 окон общий скрипт и сигналы, но свои деревья, обработчики и очередь команд.

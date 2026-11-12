@@ -744,6 +744,38 @@ fn emits_imported_component() {
 }
 
 #[test]
+fn splits_every_component_into_its_own_file() {
+    let dir = scratch(
+        "split",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    Text { \"badge\" }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge { }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::split_module_file(&dir.join("window.brul")).unwrap();
+    assert_eq!(module.files.len(), 1);
+    let badge = &module.files[0];
+    assert_eq!(badge.name, "bc_badge");
+    assert!(badge.source.starts_with("use super::*;\n"));
+    assert!(badge.source.contains("pub fn component0_view"));
+    assert!(!badge.source.contains("pub fn view("));
+    assert!(module.root.contains("pub mod bc_badge {"));
+    assert!(module.root.contains("pub use self::bc_badge::*;"));
+    assert!(module.root.contains("pub fn view("));
+    assert_eq!(
+        module.flat(),
+        emit::module_file(&dir.join("window.brul")).unwrap()
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn emits_component_properties() {
     let dir = scratch(
         "properties",

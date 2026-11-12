@@ -12,9 +12,12 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let source = root.join("src").join("window.brul");
-    let module = brul_codegen::emit::module_file(&source)?;
-    let output = PathBuf::from(env::var("OUT_DIR")?).join("view.rs");
-    fs::write(&output, module)?;
+    let module = brul_codegen::emit::split_module_file(&source)?;
+    let output = PathBuf::from(env::var("OUT_DIR")?);
+    fs::write(output.join("view.rs"), &module.root)?;
+    for file in &module.files {
+        fs::write(output.join(format!("{}.rs", file.name)), &file.source)?;
+    }
     for file in sources(&root.join("src"))? {
         println!("cargo:rerun-if-changed={}", file.display());
     }
