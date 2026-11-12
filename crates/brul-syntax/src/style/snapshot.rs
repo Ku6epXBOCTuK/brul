@@ -1,6 +1,8 @@
 use std::fmt;
 
-use crate::style::ast::{Animation, Property, State, Stylesheet, Theme, Value};
+use crate::style::ast::{
+    Animation, Gradient, GradientColor, Property, State, Stylesheet, Theme, Value,
+};
 use crate::style::properties::Kind;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -155,6 +157,24 @@ fn theme_value<'a>(theme: Option<&'a Theme>, key: &str) -> Result<&'a Value, Sna
 fn resolve(value: &Value, theme: Option<&Theme>) -> Result<Value, SnapshotError> {
     match value {
         Value::ThemeRef(key) => Ok(theme_value(theme, key)?.clone()),
+        Value::Gradient(gradient) => Ok(Value::Gradient(Gradient {
+            angle: gradient.angle,
+            from: gradient_color(&gradient.from, theme)?,
+            to: gradient_color(&gradient.to, theme)?,
+        })),
         value => Ok(value.clone()),
+    }
+}
+
+fn gradient_color(
+    value: &GradientColor,
+    theme: Option<&Theme>,
+) -> Result<GradientColor, SnapshotError> {
+    let GradientColor::Theme(key) = value else {
+        return Ok(value.clone());
+    };
+    match theme_value(theme, key)? {
+        Value::Color(color) => Ok(GradientColor::Color(*color)),
+        _ => Err(SnapshotError::UnknownThemeKey(key.clone())),
     }
 }

@@ -117,6 +117,33 @@ fn a_gradient_background_resolves_to_a_linear_paint() {
 }
 
 #[test]
+fn gradient_stops_follow_the_theme() {
+    let stylesheet = brul_syntax::style::parse_file(
+        "theme light { from: #111111; to: #222222; }\ntheme dark { from: #333333; to: #444444; }\n.a { background: linear-gradient(135deg, theme.from, theme.to); }",
+    )
+    .expect("stylesheet");
+    let light = resolve(&stylesheet, &["a"], Some("light")).expect("light");
+    let dark = resolve(&stylesheet, &["a"], Some("dark")).expect("dark");
+
+    assert_eq!(
+        light.styles.base().background,
+        Paint::Gradient(Gradient::Linear {
+            angle: 135.0,
+            from: brul_gui::Color::rgba(0x11, 0x11, 0x11, 255),
+            to: brul_gui::Color::rgba(0x22, 0x22, 0x22, 255),
+        })
+    );
+    assert_eq!(
+        dark.styles.base().background,
+        Paint::Gradient(Gradient::Linear {
+            angle: 135.0,
+            from: brul_gui::Color::rgba(0x33, 0x33, 0x33, 255),
+            to: brul_gui::Color::rgba(0x44, 0x44, 0x44, 255),
+        })
+    );
+}
+
+#[test]
 fn font_covers_size_family_weight_and_alignment() {
     let resolved = resolved(
         ".a { font-size: 20px; font-family: \"Inter\"; font-weight: 600; text-align: center; }",

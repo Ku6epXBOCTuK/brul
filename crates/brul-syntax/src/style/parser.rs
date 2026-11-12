@@ -195,7 +195,7 @@ impl<'a> Parser<'a> {
         let at = self.cursor.value_start();
         let key = self.cursor.ident()?;
         self.cursor.expect(':')?;
-        let value = Type::ThemeKey.parse(&mut self.cursor, &key)?;
+        let value = Type::ThemeKey.parse(&mut self.cursor, false, &key)?;
         self.cursor.expect(';')?;
         Ok((
             ThemeEntry {

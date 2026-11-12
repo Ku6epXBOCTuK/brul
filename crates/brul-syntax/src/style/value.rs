@@ -1,6 +1,6 @@
 use crate::cursor::Cursor;
 use crate::error::Error;
-use crate::style::ast::{Color, Gradient, Value};
+use crate::style::ast::{Color, Gradient, GradientColor, Value};
 
 #[derive(Clone, Copy)]
 pub enum Type {
@@ -23,16 +23,16 @@ pub fn value(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<V
         cursor.expect('.')?;
         return Ok(Value::ThemeRef(cursor.ident()?));
     }
-    ty.parse(cursor, name)
+    ty.parse(cursor, theme, name)
 }
 
 impl Type {
-    pub fn parse(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+    pub fn parse(self, cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
         match self {
             Type::Number | Type::Px | Type::SignedPx | Type::Length => {
                 self.number_value(cursor, name)
             }
-            Type::Color | Type::Paint => self.paint_value(cursor, name),
+            Type::Color | Type::Paint => self.paint_value(cursor, theme, name),
             Type::Bool => boolean(cursor, name).map(Value::Bool),
             Type::ThemeKey => theme_key(cursor, name),
             Type::String => string(cursor, name).map(Value::String),
@@ -60,10 +60,10 @@ impl Type {
         }
     }
 
-    fn paint_value(self, cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+    fn paint_value(self, cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
         match self {
             Type::Color => color(cursor, name).map(Value::Color),
-            Type::Paint => paint(cursor, name),
+            Type::Paint => paint(cursor, theme, name),
             _ => unreachable!("parse sends only paint types here"),
         }
     }
@@ -153,10 +153,10 @@ fn length(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
     ))
 }
 
-fn paint(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+fn paint(cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
     cursor.skip_trivia();
     if cursor.eat_keyword("linear-gradient") {
-        return gradient(cursor, name).map(Value::Gradient);
+        return gradient(cursor, theme, name).map(Value::Gradient);
     }
     Ok(Value::Color(color(cursor, name)?))
 }
@@ -218,16 +218,25 @@ fn hex_color(cursor: &mut Cursor) -> Result<Color, Error> {
     }
 }
 
-fn gradient(cursor: &mut Cursor, name: &str) -> Result<Gradient, Error> {
+fn gradient(cursor: &mut Cursor, theme: bool, name: &str) -> Result<Gradient, Error> {
     cursor.expect('(')?;
     let angle = cursor.number_literal()?;
     cursor.eat_keyword("deg");
     cursor.expect(',')?;
-    let from = color(cursor, name)?;
+    let from = gradient_color(cursor, theme, name)?;
     cursor.expect(',')?;
-    let to = color(cursor, name)?;
+    let to = gradient_color(cursor, theme, name)?;
     cursor.expect(')')?;
     Ok(Gradient { angle, from, to })
+}
+
+fn gradient_color(cursor: &mut Cursor, theme: bool, name: &str) -> Result<GradientColor, Error> {
+    cursor.skip_trivia();
+    if theme && cursor.eat_keyword("theme") {
+        cursor.expect('.')?;
+        return Ok(GradientColor::Theme(cursor.ident()?));
+    }
+    color(cursor, name).map(GradientColor::Color)
 }
 
 fn string(cursor: &mut Cursor, name: &str) -> Result<String, Error> {

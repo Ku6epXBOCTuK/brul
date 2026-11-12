@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    Animation, ClassRule, Color, Gradient, Kind, Property, State, Stylesheet, Theme, ThemeEntry,
-    Value, parse_file,
+    Animation, ClassRule, Color, Gradient, GradientColor, Kind, Property, State, Stylesheet, Theme,
+    ThemeEntry, Value, parse_file,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -285,8 +285,8 @@ fn gradients_parse() {
                     "background",
                     Value::Gradient(Gradient {
                         angle: 135.0,
-                        from: Color::rgb(0x3b, 0x82, 0xf6),
-                        to: Color::rgb(0x06, 0xb6, 0xd4),
+                        from: GradientColor::Color(Color::rgb(0x3b, 0x82, 0xf6)),
+                        to: GradientColor::Color(Color::rgb(0x06, 0xb6, 0xd4)),
                     }),
                 )],
             ),
@@ -296,8 +296,8 @@ fn gradients_parse() {
                     "background",
                     Value::Gradient(Gradient {
                         angle: 90.0,
-                        from: Color::WHITE,
-                        to: Color::TRANSPARENT,
+                        from: GradientColor::Color(Color::WHITE),
+                        to: GradientColor::Color(Color::TRANSPARENT),
                     }),
                 )],
             ),
@@ -525,7 +525,7 @@ fn errors_point_at_the_source() {
             44,
         ),
         (
-            ".a { background: linear-gradient(1deg, theme.x, #000); }",
+            ".a { background: linear-gradient(1deg, rose, #000); }",
             "expected color",
             1,
             40,

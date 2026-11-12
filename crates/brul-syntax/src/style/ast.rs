@@ -75,8 +75,14 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gradient {
     pub angle: f64,
-    pub from: Color,
-    pub to: Color,
+    pub from: GradientColor,
+    pub to: GradientColor,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GradientColor {
+    Color(Color),
+    Theme(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

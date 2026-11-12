@@ -222,8 +222,8 @@ fn background(value: &Value) -> Result<Paint, String> {
         Value::Color(value) => Ok(Paint::Color(color(*value))),
         Value::Gradient(value) => Ok(Paint::Gradient(brul_gui::Gradient::Linear {
             angle: value.angle as f32,
-            from: color(value.from),
-            to: color(value.to),
+            from: gradient_color(&value.from),
+            to: gradient_color(&value.to),
         })),
         _ => Err("expected a color or a gradient for 'background'".to_owned()),
     }
@@ -288,6 +288,15 @@ fn paint(value: &Value, kind: Kind) -> Result<Color, String> {
 
 fn expected(kind: Kind, ty: &str) -> String {
     format!("expected {ty} for '{}'", kind.name())
+}
+
+fn gradient_color(value: &brul_syntax::style::GradientColor) -> Color {
+    match value {
+        brul_syntax::style::GradientColor::Color(stop) => color(*stop),
+        brul_syntax::style::GradientColor::Theme(_) => {
+            unreachable!("a snapshot resolves gradient stops")
+        }
+    }
 }
 
 fn color(value: brul_syntax::style::Color) -> Color {

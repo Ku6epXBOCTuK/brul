@@ -75,6 +75,14 @@
         text: #ffffff;
         muted: #94a3b8;
         badge-text: #60a5fa;
+        plate-warm-from: #fb923c;
+        plate-warm-to: #ef4444;
+        plate-rose-from: #f472b6;
+        plate-rose-to: #e11d48;
+        plate-cyan-from: #22d3ee;
+        plate-cyan-to: #10b981;
+        plate-violet-from: #a78bfa;
+        plate-violet-to: #7c3aed;
     }
     theme light {
         surface-item: #f8fafc;
@@ -87,6 +95,14 @@
         text: #0f172a;
         muted: #64748b;
         badge-text: #60a5fa;
+        plate-warm-from: #fb923c;
+        plate-warm-to: #ef4444;
+        plate-rose-from: #f472b6;
+        plate-rose-to: #e11d48;
+        plate-cyan-from: #22d3ee;
+        plate-cyan-to: #10b981;
+        plate-violet-from: #a78bfa;
+        plate-violet-to: #7c3aed;
     }
     .item {
         width: 100%;
@@ -127,10 +143,10 @@
         height: 100%;
         radius: 12px;
     }
-    .tone-first { background: linear-gradient(135deg, #fb923c, #ef4444); }
-    .tone-second { background: linear-gradient(135deg, #f472b6, #e11d48); }
-    .tone-third { background: linear-gradient(135deg, #22d3ee, #10b981); }
-    .tone-fourth { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+    .tone-first { background: linear-gradient(135deg, theme.plate-warm-from, theme.plate-warm-to); }
+    .tone-second { background: linear-gradient(135deg, theme.plate-rose-from, theme.plate-rose-to); }
+    .tone-third { background: linear-gradient(135deg, theme.plate-cyan-from, theme.plate-cyan-to); }
+    .tone-fourth { background: linear-gradient(135deg, theme.plate-violet-from, theme.plate-violet-to); }
     .plate-body {
         width: 100%;
         height: 100%;

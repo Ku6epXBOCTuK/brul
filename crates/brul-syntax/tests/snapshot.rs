@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    Animation, ClassRule, Color, Kind, Property, SnapshotError, State, Stylesheet, Theme,
-    ThemeEntry, Value, parse_file,
+    Animation, ClassRule, Color, Gradient, GradientColor, Kind, Property, SnapshotError, State,
+    Stylesheet, Theme, ThemeEntry, Value, parse_file,
 };
 
 fn gray(value: u8) -> Value {
@@ -114,6 +114,45 @@ fn unknown_theme_and_key_are_errors() {
     assert_eq!(
         sheet.snapshot(&["a"], None, None),
         Err(SnapshotError::UnknownThemeKey("muted".to_string()))
+    );
+}
+
+#[test]
+fn gradient_stops_resolve_to_the_selected_theme() {
+    let sheet = parse_file(
+        "theme light { from: #111111; to: #222222; }\ntheme dark { from: #333333; to: #444444; }\n.a { background: linear-gradient(135deg, theme.from, theme.to); }",
+    )
+    .expect("sheet");
+    let light = sheet.snapshot(&["a"], None, Some("light")).expect("light");
+    let dark = sheet.snapshot(&["a"], None, Some("dark")).expect("dark");
+
+    let expected = |from: u8, to: u8| {
+        Value::Gradient(Gradient {
+            angle: 135.0,
+            from: GradientColor::Color(Color::rgb(from, from, from)),
+            to: GradientColor::Color(Color::rgb(to, to, to)),
+        })
+    };
+
+    assert_eq!(light.get(Kind::Background), Some(&expected(0x11, 0x22)));
+    assert_eq!(dark.get(Kind::Background), Some(&expected(0x33, 0x44)));
+}
+
+#[test]
+fn a_gradient_stop_with_a_bad_theme_key_is_rejected() {
+    let unknown = parse_file(
+        "theme light { from: #111111; }\n.a { background: linear-gradient(90, theme.accent, #222222); }",
+    )
+    .unwrap_err();
+    assert_eq!(unknown.message, "unknown theme key 'accent'");
+
+    let not_a_color = parse_file(
+        "theme light { radius: 4px; }\n.a { background: linear-gradient(90, theme.radius, #222222); }",
+    )
+    .unwrap_err();
+    assert_eq!(
+        not_a_color.message,
+        "theme key 'radius' is a px length, but 'background' expects a color"
     );
 }
 
