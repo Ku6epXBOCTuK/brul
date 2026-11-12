@@ -4,6 +4,9 @@ use brul_gui::{
     VerticalAlign, WidgetStyle, WidgetStylePatch,
 };
 
+use super::palette::Palette;
+use super::palette::palette_field;
+
 pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
     let LayoutStyle {
         width,
@@ -52,7 +55,7 @@ pub(super) fn layout(layout: LayoutStyle) -> Option<String> {
     })
 }
 
-pub(super) fn style_set(set: StyleSet) -> Option<String> {
+pub(super) fn style_set(set: StyleSet, palette: &Palette<'_>) -> Option<String> {
     let base = set.base();
     let transitions = set.transitions();
     let mut states = Vec::new();
@@ -62,13 +65,13 @@ pub(super) fn style_set(set: StyleSet) -> Option<String> {
         };
         states.push(format!(
             ".with(brul_gui::StyleState::{state:?}, {})",
-            widget_style_patch(patch)
+            widget_style_patch(patch, palette)
         ));
     }
     if base == WidgetStyle::default() && states.is_empty() && transitions.is_empty() {
         return None;
     }
-    let mut out = format!("brul_gui::StyleSet::new({})", widget_style(base));
+    let mut out = format!("brul_gui::StyleSet::new({})", widget_style(base, palette));
     if !transitions.is_empty() {
         out.push_str(&format!(
             ".with_transitions({})",
@@ -111,7 +114,7 @@ fn transitions_expr(value: Transitions) -> String {
     }
 }
 
-fn widget_style(style: WidgetStyle) -> String {
+fn widget_style(style: WidgetStyle, palette: &Palette<'_>) -> String {
     let WidgetStyle {
         background,
         border,
@@ -127,13 +130,13 @@ fn widget_style(style: WidgetStyle) -> String {
     let default = WidgetStyle::default();
     let mut fields = Vec::new();
     if background != default.background {
-        fields.push(format!("background: {}", paint(background)));
+        fields.push(format!("background: {}", paint(background, palette)));
     }
     if border != default.border {
-        fields.push(format!("border: {}", color(border)));
+        fields.push(format!("border: {}", color(border, palette)));
     }
     if text != default.text {
-        fields.push(format!("text: {}", color(text)));
+        fields.push(format!("text: {}", color(text, palette)));
     }
     if radius != default.radius {
         fields.push(format!("radius: {radius}"));
@@ -141,7 +144,7 @@ fn widget_style(style: WidgetStyle) -> String {
     if tint != default.tint {
         fields.push(format!(
             "tint: Some({})",
-            color(tint.unwrap_or(Color::TRANSPARENT))
+            color(tint.unwrap_or(Color::TRANSPARENT), palette)
         ));
     }
     if opacity != default.opacity {
@@ -160,7 +163,7 @@ fn widget_style(style: WidgetStyle) -> String {
         fields.push(format!("scroll: {scroll}"));
     }
     if shadow_value != default.shadow {
-        fields.push(format!("shadow: {}", shadow(shadow_value)));
+        fields.push(format!("shadow: {}", shadow(shadow_value, palette)));
     }
     if fields.is_empty() {
         "brul_gui::WidgetStyle::default()".to_owned()
@@ -176,7 +179,7 @@ pub(super) fn class(value: &Class) -> String {
     format!(
         "brul_gui::Class {{ layout: {}, style: {}, text: {} }}",
         layout_patch(&value.layout),
-        widget_style_patch(&value.style),
+        widget_style_patch(&value.style, &Palette::empty()),
         text_style_patch(&value.text)
     )
 }
@@ -220,19 +223,19 @@ fn layout_patch(patch: &LayoutPatch) -> String {
     }
 }
 
-fn widget_style_patch(patch: &WidgetStylePatch) -> String {
+fn widget_style_patch(patch: &WidgetStylePatch, palette: &Palette<'_>) -> String {
     let mut fields = Vec::new();
     if let Some(background) = patch.background {
-        fields.push(format!("background: Some({})", paint(background)));
+        fields.push(format!("background: Some({})", paint(background, palette)));
     }
     if let Some(border) = patch.border {
-        fields.push(format!("border: Some({})", color(border)));
+        fields.push(format!("border: Some({})", color(border, palette)));
     }
     if let Some(text) = patch.text {
-        fields.push(format!("text: Some({})", color(text)));
+        fields.push(format!("text: Some({})", color(text, palette)));
     }
     if let Some(tint) = patch.tint {
-        fields.push(format!("tint: Some({})", color(tint)));
+        fields.push(format!("tint: Some({})", color(tint, palette)));
     }
     if let Some(opacity) = patch.opacity {
         fields.push(format!("opacity: Some({opacity:?}f32)"));
@@ -244,7 +247,7 @@ fn widget_style_patch(patch: &WidgetStylePatch) -> String {
         fields.push(format!("clip: Some({clip})"));
     }
     if let Some(shadow) = patch.shadow {
-        fields.push(format!("shadow: Some({})", color(shadow)));
+        fields.push(format!("shadow: Some({})", color(shadow, palette)));
     }
     if fields.is_empty() {
         "brul_gui::WidgetStylePatch::default()".to_owned()
@@ -374,28 +377,31 @@ fn vertical_align(value: VerticalAlign) -> String {
     }
 }
 
-fn shadow(value: Shadow) -> String {
+fn shadow(value: Shadow, palette: &Palette<'_>) -> String {
     format!(
         "brul_gui::Shadow {{ x: {}, y: {}, blur: {}, color: {} }}",
         value.x,
         value.y,
         value.blur,
-        color(value.color)
+        color(value.color, palette)
     )
 }
 
-fn paint(value: Paint) -> String {
+fn paint(value: Paint, palette: &Palette<'_>) -> String {
     match value {
-        Paint::Color(value) => format!("brul_gui::Paint::Color({})", color(value)),
+        Paint::Color(value) => format!("brul_gui::Paint::Color({})", color(value, palette)),
         Paint::Gradient(Gradient::Linear { angle, from, to }) => format!(
             "brul_gui::Paint::Gradient(brul_gui::Gradient::Linear {{ angle: {angle:?}f32, from: {}, to: {} }})",
-            color(from),
-            color(to)
+            color(from, palette),
+            color(to, palette)
         ),
     }
 }
 
-fn color(value: Color) -> String {
+fn color(value: Color, palette: &Palette<'_>) -> String {
+    if let Some(key) = palette.lookup(value) {
+        return format!("palette.{}", palette_field(key));
+    }
     format!(
         "brul_gui::Color::rgba({}, {}, {}, {})",
         value.r, value.g, value.b, value.a
@@ -407,6 +413,7 @@ mod tests {
     use std::time::Duration;
 
     use super::{justify, style_set, widget_style};
+    use crate::emit::palette::Palette;
     use brul_gui::{Color, Justify, Shadow, StyleSet, Transitions, WidgetStyle};
 
     #[test]
@@ -417,7 +424,7 @@ mod tests {
         });
 
         assert_eq!(
-            style_set(set).as_deref(),
+            style_set(set, &Palette::empty()).as_deref(),
             Some(
                 "brul_gui::StyleSet::new(brul_gui::WidgetStyle::default()).with_transitions(brul_gui::Transitions { background: Some(std::time::Duration::from_millis(300)), ..brul_gui::Transitions::default() })"
             )
@@ -426,13 +433,16 @@ mod tests {
 
     #[test]
     fn an_empty_style_set_stays_empty() {
-        assert_eq!(style_set(StyleSet::new(WidgetStyle::default())), None);
+        assert_eq!(
+            style_set(StyleSet::new(WidgetStyle::default()), &Palette::empty()),
+            None
+        );
     }
 
     #[test]
     fn shadow_is_emitted_only_when_it_differs_from_default() {
         assert_eq!(
-            widget_style(WidgetStyle::default()),
+            widget_style(WidgetStyle::default(), &Palette::empty()),
             "brul_gui::WidgetStyle::default()"
         );
         let style = WidgetStyle {
@@ -446,7 +456,7 @@ mod tests {
         };
 
         assert_eq!(
-            widget_style(style),
+            widget_style(style, &Palette::empty()),
             "brul_gui::WidgetStyle { shadow: brul_gui::Shadow { x: -2, y: 10, blur: 15, color: brul_gui::Color::rgba(59, 130, 246, 64) }, ..brul_gui::WidgetStyle::default() }"
         );
     }

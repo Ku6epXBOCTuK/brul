@@ -10,7 +10,7 @@ use crate::Definition;
 use crate::error_at;
 
 use super::Emit;
-use super::{classes, events, names, resources, script, view};
+use super::{classes, events, names, palette, resources, script, view};
 
 pub fn module(source: &str) -> Result<String, Error> {
     module_at(source, None)
@@ -70,6 +70,8 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
         classes::tables(&mut out, "", &parsed.stylesheet)
             .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
     }
+    palette::functions(&mut out, "Palette", "palette", &parsed.stylesheet)
+        .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
     out.push_str(&resources::functions("", &registry.resources));
     for index in 0..registry.definitions.len() {
         let definition = &registry.definitions[index];
@@ -100,6 +102,13 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<String, Error> {
             classes::tables(&mut out, &prefix, &definition.stylesheet)
                 .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
         }
+        palette::functions(
+            &mut out,
+            &format!("Component{index}Palette"),
+            &format!("{prefix}palette"),
+            &definition.stylesheet,
+        )
+        .map_err(|message| error_at(Position { line: 1, column: 1 }, message))?;
         out.push_str(&script::program(
             &format!("{prefix}script"),
             definition.program.as_ref(),

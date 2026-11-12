@@ -92,7 +92,7 @@ fn dispatcher(index: usize, emit: &Emit<'_>) -> String {
         };
         let _ = writeln!(
             out,
-            "        {pattern} => structure{index}_rebuild_{position}(component),"
+            "        {pattern} => structure{index}_rebuild_{position}(theme, component),"
         );
     }
     let _ = writeln!(
@@ -119,13 +119,12 @@ fn themes(emit: &Emit<'_>) -> Vec<Option<String>> {
 fn inline(out: &mut String, index: usize, each: bool, frame: Frame<'_>, counter: &mut usize) {
     let pad = "    ".repeat(frame.depth());
     let inner = "    ".repeat(frame.depth() + 1);
-    let theme_expression = frame.theme_expression();
     let name = format!("widget{}", *counter);
     *counter += 1;
     let _ = writeln!(out, "{pad}{{");
     let _ = writeln!(
         out,
-        "{inner}let (built, _rows) = structure{index}_rebuild({theme_expression}, component)?;"
+        "{inner}let (built, _rows) = structure{index}_rebuild(theme, component)?;"
     );
     let _ = writeln!(out, "{inner}bindings.extend(built.bindings);");
     let _ = writeln!(out, "{inner}handlers.extend(built.handlers);");
@@ -148,7 +147,7 @@ fn rebuild_arm(
     frame: Frame<'_>,
 ) -> Result<String, Error> {
     let arm = arm_frame(theme, frame);
-    let mut out = arm_header(index, position);
+    let mut out = arm_header(index, position, emit);
     let _ = writeln!(
         out,
         "    let condition = structure{index}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let children = match condition {{"
@@ -178,7 +177,7 @@ fn each_arm(
     frame: Frame<'_>,
 ) -> Result<String, Error> {
     let arm = arm_frame(theme, frame);
-    let mut out = arm_header(index, position);
+    let mut out = arm_header(index, position, emit);
     out.push_str("    let mut children = Vec::new();\n");
     let _ = writeln!(
         out,
@@ -228,9 +227,7 @@ fn each_arm(
 }
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
-    Frame::root(theme, 3)
-        .baked()
-        .inside(frame.direction(), frame.spacing())
+    Frame::root(theme, 3).inside(frame.direction(), frame.spacing())
 }
 
 fn variable(name: &str, names: &Names<'_>) -> u32 {
@@ -240,16 +237,24 @@ fn variable(name: &str, names: &Names<'_>) -> u32 {
         .index()
 }
 
-fn arm_header(index: usize, position: usize) -> String {
-    format!(
+fn arm_header(index: usize, position: usize, emit: &Emit<'_>) -> String {
+    let mut out = format!(
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-fn structure{index}_rebuild_{position}(component: &brul::ComponentHandle) -> brul::Rebuilt {{
+fn structure{index}_rebuild_{position}(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let mut rows = Vec::new();
 "
-    )
+    );
+    if emit.has_themes() {
+        let _ = writeln!(
+            out,
+            "    let palette = {}palette(theme)?;",
+            emit.resource_prefix
+        );
+    }
+    out
 }
 
 fn widget(out: &mut String, frame: Frame<'_>) {

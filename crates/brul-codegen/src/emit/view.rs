@@ -72,6 +72,13 @@ fn branch(
 ) -> Result<(), Error> {
     let mut counter = 0;
     let _ = writeln!(out, "        {pattern} => {{");
+    if emit.has_themes() {
+        let _ = writeln!(
+            out,
+            "            let palette = {}palette(theme)?;",
+            emit.resource_prefix
+        );
+    }
     widget(out, root, emit, Frame::root(theme, 3), &mut counter)?;
     out.push_str("\n        }\n");
     Ok(())

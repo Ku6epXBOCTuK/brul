@@ -12,6 +12,7 @@ use crate::styles;
 use super::Emit;
 use super::Frame;
 use super::classes;
+use super::palette::Palette;
 use super::style::{layout, style_set, text_style_set};
 use super::{component, events, expression, structure};
 use crate::runtime::HandlerEvent;
@@ -40,7 +41,13 @@ pub(super) fn widget(
     let _ = writeln!(out, "{pad}{{");
     let _ = write!(out, "{inner}let {name} = ");
     let content = kind(out, element, &resolved, emit, frame, counter)?;
-    modifiers(out, &resolved, events.drag, &inner);
+    modifiers(
+        out,
+        &resolved,
+        events.drag,
+        &inner,
+        &emit.palette(frame.theme()),
+    );
     out.push_str(";\n");
     content_binding(out, content, &name, &inner, emit.names);
     parameters(out, element, &name, &inner, emit.names, emit, frame.theme())?;
@@ -111,11 +118,17 @@ fn container(
     Ok(())
 }
 
-fn modifiers(out: &mut String, resolved: &styles::Resolved, drag: bool, inner: &str) {
+fn modifiers(
+    out: &mut String,
+    resolved: &styles::Resolved,
+    drag: bool,
+    inner: &str,
+    palette: &Palette<'_>,
+) {
     if let Some(layout) = layout(resolved.layout) {
         let _ = write!(out, "\n{inner}.with_layout({layout})");
     }
-    if let Some(styles) = style_set(resolved.styles.clone()) {
+    if let Some(styles) = style_set(resolved.styles.clone(), palette) {
         let _ = write!(out, "\n{inner}.with_styles({styles})");
     }
     if drag {
