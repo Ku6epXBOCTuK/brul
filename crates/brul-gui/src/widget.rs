@@ -1522,8 +1522,8 @@ impl Pass<'_> {
 
         let resolved = layout::resolve(node.layout.width, available_width)?;
         let content_width = resolved
-            .map(|width| width.saturating_sub(layout::inset_x(&node.layout)))
-            .or(available_width);
+            .or(available_width)
+            .map(|width| width.saturating_sub(layout::inset_x(&node.layout)));
 
         let layout_node = match &node.data {
             NodeData::View { direction } => {

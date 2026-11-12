@@ -152,6 +152,51 @@ fn percent_width_inside_an_auto_container_fills_the_available_width() {
 }
 
 #[test]
+fn text_in_an_auto_container_shapes_inside_its_padding() {
+    let sentence =
+        "aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv ww xx yy zz ".repeat(3);
+    let reference = Widget::text(sentence.clone()).with_layout(LayoutStyle {
+        width: Dimension::Px(360),
+        ..LayoutStyle::default()
+    });
+    let reference_id = reference.id();
+    let reference_root = Widget::column(vec![reference]).with_layout(fixed(400, 400));
+
+    let text = Widget::text(sentence).with_layout(LayoutStyle::default());
+    let text_id = text.id();
+    let padded = Widget::view(Direction::Column, vec![text]).with_layout(LayoutStyle {
+        padding: Padding::all(20),
+        ..LayoutStyle::default()
+    });
+    let root = Widget::column(vec![padded]).with_layout(fixed(400, 400));
+
+    let mut engine = TextEngine::new();
+    let mut reference_tree = WidgetTree::new(reference_root);
+    let mut tree = WidgetTree::new(root);
+    for tree in [&mut reference_tree, &mut tree] {
+        tree.layout(
+            &mut engine,
+            Size {
+                width: 400,
+                height: 400,
+            },
+            1.0,
+        )
+        .expect("layout");
+    }
+    let reference_snapshot = reference_tree.snapshot().expect("snapshot");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let reference_node = reference_snapshot.node(reference_id).expect("reference");
+    let node = snapshot.node(text_id).expect("text");
+
+    assert_eq!(node.height, reference_node.height);
+    let text = node.text.as_ref().expect("text layout");
+    let reference_text = reference_node.text.as_ref().expect("text layout");
+    assert_eq!(text.size, reference_text.size);
+    assert!(text.size.width <= 360);
+}
+
+#[test]
 fn text_is_measured_and_wrapped_by_layout() {
     let text =
         Widget::text("one two three four five six seven eight nine ten").with_layout(LayoutStyle {
