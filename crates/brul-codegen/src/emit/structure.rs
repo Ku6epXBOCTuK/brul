@@ -129,7 +129,7 @@ fn inline(out: &mut String, index: usize, each: bool, frame: Frame<'_>, counter:
     let _ = writeln!(out, "{inner}let {name} = built.widget;");
     let _ = writeln!(
         out,
-        "{inner}structures.push(brul::Structure {{ parent: {name}.id(), each: {each}, value: structure{index}_value, rebuild: structure{index}_rebuild }});"
+        "{inner}structures.push(brul::Structure {{ parent: {name}.id(), each: {each}, component: std::rc::Rc::clone(component), scopes: component.borrow().build_scopes(), value: structure{index}_value, rebuild: structure{index}_rebuild }});"
     );
     let _ = writeln!(out, "{inner}{name}");
     let _ = write!(out, "{pad}}}");

@@ -141,6 +141,8 @@ pub type StructureRebuild = fn(Option<&str>, &ComponentHandle) -> Rebuilt;
 pub struct Structure {
     pub parent: WidgetId,
     pub each: bool,
+    pub component: ComponentHandle,
+    pub scopes: Rc<[Rc<[Variable]>]>,
     pub value: StructureValue,
     pub rebuild: StructureRebuild,
 }

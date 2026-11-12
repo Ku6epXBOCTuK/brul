@@ -254,7 +254,29 @@ fn structure_rebuild_rebuilds_rows() {
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].key, Some(Value::String("first".into())));
     assert_eq!(rows[0].count, 1);
+    assert_nested_values(&rebuilt);
     assert_eq!(rebuilt.widget.into_children().len(), 2);
+}
+
+#[test]
+fn component_structure_values_read_their_own_component() {
+    let component = seeded();
+    let built = generated::view(None, &component).expect("generated view");
+    assert_nested_values(&built);
+}
+
+fn assert_nested_values(built: &Built) {
+    let nested: Vec<_> = built
+        .structures
+        .iter()
+        .filter(|structure| !structure.each)
+        .collect();
+    assert_eq!(nested.len(), 20);
+    for structure in nested {
+        let value = (structure.value)(&mut structure.component.borrow_mut())
+            .expect("nested structure value");
+        assert!(matches!(value, Value::Bool(_)), "value is not a bool");
+    }
 }
 
 #[test]

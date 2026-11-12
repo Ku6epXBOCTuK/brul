@@ -233,7 +233,8 @@ impl Ui {
 
     fn bind_structures(&mut self, structures: Vec<Structure>) {
         for structure in structures {
-            let component = Rc::clone(&self.component);
+            let component = Rc::clone(&structure.component);
+            let scopes = Rc::clone(&structure.scopes);
             let requests = Rc::clone(&self.requests);
             let initialized = Rc::new(Cell::new(false));
             let last: Rc<Cell<Option<Value>>> = Rc::new(Cell::new(None));
@@ -241,7 +242,11 @@ impl Ui {
             scope.run(|| {
                 Effect::new(move || {
                     component.borrow().track();
-                    let value = match (structure.value)(&mut component.borrow_mut()) {
+                    let count = scopes.len();
+                    component.borrow_mut().push_binding_scopes(&scopes);
+                    let evaluated = (structure.value)(&mut component.borrow_mut());
+                    component.borrow_mut().pop_binding_scopes(count);
+                    let value = match evaluated {
                         Ok(value) => Some(value),
                         Err(error) => {
                             tracing::error!(%error, "structure expression failed");
@@ -372,14 +377,20 @@ impl Ui {
                 continue;
             }
             let structure = structures[index].structure.clone();
-            let (built, rebuilt_rows) =
-                match (structure.rebuild)(self.theme.as_deref(), &self.component) {
-                    Ok(result) => result,
-                    Err(message) => {
-                        tracing::error!(%message, "view rebuild failed");
-                        continue;
-                    }
-                };
+            let component = Rc::clone(&structure.component);
+            let count = structure.scopes.len();
+            component
+                .borrow_mut()
+                .push_binding_scopes(&structure.scopes);
+            let rebuilt = (structure.rebuild)(self.theme.as_deref(), &component);
+            component.borrow_mut().pop_binding_scopes(count);
+            let (built, rebuilt_rows) = match rebuilt {
+                Ok(result) => result,
+                Err(message) => {
+                    tracing::error!(%message, "view rebuild failed");
+                    continue;
+                }
+            };
             let Built {
                 widget,
                 bindings: added_bindings,
@@ -530,7 +541,7 @@ mod tests {
         ))
     }
 
-    fn structured_view(theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, String> {
+    fn structured_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
         if theme.is_some() {
             return Err("unknown theme".to_owned());
         }
@@ -543,6 +554,8 @@ mod tests {
             structures: vec![Structure {
                 parent,
                 each: false,
+                component: Rc::clone(component),
+                scopes: component.borrow().build_scopes(),
                 value: shown,
                 rebuild: rebuild_shown,
             }],
@@ -587,7 +600,7 @@ mod tests {
         assert_eq!(child_count(&ui, parent), 1);
     }
 
-    fn bound_view(theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, String> {
+    fn bound_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
         if theme.is_some() {
             return Err("unknown theme".to_owned());
         }
@@ -600,6 +613,8 @@ mod tests {
             structures: vec![Structure {
                 parent,
                 each: false,
+                component: Rc::clone(component),
+                scopes: component.borrow().build_scopes(),
                 value: shown,
                 rebuild: rebuild_bound,
             }],

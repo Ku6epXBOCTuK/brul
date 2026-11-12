@@ -320,7 +320,7 @@ window Demo (title: "demo") {
     assert!(module.contains("brul::Value::Bool(true) => vec!["));
     assert!(module.contains("brul::Value::Bool(false) => vec!["));
     assert!(module.contains(
-        "structures.push(brul::Structure { parent: widget1.id(), each: false, value: structure0_value, rebuild: structure0_rebuild });"
+        "structures.push(brul::Structure { parent: widget1.id(), each: false, component: std::rc::Rc::clone(component), scopes: component.borrow().build_scopes(), value: structure0_value, rebuild: structure0_rebuild });"
     ));
     assert!(module.contains(r#""if condition expects Bool, got {}""#));
 }
@@ -353,7 +353,7 @@ window Demo (title: "demo") {
     ));
     assert!(module.contains("let key = structure0_key(&mut component.borrow_mut()).ok();"));
     assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count });"));
-    assert!(module.contains("each: true, value: structure0_value"));
+    assert!(module.contains("each: true, component: std::rc::Rc::clone(component)"));
 }
 
 #[test]
