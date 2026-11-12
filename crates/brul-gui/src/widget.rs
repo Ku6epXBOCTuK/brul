@@ -1055,6 +1055,10 @@ impl WidgetTree {
         self.layout_dirty
     }
 
+    pub fn has_layout(&self) -> bool {
+        self.geometry.is_some()
+    }
+
     pub fn snapshot(&mut self) -> Result<&WidgetSnapshot, WidgetError> {
         if self.snapshot.is_none() {
             let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;

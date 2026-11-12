@@ -452,7 +452,16 @@ impl TreeApp {
         if self.tree.borrow().layout_dirty()
             && let Some(engine) = self.engine.as_mut()
         {
-            self.tree.borrow_mut().relayout(engine)?;
+            if self.tree.borrow().has_layout() {
+                self.tree.borrow_mut().relayout(engine)?;
+            } else {
+                let (width, height) = surface.size();
+                self.tree.borrow_mut().layout(
+                    engine,
+                    Size { width, height },
+                    surface.scale_factor() as f32,
+                )?;
+            }
         }
         let (dirty, rebuild) = {
             let mut tree = self.tree.borrow_mut();
@@ -893,6 +902,21 @@ mod tests {
 
         assert_eq!(app.resize(&surface, 4, 5), Step::Continue);
         assert_eq!(calls.borrow().as_slice(), ["resize 4x5"]);
+    }
+
+    #[test]
+    fn a_replaced_tree_is_laid_out_again_before_the_frame() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+        app.engine = Some(TextEngine::new());
+        let (renderer, _) = FakeRenderer::new();
+        app.renderer = Some(Box::new(renderer));
+
+        assert_eq!(app.resize(&surface, 8, 6), Step::Continue);
+        app.tree.borrow_mut().replace_root(Widget::text(""));
+
+        assert!(app.render_frame(&surface).is_ok());
+        assert!(!app.tree.borrow().layout_dirty());
     }
 
     #[test]
