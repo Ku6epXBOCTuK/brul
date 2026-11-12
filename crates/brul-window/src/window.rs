@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use tracing::error;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -282,6 +283,7 @@ impl ApplicationHandler for App {
 
 impl App {
     fn fail(&mut self, event_loop: &dyn ActiveEventLoop, error: WindowError) {
+        error!(%error, "window failed");
         self.error.set(Some(error));
         event_loop.exit();
     }

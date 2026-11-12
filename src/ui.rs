@@ -51,6 +51,7 @@ pub(crate) struct CommandHost {
 
 impl Host for CommandHost {
     fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
+        tracing::debug!(name, arguments = arguments.len(), "host call");
         if name == "set_theme" {
             if arguments.len() != 1 {
                 return Err(Error::Arity {
@@ -166,7 +167,7 @@ impl Ui {
                     function,
                 });
             } else {
-                eprintln!("every interval must be a positive number");
+                tracing::error!(interval_ms, "every interval must be a positive number");
             }
         }
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
@@ -240,7 +241,13 @@ impl Ui {
             scope.run(|| {
                 Effect::new(move || {
                     component.borrow().track();
-                    let value = (structure.value)(&mut component.borrow_mut()).ok();
+                    let value = match (structure.value)(&mut component.borrow_mut()) {
+                        Ok(value) => Some(value),
+                        Err(error) => {
+                            tracing::error!(%error, "structure expression failed");
+                            None
+                        }
+                    };
                     if !initialized.replace(true) {
                         last.set(value);
                         return;
@@ -320,7 +327,7 @@ impl Ui {
             call(&event.component, event.function, event.arguments);
             brul_reactive::flush();
         }
-        eprintln!("event chain is deeper than {EVENT_DEPTH}");
+        tracing::error!(depth = EVENT_DEPTH, "event chain is too deep");
     }
 
     fn dispatch_event(&mut self, event: &WidgetEvent) {
@@ -369,7 +376,7 @@ impl Ui {
                 match (structure.rebuild)(self.theme.as_deref(), &self.component) {
                     Ok(result) => result,
                     Err(message) => {
-                        eprintln!("{message}");
+                        tracing::error!(%message, "view rebuild failed");
                         continue;
                     }
                 };
@@ -446,12 +453,18 @@ pub(crate) fn apply_prop(prop: &PropBinding) {
     prop.component
         .borrow_mut()
         .push_binding_scopes(&prop.scopes);
-    let value = (prop.expression)(&mut prop.component.borrow_mut()).ok();
+    let value = match (prop.expression)(&mut prop.component.borrow_mut()) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            tracing::error!(%error, "binding expression failed");
+            None
+        }
+    };
     if let Some(value) = value
         && accepts_prop(&value, prop.ty)
         && let Err(error) = prop.target.borrow_mut().assign_property(prop.name, value)
     {
-        eprintln!("{error}");
+        tracing::error!(%error, "property assignment failed");
     }
     prop.component.borrow_mut().pop_binding_scopes(count);
 }

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{Frame, Size, TextEngine, WidgetEvent, WidgetTree};
+use tracing::{debug, error, info, trace};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
@@ -199,6 +200,7 @@ impl TreeApp {
         self.renderer = Some(Box::new(gpu));
         self.engine = Some(engine);
         self.frame = Some(Frame::new(size.width.max(1), size.height.max(1)));
+        info!(title = %self.config.title, width = size.width, height = size.height, "window opened");
         window.set_visible(true);
         window.request_redraw();
         Step::Continue
@@ -214,7 +216,13 @@ impl TreeApp {
         };
         let window = Arc::clone(window);
 
-        match window_input(event).or_else(|| event_input(event)) {
+        let input = window_input(event).or_else(|| event_input(event));
+        match &input {
+            Some(Input::Moved(..)) | Some(Input::Redraw) => trace!(?input, "window input"),
+            Some(_) => debug!(?input, "window input"),
+            None => {}
+        }
+        match input {
             Some(Input::Exit) => Step::Close,
             Some(Input::Redraw) => self.render(&window),
             Some(input) => self.handle(&window, input),
@@ -335,11 +343,13 @@ impl TreeApp {
         let Some(build) = self.build.as_mut() else {
             return Step::Continue;
         };
+        info!(?scheme, "system theme changed");
         self.tree = build(scheme);
         self.resize_to_surface(surface)
     }
 
     pub(crate) fn replace_tree(&mut self, tree: Rc<RefCell<WidgetTree>>) -> Step {
+        debug!("replacing the widget tree");
         self.tree = tree;
         match self.window.clone() {
             Some(window) => self.resize_to_surface(&window),
@@ -353,6 +363,7 @@ impl TreeApp {
     }
 
     fn fail(&mut self, error: WindowError) -> Step {
+        error!(%error, "window failed");
         self.error.set(Some(error));
         Step::Exit
     }
@@ -384,7 +395,9 @@ impl TreeApp {
         if drag {
             surface.drag();
         }
+        debug!(?events, "widget events");
         let commands = (self.handler)(&events);
+        debug!(?commands, "window commands");
         let step = self.run_commands(surface, commands);
         brul_reactive::flush();
         if self.tree.borrow().snapshot_dirty() {
@@ -413,6 +426,7 @@ impl TreeApp {
         if width == 0 || height == 0 {
             return Step::Continue;
         }
+        debug!(width, height, "window resized");
         if let Some(renderer) = self.renderer.as_mut() {
             renderer.resize(width, height);
         }
@@ -445,6 +459,7 @@ impl TreeApp {
     }
 
     fn render_frame(&mut self, surface: &dyn Surface) -> Result<(), brul_gui::WidgetError> {
+        trace!("rendering a frame");
         let now = Instant::now();
         let delta = now.saturating_duration_since(self.tick);
         self.tick = now;

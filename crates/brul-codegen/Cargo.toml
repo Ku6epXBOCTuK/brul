@@ -9,6 +9,7 @@ brul-reactive = { workspace = true }
 brul-script = { workspace = true }
 brul-syntax = { workspace = true }
 brul-window = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true

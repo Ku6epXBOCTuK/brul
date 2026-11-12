@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use brul_gui::WidgetEvent;
+use tracing::{debug, error, info, trace};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -74,6 +75,7 @@ where
         match (self.create.borrow_mut())(key, scheme) {
             Ok(spec) => Some(spec),
             Err(message) => {
+                error!(%message, "window creation failed");
                 self.error.set(Some(WindowError::Stage {
                     stage: "window",
                     message,
@@ -85,10 +87,12 @@ where
 
     fn open(&mut self, event_loop: &dyn ActiveEventLoop, key: WindowKey) {
         if let Some(index) = self.windows.iter().position(|(open, _)| *open == key) {
+            debug!(%key, "focusing an open window");
             self.windows[index].1.focus();
             return;
         }
 
+        info!(%key, "opening a window");
         let scheme = system_scheme(event_loop.system_theme().as_ref());
         let Some(spec) = self.create(key, scheme) else {
             event_loop.exit();
@@ -126,6 +130,7 @@ where
 
     fn close(&mut self, event_loop: &dyn ActiveEventLoop, index: usize) {
         let (key, _) = self.windows.remove(index);
+        info!(%key, "window closed");
         (self.closed)(key);
         if self.windows.is_empty() {
             event_loop.exit();
@@ -163,10 +168,12 @@ where
         event: WindowEvent,
     ) {
         let Some(index) = self.index_of(window_id) else {
+            trace!(?window_id, "event for an unknown window");
             return;
         };
         if let WindowEvent::ThemeChanged(theme) = &event {
             let key = self.windows[index].0;
+            info!(%key, ?theme, "system theme changed");
             let Some(spec) = self.create(key, scheme(theme)) else {
                 event_loop.exit();
                 return;

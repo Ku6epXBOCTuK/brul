@@ -9,5 +9,6 @@ workspace = true
 [dependencies]
 brul-gui = { workspace = true }
 brul-reactive = { workspace = true }
+tracing = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }

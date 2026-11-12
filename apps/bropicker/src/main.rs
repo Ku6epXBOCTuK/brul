@@ -8,6 +8,7 @@ use bropicker::{
     BrowserEntry, Config, Theme, config::icon_for, config::is_known_browser, default_path,
     demo_browsers, detect_browsers, domain_of, generated,
 };
+use brul::logging::{error, info};
 use brul::{Host, Value};
 
 struct Session {
@@ -110,7 +111,7 @@ impl<R: Runner> LauncherHost<R> {
             return;
         };
         if let Err(error) = self.config.borrow().save(path) {
-            eprintln!("settings: {error}");
+            error!(%error, "config save failed");
         }
     }
 
@@ -133,11 +134,12 @@ impl<R: Runner> LauncherHost<R> {
         };
         let browser = self.config.borrow().browsers.get(index).cloned();
         let Some(browser) = browser else {
-            eprintln!("launch: browser {index} is not configured");
+            error!(index, "browser is not configured");
             return Ok(Value::Bool(false));
         };
+        info!(browser = %browser.name, domain = %domain_of(&self.url), "launching");
         if let Err(error) = self.launcher.launch(&browser, &self.url) {
-            eprintln!("launch: {error}");
+            error!(browser = %browser.name, %error, "browser launch failed");
             return Ok(Value::Bool(false));
         }
         Ok(Value::Bool(true))
@@ -145,6 +147,7 @@ impl<R: Runner> LauncherHost<R> {
 
     fn remove_browser(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
         let name = text(arguments, "removeBrowser")?;
+        info!(browser = %name, "removing browser");
         self.config
             .borrow_mut()
             .browsers
@@ -155,6 +158,7 @@ impl<R: Runner> LauncherHost<R> {
 
     fn remove_remembered(&mut self, arguments: &[Value]) -> Result<Value, brul::Error> {
         let domain = text(arguments, "removeRemembered")?;
+        info!(%domain, "removing a remembered domain");
         self.config.borrow_mut().remembered.remove(domain);
         self.save();
         Ok(remembered_value(&self.config.borrow()))
@@ -167,7 +171,9 @@ impl<R: Runner> LauncherHost<R> {
                 expected: "no",
             });
         }
-        self.config.borrow_mut().add_detected(detect_browsers());
+        let detected = detect_browsers();
+        info!(count = detected.len(), "detected browsers");
+        self.config.borrow_mut().add_detected(detected);
         self.save();
         Ok(browsers_value(&self.config.borrow()))
     }
@@ -235,8 +241,9 @@ fn remembered_value(config: &Config) -> Value {
 }
 
 fn main() {
+    brul::logging::init();
     if let Err(error) = run() {
-        eprintln!("bropicker: {error}");
+        error!(%error, "bropicker failed");
     }
 }
 

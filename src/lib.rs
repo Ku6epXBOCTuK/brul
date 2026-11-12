@@ -2,6 +2,7 @@
 
 mod each;
 mod event;
+pub mod logging;
 mod run;
 mod ui;
 

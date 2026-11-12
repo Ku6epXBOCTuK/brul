@@ -25,9 +25,15 @@ pub fn run_generated(
     seeds: &[(&str, Value)],
     host: Option<Box<dyn Host>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    crate::logging::init();
     if windows.is_empty() {
         return Err(std::io::Error::other("no window declarations").into());
     }
+    tracing::info!(
+        windows = windows.len(),
+        theme = theme.unwrap_or("system"),
+        "starting"
+    );
 
     let component = generated_component(names, script.as_ref(), seeds)?;
     let keys = windows
@@ -131,12 +137,13 @@ impl Runtime {
     }
 
     fn apply_theme(&mut self, theme: &str) {
+        tracing::info!(theme, "applying theme");
         self.theme = Some(theme.to_owned());
         for ui in self.uis.values_mut() {
             if let Err(error) = ui.set_theme(theme)
                 && !error.message.contains("unknown theme")
             {
-                eprintln!("{error}");
+                tracing::error!(%error, "theme change failed");
             }
         }
     }
@@ -159,10 +166,11 @@ impl Runtime {
         };
         let theme = self.theme_for(scheme);
         if let Some(ui) = self.uis.get_mut(&key) {
+            tracing::debug!(%key, %theme, "reusing window");
             if let Err(error) = ui.set_theme(&theme)
                 && !error.message.contains("unknown theme")
             {
-                eprintln!("{error}");
+                tracing::error!(%error, "theme change failed");
             }
             return Ok(WindowSpec {
                 config,
@@ -171,6 +179,7 @@ impl Runtime {
             });
         }
 
+        tracing::info!(%key, %theme, "creating window");
         let built = view(self.fixed_theme.as_deref(), &self.component)?;
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
@@ -182,7 +191,7 @@ impl Runtime {
         if let Err(error) = ui.set_theme(&theme)
             && !error.message.contains("unknown theme")
         {
-            eprintln!("{error}");
+            tracing::error!(%error, "theme change failed");
         }
         let mut commands = std::mem::take(&mut self.pending);
         commands.extend(ui.dispatch(&[]));
@@ -197,9 +206,12 @@ impl Runtime {
 
     fn dispatch(&mut self, key: WindowKey, events: &[WidgetEvent]) -> Vec<WindowCommand> {
         let Some(ui) = self.uis.get_mut(&key) else {
+            tracing::warn!(%key, "event for an unknown window");
             return Vec::new();
         };
+        tracing::debug!(%key, events = events.len(), "dispatching events");
         let commands = ui.dispatch(events);
+        tracing::debug!(%key, ?commands, "window commands");
         brul_reactive::flush();
         for ui in self.uis.values_mut() {
             ui.settle();
@@ -208,6 +220,7 @@ impl Runtime {
     }
 
     fn close(&mut self, key: WindowKey) {
+        tracing::info!(%key, "closing window");
         self.uis.remove(&key);
     }
 }

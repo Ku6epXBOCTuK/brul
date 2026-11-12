@@ -2,8 +2,13 @@ use brul_gui::{WidgetEvent, WidgetId};
 
 use crate::{ComponentHandle, HandlerEvent, Value};
 pub(crate) fn call(component: &ComponentHandle, function: &str, arguments: Vec<Value>) {
+    tracing::debug!(
+        function,
+        arguments = arguments.len(),
+        "calling script function"
+    );
     if let Err(error) = component.borrow_mut().call_function(function, arguments) {
-        eprintln!("{error}");
+        tracing::error!(%error, function, "script function failed");
     }
 }
 

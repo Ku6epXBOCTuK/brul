@@ -12,6 +12,7 @@ use brul_script::{
 use brul_syntax::markup::PropType;
 use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
+use tracing::error;
 
 use crate::{Import, Registry};
 
@@ -435,15 +436,22 @@ pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {
     }
 }
 
+fn value(component: &RefCell<Component>, expression: Expression) -> Option<Value> {
+    match expression(&mut component.borrow_mut()) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            error!(%error, "binding expression failed");
+            None
+        }
+    }
+}
+
 fn string(component: &RefCell<Component>, expression: Expression) -> Option<String> {
-    expression(&mut component.borrow_mut())
-        .ok()?
-        .as_text()
-        .map(str::to_owned)
+    value(component, expression)?.as_text().map(str::to_owned)
 }
 
 fn flag(component: &RefCell<Component>, expression: Expression) -> Option<bool> {
-    expression(&mut component.borrow_mut()).ok()?.as_flag()
+    value(component, expression)?.as_flag()
 }
 
 fn texture(
@@ -451,8 +459,7 @@ fn texture(
     expression: Expression,
     textures: &Textures,
 ) -> Option<Rc<Texture>> {
-    let value = expression(&mut component.borrow_mut()).ok()?;
-    match &value {
+    match &value(component, expression)? {
         Value::Image(path) => load_texture(Path::new(path.as_ref()), textures),
         Value::Null => Some(Rc::new(Texture::empty())),
         _ => None,
@@ -463,7 +470,7 @@ fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
     let key = match fs::canonicalize(source) {
         Ok(key) => key,
         Err(error) => {
-            eprintln!("cannot read image '{}': {error}", source.display());
+            error!(path = %source.display(), %error, "cannot read image");
             return None;
         }
     };
@@ -473,7 +480,7 @@ fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
     let bytes = match fs::read(&key) {
         Ok(bytes) => bytes,
         Err(error) => {
-            eprintln!("cannot read image '{}': {error}", source.display());
+            error!(path = %source.display(), %error, "cannot read image");
             return None;
         }
     };
@@ -484,7 +491,7 @@ fn load_texture(source: &Path, textures: &Textures) -> Option<Rc<Texture>> {
             Some(texture)
         }
         Err(error) => {
-            eprintln!("cannot decode image '{}': {error}", source.display());
+            error!(path = %source.display(), %error, "cannot decode image");
             None
         }
     }
@@ -556,7 +563,7 @@ fn offset_value(component: &RefCell<Component>, expression: Option<Expression>) 
     let Some(expression) = expression else {
         return Some(0);
     };
-    expression(&mut component.borrow_mut()).ok()?.as_pixels()
+    value(component, expression)?.as_pixels()
 }
 
 #[cfg(test)]
