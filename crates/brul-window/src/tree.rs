@@ -276,6 +276,16 @@ impl TreeApp {
     }
 
     fn handle(&mut self, surface: &dyn Surface, input: Input) -> Step {
+        if self.engine.is_some() && !self.tree.borrow().has_layout() {
+            let step = self.resize_to_surface(surface);
+            if !matches!(step, Step::Continue) {
+                return step;
+            }
+            if !self.tree.borrow().has_layout() {
+                debug!(?input, "input dropped until the tree is laid out");
+                return Step::Continue;
+            }
+        }
         match input {
             Input::Key(code) => self.press_key(surface, code),
             Input::Moved(x, y) => self.move_pointer(surface, x, y),
@@ -623,6 +633,32 @@ mod tests {
     }
     fn commands(commands: Vec<WindowCommand>) -> EventHandler {
         Box::new(move |_| commands.clone())
+    }
+
+    #[test]
+    fn an_input_after_a_rebuild_lays_the_tree_out_instead_of_failing() {
+        let mut app = tree_app(commands(Vec::new()));
+        app.engine = Some(TextEngine::new());
+        let surface = FakeSurface::new(1.0);
+        assert!(!app.tree.borrow().has_layout());
+
+        let step = app.handle(&surface, Input::Moved(1.0, 1.0));
+
+        assert!(matches!(step, Step::Continue));
+        assert!(app.tree.borrow().has_layout());
+    }
+
+    #[test]
+    fn an_input_on_a_zero_size_window_is_dropped() {
+        let mut app = tree_app(commands(Vec::new()));
+        app.engine = Some(TextEngine::new());
+        let mut surface = FakeSurface::new(1.0);
+        surface.size = (0, 0);
+
+        let step = app.handle(&surface, Input::Down(1.0, 1.0));
+
+        assert!(matches!(step, Step::Continue));
+        assert!(!app.tree.borrow().has_layout());
     }
 
     #[test]
