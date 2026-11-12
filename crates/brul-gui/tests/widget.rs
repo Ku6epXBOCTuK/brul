@@ -1,7 +1,7 @@
 use brul_gui::{
-    Color, Dimension, LayoutStyle, Padding, Paint, Size, StyleSet, StyleState, TextAlign,
-    TextEngine, TextStyle, TextStyleSet, Texture, Widget, WidgetError, WidgetEvent, WidgetId,
-    WidgetState, WidgetStyle, WidgetTree,
+    Color, Dimension, Direction, LayoutStyle, Padding, Paint, Size, StyleSet, StyleState,
+    TextAlign, TextEngine, TextStyle, TextStyleSet, Texture, Widget, WidgetError, WidgetEvent,
+    WidgetId, WidgetState, WidgetStyle, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -112,6 +112,43 @@ fn children_are_placed_inside_padding_and_spacing() {
     assert_eq!((first_node.x, first_node.y), (10, 10));
     let second_node = snapshot.node(second_id).expect("second");
     assert_eq!((second_node.x, second_node.y), (10, 35));
+}
+
+#[test]
+fn percent_width_inside_an_auto_container_fills_the_available_width() {
+    let item = Widget::column(Vec::new()).with_layout(LayoutStyle {
+        width: Dimension::Percent(100.0),
+        height: Dimension::Px(24),
+        ..LayoutStyle::default()
+    });
+    let item_id = item.id();
+    let rows = Widget::view(Direction::Column, vec![item]).with_layout(LayoutStyle {
+        spacing: 8,
+        ..LayoutStyle::default()
+    });
+    let root = Widget::column(vec![rows]).with_layout(LayoutStyle {
+        width: Dimension::Px(488),
+        height: Dimension::Px(400),
+        padding: Padding::all(12),
+        ..LayoutStyle::default()
+    });
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 488,
+            height: 400,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let item = snapshot.node(item_id).expect("item");
+
+    assert_eq!(item.width, 464);
+    assert_eq!(item.x, 12);
 }
 
 #[test]

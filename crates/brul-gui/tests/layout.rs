@@ -54,6 +54,57 @@ fn percent_width_uses_parent_content_width() {
 }
 
 #[test]
+fn percent_width_inside_auto_container_uses_available_width() {
+    let child = LayoutNode::leaf(0, 20).with_style(LayoutStyle {
+        width: Dimension::Percent(100.0),
+        ..LayoutStyle::default()
+    });
+    let wrapper = LayoutNode::column(vec![child]);
+    let root = LayoutNode::column(vec![wrapper]).with_style(LayoutStyle {
+        width: Dimension::Px(300),
+        padding: Padding::all(10),
+        ..LayoutStyle::default()
+    });
+
+    let placed = layout(
+        &root,
+        Size {
+            width: 300,
+            height: 100,
+        },
+    )
+    .expect("layout");
+
+    assert_eq!(placed.children[0].width, 280);
+    assert_eq!(placed.children[0].children[0].width, 280);
+}
+
+#[test]
+fn percent_height_inside_auto_container_uses_available_height() {
+    let child = LayoutNode::leaf(40, 0).with_style(LayoutStyle {
+        height: Dimension::Percent(50.0),
+        ..LayoutStyle::default()
+    });
+    let wrapper = LayoutNode::column(vec![child]);
+    let root = LayoutNode::column(vec![wrapper]).with_style(LayoutStyle {
+        width: Dimension::Px(100),
+        height: Dimension::Px(200),
+        ..LayoutStyle::default()
+    });
+
+    let placed = layout(
+        &root,
+        Size {
+            width: 100,
+            height: 200,
+        },
+    )
+    .expect("layout");
+
+    assert_eq!(placed.children[0].height, 100);
+}
+
+#[test]
 fn stretch_distributes_remaining_main_space() {
     let first = LayoutNode::leaf(50, 10);
     let second = LayoutNode::leaf(50, 10).with_style(LayoutStyle {

@@ -291,8 +291,12 @@ fn measure_container(
     let resolved_width = resolve(style.width, constraints.width)?;
     let resolved_height = resolve(style.height, constraints.height)?;
     let child_constraints = Constraints {
-        width: resolved_width.map(|width| width.saturating_sub(inset_x(&style))),
-        height: resolved_height.map(|height| height.saturating_sub(inset_y(&style))),
+        width: resolved_width
+            .or(constraints.width)
+            .map(|width| width.saturating_sub(inset_x(&style))),
+        height: resolved_height
+            .or(constraints.height)
+            .map(|height| height.saturating_sub(inset_y(&style))),
     };
     let mut measured_children = Vec::with_capacity(children.len());
     for child in children {
