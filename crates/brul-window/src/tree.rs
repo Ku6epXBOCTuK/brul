@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{CaretArea, Frame, Size, TextEngine, WidgetEvent, WidgetTree};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
@@ -24,6 +24,7 @@ type EventHandler = Box<dyn FnMut(&[WidgetEvent]) -> Vec<WindowCommand>>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
+const SLOW_INPUT: Duration = Duration::from_millis(50);
 
 pub(crate) struct Timer {
     next: Instant,
@@ -248,7 +249,8 @@ impl TreeApp {
             Some(_) => debug!(?input, "window input"),
             None => {}
         }
-        match input {
+        let started = Instant::now();
+        let step = match input {
             Some(Input::Exit) => self.dispatch_events(&window, vec![WidgetEvent::Close]),
             Some(Input::Redraw) => self.render(&window),
             Some(input) => {
@@ -257,7 +259,12 @@ impl TreeApp {
                 step
             }
             None => Step::Continue,
+        };
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_INPUT {
+            warn!(?elapsed, "input took too long");
         }
+        step
     }
 
     pub(crate) fn pump(&mut self, now: Instant) -> Step {
