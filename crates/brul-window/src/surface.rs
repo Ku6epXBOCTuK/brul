@@ -10,6 +10,7 @@ pub(crate) trait Surface {
     fn drag(&self);
     fn redraw(&self);
     fn set_visible(&self, visible: bool);
+    fn focus(&self);
     fn size(&self) -> (u32, u32);
     fn pre_present_notify(&self);
     fn set_always_on_top(&self, on_top: bool);
@@ -30,6 +31,10 @@ impl Surface for Arc<dyn Window> {
 
     fn set_visible(&self, visible: bool) {
         self.as_ref().set_visible(visible);
+    }
+
+    fn focus(&self) {
+        self.as_ref().focus_window();
     }
 
     fn size(&self) -> (u32, u32) {

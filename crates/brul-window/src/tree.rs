@@ -555,6 +555,7 @@ impl TreeApp {
                 WindowCommand::Drag => surface.drag(),
                 WindowCommand::Show => surface.set_visible(true),
                 WindowCommand::Hide => surface.set_visible(false),
+                WindowCommand::Focus => surface.focus(),
                 WindowCommand::Every { interval, function } => {
                     self.timers.push(Timer::new(interval, function));
                 }
@@ -671,6 +672,7 @@ mod tests {
         redraws: Cell<usize>,
         visible: Cell<Option<bool>>,
         on_top: Cell<Option<bool>>,
+        focus: Cell<usize>,
     }
 
     impl FakeSurface {
@@ -682,6 +684,7 @@ mod tests {
                 redraws: Cell::new(0),
                 visible: Cell::new(None),
                 on_top: Cell::new(None),
+                focus: Cell::new(0),
             }
         }
     }
@@ -701,6 +704,10 @@ mod tests {
 
         fn set_visible(&self, visible: bool) {
             self.visible.set(Some(visible));
+        }
+
+        fn focus(&self) {
+            self.focus.set(self.focus.get() + 1);
         }
 
         fn set_always_on_top(&self, on_top: bool) {
@@ -1013,6 +1020,16 @@ mod tests {
 
         app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
         assert_eq!(surface.on_top.get(), Some(true));
+    }
+
+    #[test]
+    fn a_focus_command_takes_the_focus() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(vec![WindowCommand::Show, WindowCommand::Focus]));
+        let widget = Widget::text("x").id();
+
+        app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(surface.focus.get(), 1);
     }
 
     #[test]

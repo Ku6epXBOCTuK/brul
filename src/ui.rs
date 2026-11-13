@@ -112,6 +112,7 @@ impl Host for CommandHost {
             "dragWindow" => WindowCommand::Drag,
             "showWindow" => WindowCommand::Show,
             "hideWindow" => WindowCommand::Hide,
+            "focusWindow" => WindowCommand::Focus,
             _ => return self.delegate(name, arguments),
         };
         if !arguments.is_empty() {
@@ -925,6 +926,7 @@ mod tests {
         assert_eq!(host.call("dragWindow", &[]), Ok(Value::Null));
         assert_eq!(host.call("showWindow", &[]), Ok(Value::Null));
         assert_eq!(host.call("hideWindow", &[]), Ok(Value::Null));
+        assert_eq!(host.call("focusWindow", &[]), Ok(Value::Null));
         assert_eq!(
             host.call("exit", &[Value::Number(1.0)]),
             Err(Error::Arity {
@@ -939,7 +941,8 @@ mod tests {
                 WindowCommand::Close,
                 WindowCommand::Drag,
                 WindowCommand::Show,
-                WindowCommand::Hide
+                WindowCommand::Hide,
+                WindowCommand::Focus
             ]
         );
     }

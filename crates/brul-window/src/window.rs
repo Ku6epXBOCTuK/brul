@@ -199,6 +199,7 @@ pub enum WindowCommand {
     Drag,
     Show,
     Hide,
+    Focus,
     Every {
         interval: Duration,
         function: String,
