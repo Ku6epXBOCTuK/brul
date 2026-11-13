@@ -299,6 +299,13 @@ impl TreeApp {
         self.window.as_ref().map(|window| window.id())
     }
 
+    pub(crate) fn apply(&mut self, commands: Vec<WindowCommand>) -> Step {
+        match self.window.clone() {
+            Some(window) => self.run_commands(&window, commands),
+            None => Step::Continue,
+        }
+    }
+
     pub(crate) fn focus(&self) {
         if let Some(window) = &self.window {
             window.focus_window();

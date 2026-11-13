@@ -32,9 +32,18 @@ where
     let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    ready(Waker::new(event_loop.create_proxy()));
+    let waker = Waker::new(event_loop.create_proxy());
+    ready(waker.clone());
     let error = Rc::new(Cell::new(None));
-    let app = Windows::new(initial, create, handler, closed, wake, Rc::clone(&error));
+    let app = Windows::new(
+        initial,
+        create,
+        handler,
+        closed,
+        waker,
+        wake,
+        Rc::clone(&error),
+    );
     let result = event_loop.run_app(app);
 
     if let Some(error) = error.take() {
@@ -48,6 +57,7 @@ struct Windows<C, H, F, W> {
     create: Rc<RefCell<C>>,
     handler: Rc<RefCell<H>>,
     closed: F,
+    waker: Waker,
     wake: W,
     error: Rc<Cell<Option<WindowError>>>,
     windows: Vec<(WindowKey, TreeApp)>,
@@ -66,6 +76,7 @@ where
         create: C,
         handler: H,
         closed: F,
+        waker: Waker,
         wake: W,
         error: Rc<Cell<Option<WindowError>>>,
     ) -> Self {
@@ -74,6 +85,7 @@ where
             create: Rc::new(RefCell::new(create)),
             handler: Rc::new(RefCell::new(handler)),
             closed,
+            waker,
             wake,
             error,
             windows: Vec::new(),
@@ -178,26 +190,41 @@ where
         }
     }
 
-    fn pump(&mut self, event_loop: &dyn ActiveEventLoop, now: Instant) {
+    fn run_steps(
+        &mut self,
+        event_loop: &dyn ActiveEventLoop,
+        mut step_of: impl FnMut(&mut TreeApp) -> Step,
+    ) -> bool {
         let mut index = 0;
         while index < self.windows.len() {
-            let step = self.windows[index].1.pump(now);
+            let step = step_of(&mut self.windows[index].1);
             match step {
                 Step::Close => {
                     self.close(event_loop, index);
                     if self.windows.is_empty() {
-                        return;
+                        return false;
                     }
                     continue;
                 }
                 Step::Open(key) => self.open(event_loop, key),
                 Step::Exit => {
                     event_loop.exit();
-                    return;
+                    return false;
                 }
                 Step::Continue => {}
             }
             index += 1;
+        }
+        true
+    }
+
+    fn pump(&mut self, event_loop: &dyn ActiveEventLoop, now: Instant) {
+        let commands = self.waker.take_commands();
+        if !commands.is_empty() && !self.run_steps(event_loop, |app| app.apply(commands.clone())) {
+            return;
+        }
+        if !self.run_steps(event_loop, |app| app.pump(now)) {
+            return;
         }
 
         let deadline = self

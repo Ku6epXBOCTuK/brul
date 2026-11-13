@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::PoisonError;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tracing::error;
@@ -89,17 +90,37 @@ pub enum ColorScheme {
 pub struct WindowKey(pub u64);
 
 /// Будит цикл событий из другого потока: [`Waker::wake`] безопасен после выхода
-/// из цикла и тогда ничего не делает.
+/// из цикла и тогда ничего не делает. Команды, поставленные через
+/// [`Waker::command`], применяются ко всем открытым окнам.
 #[derive(Clone, Debug)]
-pub struct Waker(EventLoopProxy);
+pub struct Waker {
+    proxy: EventLoopProxy,
+    commands: Arc<Mutex<Vec<WindowCommand>>>,
+}
 
 impl Waker {
     pub(crate) fn new(proxy: EventLoopProxy) -> Self {
-        Self(proxy)
+        Self {
+            proxy,
+            commands: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     pub fn wake(&self) {
-        self.0.wake_up();
+        self.proxy.wake_up();
+    }
+
+    pub fn command(&self, command: WindowCommand) {
+        self.commands
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(command);
+        self.wake();
+    }
+
+    pub(crate) fn take_commands(&self) -> Vec<WindowCommand> {
+        let mut commands = self.commands.lock().unwrap_or_else(PoisonError::into_inner);
+        std::mem::take(&mut *commands)
     }
 }
 

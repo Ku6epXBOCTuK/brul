@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use brul_gui::WidgetEvent;
-use brul_window::{ColorScheme, WindowCommand, WindowKey, WindowSpec, run_windows};
+use brul_window::{ColorScheme, Waker, WindowCommand, WindowKey, WindowSpec, run_windows};
 
 use crate::handle::{Handle, Message, take};
 use crate::ui::CommandHost;
@@ -74,6 +74,7 @@ pub fn run_generated_with(
     let handler = Rc::clone(&runtime);
     let closed = Rc::clone(&runtime);
     let waking = Rc::clone(&runtime);
+    let attaching = Rc::clone(&runtime);
     let queue = Arc::new(Mutex::new(Vec::new()));
     let waking_queue = Arc::clone(&queue);
     run_windows(
@@ -81,7 +82,10 @@ pub fn run_generated_with(
         move |key, scheme| creator.borrow_mut().create(key, scheme),
         move |key, events| handler.borrow_mut().dispatch(key, events),
         move |key| closed.borrow_mut().close(key),
-        move |waker| ready(Handle::new(queue, waker)),
+        move |waker| {
+            attaching.borrow_mut().waker = Some(waker.clone());
+            ready(Handle::new(queue, waker));
+        },
         move || {
             let messages = take(&waking_queue);
             if !messages.is_empty() {
@@ -130,6 +134,7 @@ struct Runtime {
     theme: Option<String>,
     shown: Rc<RefCell<Option<String>>>,
     pending: Vec<WindowCommand>,
+    waker: Option<Waker>,
 }
 
 impl Runtime {
@@ -150,6 +155,7 @@ impl Runtime {
             theme: None,
             shown,
             pending,
+            waker: None,
         };
         let pending = std::mem::take(&mut runtime.pending);
         runtime.pending = runtime.absorb(pending);
@@ -284,6 +290,17 @@ impl Runtime {
         brul_reactive::flush();
         for ui in self.uis.values_mut() {
             ui.settle();
+        }
+        self.drain_commands();
+    }
+
+    fn drain_commands(&mut self) {
+        let commands = std::mem::take(&mut *self.commands.borrow_mut());
+        let rest = self.absorb(commands);
+        if let Some(waker) = &self.waker {
+            for command in rest {
+                waker.command(command);
+            }
         }
     }
 }
