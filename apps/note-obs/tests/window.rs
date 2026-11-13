@@ -54,3 +54,18 @@ fn the_afk_note_is_refreshed_by_a_timer() {
     });
     assert!(scheduled, "every is not called");
 }
+
+#[test]
+fn the_afk_transitions_have_handlers() {
+    let script = generated::script().expect("script");
+
+    for name in ["afkAway", "afkBack"] {
+        assert!(
+            script
+                .functions
+                .iter()
+                .any(|function| function.name == name),
+            "{name} is not declared"
+        );
+    }
+}

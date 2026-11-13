@@ -38,6 +38,16 @@
         afkNote = afkStatus();
     }
 
+    function afkAway() {
+        showWindow();
+        focusWindow();
+        setAlwaysOnTop(true);
+    }
+
+    function afkBack() {
+        setAlwaysOnTop(draft != "");
+    }
+
     every(1000, tick);
 
     function trayShow() {

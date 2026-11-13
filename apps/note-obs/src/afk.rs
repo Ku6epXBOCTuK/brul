@@ -73,7 +73,6 @@ impl Afk {
     pub fn set(&mut self, enabled: bool, text: String) {
         self.enabled = enabled;
         self.text = text;
-        self.active = false;
         self.written = None;
     }
 
@@ -105,14 +104,14 @@ impl Afk {
         if !self.enabled || self.text.is_empty() {
             return self.back();
         }
-        let away = idle.is_some_and(|idle| Duration::from_secs(idle) >= self.after);
-        if !away {
-            return self.back();
-        }
-        let retry = self
-            .written
-            .is_some_and(|written| now.saturating_duration_since(written) >= RETRY);
-        if self.active && !retry {
+        if self.active {
+            let retry = self
+                .written
+                .is_none_or(|written| now.saturating_duration_since(written) >= RETRY);
+            if !retry {
+                return None;
+            }
+        } else if !idle.is_some_and(|idle| Duration::from_secs(idle) >= self.after) {
             return None;
         }
         self.active = true;
@@ -188,12 +187,42 @@ mod tests {
     }
 
     #[test]
-    fn coming_back_clears_the_text_once() {
+    fn coming_back_keeps_the_text_until_cleared() {
         let mut afk = afk();
         let now = Instant::now();
         afk.poll(Some(5), now);
-        assert_eq!(afk.poll(Some(0), now), Some(Action::Back));
         assert_eq!(afk.poll(Some(0), now), None);
+        assert_eq!(afk.poll(Some(0), now + Duration::from_secs(1)), None);
+    }
+
+    #[test]
+    fn switching_afk_off_clears_the_text_once() {
+        let mut afk = afk();
+        afk.poll(Some(5), Instant::now());
+        afk.set(false, String::from("away"));
+        assert_eq!(afk.poll(Some(5), Instant::now()), Some(Action::Back));
+        assert_eq!(afk.poll(Some(5), Instant::now()), None);
+    }
+
+    #[test]
+    fn a_reset_idle_keeps_the_away_text_on_screen() {
+        let mut afk = afk();
+        let now = Instant::now();
+        afk.poll(Some(5), now);
+        assert_eq!(afk.poll(Some(0), now + Duration::from_secs(1)), None);
+        assert_eq!(
+            afk.poll(Some(0), now + Duration::from_secs(16)),
+            Some(Action::Away)
+        );
+    }
+
+    #[test]
+    fn a_new_away_text_is_written_at_once() {
+        let mut afk = afk();
+        let now = Instant::now();
+        afk.poll(Some(5), now);
+        afk.set(true, String::from("back soon"));
+        assert_eq!(afk.poll(Some(5), now), Some(Action::Away));
     }
 
     #[test]

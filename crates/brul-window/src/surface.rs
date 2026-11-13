@@ -34,6 +34,7 @@ impl Surface for Arc<dyn Window> {
     }
 
     fn focus(&self) {
+        // NOTE: winit steals the foreground with a synthetic Alt via SendInput, which resets the system idle timer
         self.as_ref().focus_window();
     }
 

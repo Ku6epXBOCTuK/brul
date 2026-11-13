@@ -110,10 +110,12 @@ impl Job {
                         write(&config, &text, "в эфире", &handle);
                     }
                     Ok(Command::Clear) => {
+                        info!("note cleared");
                         afk.free();
                         write(&config, "", "idle", &handle);
                     }
                     Ok(Command::Afk(enabled)) => {
+                        info!(enabled, "afk switch");
                         config.afk_enabled = enabled;
                         afk.set(enabled, config.afk_text.clone());
                         save_at = Some(Instant::now() + SAVE_DELAY);
@@ -128,8 +130,21 @@ impl Job {
                 }
                 let idle = afk::idle_secs();
                 match afk.poll(idle, Instant::now()) {
-                    Some(Action::Away) => write(&config, afk.text(), "отошёл", &handle),
-                    Some(Action::Back) => write(&config, "", "idle", &handle),
+                    Some(Action::Away) => {
+                        info!(?idle, len = afk.text().len(), "afk away");
+                        write(&config, afk.text(), "отошёл", &handle);
+                        handle.call("afkAway");
+                    }
+                    Some(Action::Back) => {
+                        info!(
+                            ?idle,
+                            enabled = afk.enabled(),
+                            len = afk.text().len(),
+                            "afk back"
+                        );
+                        write(&config, "", "idle", &handle);
+                        handle.call("afkBack");
+                    }
                     None => {}
                 }
                 *guard(&shared) = afk.snapshot(idle);
