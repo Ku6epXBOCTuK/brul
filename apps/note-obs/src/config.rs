@@ -123,6 +123,38 @@ impl Config {
     pub fn target(&self) -> String {
         format!("{}:{}", self.host, self.port)
     }
+
+    pub fn save_afk(path: impl AsRef<Path>, enabled: bool, text: &str) -> Result<(), ConfigError> {
+        let path = path.as_ref();
+        let source = std::fs::read_to_string(path).map_err(|error| ConfigError::Read {
+            path: path.to_path_buf(),
+            message: error.to_string(),
+        })?;
+        let mut document: toml_edit::DocumentMut =
+            source
+                .parse()
+                .map_err(|error: toml_edit::TomlError| ConfigError::Parse {
+                    path: path.to_path_buf(),
+                    message: error.to_string(),
+                })?;
+        document["afk_enabled"] = toml_edit::value(enabled);
+        patch(&mut document, "afk_text", toml_edit::Value::from(text));
+        std::fs::write(path, document.to_string()).map_err(|error| ConfigError::Write {
+            path: path.to_path_buf(),
+            message: error.to_string(),
+        })
+    }
+}
+
+fn patch(document: &mut toml_edit::DocumentMut, key: &str, value: toml_edit::Value) {
+    match document.get_mut(key).and_then(|item| item.as_value_mut()) {
+        Some(slot) => {
+            let decor = slot.decor().clone();
+            *slot = value;
+            *slot.decor_mut() = decor;
+        }
+        None => document[key] = toml_edit::Item::Value(value),
+    }
 }
 
 pub fn default_path() -> PathBuf {
@@ -197,6 +229,25 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert!(matches!(error, ConfigError::Parse { .. }));
+    }
+
+    #[test]
+    fn an_afk_change_keeps_the_comments() {
+        let path = temp_file("afk");
+        std::fs::write(
+            &path,
+            "# my obs\nafk_enabled = true\nafk_text = \"away\" # keep me\nport = 4455\n",
+        )
+        .expect("write config");
+
+        Config::save_afk(&path, false, "back soon").expect("patch");
+        let source = std::fs::read_to_string(&path).expect("patched file");
+        let _ = std::fs::remove_file(&path);
+
+        assert!(source.contains("# my obs"));
+        assert!(source.contains("# keep me"));
+        assert!(source.contains("afk_enabled = false"));
+        assert!(source.contains("afk_text = \"back soon\""));
     }
 
     #[test]

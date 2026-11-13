@@ -39,6 +39,24 @@ fn clear(host: &mut AppHost) -> Result<Value, brul::Error> {
     Ok(Value::String(sent(host.worker.clear(), "очищаю").into()))
 }
 
+#[command]
+fn set_afk(host: &mut AppHost, enabled: bool) -> Result<Value, brul::Error> {
+    let done = if enabled {
+        "простой отслеживается"
+    } else {
+        "простой не отслеживается"
+    };
+    Ok(Value::String(sent(host.worker.afk(enabled), done).into()))
+}
+
+#[command]
+fn set_afk_text(host: &mut AppHost, text: String) -> Result<Value, brul::Error> {
+    if let Err(message) = host.worker.afk_text(text) {
+        error!(%message, "afk text not sent");
+    }
+    Ok(Value::Null)
+}
+
 fn sent(result: Result<(), String>, done: &str) -> String {
     result.map_or_else(|message| message, |()| String::from(done))
 }
@@ -52,7 +70,7 @@ fn presets(config: &Config) -> Value {
     Value::Array(Rc::new(items))
 }
 
-host! { AppHost: submit, clear }
+host! { AppHost: submit, clear, set_afk, set_afk_text }
 
 fn main() -> ExitCode {
     brul::logging::init();
@@ -90,13 +108,15 @@ fn run() -> Result<(), Box<dyn Error>> {
         config.scene,
         config.source
     );
-    let (worker, job) = note_obs::worker::worker(config.clone());
+    let (worker, job) = note_obs::worker::worker(config.clone(), path.clone());
     let host = AppHost { worker };
     let seeds = [
         ("draft", Value::String(String::new().into())),
         ("status", Value::String(String::from("idle").into())),
         ("hint", Value::String(hint.into())),
         ("presets", presets(&config)),
+        ("afkEnabled", Value::Bool(config.afk_enabled)),
+        ("afkText", Value::String(config.afk_text.as_str().into())),
     ];
 
     brul::run_generated_with(

@@ -17,6 +17,16 @@
         status = submit(draft);
     }
 
+    function toggleAfk() {
+        afkEnabled = !afkEnabled;
+        status = setAfk(afkEnabled);
+    }
+
+    function changeAfk(value, caret) {
+        afkText = value;
+        setAfkText(afkText);
+    }
+
     function handleKey(ev) {
         if (ev.ctrl) {
             if (ev.code == "Enter") {
@@ -69,6 +79,17 @@
                 View (secondary, on click: clearNote) {
                     Text (secondary-label) { "Clear" }
                 }
+            }
+            Row (afk-row) {
+                Row (afk-toggle, on click: toggleAfk) {
+                    View (afk-box, checked: afkEnabled) {
+                        if (afkEnabled) {
+                            Text (afk-mark) { "✓" }
+                        }
+                    }
+                    Text (afk-label) { "Отслеживать простой" }
+                }
+                TextInput (afk-input, on input: changeAfk) { afkText }
             }
             Text (hint) { hint }
         }
@@ -153,4 +174,40 @@
     }
     .secondary-label { color: theme.text; font-size: 14px; }
     .hint { color: theme.muted; font-size: 12px; }
+    .afk-row {
+        width: 100%;
+        spacing: 12px;
+        align-items: center;
+    }
+    .afk-toggle {
+        height: 28px;
+        spacing: 10px;
+        align-items: center;
+    }
+    .afk-box {
+        width: 20px;
+        height: 20px;
+        background: transparent;
+        border: 2px theme.border;
+        radius: 6px;
+        align-items: center;
+        justify-content: center;
+    }
+    .afk-box:checked {
+        background: theme.accent;
+        border-color: theme.accent;
+    }
+    .afk-mark { color: #ffffff; font-size: 12px; }
+    .afk-label { color: theme.muted; font-size: 13px; }
+    .afk-input {
+        stretch: 1;
+        height: 30px;
+        padding-left: 10px;
+        padding-right: 10px;
+        background: theme.surface;
+        border: 1px theme.border;
+        radius: 8px;
+        color: theme.text;
+        font-size: 13px;
+    }
 </style>

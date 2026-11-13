@@ -17,7 +17,14 @@ fn the_note_window_opens_centered() {
 fn the_script_seeds_are_named() {
     let names = generated::names();
 
-    for name in ["draft", "status", "hint", "presets"] {
+    for name in [
+        "draft",
+        "status",
+        "hint",
+        "presets",
+        "afkEnabled",
+        "afkText",
+    ] {
         assert!(names.contains(&name), "{name} is not declared");
     }
 }
