@@ -92,6 +92,7 @@ fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Erro
         "transparent" => config.transparent = flag(value, "transparent")?,
         "visible" => config.visible = flag(value, "visible")?,
         "centered" => config.centered = flag(value, "centered")?,
+        "scroll" => config.scroll = flag(value, "scroll")?,
         _ => {
             return Err(error_at(
                 value.position,
@@ -228,6 +229,16 @@ mod tests {
 
         assert!(!config.visible);
         assert!(WindowConfig::default().visible);
+    }
+
+    #[test]
+    fn a_window_scrolls_its_root_unless_it_says_otherwise() {
+        let (config, _) = arguments(&window(Vec::new())).expect("arguments");
+        assert!(config.scroll);
+
+        let args = vec![flag_arg("scroll", false)];
+        let (config, _) = arguments(&window(args)).expect("arguments");
+        assert!(!config.scroll);
     }
 
     #[test]

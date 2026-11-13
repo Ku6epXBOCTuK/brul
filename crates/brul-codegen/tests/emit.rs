@@ -60,6 +60,7 @@ pub fn demo_window() -> brul::WindowConfig {
         transparent: false,
         visible: true,
         centered: false,
+        scroll: true,
         position: None,
         ..brul::WindowConfig::default()
     }
@@ -177,6 +178,7 @@ pub fn styled_window() -> brul::WindowConfig {
         transparent: false,
         visible: true,
         centered: false,
+        scroll: true,
         position: None,
         ..brul::WindowConfig::default()
     }
@@ -598,7 +600,7 @@ window Demo (title: "demo", x: -40, y: 12.5) {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "        centered: false,\n        position: Some(brul::WindowPosition { x: -40.0, y: 12.5 }),"
+        "        centered: false,\n        scroll: true,\n        position: Some(brul::WindowPosition { x: -40.0, y: 12.5 }),"
     ));
 
     let centered = r#"<markup>
@@ -608,7 +610,9 @@ window Demo (title: "demo", centered: true) {
 </markup>
 "#;
     let module = emit::module(centered).expect("module");
-    assert!(module.contains("        centered: true,\n        position: None,"));
+    assert!(
+        module.contains("        centered: true,\n        scroll: true,\n        position: None,")
+    );
 }
 
 #[test]
@@ -683,7 +687,7 @@ window Demo (title: "demo", width: 488, height: 800, frameless: true, transparen
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        visible: true,\n        centered: false,\n        position: None,\n        ..brul::WindowConfig::default()\n    }\n}"
+        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        visible: true,\n        centered: false,\n        scroll: true,\n        position: None,\n        ..brul::WindowConfig::default()\n    }\n}"
     ));
 }
 
@@ -703,7 +707,7 @@ window Settings (title: "settings", width: 760, height: 560, frameless: false) {
 
     assert!(module.contains("pub fn settings_view(theme: Option<&str>"));
     assert!(module.contains(
-        "pub fn settings_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,\n        visible: true,\n        centered: false,\n        position: None,"
+        "pub fn settings_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,\n        visible: true,\n        centered: false,\n        scroll: true,\n        position: None,"
     ));
     assert!(module.contains("name: \"Picker\", config: picker_window(), view: picker_view }"));
     assert!(

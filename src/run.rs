@@ -235,6 +235,7 @@ impl Runtime {
             view,
             self.fixed_theme.clone(),
             Rc::clone(&self.commands),
+            config.scroll,
         );
         if let Err(error) = ui.set_theme(&theme)
             && !error.message.contains("unknown theme")

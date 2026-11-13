@@ -40,6 +40,7 @@ pub struct WindowConfig {
     pub visible: bool,
     pub centered: bool,
     pub position: Option<WindowPosition>,
+    pub scroll: bool,
 }
 
 impl Default for WindowConfig {
@@ -54,6 +55,7 @@ impl Default for WindowConfig {
             visible: true,
             centered: false,
             position: None,
+            scroll: true,
         }
     }
 }

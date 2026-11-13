@@ -323,6 +323,74 @@ fn the_wheel_scrolls_the_nearest_scroll_container() {
 }
 
 #[test]
+fn the_root_scrolls_when_the_window_asks_for_it() {
+    fn tall() -> (Widget, WidgetId) {
+        let first = Widget::text("one").with_layout(fixed(80, 60));
+        let first_id = first.id();
+        let stub = Widget::text("stub").with_layout(fixed(80, 60));
+        let note = Widget::text("note").with_layout(fixed(80, 60));
+        let root = Widget::column(vec![first, stub, note]).with_layout(fixed(80, 100));
+        (root, first_id)
+    }
+
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 80,
+        height: 100,
+    };
+
+    let (root, first_id) = tall();
+    let mut tree = WidgetTree::new(root);
+    tree.set_root_scroll(true);
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    assert!(tree.wheel(10, 10, 50));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
+    assert_eq!(first.expect("first").y, -50);
+
+    let (root, _) = tall();
+    let mut tree = WidgetTree::new(root);
+    tree.set_root_scroll(false);
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    assert!(!tree.wheel(10, 10, 50));
+}
+
+#[test]
+fn an_inner_scroll_container_wins_over_the_root() {
+    let inner_first = Widget::text("one").with_layout(fixed(80, 60));
+    let inner_first_id = inner_first.id();
+    let list = Widget::column(vec![
+        inner_first,
+        Widget::text("two").with_layout(fixed(80, 60)),
+    ])
+    .with_layout(fixed(80, 80))
+    .with_styles(StyleSet::new(WidgetStyle {
+        clip: true,
+        scroll: true,
+        ..WidgetStyle::default()
+    }));
+    let tail = Widget::text("tail").with_layout(fixed(80, 60));
+    let tail_id = tail.id();
+    let root = Widget::column(vec![list, tail]).with_layout(fixed(80, 100));
+    let mut tree = WidgetTree::new(root);
+    tree.set_root_scroll(true);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 80,
+        height: 100,
+    };
+
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    assert!(tree.wheel(10, 10, 40));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let first = snapshot.node(inner_first_id).cloned().expect("first");
+    let tail = snapshot.node(tail_id).cloned().expect("tail");
+    assert_eq!(first.y, -40);
+    assert_eq!(tail.y, 80);
+}
+
+#[test]
 fn a_clipped_child_is_not_hit() {
     let child = Widget::column(Vec::new()).with_layout(fixed(32, 16));
     let child_id = child.id();

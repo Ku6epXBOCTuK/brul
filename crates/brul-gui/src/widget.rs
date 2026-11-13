@@ -1037,6 +1037,7 @@ pub struct WidgetTree {
     index: HashMap<WidgetId, Slot>,
     free: Vec<Slot>,
     root: Slot,
+    root_scroll: bool,
     geometry: Option<Geometry>,
     snapshot: Option<WidgetSnapshot>,
     texts: HashMap<WidgetId, ShapedText>,
@@ -1126,6 +1127,7 @@ impl WidgetTree {
             index: HashMap::new(),
             free: Vec::new(),
             root: Slot(0),
+            root_scroll: false,
             geometry: None,
             snapshot: None,
             texts: HashMap::new(),
@@ -1276,6 +1278,10 @@ impl WidgetTree {
     fn node_mut(&mut self, id: WidgetId) -> Option<&mut Node> {
         let slot = *self.index.get(&id)?;
         Some(&mut self.nodes[slot.index()])
+    }
+
+    pub fn set_root_scroll(&mut self, scroll: bool) {
+        self.root_scroll = scroll;
     }
 
     pub fn replace_root(&mut self, root: Widget) {
@@ -2288,7 +2294,9 @@ impl WidgetTree {
         };
         let target = path.iter().rev().copied().find(|slot| {
             let node = &self.nodes[slot.index()];
-            matches!(node.data, NodeData::View { .. }) && node.styles.resolve(node.state).scroll
+            matches!(node.data, NodeData::View { .. })
+                && (node.styles.resolve(node.state).scroll
+                    || (self.root_scroll && *slot == self.root))
         });
         let Some(target) = target else {
             return false;

@@ -173,7 +173,14 @@ impl Ui {
         host: Option<Box<dyn Host>>,
     ) -> Self {
         let commands = Rc::new(RefCell::new(Vec::new()));
-        let ui = Self::assemble_with(component, built, view, theme.clone(), Rc::clone(&commands));
+        let ui = Self::assemble_with(
+            component,
+            built,
+            view,
+            theme.clone(),
+            Rc::clone(&commands),
+            true,
+        );
         ui.component.borrow_mut().set_host(CommandHost {
             commands,
             app: host,
@@ -189,6 +196,7 @@ impl Ui {
         view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
         theme: Option<String>,
         commands: Rc<RefCell<Vec<WindowCommand>>>,
+        scroll: bool,
     ) -> Self {
         let Built {
             widget,
@@ -207,6 +215,7 @@ impl Ui {
             }
         }
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
+        tree.borrow_mut().set_root_scroll(scroll);
         let window_handlers = handlers
             .iter()
             .filter(|handler| handler.widget.is_none())

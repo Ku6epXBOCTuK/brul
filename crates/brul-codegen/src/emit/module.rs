@@ -326,6 +326,7 @@ fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfi
         transparent: {},
         visible: {},
         centered: {},
+        scroll: {},
         position: {position},
         ..brul::WindowConfig::default()
     }}
@@ -337,7 +338,8 @@ fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfi
         config.frameless,
         config.transparent,
         config.visible,
-        config.centered
+        config.centered,
+        config.scroll
     );
 }
 
