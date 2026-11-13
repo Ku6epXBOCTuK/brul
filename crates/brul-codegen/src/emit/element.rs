@@ -101,7 +101,7 @@ fn content_needed(element: &Element, emit: &Emit<'_>) -> bool {
         return false;
     };
     match element.name.as_str() {
-        "Text" => !matches!(expression.kind, ExprKind::String(_)),
+        "Text" | "TextInput" => !matches!(expression.kind, ExprKind::String(_)),
         "Image" => resource(expression, emit).is_none(),
         _ => false,
     }
@@ -130,6 +130,7 @@ fn classes(element: &Element) -> Vec<&str> {
 
 enum Content {
     Text(Expr),
+    Input(Expr),
     Image(Expr),
 }
 
@@ -146,6 +147,7 @@ fn kind(
             Ok(None)
         }
         "Text" => Ok(text_widget(out, element)?.map(Content::Text)),
+        "TextInput" => Ok(input_widget(out, element)?.map(Content::Input)),
         "Image" => Ok(image_widget(out, element, emit)?.map(Content::Image)),
         name => Err(error_at(
             element.position,
@@ -192,6 +194,7 @@ fn content_binding(
     };
     let (target, expression) = match content {
         Content::Text(expression) => ("Text", expression),
+        Content::Input(expression) => ("Input", expression),
         Content::Image(expression) => ("Image", expression),
     };
     let _ = writeln!(
@@ -249,18 +252,31 @@ pub(crate) fn items(
 }
 
 fn text_widget(out: &mut String, element: &Element) -> Result<Option<Expr>, Error> {
+    field_widget(out, element, "text", "Text")
+}
+
+fn input_widget(out: &mut String, element: &Element) -> Result<Option<Expr>, Error> {
+    field_widget(out, element, "input", "TextInput")
+}
+
+fn field_widget(
+    out: &mut String,
+    element: &Element,
+    constructor: &str,
+    label: &str,
+) -> Result<Option<Expr>, Error> {
     match element.block.items.as_slice() {
         [BlockItem::Expr(expression)] => {
             let ExprKind::String(content) = &expression.kind else {
-                out.push_str("brul::gui::Widget::text(\"\")");
+                let _ = write!(out, "brul::gui::Widget::{constructor}(\"\")");
                 return Ok(Some(expression.clone()));
             };
-            let _ = write!(out, "brul::gui::Widget::text({content:?})");
+            let _ = write!(out, "brul::gui::Widget::{constructor}({content:?})");
             Ok(None)
         }
         _ => Err(error_at(
             element.position,
-            "Text requires a single content expression",
+            format!("{label} requires a single content expression"),
         )),
     }
 }

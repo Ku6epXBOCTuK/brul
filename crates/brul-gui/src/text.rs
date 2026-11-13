@@ -81,10 +81,27 @@ pub struct PlacedGlyph {
     pub slot: AtlasSlot,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CaretStop {
+    pub byte: usize,
+    pub x: i32,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextLayout {
     pub size: TextSize,
     pub glyphs: Vec<PlacedGlyph>,
+    pub carets: Vec<CaretStop>,
+}
+
+impl TextLayout {
+    pub fn caret_x(&self, byte: usize) -> i32 {
+        self.carets
+            .iter()
+            .rev()
+            .find(|stop| stop.byte <= byte)
+            .map_or(0, |stop| stop.x)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -200,6 +217,7 @@ fn place_glyphs(
     let mut width: f32 = 0.0;
     let mut height: f32 = 0.0;
     let mut glyphs = Vec::new();
+    let mut carets = Vec::new();
 
     for run in buffer.layout_runs() {
         width = width.max(run.line_w);
@@ -207,6 +225,10 @@ fn place_glyphs(
 
         for glyph in run.glyphs {
             let physical = glyph.physical((0.0, run.line_y * scale), scale);
+            carets.push(CaretStop {
+                byte: glyph.start,
+                x: physical.x,
+            });
             let Some(image) = swash.get_image(font_system, physical.cache_key) else {
                 continue;
             };
@@ -222,6 +244,10 @@ fn place_glyphs(
                 slot,
             });
         }
+        carets.push(CaretStop {
+            byte: run.text.len(),
+            x: (run.line_w * scale).round() as i32,
+        });
     }
 
     if height == 0.0 {
@@ -234,6 +260,7 @@ fn place_glyphs(
             height: ceil_pixels(height * scale),
         },
         glyphs,
+        carets,
     })
 }
 

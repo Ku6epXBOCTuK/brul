@@ -66,6 +66,8 @@ pub enum HandlerEvent {
     Key,
     Focus,
     Blur,
+    Input,
+    Submit,
 }
 
 impl HandlerEvent {
@@ -80,6 +82,8 @@ impl HandlerEvent {
             Self::Key => "key",
             Self::Focus => "focus",
             Self::Blur => "blur",
+            Self::Input => "input",
+            Self::Submit => "submit",
         }
     }
 
@@ -94,6 +98,8 @@ impl HandlerEvent {
             "key" => Some(Self::Key),
             "focus" => Some(Self::Focus),
             "blur" => Some(Self::Blur),
+            "input" => Some(Self::Input),
+            "submit" => Some(Self::Submit),
             _ => None,
         }
     }
@@ -129,6 +135,7 @@ pub type ClassTable = fn(&str) -> Option<Class>;
 #[derive(Debug, Clone)]
 pub enum BindingTarget {
     Text(Expression),
+    Input(Expression),
     Image(Expression),
     Checked(Expression),
     Selected(Expression),
@@ -452,6 +459,7 @@ impl Bindings {
 
 pub enum Write {
     Text(Option<String>),
+    Input(Option<String>),
     Image(Option<Image>),
     Checked(Option<bool>),
     Selected(Option<bool>),
@@ -471,6 +479,7 @@ pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
     let component = &binding.component;
     let write = match &binding.target {
         BindingTarget::Text(expression) => Write::Text(string(component, *expression)),
+        BindingTarget::Input(expression) => Write::Input(string(component, *expression)),
         BindingTarget::Image(expression) => Write::Image(texture(component, *expression, textures)),
         BindingTarget::Checked(expression) => Write::Checked(flag(component, *expression)),
         BindingTarget::Selected(expression) => Write::Selected(flag(component, *expression)),
@@ -490,6 +499,7 @@ pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
 pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {
     match write {
         Write::Text(value) => set_text(tree, widget, value),
+        Write::Input(value) => set_input(tree, widget, value),
         Write::Image(value) => set_texture(tree, widget, value),
         Write::Checked(value) => set_flag(tree, widget, value, WidgetTree::set_checked),
         Write::Selected(value) => set_flag(tree, widget, value, WidgetTree::set_selected),
@@ -607,6 +617,12 @@ pub fn set_texture(tree: &mut WidgetTree, widget: WidgetId, value: Option<Image>
 pub fn set_text(tree: &mut WidgetTree, widget: WidgetId, value: Option<String>) {
     if let Some(value) = value {
         tree.set_text(widget, value);
+    }
+}
+
+pub fn set_input(tree: &mut WidgetTree, widget: WidgetId, value: Option<String>) {
+    if let Some(value) = value {
+        tree.set_input_text(widget, value);
     }
 }
 
@@ -898,6 +914,8 @@ mod tests {
             HandlerEvent::Key,
             HandlerEvent::Focus,
             HandlerEvent::Blur,
+            HandlerEvent::Input,
+            HandlerEvent::Submit,
         ];
         for event in events {
             assert_eq!(HandlerEvent::parse(event.name()), Some(event));

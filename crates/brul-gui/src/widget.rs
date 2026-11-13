@@ -24,6 +24,7 @@ pub enum WidgetKind {
     View,
     Text,
     Image,
+    Input,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -633,6 +634,11 @@ enum WidgetData {
         content: String,
         styles: Box<TextStyleSet>,
     },
+    Input {
+        value: String,
+        styles: Box<TextStyleSet>,
+        caret: usize,
+    },
     Image(Image),
 }
 
@@ -706,6 +712,21 @@ impl Widget {
         Self::new(WidgetData::Image(image.into()))
     }
 
+    pub fn input(value: impl Into<String>) -> Self {
+        Self::input_with_styles(value, TextStyleSet::default())
+    }
+
+    pub fn input_with_styles(value: impl Into<String>, styles: TextStyleSet) -> Self {
+        let value = value.into();
+        let caret = value.len();
+        Self::new(WidgetData::Input {
+            value,
+            styles: Box::new(styles),
+            caret,
+        })
+        .focusable(true)
+    }
+
     fn new(data: WidgetData) -> Self {
         Self {
             id: WidgetId(NEXT_WIDGET_ID.fetch_add(1, Ordering::Relaxed)),
@@ -727,6 +748,7 @@ impl Widget {
         match &self.data {
             WidgetData::View { .. } => WidgetKind::View,
             WidgetData::Text { .. } => WidgetKind::Text,
+            WidgetData::Input { .. } => WidgetKind::Input,
             WidgetData::Image(_) => WidgetKind::Image,
         }
     }
@@ -742,11 +764,14 @@ impl Widget {
     }
 
     pub fn with_text_styles(mut self, styles: TextStyleSet) -> Self {
-        if let WidgetData::Text {
-            styles: current, ..
-        } = &mut self.data
-        {
-            **current = styles;
+        match &mut self.data {
+            WidgetData::Text {
+                styles: current, ..
+            }
+            | WidgetData::Input {
+                styles: current, ..
+            } => **current = styles,
+            WidgetData::View { .. } | WidgetData::Image(_) => {}
         }
         self
     }
@@ -815,6 +840,7 @@ pub struct WidgetSnapshotNode {
     pub state: WidgetState,
     pub style: WidgetStyle,
     pub text: Option<TextLayout>,
+    pub caret: Option<i32>,
     pub image: Option<Image>,
     pub clips: Vec<ClipRect>,
 }
@@ -831,6 +857,8 @@ pub enum WidgetEvent {
     Timer(String),
     Focus(WidgetId),
     Blur(WidgetId),
+    Input(WidgetId, String, usize),
+    Submit(WidgetId),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -918,6 +946,11 @@ enum NodeData {
         content: String,
         styles: Box<TextStyleSet>,
     },
+    Input {
+        value: String,
+        styles: Box<TextStyleSet>,
+        caret: usize,
+    },
     Image(Image),
 }
 
@@ -926,6 +959,7 @@ impl Node {
         match &self.data {
             NodeData::View { .. } => WidgetKind::View,
             NodeData::Text { .. } => WidgetKind::Text,
+            NodeData::Input { .. } => WidgetKind::Input,
             NodeData::Image(_) => WidgetKind::Image,
         }
     }
@@ -1079,6 +1113,18 @@ impl WidgetTree {
             WidgetData::Text { content, styles } => {
                 (NodeData::Text { content, styles }, Vec::new())
             }
+            WidgetData::Input {
+                value,
+                styles,
+                caret,
+            } => (
+                NodeData::Input {
+                    value,
+                    styles,
+                    caret,
+                },
+                Vec::new(),
+            ),
             WidgetData::Image(image) => (NodeData::Image(image), Vec::new()),
         };
         let mut slots = Vec::with_capacity(children.len());
@@ -1131,6 +1177,15 @@ impl WidgetTree {
             NodeData::Text { content, styles } => WidgetData::Text {
                 content: std::mem::take(content),
                 styles: Box::new(std::mem::take(&mut **styles)),
+            },
+            NodeData::Input {
+                value,
+                styles,
+                caret,
+            } => WidgetData::Input {
+                value: std::mem::take(value),
+                styles: Box::new(std::mem::take(&mut **styles)),
+                caret: *caret,
             },
             NodeData::Image(image) => WidgetData::Image(image.clone()),
         };
@@ -1363,7 +1418,8 @@ impl WidgetTree {
     pub fn snapshot(&mut self) -> Result<&WidgetSnapshot, WidgetError> {
         if self.snapshot.is_none() {
             let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
-            let snapshot = build_snapshot(&self.nodes, self.root, geometry, &self.texts);
+            let snapshot =
+                build_snapshot(&self.nodes, self.root, geometry, &self.texts, self.focused);
             self.snapshot = Some(snapshot);
         }
         Ok(self.snapshot.as_ref().expect("snapshot built"))
@@ -1541,9 +1597,13 @@ impl WidgetTree {
     }
 
     fn invalidate_layout(&mut self) {
+        self.invalidate_snapshot();
+        self.layout_dirty = true;
+    }
+
+    fn invalidate_snapshot(&mut self) {
         self.snapshot = None;
         self.full_dirty = true;
-        self.layout_dirty = true;
         self.dirty.clear();
     }
 
@@ -1572,11 +1632,133 @@ impl WidgetTree {
         self.focused.map(|slot| self.nodes[slot.index()].id)
     }
 
+    fn place_caret(&mut self, slot: Slot, x: i32) {
+        let Some(geometry) = self.geometry.as_ref() else {
+            return;
+        };
+        let node = &self.nodes[slot.index()];
+        let NodeData::Input { caret, .. } = &node.data else {
+            return;
+        };
+        let Some(text) = self.texts.get(&node.id) else {
+            return;
+        };
+        let layout_style = node.layout_style();
+        let boxed = &geometry.boxes[slot.index()];
+        let origin = boxed.x.saturating_add(
+            layout_style
+                .border_width
+                .saturating_add(layout_style.padding.left) as i32,
+        );
+        let offset = x.saturating_sub(origin);
+        let byte = text
+            .variants
+            .base
+            .carets
+            .iter()
+            .min_by_key(|stop| (stop.x - offset).abs())
+            .map_or(0, |stop| stop.byte);
+        let caret = *caret;
+        if let NodeData::Input { caret, .. } = &mut self.nodes[slot.index()].data {
+            *caret = byte;
+        }
+        if caret != byte {
+            self.invalidate_snapshot();
+        }
+    }
+
     pub fn press_key(&mut self, code: &str) -> Vec<WidgetEvent> {
         if code == "Tab" {
             return self.focus_next();
         }
-        vec![WidgetEvent::Key(code.to_owned())]
+        let Some(slot) = self
+            .focused
+            .filter(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
+        else {
+            return vec![WidgetEvent::Key(code.to_owned())];
+        };
+        match code {
+            "Escape" | "ArrowUp" | "ArrowDown" => vec![WidgetEvent::Key(code.to_owned())],
+            "Enter" => vec![WidgetEvent::Submit(self.nodes[slot.index()].id)],
+            "ArrowLeft" | "ArrowRight" | "Home" | "End" => {
+                self.edit_input(slot, code);
+                Vec::new()
+            }
+            text => {
+                if !self.edit_input(slot, text) {
+                    return Vec::new();
+                }
+                let node = &self.nodes[slot.index()];
+                let NodeData::Input { value, caret, .. } = &node.data else {
+                    return Vec::new();
+                };
+                vec![WidgetEvent::Input(node.id, value.clone(), *caret)]
+            }
+        }
+    }
+
+    fn edit_input(&mut self, slot: Slot, code: &str) -> bool {
+        let NodeData::Input { value, caret, .. } = &mut self.nodes[slot.index()].data else {
+            return false;
+        };
+        let previous = value.clone();
+        match code {
+            "Backspace" => {
+                if let Some((index, _)) = value[..*caret].char_indices().next_back() {
+                    value.remove(index);
+                    *caret = index;
+                }
+            }
+            "Delete" => {
+                if *caret < value.len() {
+                    value.remove(*caret);
+                }
+            }
+            "ArrowLeft" => {
+                *caret = value[..*caret]
+                    .char_indices()
+                    .next_back()
+                    .map_or(0, |(index, _)| index);
+            }
+            "ArrowRight" => {
+                if let Some(character) = value[*caret..].chars().next() {
+                    *caret += character.len_utf8();
+                }
+            }
+            "Home" => *caret = 0,
+            "End" => *caret = value.len(),
+            text => {
+                if text.is_empty() || text.chars().any(char::is_control) {
+                    return false;
+                }
+                value.insert_str(*caret, text);
+                *caret += text.len();
+            }
+        }
+        let changed = *value != previous;
+        self.stale.insert(slot);
+        self.invalidate_layout();
+        changed
+    }
+
+    pub fn set_input_text(&mut self, id: WidgetId, text: String) -> bool {
+        let Some(&slot) = self.index.get(&id) else {
+            return false;
+        };
+        let NodeData::Input { value, caret, .. } = &mut self.nodes[slot.index()].data else {
+            return false;
+        };
+        if *value == text {
+            return false;
+        }
+        *value = text;
+        *caret = (*caret).min(value.len());
+        while !value.is_char_boundary(*caret) {
+            *caret -= 1;
+        }
+        self.stale.insert(slot);
+        self.invalidate_layout();
+        true
     }
 
     fn focus_next(&mut self) -> Vec<WidgetEvent> {
@@ -1620,6 +1802,7 @@ impl WidgetTree {
             events.push(WidgetEvent::Focus(self.nodes[next.index()].id));
         }
         self.focused = slot;
+        self.invalidate_snapshot();
         events
     }
 
@@ -1694,6 +1877,9 @@ impl WidgetTree {
             .copied()
             .find(|slot| self.nodes[slot.index()].focusable);
         let mut events = self.focus_events(focus);
+        if let Some(slot) = focus {
+            self.place_caret(slot, x);
+        }
         for &slot in path.iter().rev() {
             let node = &mut self.nodes[slot.index()];
             node.state.pressed = true;
@@ -1934,51 +2120,10 @@ impl Pass<'_> {
                 }
             }
             NodeData::Text { content, styles } => {
-                let mut styles = (**styles).clone();
-                if let Some(class) = &node.class {
-                    styles.apply_layers(&class.text);
-                }
-                let max_width = content_width.map(|width| width as f32 / self.scale);
-                let cached = self.texts.get(&node.id).filter(|cached| {
-                    cached.width == content_width
-                        && cached.scale == self.scale
-                        && cached.content == *content
-                });
-                if cached.is_none() {
-                    let mut variants = TextVariants::new(self.engine.layout(
-                        content,
-                        styles.base(),
-                        max_width,
-                        self.scale,
-                    )?);
-                    for state in StyleState::ALL {
-                        let style = styles.resolve(state.flags());
-                        if style == *styles.base() {
-                            continue;
-                        }
-                        variants = variants.with(
-                            state,
-                            self.engine.layout(content, &style, max_width, self.scale)?,
-                        );
-                    }
-                    self.texts.insert(
-                        node.id,
-                        ShapedText {
-                            content: content.clone(),
-                            width: content_width,
-                            scale: self.scale,
-                            variants,
-                        },
-                    );
-                }
-                let size = self
-                    .texts
-                    .get(&node.id)
-                    .expect("shaped text cached")
-                    .variants
-                    .base
-                    .size;
-                LayoutNode::leaf(size.width, size.height)
+                self.build_text(node, content, styles, content_width)?
+            }
+            NodeData::Input { value, styles, .. } => {
+                self.build_text(node, value, styles, content_width)?
             }
             NodeData::Image(image) => LayoutNode::leaf(image.width(), image.height()),
         };
@@ -1988,6 +2133,58 @@ impl Pass<'_> {
             Some(offset) => layout_node.with_offset(offset.x, offset.y),
             None => layout_node,
         })
+    }
+
+    fn build_text(
+        &mut self,
+        node: &Node,
+        content: &str,
+        styles: &TextStyleSet,
+        content_width: Option<u32>,
+    ) -> Result<LayoutNode, WidgetError> {
+        let mut styles = styles.clone();
+        if let Some(class) = &node.class {
+            styles.apply_layers(&class.text);
+        }
+        let max_width = content_width.map(|width| width as f32 / self.scale);
+        let cached = self.texts.get(&node.id).filter(|cached| {
+            cached.width == content_width && cached.scale == self.scale && cached.content == content
+        });
+        if cached.is_none() {
+            let mut variants = TextVariants::new(self.engine.layout(
+                content,
+                styles.base(),
+                max_width,
+                self.scale,
+            )?);
+            for state in StyleState::ALL {
+                let style = styles.resolve(state.flags());
+                if style == *styles.base() {
+                    continue;
+                }
+                variants = variants.with(
+                    state,
+                    self.engine.layout(content, &style, max_width, self.scale)?,
+                );
+            }
+            self.texts.insert(
+                node.id,
+                ShapedText {
+                    content: content.to_owned(),
+                    width: content_width,
+                    scale: self.scale,
+                    variants,
+                },
+            );
+        }
+        let size = self
+            .texts
+            .get(&node.id)
+            .expect("shaped text cached")
+            .variants
+            .base
+            .size;
+        Ok(LayoutNode::leaf(size.width, size.height))
     }
 }
 
@@ -2028,9 +2225,10 @@ fn build_snapshot(
     root: Slot,
     geometry: &Geometry,
     texts: &HashMap<WidgetId, ShapedText>,
+    focused: Option<Slot>,
 ) -> WidgetSnapshot {
     let mut nodes = Vec::new();
-    snapshot_widget(tree, root, &geometry.boxes, texts, &[], &mut nodes);
+    snapshot_widget(tree, root, &geometry.boxes, texts, &[], focused, &mut nodes);
     let root_box = &geometry.boxes[root.index()];
     WidgetSnapshot {
         size: Size {
@@ -2047,6 +2245,7 @@ fn snapshot_widget(
     boxes: &[LayoutBox],
     texts: &HashMap<WidgetId, ShapedText>,
     clips: &[ClipRect],
+    focused: Option<Slot>,
     nodes: &mut Vec<WidgetSnapshotNode>,
 ) {
     let node = &tree[slot.index()];
@@ -2074,9 +2273,15 @@ fn snapshot_widget(
         .height
         .saturating_sub(layout::inset_y(&layout_style));
     let text = match &node.data {
-        NodeData::Text { .. } => texts
+        NodeData::Text { .. } | NodeData::Input { .. } => texts
             .get(&node.id)
             .map(|cached| cached.variants.resolve(node.state)),
+        _ => None,
+    };
+    let caret = match &node.data {
+        NodeData::Input { caret, .. } if focused == Some(slot) => texts
+            .get(&node.id)
+            .map(|cached| cached.variants.base.caret_x(*caret)),
         _ => None,
     };
     let image = match &node.data {
@@ -2099,6 +2304,7 @@ fn snapshot_widget(
         state: node.state,
         style,
         text,
+        caret,
         image,
         clips: clips.to_vec(),
     });
@@ -2114,7 +2320,7 @@ fn snapshot_widget(
         ));
     }
     for &child in &node.children {
-        snapshot_widget(tree, child, boxes, texts, &child_clips, nodes);
+        snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
     }
 }
 

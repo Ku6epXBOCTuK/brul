@@ -364,6 +364,26 @@ window Demo (title: "demo") {
 }
 
 #[test]
+fn emits_a_text_input_with_its_binding_and_handlers() {
+    let source = r#"<script>
+    function edited() { }
+    function submitted() { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    TextInput (field, on input: edited, on submit: submitted) { draft }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains("brul::gui::Widget::input(\"\")"));
+    assert!(module.contains("brul::BindingTarget::Input("));
+    assert!(module.contains(r#"HandlerEvent::Input, "edited""#));
+    assert!(module.contains(r#"HandlerEvent::Submit, "submitted""#));
+}
+
+#[test]
 fn rejects_a_focusable_that_is_not_a_literal() {
     let source = r#"<markup>
 window Demo (title: "demo") {

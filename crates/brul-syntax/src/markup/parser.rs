@@ -94,7 +94,7 @@ impl Cursor<'_> {
         } else {
             Vec::new()
         };
-        let block = if name == "Text" || name == "Image" {
+        let block = if name == "Text" || name == "TextInput" || name == "Image" {
             self.leaf_block(&name)?
         } else {
             self.block()?

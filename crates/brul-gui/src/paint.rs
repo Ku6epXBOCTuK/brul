@@ -97,6 +97,14 @@ impl Frame {
                     self.paint_image(node, image, opacity, clip);
                 }
             }
+            crate::WidgetKind::Input => {
+                if let Some(text) = &node.text {
+                    self.paint_text(node, text, atlas, opacity, clip);
+                }
+                if let Some(caret) = node.caret {
+                    self.paint_caret(node, caret, opacity, clip);
+                }
+            }
             crate::WidgetKind::View => {}
         }
     }
@@ -195,6 +203,23 @@ impl Frame {
                     self.blend_rgba(x, y, Color::rgba(red, green, blue, alpha), opacity);
                 }
             }
+        }
+    }
+
+    fn paint_caret(&mut self, node: &WidgetSnapshotNode, x: i32, opacity: f32, clip: Clip) {
+        let Some(clip) = node_clip(node, clip) else {
+            return;
+        };
+        let color = node.style.text;
+        let origin_x = node.content_x.saturating_add(x);
+        let bottom = node.content_y.saturating_add(node.content_height as i32);
+        for y in node.content_y..bottom {
+            if !clip.contains(i64::from(origin_x), i64::from(y))
+                || !visible(&node.clips, origin_x, y)
+            {
+                continue;
+            }
+            self.blend_rgba(origin_x, y, color, opacity);
         }
     }
 
