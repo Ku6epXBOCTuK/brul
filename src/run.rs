@@ -281,7 +281,11 @@ impl Runtime {
                     }
                 }
                 Message::Call(function) => {
-                    if let Err(error) = self.component.borrow_mut().call(&function, &[]) {
+                    if let Err(error) = self
+                        .component
+                        .borrow_mut()
+                        .call_function(&function, Vec::new())
+                    {
                         tracing::error!(%error, %function, "handle call failed");
                     }
                 }
@@ -561,6 +565,57 @@ mod tests {
 
         let tree = &mut runtime.uis[&WindowKey(0)].tree.borrow_mut();
         assert!(!tree.set_text(id, "live".to_owned()));
+    }
+
+    #[test]
+    fn a_handle_call_runs_the_script_function() {
+        let seeds = [("name", Value::String("".into()))];
+        let program = script::Program {
+            functions: vec![script::Function {
+                name: "mark".to_owned(),
+                params: Vec::new(),
+                body: vec![script::Statement::Expr(Expr::new(
+                    ExprKind::Assign {
+                        target: Box::new(Expr::new(
+                            ExprKind::Ident("name".to_owned()),
+                            Position::default(),
+                        )),
+                        op: brul_syntax::ast::AssignOp::Set,
+                        value: Box::new(Expr::new(
+                            ExprKind::String("called".to_owned()),
+                            Position::default(),
+                        )),
+                    },
+                    Position::default(),
+                ))],
+            }],
+            statements: Vec::new(),
+        };
+        let component = generated_component(NAMES, Some(&program), &seeds).expect("component");
+        let defs = vec![WindowDef {
+            name: "Only",
+            config: WindowConfig::default(),
+            view: seeded_view,
+        }];
+        let mut runtime = Runtime::new(
+            defs,
+            component,
+            Rc::new(RefCell::new(Vec::new())),
+            None,
+            Rc::new(RefCell::new(None)),
+            Vec::new(),
+        );
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("window");
+        let id = LAST_ID
+            .with(|slot| slot.borrow_mut().take())
+            .expect("widget");
+
+        runtime.apply(vec![Message::Call("mark".to_owned())]);
+
+        let tree = &mut runtime.uis[&WindowKey(0)].tree.borrow_mut();
+        assert!(!tree.set_text(id, "called".to_owned()));
     }
 
     #[test]
