@@ -42,6 +42,8 @@ pub(crate) fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, H
         WidgetEvent::Key(_) => Some((None, HandlerEvent::Key)),
         WidgetEvent::Drag(_) => None,
         WidgetEvent::Timer(_) => None,
+        WidgetEvent::Copy(_) => None,
+        WidgetEvent::Paste => None,
     }
 }
 

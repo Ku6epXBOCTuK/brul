@@ -884,6 +884,8 @@ pub enum WidgetEvent {
     Blur(WidgetId),
     Input(WidgetId, String, usize),
     Submit(WidgetId),
+    Copy(String),
+    Paste,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1785,12 +1787,16 @@ impl WidgetTree {
                 self.input_event(slot, changed)
             }
             "Enter" if !multiline => vec![WidgetEvent::Submit(self.nodes[slot.index()].id)],
-            _ if self.modifiers.control => {
-                if code.eq_ignore_ascii_case("a") {
+            _ if self.modifiers.control => match code.to_ascii_uppercase().as_str() {
+                "A" => {
                     self.select_all(slot);
+                    Vec::new()
                 }
-                Vec::new()
-            }
+                "C" => self.copy_input(slot),
+                "X" => self.cut_input(slot),
+                "V" => vec![WidgetEvent::Paste],
+                _ => Vec::new(),
+            },
             text => {
                 let text = if text == "Enter" { "\n" } else { text };
                 let changed = self.insert_input(slot, text);
@@ -1836,6 +1842,54 @@ impl WidgetTree {
         *caret = value.len();
         self.stale.insert(slot);
         self.invalidate_snapshot();
+    }
+
+    fn selected_text(&self, slot: Slot) -> Option<String> {
+        let (start, end) = self.selection(slot)?;
+        let NodeData::Input { value, .. } = &self.nodes[slot.index()].data else {
+            return None;
+        };
+        value.get(start..end).map(str::to_owned)
+    }
+
+    fn copy_input(&self, slot: Slot) -> Vec<WidgetEvent> {
+        self.selected_text(slot)
+            .map_or_else(Vec::new, |text| vec![WidgetEvent::Copy(text)])
+    }
+
+    fn cut_input(&mut self, slot: Slot) -> Vec<WidgetEvent> {
+        let Some(text) = self.selected_text(slot) else {
+            return Vec::new();
+        };
+        let changed = self.delete_input(slot, true);
+        let mut events = self.input_event(slot, changed);
+        events.push(WidgetEvent::Copy(text));
+        events
+    }
+
+    pub fn paste_text(&mut self, text: &str) -> Vec<WidgetEvent> {
+        let Some(slot) = self
+            .focused
+            .filter(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
+        else {
+            return Vec::new();
+        };
+        let multiline = matches!(
+            self.nodes[slot.index()].data,
+            NodeData::Input {
+                multiline: true,
+                ..
+            }
+        );
+        let text = if multiline {
+            text.replace("\r\n", "\n").replace('\r', "\n")
+        } else {
+            text.chars()
+                .filter(|character| *character != '\r' && *character != '\n')
+                .collect()
+        };
+        let changed = self.insert_input(slot, &text);
+        self.input_event(slot, changed)
     }
 
     fn insert_input(&mut self, slot: Slot, text: &str) -> bool {

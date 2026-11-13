@@ -5,6 +5,7 @@ use std::time::Instant;
 use brul_gui::WidgetEvent;
 use tracing::{debug, error, info, trace};
 use winit::application::ApplicationHandler;
+use winit::data_transfer::{DataTransferSendBuilder, TypeHint};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::WindowId;
@@ -137,6 +138,28 @@ where
         }
     }
 
+    fn clipboard(&mut self, event_loop: &dyn ActiveEventLoop, index: usize) {
+        if let Some(text) = self.windows[index].1.take_clipboard() {
+            let data = DataTransferSendBuilder::new(text)
+                .with_type(TypeHint::Plaintext, |text: &String, _| Some(text.clone()))
+                .build();
+            if let Err(error) = event_loop.set_clipboard(data) {
+                tracing::warn!(%error, "clipboard write failed");
+            }
+        }
+        if self.windows[index].1.take_paste() {
+            match event_loop.clipboard() {
+                Ok(Some(id)) => {
+                    if let Err(error) = event_loop.fetch_data_transfer(id, &TypeHint::Plaintext) {
+                        tracing::warn!(%error, "clipboard read failed");
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => tracing::warn!(%error, "clipboard unavailable"),
+            }
+        }
+    }
+
     fn apply(&mut self, event_loop: &dyn ActiveEventLoop, index: usize, step: Step) {
         match step {
             Step::Continue => {}
@@ -184,6 +207,7 @@ where
         }
 
         let step = self.windows[index].1.event(window_id, &event);
+        self.clipboard(event_loop, index);
         self.apply(event_loop, index, step);
     }
 

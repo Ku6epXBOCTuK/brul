@@ -10,6 +10,7 @@ pub(crate) enum Input {
     Exit,
     Key(String),
     Modifiers(KeyModifiers),
+    Paste(String),
     Moved(f64, f64),
     Left,
     Down(f64, f64),
@@ -40,7 +41,17 @@ pub(crate) fn key_code(key: &Key) -> Option<String> {
             .iter()
             .find(|(value, _)| value == named)
             .map(|(_, code)| (*code).to_owned()),
-        Key::Character(text) => Some(text.to_string()),
+        Key::Character(text) => {
+            let mut characters = text.chars();
+            let (Some(character), None) = (characters.next(), characters.next()) else {
+                return Some(text.to_string());
+            };
+            if ('\u{1}'..='\u{1a}').contains(&character) {
+                let letter = b'A' + (character as u8 - 1);
+                return Some(char::from(letter).to_string());
+            }
+            Some(text.to_string())
+        }
         _ => None,
     }
 }
@@ -95,6 +106,11 @@ pub(crate) fn event_input(event: &WindowEvent) -> Option<Input> {
             let code = key_code(&event.logical_key)?;
             Some(Input::Key(code))
         }
+        WindowEvent::DataTransferReceived { value, .. } => value
+            .try_as_string()
+            .ok()
+            .filter(|text| !text.is_empty())
+            .map(Input::Paste),
         WindowEvent::PointerMoved { position, .. } => Some(Input::Moved(position.x, position.y)),
         WindowEvent::PointerLeft { .. } => Some(Input::Left),
         WindowEvent::MouseWheel { delta, .. } => Some(Input::Wheel(match delta {

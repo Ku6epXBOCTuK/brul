@@ -401,3 +401,84 @@ fn shift_tab_moves_the_focus_back() {
         vec![WidgetEvent::Blur(second_id), WidgetEvent::Focus(first_id)]
     );
 }
+
+fn control() -> KeyModifiers {
+    KeyModifiers {
+        control: true,
+        ..KeyModifiers::default()
+    }
+}
+
+fn selected(tree: &mut WidgetTree) {
+    tree.set_modifiers(shift());
+    tree.press_key("Home");
+    tree.set_modifiers(control());
+}
+
+#[test]
+fn control_c_copies_the_selection() {
+    let (mut tree, _) = focused_field("abc");
+    selected(&mut tree);
+
+    assert_eq!(
+        tree.press_key("c"),
+        vec![WidgetEvent::Copy("abc".to_owned())]
+    );
+}
+
+#[test]
+fn control_c_without_a_selection_copies_nothing() {
+    let (mut tree, _) = focused_field("abc");
+    tree.set_modifiers(control());
+
+    assert_eq!(tree.press_key("c"), Vec::new());
+}
+
+#[test]
+fn control_x_cuts_the_selection() {
+    let (mut tree, id) = focused_field("abc");
+    selected(&mut tree);
+
+    assert_eq!(
+        tree.press_key("x"),
+        vec![
+            WidgetEvent::Input(id, String::new(), 0),
+            WidgetEvent::Copy("abc".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn control_v_asks_for_the_clipboard() {
+    let (mut tree, _) = focused_field("abc");
+    tree.set_modifiers(control());
+
+    assert_eq!(tree.press_key("v"), vec![WidgetEvent::Paste]);
+}
+
+#[test]
+fn pasting_replaces_the_selection_and_strips_newlines() {
+    let (mut tree, id) = focused_field("abc");
+    tree.set_modifiers(control());
+    tree.press_key("a");
+    tree.set_modifiers(KeyModifiers::default());
+
+    assert_eq!(
+        tree.paste_text("x\r\ny"),
+        vec![WidgetEvent::Input(id, "xy".to_owned(), 2)]
+    );
+}
+
+#[test]
+fn a_multiline_paste_keeps_its_lines() {
+    let input = multiline("a");
+    let id = input.id();
+    let mut tree = focused(laid_out(
+        Widget::column(vec![input]).with_layout(fixed(100, 40)),
+    ));
+
+    assert_eq!(
+        tree.paste_text("b\r\nc"),
+        vec![WidgetEvent::Input(id, "ab\nc".to_owned(), 4)]
+    );
+}

@@ -94,6 +94,8 @@ pub(crate) struct TreeApp {
     cursor: (i32, i32),
     tick: Instant,
     next_frame: Instant,
+    clipboard: Option<String>,
+    paste: bool,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -141,6 +143,8 @@ pub(crate) fn tree_app(
         cursor: (0, 0),
         tick: Instant::now(),
         next_frame: Instant::now(),
+        clipboard: None,
+        paste: false,
     };
     for command in initial {
         if let WindowCommand::Every { interval, function } = command {
@@ -292,6 +296,10 @@ impl TreeApp {
                 self.tree.borrow_mut().set_modifiers(modifiers);
                 Step::Continue
             }
+            Input::Paste(text) => {
+                let events = self.tree.borrow_mut().paste_text(&text);
+                self.dispatch_events(surface, events)
+            }
             Input::Moved(x, y) => self.move_pointer(surface, x, y),
             Input::Left => self.leave_pointer(surface),
             Input::Down(x, y) => self.press_pointer(surface, x, y),
@@ -307,6 +315,14 @@ impl TreeApp {
             Input::Theme(scheme) => self.change_theme(surface, scheme),
             _ => self.resize_to_surface(surface),
         }
+    }
+
+    pub(crate) fn take_clipboard(&mut self) -> Option<String> {
+        self.clipboard.take()
+    }
+
+    pub(crate) fn take_paste(&mut self) -> bool {
+        std::mem::take(&mut self.paste)
     }
 
     fn press_key(&mut self, surface: &dyn Surface, code: String) -> Step {
@@ -409,6 +425,15 @@ impl TreeApp {
             .any(|event| matches!(event, WidgetEvent::Drag(_)));
         if drag {
             surface.drag();
+        }
+        for event in &events {
+            match event {
+                WidgetEvent::Copy(text) => {
+                    self.clipboard = (!text.is_empty()).then(|| text.clone());
+                }
+                WidgetEvent::Paste => self.paste = true,
+                _ => {}
+            }
         }
         debug!(?events, "widget events");
         let commands = (self.handler)(&events);
