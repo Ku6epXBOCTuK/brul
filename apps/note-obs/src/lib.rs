@@ -7,6 +7,7 @@ pub mod afk;
 pub mod config;
 pub mod generated;
 pub mod obs;
+pub mod tray;
 pub mod worker;
 
 pub use config::{Config, ConfigError, default_path};

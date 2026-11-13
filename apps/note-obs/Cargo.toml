@@ -19,6 +19,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
+tray-icon = { workspace = true }
 toml_edit = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

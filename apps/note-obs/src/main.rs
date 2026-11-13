@@ -15,8 +15,9 @@ use note_obs::{Config, default_path, generated};
 const USAGE: &str = "\
 nobs: текст в источник OBS
 
-Использование: nobs [--help]
+Использование: nobs [--tray] [--help]
 
+  --tray       запустить без окна, только со значком в трее
   --help, -h   показать эту справку
 ";
 
@@ -94,8 +95,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         println!("{USAGE}");
         return Ok(());
     }
-    if let Some(argument) = arguments.first() {
-        return Err(format!("unknown option '{argument}', try --help").into());
+    let mut tray = false;
+    for argument in &arguments {
+        if argument == "--tray" {
+            tray = true;
+        } else {
+            return Err(format!("unknown option '{argument}', try --help").into());
+        }
     }
 
     let path = default_path();
@@ -120,14 +126,22 @@ fn run() -> Result<(), Box<dyn Error>> {
         ("afkText", Value::String(config.afk_text.as_str().into())),
     ];
 
+    let mut windows = generated::windows();
+    if tray {
+        windows[0].config.visible = false;
+    }
+
     brul::run_generated_with(
-        generated::windows(),
+        windows,
         generated::script(),
         generated::names(),
         None,
         &seeds,
         Some(Box::new(host)),
-        move |handle| job.start(handle),
+        move |handle| {
+            job.start(handle.clone());
+            note_obs::tray::warn_missing(note_obs::tray::install(handle));
+        },
     )
 }
 

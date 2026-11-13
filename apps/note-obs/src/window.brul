@@ -34,6 +34,18 @@
         setAfkText(afkText);
     }
 
+    function trayShow() {
+        showWindow();
+    }
+
+    function trayClear() {
+        clearNote();
+    }
+
+    function trayQuit() {
+        exit();
+    }
+
     function handleKey(ev) {
         if (ev.code == "Escape") {
             hideNote();
