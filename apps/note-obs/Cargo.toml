@@ -20,5 +20,8 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
+
 [build-dependencies]
 brul = { workspace = true }

@@ -1,13 +1,17 @@
 //! Фоновый воркер: OBS трогается из отдельного потока, статус уходит в DSL.
 
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use brul::Handle;
 use brul::logging::{error, info};
 
+use crate::afk::{self, Action};
 use crate::config::Config;
 use crate::obs;
+
+const POLL: Duration = Duration::from_millis(200);
 
 pub enum Command {
     Show(String),
@@ -49,22 +53,44 @@ impl Job {
     pub fn start(self, handle: Handle) {
         let Self { config, inbox } = self;
         thread::spawn(move || {
-            for command in inbox {
-                let (text, idle) = match command {
-                    Command::Show(text) => (text, "в эфире"),
-                    Command::Clear => (String::new(), "idle"),
-                };
-                match obs::write_text(&config, &text) {
-                    Ok(()) => {
-                        info!(len = text.len(), "text written");
-                        handle.set("status", idle);
+            let mut afk = afk::Afk::new(
+                config.afk_enabled,
+                config.afk_text.clone(),
+                config.afk_after_secs,
+            );
+            loop {
+                match inbox.recv_timeout(POLL) {
+                    Ok(Command::Show(text)) => {
+                        afk.busy();
+                        write(&config, &text, "в эфире", &handle);
                     }
-                    Err(failure) => {
-                        error!(%failure, "text not written");
-                        handle.set("status", failure.to_string());
+                    Ok(Command::Clear) => {
+                        afk.free();
+                        write(&config, "", "idle", &handle);
                     }
+                    Err(RecvTimeoutError::Timeout) => {}
+                    Err(RecvTimeoutError::Disconnected) => break,
+                }
+                match afk.poll(afk::idle_secs(), Instant::now()) {
+                    Some(Action::Away) => write(&config, afk.text(), "отошёл", &handle),
+                    Some(Action::Back) => write(&config, "", "idle", &handle),
+                    None => {}
                 }
             }
+            info!("OBS worker stopped");
         });
+    }
+}
+
+fn write(config: &Config, text: &str, status: &str, handle: &Handle) {
+    match obs::write_text(config, text) {
+        Ok(()) => {
+            info!(len = text.len(), "text written");
+            handle.set("status", status);
+        }
+        Err(failure) => {
+            error!(%failure, "text not written");
+            handle.set("status", failure.to_string());
+        }
     }
 }

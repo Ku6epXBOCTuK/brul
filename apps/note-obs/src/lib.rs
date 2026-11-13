@@ -3,6 +3,7 @@
 // NOTE: UI copy is Russian, so literals in the generated view cannot stay ASCII.
 #![allow(clippy::non_ascii_literal)]
 
+pub mod afk;
 pub mod config;
 pub mod generated;
 pub mod obs;

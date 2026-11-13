@@ -71,5 +71,10 @@ tracing-subscriber = "0.3"
 wgpu = "30.0.1"
 winit = "=0.31.0-beta.4"
 winreg = "0.56.0"
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_System_SystemInformation",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
 brul = { path = "" }
 resvg = { version = "0.50.0", default-features = false }
