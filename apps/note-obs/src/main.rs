@@ -113,6 +113,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let seeds = [
         ("draft", Value::String(String::new().into())),
         ("status", Value::String(String::from("idle").into())),
+        ("live", Value::Bool(false)),
         ("hint", Value::String(hint.into())),
         ("presets", presets(&config)),
         ("afkEnabled", Value::Bool(config.afk_enabled)),

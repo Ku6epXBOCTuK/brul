@@ -5,16 +5,23 @@
 
     function showNote() {
         status = submit(draft);
+        setAlwaysOnTop(draft != "");
     }
 
     function clearNote() {
         draft = "";
         status = clear();
+        setAlwaysOnTop(false);
+    }
+
+    function hideNote() {
+        hideWindow();
     }
 
     function applyPreset(i) {
         draft = presets[i];
         status = submit(draft);
+        setAlwaysOnTop(true);
     }
 
     function toggleAfk() {
@@ -28,9 +35,13 @@
     }
 
     function handleKey(ev) {
-        if (ev.ctrl) {
+        if (ev.code == "Escape") {
+            hideNote();
+        } else if (ev.ctrl) {
             if (ev.code == "Enter") {
                 showNote();
+            } else if (ev.code == "q" || ev.code == "Q") {
+                exit();
             }
         }
     }
@@ -46,9 +57,10 @@
         width: 520,
         height: 480,
         centered: true,
-        on key: handleKey
+        on key: handleKey,
+        on close: hideNote
     ) {
-        Column (root) {
+        Column (root, class: live ? "live" : "") {
             Row (header, on drag: dragWindow) {
                 Text (title) { "nobs" }
                 Text (status) { status }
@@ -116,10 +128,12 @@
     .root {
         width: 100%;
         height: 100%;
-        padding: 20px;
+        padding: 18px;
         spacing: 14px;
         background: theme.background;
+        border: 2px theme.background;
     }
+    .live { border-color: #e24e4e; }
     .header {
         width: 100%;
         height: 32px;

@@ -24,6 +24,7 @@ fn the_script_seeds_are_named() {
         "presets",
         "afkEnabled",
         "afkText",
+        "live",
     ] {
         assert!(names.contains(&name), "{name} is not declared");
     }

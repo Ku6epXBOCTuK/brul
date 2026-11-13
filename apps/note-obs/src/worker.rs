@@ -130,6 +130,7 @@ fn write(config: &Config, text: &str, status: &str, handle: &Handle) {
     match obs::write_text(config, text) {
         Ok(()) => {
             info!(len = text.len(), "text written");
+            handle.set("live", !text.is_empty());
             handle.set("status", status);
         }
         Err(failure) => {
