@@ -106,6 +106,13 @@ impl HandlerEvent {
             _ => None,
         }
     }
+
+    pub const fn arguments_count(self) -> usize {
+        match self {
+            Self::Key | Self::Input => 1,
+            _ => 0,
+        }
+    }
 }
 
 #[derive(Clone)]

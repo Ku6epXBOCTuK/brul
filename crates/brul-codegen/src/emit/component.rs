@@ -111,7 +111,12 @@ fn event_of<'a>(
             format!("component '{name}' has no event '{event}'"),
         ));
     };
-    events::define(handler, emit.program, element.position)?;
+    events::define(
+        handler,
+        emit.program,
+        declaration.params.len(),
+        element.position,
+    )?;
     let params = declaration.params.iter().map(|param| param.ty).collect();
     Ok((event, handler, params))
 }

@@ -69,7 +69,7 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
                 format!("event '{}' is handled twice", event.name()),
             ));
         }
-        define(handler, program, element.position)?;
+        define(handler, program, event.arguments_count(), element.position)?;
         handlers.push((event, handler.clone()));
     }
     Ok(Events {
@@ -127,7 +127,12 @@ pub(super) fn window(
                 format!("event '{}' is handled twice", event.name()),
             ));
         }
-        define(&item.function, program, item.position)?;
+        define(
+            &item.function,
+            program,
+            event.arguments_count(),
+            item.position,
+        )?;
         handlers.push((event, item.function.clone()));
     }
     Ok(handlers)
@@ -136,20 +141,29 @@ pub(super) fn window(
 pub(super) fn define(
     name: &str,
     program: Option<&Program>,
+    arguments_count: usize,
     position: Position,
 ) -> Result<(), Error> {
-    let declared = program.is_some_and(|program| {
+    let function = program.and_then(|program| {
         program
             .functions
             .iter()
-            .any(|function| function.name == name)
+            .find(|function| function.name == name)
     });
-    if declared {
-        Ok(())
-    } else {
-        Err(error_at(
+    let Some(function) = function else {
+        return Err(error_at(
             position,
             format!("function '{name}' is not defined"),
-        ))
+        ));
+    };
+    if function.params.len() == arguments_count {
+        return Ok(());
     }
+    Err(error_at(
+        position,
+        format!(
+            "function '{name}' expects {arguments_count} arguments, got {}",
+            function.params.len()
+        ),
+    ))
 }

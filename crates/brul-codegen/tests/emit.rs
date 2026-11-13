@@ -372,7 +372,7 @@ window Demo (title: "demo") {
 #[test]
 fn emits_a_text_input_with_its_binding_and_handlers() {
     let source = r#"<script>
-    function edited() { }
+    function edited(ev) { }
     function submitted() { }
 </script>
 
@@ -387,6 +387,41 @@ window Demo (title: "demo") {
     assert!(module.contains("brul::BindingTarget::Input("));
     assert!(module.contains(r#"HandlerEvent::Input, "edited""#));
     assert!(module.contains(r#"HandlerEvent::Submit, "submitted""#));
+}
+
+#[test]
+fn rejects_a_handler_that_ignores_the_event_arguments() {
+    let source = r#"<script>
+    function edited(value, caret) { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    TextInput (field, on input: edited) { draft }
+}
+</markup>
+"#;
+    let error = emit::module(source).expect_err("error");
+    assert_eq!(
+        error.message,
+        "function 'edited' expects 1 arguments, got 2"
+    );
+}
+
+#[test]
+fn rejects_a_window_handler_that_ignores_the_key() {
+    let source = r#"<script>
+    function quit() { }
+</script>
+
+<markup>
+window Demo (title: "demo", on key: quit) {
+    View { }
+}
+</markup>
+"#;
+    let error = emit::module(source).expect_err("error");
+    assert_eq!(error.message, "function 'quit' expects 1 arguments, got 0");
 }
 
 #[test]
@@ -520,7 +555,7 @@ window Demo (title: "demo") {
 #[test]
 fn emits_window_handler() {
     let source = r#"<script>
-    function quit() { }
+    function quit(ev) { }
 </script>
 
 <markup>
@@ -1018,7 +1053,7 @@ fn emits_component_events() {
             ),
             (
                 "window.brul",
-                "<script>\n    function launch() {\n    }\n</script>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge (on clicked: launch) { }\n    }\n}\n</markup>\n",
+                "<script>\n    function launch(i) {\n    }\n</script>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge (on clicked: launch) { }\n    }\n}\n</markup>\n",
             ),
         ],
     );

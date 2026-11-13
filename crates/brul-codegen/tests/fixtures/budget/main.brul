@@ -12,7 +12,7 @@
 </use>
 
 <markup>
-    window Picker (title: "picker", width: 800, on key: toggle) {
+    window Picker (title: "picker", width: 800) {
         Column (root, on drag: dragWindow) {
             Text (heading) { "picker" }
             Row (bar) {
