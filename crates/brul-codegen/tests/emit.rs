@@ -19,19 +19,10 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        {
-            let widget0 = brul::gui::Widget::row(vec![
-                {
-                    let widget1 = brul::gui::Widget::text("a");
-                    widget1
-                },
-                {
-                    let widget2 = brul::gui::Widget::column(vec![]);
-                    widget2
-                },
-            ]);
-            widget0
-        }
+        brul::gui::Widget::row(vec![
+            brul::gui::Widget::text("a"),
+            brul::gui::Widget::column(vec![]),
+        ])
     };
     Ok(brul::Built {
         widget,
@@ -120,10 +111,7 @@ pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        {
-            let widget0 = styled(brul::gui::Widget::column(vec![]), &["box"], theme)?;
-            widget0
-        }
+        styled(brul::gui::Widget::column(vec![]), &["box"], theme)?
     };
     Ok(brul::Built {
         widget,
@@ -235,7 +223,7 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
 
     assert!(
-        module.contains("brul::BindingTarget::Class { table: class_none, expression: "),
+        module.contains("brul::BindingTarget::Class { table: class_table(theme), expression: "),
         "{module}"
     );
     assert!(
@@ -372,13 +360,13 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        r#"handlers.push(brul::Handler::new(component, Some(widget1.id()), brul::HandlerEvent::Click, "toggle"));"#
+        r#"handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Click, "toggle"));"#
     ));
     assert!(module.contains(
-        r#"handlers.push(brul::Handler::new(component, Some(widget1.id()), brul::HandlerEvent::Enter, "toggle"));"#
+        r#"handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Enter, "toggle"));"#
     ));
     assert!(module.contains("brul::gui::Widget::column(vec!["));
-    assert!(module.contains(".draggable(true);"));
+    assert!(module.contains(".draggable(true)"));
     assert!(!module.contains("HandlerEvent::Drag"));
 }
 
@@ -406,7 +394,7 @@ window Demo (title: "demo") {
     assert!(module.contains("brul::Value::Bool(true) => vec!["));
     assert!(module.contains("brul::Value::Bool(false) => vec!["));
     assert!(module.contains(
-        "brul::register_structure(component, widget1.id(), false, structure0_value, structure0_rebuild);"
+        "brul::register_structure(component, widget0.id(), false, structure0_value, structure0_rebuild);"
     ));
     assert!(module.contains(r#""if condition expects Bool, got {}""#));
 }
@@ -438,7 +426,7 @@ window Demo (title: "demo") {
     assert!(module.contains("let key = structure0_key(&mut component.borrow_mut()).ok();"));
     assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count });"));
     assert!(module.contains(
-        "brul::register_structure(component, widget1.id(), true, structure0_value, structure0_rebuild);"
+        "brul::register_structure(component, widget0.id(), true, structure0_value, structure0_rebuild);"
     ));
 }
 

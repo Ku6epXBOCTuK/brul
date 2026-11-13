@@ -66,6 +66,13 @@ impl<'a> Frame<'a> {
         }
     }
 
+    pub(super) fn shallower(self, levels: usize) -> Self {
+        Self {
+            depth: self.depth.saturating_sub(levels),
+            ..self
+        }
+    }
+
     pub(super) fn inside(self, direction: &'a str, spacing: u32) -> Self {
         Self {
             direction,

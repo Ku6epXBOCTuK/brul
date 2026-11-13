@@ -12,25 +12,8 @@ pub(super) fn name(prefix: &str, theme: Option<&str>) -> String {
     }
 }
 
-pub(super) fn table(prefix: &str, stylesheet: &Stylesheet) -> String {
-    let Some(first) = stylesheet.themes.first() else {
-        return name(prefix, None);
-    };
-    let first_name = name(prefix, Some(&first.name));
-    let mut out = format!(
-        "match theme {{ None | Some({:?}) => {first_name}",
-        first.name
-    );
-    for theme in &stylesheet.themes[1..] {
-        let _ = write!(
-            out,
-            ", Some({:?}) => {}",
-            theme.name,
-            name(prefix, Some(&theme.name))
-        );
-    }
-    let _ = write!(out, ", Some(_) => {first_name} }}");
-    out
+pub(super) fn table(prefix: &str) -> String {
+    format!("{prefix}class_table(theme)")
 }
 
 pub(super) fn tables(out: &mut String, prefix: &str, stylesheet: &Stylesheet) {
@@ -50,4 +33,25 @@ pub(super) fn tables(out: &mut String, prefix: &str, stylesheet: &Stylesheet) {
             theme
         );
     }
+    let (parameter, body) = match stylesheet.themes.first() {
+        Some(first) => {
+            let first_name = name(prefix, Some(&first.name));
+            let mut arms = format!("None | Some({:?}) => {first_name}", first.name);
+            for theme in &stylesheet.themes[1..] {
+                let _ = write!(
+                    arms,
+                    ", Some({:?}) => {}",
+                    theme.name,
+                    name(prefix, Some(&theme.name))
+                );
+            }
+            let _ = write!(arms, ", Some(_) => {first_name}");
+            ("theme", format!("match theme {{ {arms} }}"))
+        }
+        None => ("_theme", name(prefix, None)),
+    };
+    let _ = writeln!(
+        out,
+        "\nfn {prefix}class_table({parameter}: Option<&str>) -> brul::ClassTable {{\n    {body}\n}}"
+    );
 }

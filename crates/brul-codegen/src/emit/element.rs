@@ -30,12 +30,50 @@ pub(super) fn widget(
     }
     let classes = classes(element);
     let events = events::widget(element, emit.program)?;
-    let name = format!("widget{}", *counter);
-    *counter += 1;
     let pad = "    ".repeat(frame.depth());
     let inner = "    ".repeat(frame.depth() + 1);
+    let needs = content_needed(element, emit)
+        || !events.handlers.is_empty()
+        || element
+            .args
+            .iter()
+            .any(|arg| matches!(arg, Arg::Named { .. }));
+    if !needs {
+        let _ = write!(out, "{pad}");
+        element_expression(
+            out,
+            element,
+            &classes,
+            &events,
+            emit,
+            frame.shallower(1),
+            counter,
+        )?;
+        return Ok(());
+    }
+    let name = format!("widget{}", *counter);
+    *counter += 1;
     let _ = writeln!(out, "{pad}{{");
     let _ = write!(out, "{inner}let {name} = ");
+    let content = element_expression(out, element, &classes, &events, emit, frame, counter)?;
+    out.push_str(";\n");
+    content_binding(out, content, &name, &inner, emit.names);
+    parameters(out, element, &name, &inner, emit.names, emit)?;
+    handler_bindings(out, &events.handlers, &name, &inner);
+    let _ = writeln!(out, "{inner}{name}");
+    let _ = write!(out, "{pad}}}");
+    Ok(())
+}
+
+fn element_expression(
+    out: &mut String,
+    element: &Element,
+    classes: &[&str],
+    events: &events::Events,
+    emit: &mut Emit<'_>,
+    frame: Frame<'_>,
+    counter: &mut usize,
+) -> Result<Option<Content>, Error> {
     let styled = !classes.is_empty();
     if styled {
         let _ = write!(out, "{}styled(", emit.resource_prefix);
@@ -52,13 +90,28 @@ pub(super) fn widget(
     if events.drag {
         out.push_str(".draggable(true)");
     }
-    out.push_str(";\n");
-    content_binding(out, content, &name, &inner, emit.names);
-    parameters(out, element, &name, &inner, emit.names, emit)?;
-    handler_bindings(out, &events.handlers, &name, &inner);
-    let _ = writeln!(out, "{inner}{name}");
-    let _ = write!(out, "{pad}}}");
-    Ok(())
+    Ok(content)
+}
+
+fn content_needed(element: &Element, emit: &Emit<'_>) -> bool {
+    let [BlockItem::Expr(expression)] = element.block.items.as_slice() else {
+        return false;
+    };
+    match element.name.as_str() {
+        "Text" => !matches!(expression.kind, ExprKind::String(_)),
+        "Image" => resource(expression, emit).is_none(),
+        _ => false,
+    }
+}
+
+fn resource<'a>(expression: &'a Expr, emit: &Emit<'_>) -> Option<&'a str> {
+    let ExprKind::Ident(name) = &expression.kind else {
+        return None;
+    };
+    emit.resources
+        .iter()
+        .any(|resource| &resource.name == name)
+        .then_some(name.as_str())
 }
 
 fn classes(element: &Element) -> Vec<&str> {
@@ -220,9 +273,7 @@ fn image_widget(
             "Image requires a single content expression",
         ));
     };
-    if let ExprKind::Ident(name) = &expression.kind
-        && emit.resources.iter().any(|resource| &resource.name == name)
-    {
+    if let Some(name) = resource(expression, emit) {
         let _ = write!(
             out,
             "brul::gui::Widget::image(brul::gui::Image::from_bytes({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
@@ -293,7 +344,7 @@ fn parameters(
     }
     if let Some(value) = class {
         *emit.dynamic_classes = true;
-        let table = classes::table(emit.resource_prefix, emit.stylesheet);
+        let table = classes::table(emit.resource_prefix);
         let _ = writeln!(
             out,
             "{pad}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",

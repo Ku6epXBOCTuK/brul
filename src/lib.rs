@@ -11,8 +11,8 @@ pub mod build {
 }
 
 pub use brul_codegen::runtime::{
-    Binding, BindingTarget, Built, ComponentEvent, ComponentHandle, Handler, HandlerEvent,
-    Instance, PropArgument, PropBinding, Rebuilt, RowInfo, Structure, View, instance,
+    Binding, BindingTarget, Built, ClassTable, ComponentEvent, ComponentHandle, Handler,
+    HandlerEvent, Instance, PropArgument, PropBinding, Rebuilt, RowInfo, Structure, View, instance,
     register_structure, take_structures,
 };
 pub use brul_gui as gui;
