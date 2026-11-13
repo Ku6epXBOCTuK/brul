@@ -1,15 +1,28 @@
 use brul_gui::KeyModifiers;
-use winit::event::{ButtonSource, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{ButtonSource, ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::Theme;
 
 use crate::window::ColorScheme;
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ImeEvent {
+    Enabled,
+    Preedit(String),
+    Commit(String),
+    DeleteSurrounding {
+        before_bytes: usize,
+        after_bytes: usize,
+    },
+    Disabled,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Input {
     Exit,
     Key(String),
     Modifiers(KeyModifiers),
+    Ime(ImeEvent),
     Paste(String),
     Moved(f64, f64),
     Left,
@@ -80,6 +93,22 @@ pub(crate) fn modifiers(state: ModifiersState) -> KeyModifiers {
     }
 }
 
+pub(crate) fn ime_event(event: &Ime) -> ImeEvent {
+    match event {
+        Ime::Enabled => ImeEvent::Enabled,
+        Ime::Preedit(text, _) => ImeEvent::Preedit(text.clone()),
+        Ime::Commit(text) => ImeEvent::Commit(text.clone()),
+        Ime::DeleteSurrounding {
+            before_bytes,
+            after_bytes,
+        } => ImeEvent::DeleteSurrounding {
+            before_bytes: *before_bytes,
+            after_bytes: *after_bytes,
+        },
+        Ime::Disabled => ImeEvent::Disabled,
+    }
+}
+
 pub(crate) fn window_input(event: &WindowEvent) -> Option<Input> {
     match event {
         WindowEvent::CloseRequested => Some(Input::Exit),
@@ -106,6 +135,7 @@ pub(crate) fn event_input(event: &WindowEvent) -> Option<Input> {
             let code = key_code(&event.logical_key)?;
             Some(Input::Key(code))
         }
+        WindowEvent::Ime(ime) => Some(Input::Ime(ime_event(ime))),
         WindowEvent::DataTransferReceived { value, .. } => value
             .try_as_string()
             .ok()
@@ -185,6 +215,38 @@ mod tests {
             primary,
             button: ButtonSource::Mouse(button),
             is_macos_activation_click,
+        }
+    }
+
+    #[test]
+    fn ime_events_become_input() {
+        let cases = [
+            (Ime::Enabled, ImeEvent::Enabled),
+            (
+                Ime::Preedit("a".to_owned(), None),
+                ImeEvent::Preedit("a".to_owned()),
+            ),
+            (
+                Ime::Commit("ab".to_owned()),
+                ImeEvent::Commit("ab".to_owned()),
+            ),
+            (
+                Ime::DeleteSurrounding {
+                    before_bytes: 2,
+                    after_bytes: 1,
+                },
+                ImeEvent::DeleteSurrounding {
+                    before_bytes: 2,
+                    after_bytes: 1,
+                },
+            ),
+            (Ime::Disabled, ImeEvent::Disabled),
+        ];
+        for (event, expected) in cases {
+            assert_eq!(
+                event_input(&WindowEvent::Ime(event)),
+                Some(Input::Ime(expected))
+            );
         }
     }
 

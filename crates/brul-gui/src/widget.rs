@@ -855,6 +855,7 @@ pub struct WidgetSnapshotNode {
     pub state: WidgetState,
     pub style: WidgetStyle,
     pub text: Option<TextLayout>,
+    pub preedit: Option<TextLayout>,
     pub caret: Option<CaretPosition>,
     pub selection: Vec<SelectionRect>,
     pub scroll: i32,
@@ -868,6 +869,14 @@ pub struct KeyModifiers {
     pub control: bool,
     pub alt: bool,
     pub meta: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CaretArea {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -980,6 +989,7 @@ enum NodeData {
         anchor: usize,
         multiline: bool,
         scroll: i32,
+        preedit: String,
     },
     Image(Image),
 }
@@ -1047,6 +1057,8 @@ struct ShapedText {
     width: Option<u32>,
     scale: f32,
     variants: TextVariants,
+    preedit: Option<TextLayout>,
+    preedit_text: String,
 }
 
 #[derive(Clone, Debug)]
@@ -1158,6 +1170,7 @@ impl WidgetTree {
                     anchor: caret,
                     multiline,
                     scroll: 0,
+                    preedit: String::new(),
                 },
                 Vec::new(),
             ),
@@ -1868,12 +1881,90 @@ impl WidgetTree {
     }
 
     pub fn paste_text(&mut self, text: &str) -> Vec<WidgetEvent> {
-        let Some(slot) = self
-            .focused
-            .filter(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
+        let Some(slot) = self.focused_input() else {
+            return Vec::new();
+        };
+        let text = self.field_text(slot, text);
+        let changed = self.insert_input(slot, &text);
+        self.input_event(slot, changed)
+    }
+
+    pub fn set_preedit(&mut self, text: &str) -> bool {
+        let Some(slot) = self.focused_input() else {
+            return false;
+        };
+        let NodeData::Input { preedit, .. } = &mut self.nodes[slot.index()].data else {
+            return false;
+        };
+        if preedit == text {
+            return false;
+        }
+        preedit.clear();
+        preedit.push_str(text);
+        self.stale.insert(slot);
+        self.invalidate_layout();
+        true
+    }
+
+    pub fn commit_text(&mut self, text: &str) -> Vec<WidgetEvent> {
+        let Some(slot) = self.focused_input() else {
+            return Vec::new();
+        };
+        self.clear_preedit(slot);
+        let text = self.field_text(slot, text);
+        let changed = self.insert_input(slot, &text);
+        self.input_event(slot, changed)
+    }
+
+    pub fn delete_surrounding(&mut self, before: usize, after: usize) -> Vec<WidgetEvent> {
+        let Some(slot) = self.focused_input() else {
+            return Vec::new();
+        };
+        if self.selection(slot).is_some() {
+            let changed = self.delete_input(slot, true);
+            return self.input_event(slot, changed);
+        }
+        let NodeData::Input {
+            value,
+            caret,
+            anchor,
+            ..
+        } = &mut self.nodes[slot.index()].data
         else {
             return Vec::new();
         };
+        let start = boundary_before(value, caret.saturating_sub(before));
+        let end = boundary_before(value, (*caret + after).min(value.len()));
+        if start >= end {
+            return Vec::new();
+        }
+        value.replace_range(start..end, "");
+        *caret = start;
+        *anchor = start;
+        self.stale.insert(slot);
+        self.invalidate_layout();
+        self.input_event(slot, true)
+    }
+
+    fn clear_preedit(&mut self, slot: Slot) -> bool {
+        let NodeData::Input { preedit, .. } = &mut self.nodes[slot.index()].data else {
+            return false;
+        };
+        if preedit.is_empty() {
+            return false;
+        }
+        preedit.clear();
+        self.stale.insert(slot);
+        self.invalidate_layout();
+        true
+    }
+
+    fn focused_input(&self) -> Option<Slot> {
+        self.focused
+            .filter(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
+    }
+
+    fn field_text(&self, slot: Slot, text: &str) -> String {
         let multiline = matches!(
             self.nodes[slot.index()].data,
             NodeData::Input {
@@ -1881,15 +1972,13 @@ impl WidgetTree {
                 ..
             }
         );
-        let text = if multiline {
+        if multiline {
             text.replace("\r\n", "\n").replace('\r', "\n")
         } else {
             text.chars()
                 .filter(|character| *character != '\r' && *character != '\n')
                 .collect()
-        };
-        let changed = self.insert_input(slot, &text);
-        self.input_event(slot, changed)
+        }
     }
 
     fn insert_input(&mut self, slot: Slot, text: &str) -> bool {
@@ -2080,6 +2169,42 @@ impl WidgetTree {
         self.stale.insert(slot);
         self.invalidate_layout();
         true
+    }
+
+    pub fn caret_area(&self) -> Option<CaretArea> {
+        let slot = self.focused_input()?;
+        let geometry = self.geometry.as_ref()?;
+        let node = &self.nodes[slot.index()];
+        let NodeData::Input { caret, scroll, .. } = &node.data else {
+            return None;
+        };
+        let cached = self.texts.get(&node.id)?;
+        let placed = geometry.boxes.get(slot.index())?;
+        let style = node.layout_style();
+        let content_x = placed
+            .x
+            .saturating_add(style.border_width.saturating_add(style.padding.left) as i32);
+        let content_y = placed
+            .y
+            .saturating_add(style.border_width.saturating_add(style.padding.top) as i32);
+        let content_height = placed.height.saturating_sub(layout::inset_y(&style));
+        let offset = node
+            .styles
+            .resolve(node.state)
+            .vertical_align
+            .offset(content_height, cached.variants.base.size.height) as i32;
+        let position = cached.variants.base.caret(*caret);
+        let x = content_x.saturating_add(position.x);
+        let y = content_y
+            .saturating_add(position.y)
+            .saturating_add(offset)
+            .saturating_sub(*scroll);
+        Some(CaretArea {
+            x,
+            y,
+            width: 1,
+            height: position.height.max(1) as u32,
+        })
     }
 
     fn focus_next(&mut self) -> Vec<WidgetEvent> {
@@ -2465,16 +2590,17 @@ impl Pass<'_> {
                 }
             }
             NodeData::Text { content, styles } => {
-                self.build_text(node, content, styles, content_width)?
+                self.build_text(node, content, styles, content_width, "")?
             }
             NodeData::Input {
                 value,
                 styles,
                 multiline,
+                preedit,
                 ..
             } => {
                 let width = if *multiline { content_width } else { None };
-                self.build_text(node, value, styles, width)?
+                self.build_text(node, value, styles, width, preedit)?
             }
             NodeData::Image(image) => LayoutNode::leaf(image.width(), image.height()),
         };
@@ -2492,6 +2618,7 @@ impl Pass<'_> {
         content: &str,
         styles: &TextStyleSet,
         content_width: Option<u32>,
+        preedit: &str,
     ) -> Result<LayoutNode, WidgetError> {
         let mut styles = styles.clone();
         if let Some(class) = &node.class {
@@ -2499,7 +2626,10 @@ impl Pass<'_> {
         }
         let max_width = content_width.map(|width| width as f32 / self.scale);
         let cached = self.texts.get(&node.id).filter(|cached| {
-            cached.width == content_width && cached.scale == self.scale && cached.content == content
+            cached.width == content_width
+                && cached.scale == self.scale
+                && cached.content == content
+                && cached.preedit_text == preedit
         });
         if cached.is_none() {
             let mut variants = TextVariants::new(self.engine.layout(
@@ -2518,6 +2648,15 @@ impl Pass<'_> {
                     self.engine.layout(content, &style, max_width, self.scale)?,
                 );
             }
+            let preedit_text = preedit.to_owned();
+            let preedit = if preedit_text.is_empty() {
+                None
+            } else {
+                Some(
+                    self.engine
+                        .layout(&preedit_text, styles.base(), None, self.scale)?,
+                )
+            };
             self.texts.insert(
                 node.id,
                 ShapedText {
@@ -2525,6 +2664,8 @@ impl Pass<'_> {
                     width: content_width,
                     scale: self.scale,
                     variants,
+                    preedit,
+                    preedit_text,
                 },
             );
         }
@@ -2537,6 +2678,14 @@ impl Pass<'_> {
             .size;
         Ok(LayoutNode::leaf(size.width, size.height))
     }
+}
+
+fn boundary_before(value: &str, mut index: usize) -> usize {
+    index = index.min(value.len());
+    while !value.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
 }
 
 fn reveal_carets(nodes: &mut [Node], texts: &HashMap<WidgetId, ShapedText>, boxes: &[LayoutBox]) {
@@ -2675,10 +2824,22 @@ fn snapshot_widget(
             .map(|cached| cached.variants.resolve(node.state)),
         _ => None,
     };
-    let caret = match &node.data {
-        NodeData::Input { caret, .. } if focused == Some(slot) => texts
+    let preedit = match &node.data {
+        NodeData::Input { .. } if focused == Some(slot) => texts
             .get(&node.id)
-            .map(|cached| cached.variants.base.caret(*caret)),
+            .and_then(|cached| cached.preedit.clone()),
+        _ => None,
+    };
+    let caret = match &node.data {
+        NodeData::Input { caret, .. } if focused == Some(slot) => {
+            texts.get(&node.id).map(|cached| {
+                let mut position = cached.variants.base.caret(*caret);
+                if let Some(preedit) = &cached.preedit {
+                    position.x += preedit.size.width as i32;
+                }
+                position
+            })
+        }
         _ => None,
     };
     let selection = match &node.data {
@@ -2713,6 +2874,7 @@ fn snapshot_widget(
         state: node.state,
         style,
         text,
+        preedit,
         caret,
         selection,
         scroll,

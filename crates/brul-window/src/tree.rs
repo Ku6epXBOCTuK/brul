@@ -3,15 +3,18 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{Frame, Size, TextEngine, WidgetEvent, WidgetTree};
+use brul_gui::{CaretArea, Frame, Size, TextEngine, WidgetEvent, WidgetTree};
 use tracing::{debug, error, info, trace};
 use winit::application::ApplicationHandler;
+use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::window::{Window, WindowId};
+use winit::window::{
+    ImeCapabilities, ImeEnableRequest, ImeRequest, ImeRequestData, Window, WindowId,
+};
 
 use crate::gpu::Gpu;
-use crate::input::{Input, event_input, point, system_scheme, window_input};
+use crate::input::{ImeEvent, Input, event_input, point, system_scheme, window_input};
 use crate::surface::{Renderer, Surface};
 use crate::window::{
     ColorScheme, WindowCommand, WindowConfig, WindowError, WindowKey, create_window,
@@ -96,6 +99,8 @@ pub(crate) struct TreeApp {
     next_frame: Instant,
     clipboard: Option<String>,
     paste: bool,
+    ime_enabled: bool,
+    ime_area: Option<CaretArea>,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -145,6 +150,8 @@ pub(crate) fn tree_app(
         next_frame: Instant::now(),
         clipboard: None,
         paste: false,
+        ime_enabled: false,
+        ime_area: None,
     };
     for command in initial {
         if let WindowCommand::Every { interval, function } = command {
@@ -229,7 +236,11 @@ impl TreeApp {
         match input {
             Some(Input::Exit) => Step::Close,
             Some(Input::Redraw) => self.render(&window),
-            Some(input) => self.handle(&window, input),
+            Some(input) => {
+                let step = self.handle(&window, input);
+                self.sync_ime(window.as_ref());
+                step
+            }
             None => Step::Continue,
         }
     }
@@ -300,6 +311,7 @@ impl TreeApp {
                 let events = self.tree.borrow_mut().paste_text(&text);
                 self.dispatch_events(surface, events)
             }
+            Input::Ime(ime) => self.ime(surface, ime),
             Input::Moved(x, y) => self.move_pointer(surface, x, y),
             Input::Left => self.leave_pointer(surface),
             Input::Down(x, y) => self.press_pointer(surface, x, y),
@@ -328,6 +340,65 @@ impl TreeApp {
     fn press_key(&mut self, surface: &dyn Surface, code: String) -> Step {
         let events = self.tree.borrow_mut().press_key(&code);
         self.dispatch_events(surface, events)
+    }
+
+    fn ime(&mut self, surface: &dyn Surface, ime: ImeEvent) -> Step {
+        match ime {
+            ImeEvent::Preedit(text) => {
+                self.tree.borrow_mut().set_preedit(&text);
+                Step::Continue
+            }
+            ImeEvent::Commit(text) => {
+                let events = self.tree.borrow_mut().commit_text(&text);
+                self.dispatch_events(surface, events)
+            }
+            ImeEvent::DeleteSurrounding {
+                before_bytes,
+                after_bytes,
+            } => {
+                let events = self
+                    .tree
+                    .borrow_mut()
+                    .delete_surrounding(before_bytes, after_bytes);
+                self.dispatch_events(surface, events)
+            }
+            ImeEvent::Enabled | ImeEvent::Disabled => Step::Continue,
+        }
+    }
+
+    fn sync_ime(&mut self, window: &dyn Window) {
+        let area = self.tree.borrow().caret_area();
+        if self.ime_area == area {
+            return;
+        }
+        self.ime_area = area;
+        let request = match area {
+            Some(area) => {
+                let data = ImeRequestData::default().with_cursor_area(
+                    PhysicalPosition::new(area.x, area.y).into(),
+                    PhysicalSize::new(area.width, area.height).into(),
+                );
+                if self.ime_enabled {
+                    ImeRequest::Update(data)
+                } else {
+                    let capabilities = ImeCapabilities::new().with_cursor_area();
+                    match ImeEnableRequest::new(capabilities, data) {
+                        Some(enable) => ImeRequest::Enable(enable),
+                        None => return,
+                    }
+                }
+            }
+            None => {
+                if !self.ime_enabled {
+                    return;
+                }
+                ImeRequest::Disable
+            }
+        };
+        match window.request_ime_update(request) {
+            Ok(()) => self.ime_enabled = area.is_some(),
+            Err(error) => debug!(%error, "ime request failed"),
+        }
     }
 
     fn move_pointer(&mut self, surface: &dyn Surface, x: f64, y: f64) -> Step {

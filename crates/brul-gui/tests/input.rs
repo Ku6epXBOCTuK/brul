@@ -482,3 +482,67 @@ fn a_multiline_paste_keeps_its_lines() {
         vec![WidgetEvent::Input(id, "ab\nc".to_owned(), 4)]
     );
 }
+
+#[test]
+fn a_preedit_is_shown_at_the_caret_and_the_caret_moves_past_it() {
+    let (mut tree, id) = focused_field("ab");
+    tree.press_key("Home");
+
+    assert!(tree.set_preedit("\u{3042}"));
+    relayout(&mut tree);
+
+    let node = tree
+        .snapshot()
+        .expect("snapshot")
+        .node(id)
+        .expect("node")
+        .clone();
+    let preedit = node.preedit.expect("preedit");
+    assert!(preedit.size.width > 0);
+    assert_eq!(node.caret.expect("caret").x, preedit.size.width as i32);
+}
+
+#[test]
+fn a_commit_inserts_the_text_and_clears_the_preedit() {
+    let (mut tree, id) = focused_field("ab");
+    tree.press_key("Home");
+    tree.set_preedit("x");
+
+    assert_eq!(
+        tree.commit_text("X"),
+        vec![WidgetEvent::Input(id, "Xab".to_owned(), 1)]
+    );
+    relayout(&mut tree);
+    let node = tree
+        .snapshot()
+        .expect("snapshot")
+        .node(id)
+        .expect("node")
+        .clone();
+    assert!(node.preedit.is_none());
+}
+
+#[test]
+fn the_caret_area_follows_the_focused_field() {
+    let input = field("ab");
+    let mut tree = laid_out(input);
+    assert!(tree.caret_area().is_none());
+
+    tree.press_key("Tab");
+    let area = tree.caret_area().expect("caret area");
+    assert!(area.width >= 1);
+    assert!(area.height >= 1);
+}
+
+#[test]
+fn delete_surrounding_removes_whole_characters_around_the_caret() {
+    let word = "\u{43f}\u{440}\u{438}";
+    let (mut tree, id) = focused_field(word);
+    tree.press_key("Home");
+    tree.press_key("ArrowRight");
+
+    assert_eq!(
+        tree.delete_surrounding(2, 2),
+        vec![WidgetEvent::Input(id, "\u{438}".to_owned(), 0)]
+    );
+}

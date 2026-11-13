@@ -136,7 +136,7 @@ pub use text::{
 };
 pub use texture::{Texture, TextureError};
 pub use widget::{
-    Class, Dirty, KeyModifiers, Layers, StyleSet, StyleState, TextStylePatch, TextStyleSet,
-    Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot,
-    WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    CaretArea, Class, Dirty, KeyModifiers, Layers, StyleSet, StyleState, TextStylePatch,
+    TextStyleSet, Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind,
+    WidgetSnapshot, WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };

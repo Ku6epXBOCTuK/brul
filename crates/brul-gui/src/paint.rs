@@ -102,6 +102,11 @@ impl Frame {
                 if let Some(text) = &node.text {
                     self.paint_text(node, text, atlas, opacity, clip);
                 }
+                if let Some(preedit) = &node.preedit
+                    && let Some(caret) = node.caret
+                {
+                    self.paint_preedit(node, preedit, caret, atlas, opacity, clip);
+                }
                 if let Some(caret) = node.caret {
                     self.paint_caret(node, caret, opacity, clip);
                 }
@@ -161,6 +166,18 @@ impl Frame {
         opacity: f32,
         clip: Clip,
     ) {
+        self.paint_glyphs(node, text, 0, atlas, opacity, clip);
+    }
+
+    fn paint_glyphs(
+        &mut self,
+        node: &WidgetSnapshotNode,
+        text: &crate::TextLayout,
+        shift: i32,
+        atlas: &Atlas,
+        opacity: f32,
+        clip: Clip,
+    ) {
         let Some(clip) = node_clip(node, clip) else {
             return;
         };
@@ -172,7 +189,7 @@ impl Frame {
             - node.scroll;
         for glyph in &text.glyphs {
             let slot = glyph.slot;
-            let origin_x = node.content_x.saturating_add(glyph.x);
+            let origin_x = node.content_x.saturating_add(shift).saturating_add(glyph.x);
             let origin_y = node
                 .content_y
                 .saturating_add(glyph.y)
@@ -238,6 +255,45 @@ impl Frame {
                     self.blend_rgba(x, y, color, opacity);
                 }
             }
+        }
+    }
+
+    fn paint_preedit(
+        &mut self,
+        node: &WidgetSnapshotNode,
+        preedit: &crate::TextLayout,
+        caret: crate::CaretPosition,
+        atlas: &Atlas,
+        opacity: f32,
+        clip: Clip,
+    ) {
+        let shift = caret.x.saturating_sub(preedit.size.width as i32);
+        self.paint_glyphs(node, preedit, shift, atlas, opacity, clip);
+        let Some(clip) = node_clip(node, clip) else {
+            return;
+        };
+        let height = node
+            .text
+            .as_ref()
+            .map_or(caret.y, |text| text.size.height as i32);
+        let offset = node
+            .style
+            .vertical_align
+            .offset(node.content_height, height as u32) as i32
+            - node.scroll;
+        let top = node
+            .content_y
+            .saturating_add(caret.y)
+            .saturating_add(offset)
+            .saturating_add(preedit.size.height as i32)
+            .saturating_sub(1);
+        let left = node.content_x.saturating_add(shift);
+        let right = left.saturating_add(preedit.size.width as i32);
+        for x in left..right {
+            if !clip.contains(i64::from(x), i64::from(top)) || !visible(&node.clips, x, top) {
+                continue;
+            }
+            self.blend_rgba(x, top, node.style.text, opacity);
         }
     }
 
