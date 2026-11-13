@@ -101,6 +101,7 @@ pub(crate) struct TreeApp {
     paste: bool,
     ime_enabled: bool,
     ime_area: Option<CaretArea>,
+    initial: Vec<WindowCommand>,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -152,13 +153,26 @@ pub(crate) fn tree_app(
         paste: false,
         ime_enabled: false,
         ime_area: None,
+        initial: Vec::new(),
     };
-    for command in initial {
-        if let WindowCommand::Every { interval, function } = command {
-            app.timers.push(Timer::new(interval, function));
+    let (timers, initial) = split_initial(initial);
+    app.timers = timers;
+    app.initial = initial;
+    app
+}
+
+fn split_initial(commands: Vec<WindowCommand>) -> (Vec<Timer>, Vec<WindowCommand>) {
+    let mut timers = Vec::new();
+    let mut rest = Vec::new();
+    for command in commands {
+        match command {
+            WindowCommand::Every { interval, function } => {
+                timers.push(Timer::new(interval, function));
+            }
+            command => rest.push(command),
         }
     }
-    app
+    (timers, rest)
 }
 impl TreeApp {
     pub(crate) fn open(
@@ -214,7 +228,8 @@ impl TreeApp {
         info!(title = %self.config.title, width = size.width, height = size.height, "window opened");
         window.set_visible(self.config.visible);
         window.request_redraw();
-        Step::Continue
+        let commands = std::mem::take(&mut self.initial);
+        self.run_commands(&window, commands)
     }
 
     pub(crate) fn event(&mut self, window_id: WindowId, event: &WindowEvent) -> Step {
@@ -746,6 +761,7 @@ mod tests {
         );
 
         assert_eq!(app.timers.len(), 1);
+        assert_eq!(app.initial, vec![WindowCommand::Exit]);
     }
     fn commands(commands: Vec<WindowCommand>) -> EventHandler {
         Box::new(move |_| commands.clone())
