@@ -532,6 +532,24 @@ window Demo (title: "demo", on key: quit) {
 }
 
 #[test]
+fn emits_a_window_close_handler() {
+    let source = r#"<script>
+    function hide() { }
+</script>
+
+<markup>
+window Demo (title: "demo", on close: hide) {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        r#"handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::Close, "hide"));"#
+    ));
+}
+
+#[test]
 fn rejects_invalid_events() {
     let unknown = r#"<markup>
 window Demo (title: "demo") {
@@ -564,6 +582,17 @@ window Demo (title: "demo") {
     assert_eq!(
         emit::module(key).expect_err("error").message,
         "key events are only supported on the window"
+    );
+
+    let close = r#"<markup>
+window Demo (title: "demo") {
+    View (on close: quit) { }
+}
+</markup>
+"#;
+    assert_eq!(
+        emit::module(close).expect_err("error").message,
+        "close events are only supported on the window"
     );
 
     let window = r#"<markup>

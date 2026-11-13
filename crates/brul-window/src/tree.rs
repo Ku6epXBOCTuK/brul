@@ -234,7 +234,7 @@ impl TreeApp {
             None => {}
         }
         match input {
-            Some(Input::Exit) => Step::Close,
+            Some(Input::Exit) => self.dispatch_events(&window, vec![WidgetEvent::Close]),
             Some(Input::Redraw) => self.render(&window),
             Some(input) => {
                 let step = self.handle(&window, input);
@@ -888,6 +888,22 @@ mod tests {
         let step = app.dispatch_events(&surface, vec![WidgetEvent::Drag(widget)]);
         assert_eq!(step, Step::Continue);
         assert_eq!(surface.drags.get(), 1);
+    }
+
+    #[test]
+    fn a_close_request_waits_for_the_handler() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+        assert_eq!(
+            app.dispatch_events(&surface, vec![WidgetEvent::Close]),
+            Step::Continue
+        );
+
+        let mut app = tree_app(commands(vec![WindowCommand::Close]));
+        assert_eq!(
+            app.dispatch_events(&surface, vec![WidgetEvent::Close]),
+            Step::Close
+        );
     }
 
     #[test]

@@ -6,7 +6,7 @@ use brul_gui::{
     WidgetStyle, WidgetTree,
 };
 use brul_reactive::{Effect, Signal, batch};
-use brul_window::{WindowConfig, run_tree};
+use brul_window::{WindowCommand, WindowConfig, run_tree};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let base = WidgetStyle {
@@ -51,6 +51,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .any(|event| matches!(event, WidgetEvent::Click(_)))
         {
             batch(|| checked.set(!checked.get()));
+        }
+        if events
+            .iter()
+            .any(|event| matches!(event, WidgetEvent::Close))
+        {
+            return vec![WindowCommand::Close];
         }
         Vec::new()
     })?;

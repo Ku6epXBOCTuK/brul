@@ -11,7 +11,8 @@ use brul_window::{WindowCommand, WindowKey};
 use crate::each::reconcile_each;
 use crate::event::{arguments, call, handler_target};
 use crate::{
-    Binding, Built, ComponentHandle, Error, Handler, Host, PropBinding, RowInfo, Structure, Value,
+    Binding, Built, ComponentHandle, Error, Handler, HandlerEvent, Host, PropBinding, RowInfo,
+    Structure, Value,
 };
 
 const EVENT_DEPTH: usize = 64;
@@ -333,6 +334,7 @@ impl Ui {
                 WidgetEvent::Timer(function) => {
                     call(&self.component, function, Vec::new());
                 }
+                WidgetEvent::Close => self.close(),
                 _ => self.dispatch_event(event),
             }
             self.pump_events();
@@ -363,6 +365,17 @@ impl Ui {
             return;
         };
         call(&handler.component, &handler.function, arguments(event));
+    }
+
+    fn close(&mut self) {
+        let handler = self
+            .handlers
+            .iter()
+            .find(|handler| handler.widget.is_none() && handler.event == HandlerEvent::Close);
+        match handler {
+            Some(handler) => call(&handler.component, &handler.function, Vec::new()),
+            None => self.commands.borrow_mut().push(WindowCommand::Close),
+        }
     }
 
     fn take_commands(&mut self) -> Vec<WindowCommand> {
@@ -1189,6 +1202,36 @@ mod tests {
         assert_eq!(
             seen,
             Value::Object(vec![("code".to_owned(), Value::String("Enter".into()))].into())
+        );
+    }
+
+    #[test]
+    fn a_close_handler_keeps_the_window_open() {
+        let component = component_with(
+            vec![function("closing", Vec::new(), vec![let_true("ran")])],
+            &["ran"],
+        );
+        let (_, mut ui) = dispatching(&component, Widget::text(""), |_| {
+            vec![Handler::new(
+                &component,
+                None,
+                HandlerEvent::Close,
+                "closing",
+            )]
+        });
+
+        assert!(ui.dispatch(&[WidgetEvent::Close]).is_empty());
+        assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+    }
+
+    #[test]
+    fn a_close_without_a_handler_closes_the_window() {
+        let component = component_with(Vec::new(), &[]);
+        let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
+
+        assert_eq!(
+            ui.dispatch(&[WidgetEvent::Close]),
+            vec![WindowCommand::Close]
         );
     }
 

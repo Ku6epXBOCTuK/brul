@@ -40,6 +40,7 @@ pub(crate) fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, H
         WidgetEvent::Input(id, _, _) => Some((Some(*id), HandlerEvent::Input)),
         WidgetEvent::Submit(id) => Some((Some(*id), HandlerEvent::Submit)),
         WidgetEvent::Key(_) => Some((None, HandlerEvent::Key)),
+        WidgetEvent::Close => Some((None, HandlerEvent::Close)),
         WidgetEvent::Drag(_) => None,
         WidgetEvent::Timer(_) => None,
         WidgetEvent::Copy(_) => None,
@@ -92,10 +93,14 @@ mod tests {
     }
 
     #[test]
-    fn handler_target_leaves_out_the_widget_for_keys_and_ignores_drag_and_timer() {
+    fn handler_target_names_window_events_without_a_widget() {
         assert_eq!(
             handler_target(&WidgetEvent::Key("Escape".to_owned())),
             Some((None, HandlerEvent::Key))
+        );
+        assert_eq!(
+            handler_target(&WidgetEvent::Close),
+            Some((None, HandlerEvent::Close))
         );
         let id = Widget::text("x").id();
         assert_eq!(handler_target(&WidgetEvent::Drag(id)), None);

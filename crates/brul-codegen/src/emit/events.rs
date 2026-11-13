@@ -44,6 +44,12 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
                 "key events are only supported on the window",
             ));
         }
+        if event == HandlerEvent::Close {
+            return Err(error_at(
+                element.position,
+                "close events are only supported on the window",
+            ));
+        }
         if event == HandlerEvent::Drag {
             if handler != "dragWindow" {
                 return Err(error_at(
@@ -106,7 +112,7 @@ pub(super) fn window(
                 format!("event '{}' is not supported yet", item.event),
             ));
         };
-        if event != HandlerEvent::Key {
+        if !matches!(event, HandlerEvent::Key | HandlerEvent::Close) {
             return Err(error_at(
                 item.position,
                 format!("window event '{}' is not supported yet", event.name()),

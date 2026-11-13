@@ -888,6 +888,7 @@ pub enum WidgetEvent {
     Click(WidgetId),
     Drag(WidgetId),
     Key(String),
+    Close,
     Timer(String),
     Focus(WidgetId),
     Blur(WidgetId),
