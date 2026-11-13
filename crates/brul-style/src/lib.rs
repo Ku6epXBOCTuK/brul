@@ -10,7 +10,9 @@ pub use ast::{
     Animation, ClassRule, Color, Gradient, GradientColor, Property, State, Stylesheet, Theme,
     ThemeEntry, Value,
 };
-pub use properties::{Kind, SPECS, Side, Spec, StatePolicy, ThemeType};
+pub use properties::{
+    Kind, LayoutField, SPECS, Side, Spec, StatePolicy, StyleField, Target, TextField, ThemeType,
+};
 pub use snapshot::{Snapshot, SnapshotError};
 pub use ty::Type;
 pub use validate::ValidationError;

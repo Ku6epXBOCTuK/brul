@@ -2,7 +2,8 @@ use std::fmt;
 use std::time::Duration;
 
 use brul_style::{
-    GradientColor, Kind, Property, Side, Snapshot, SnapshotError, State, Stylesheet, Type, Value,
+    GradientColor, Kind, LayoutField, Property, Side, Snapshot, SnapshotError, State, StyleField,
+    Stylesheet, Target, TextField, Type, Value,
 };
 
 use crate::widget::{
@@ -160,17 +161,19 @@ fn state_patch(snapshot: &Snapshot) -> Result<(WidgetStylePatch, TextStylePatch)
     for property in snapshot.properties() {
         let kind = property.kind;
         let value = read(&property.value, kind)?;
-        match kind {
-            Kind::Background => style.background = Some(value.paint()),
-            Kind::BorderColor => style.border = Some(value.color()),
-            Kind::Color => style.text = Some(value.color()),
-            Kind::Tint => style.tint = Some(value.color()),
-            Kind::Opacity => style.opacity = Some(value.number() as f32),
-            Kind::Clip => style.clip = Some(value.flag()),
-            Kind::ShadowColor => style.shadow = Some(value.color()),
-            Kind::VerticalAlign => style.vertical_align = Some(vertical_align(value.keyword())),
-            Kind::TextAlign => text.align = Some(text_align(value.keyword())),
-            Kind::FontWeight => text.weight = Some(value.number() as u16),
+        match kind.target() {
+            Target::Style(StyleField::Background) => style.background = Some(value.paint()),
+            Target::Style(StyleField::Border) => style.border = Some(value.color()),
+            Target::Style(StyleField::Text) => style.text = Some(value.color()),
+            Target::Style(StyleField::Tint) => style.tint = Some(value.color()),
+            Target::Style(StyleField::Opacity) => style.opacity = Some(value.number() as f32),
+            Target::Style(StyleField::Clip) => style.clip = Some(value.flag()),
+            Target::Style(StyleField::ShadowColor) => style.shadow = Some(value.color()),
+            Target::Text(TextField::VerticalAlign) => {
+                style.vertical_align = Some(vertical_align(value.keyword()));
+            }
+            Target::Text(TextField::Align) => text.align = Some(text_align(value.keyword())),
+            Target::Text(TextField::Weight) => text.weight = Some(value.number() as u16),
             _ => {}
         }
     }
@@ -180,16 +183,16 @@ fn state_patch(snapshot: &Snapshot) -> Result<(WidgetStylePatch, TextStylePatch)
 fn transitions(snapshot: &Snapshot) -> Result<Transitions, StyleError> {
     let mut transitions = Transitions::default();
     for animation in snapshot.animations() {
-        let field = match animation.property {
-            Kind::Background => &mut transitions.background,
-            Kind::BorderColor => &mut transitions.border,
-            Kind::Color => &mut transitions.text,
-            Kind::Tint => &mut transitions.tint,
-            Kind::Opacity => &mut transitions.opacity,
-            Kind::ShadowColor => &mut transitions.shadow,
-            kind => {
+        let field = match animation.property.target() {
+            Target::Style(StyleField::Background) => &mut transitions.background,
+            Target::Style(StyleField::Border) => &mut transitions.border,
+            Target::Style(StyleField::Text) => &mut transitions.text,
+            Target::Style(StyleField::Tint) => &mut transitions.tint,
+            Target::Style(StyleField::Opacity) => &mut transitions.opacity,
+            Target::Style(StyleField::ShadowColor) => &mut transitions.shadow,
+            _ => {
                 return Err(StyleError::Value {
-                    kind,
+                    kind: animation.property,
                     expected: "an animatable property",
                 });
             }
@@ -301,37 +304,39 @@ fn apply(
 ) -> Result<(), StyleError> {
     let kind = property.kind;
     let value = read(&property.value, kind)?;
-    match kind {
-        Kind::Width => layout.width = value.length(),
-        Kind::Height => layout.height = value.length(),
-        Kind::Stretch => layout.stretch = value.number() as f32,
-        Kind::PaddingSide(side) => {
+    match kind.target() {
+        Target::Layout(LayoutField::Width) => layout.width = value.length(),
+        Target::Layout(LayoutField::Height) => layout.height = value.length(),
+        Target::Layout(LayoutField::Stretch) => layout.stretch = value.number() as f32,
+        Target::Layout(LayoutField::Padding(side)) => {
             *edge(&mut layout.padding, side) = value.px();
         }
-        Kind::Spacing => layout.spacing = value.px(),
-        Kind::BorderWidth => layout.border_width = value.px(),
-        Kind::JustifyContent => layout.justify = justify(value.keyword()),
-        Kind::AlignItems => layout.align = align(value.keyword()),
-        Kind::Background => style.background = value.paint(),
-        Kind::BorderColor => style.border = value.color(),
-        Kind::Color => style.text = value.color(),
-        Kind::Tint => style.tint = Some(value.color()),
-        Kind::Radius => style.radius = value.px(),
-        Kind::Opacity => style.opacity = value.number() as f32,
-        Kind::Clip => style.clip = value.flag(),
-        Kind::Scroll => style.scroll = value.flag(),
-        Kind::ShadowOffsetX => style.shadow.x = value.signed_px(),
-        Kind::ShadowOffsetY => style.shadow.y = value.signed_px(),
-        Kind::ShadowBlur => style.shadow.blur = value.px(),
-        Kind::ShadowColor => style.shadow.color = value.color(),
-        Kind::FontSize => {
+        Target::Layout(LayoutField::Spacing) => layout.spacing = value.px(),
+        Target::Layout(LayoutField::BorderWidth) => layout.border_width = value.px(),
+        Target::Layout(LayoutField::Justify) => layout.justify = justify(value.keyword()),
+        Target::Layout(LayoutField::Align) => layout.align = align(value.keyword()),
+        Target::Style(StyleField::Background) => style.background = value.paint(),
+        Target::Style(StyleField::Border) => style.border = value.color(),
+        Target::Style(StyleField::Text) => style.text = value.color(),
+        Target::Style(StyleField::Tint) => style.tint = Some(value.color()),
+        Target::Style(StyleField::Radius) => style.radius = value.px(),
+        Target::Style(StyleField::Opacity) => style.opacity = value.number() as f32,
+        Target::Style(StyleField::Clip) => style.clip = value.flag(),
+        Target::Style(StyleField::Scroll) => style.scroll = value.flag(),
+        Target::Style(StyleField::ShadowX) => style.shadow.x = value.signed_px(),
+        Target::Style(StyleField::ShadowY) => style.shadow.y = value.signed_px(),
+        Target::Style(StyleField::ShadowBlur) => style.shadow.blur = value.px(),
+        Target::Style(StyleField::ShadowColor) => style.shadow.color = value.color(),
+        Target::Text(TextField::Size) => {
             text.font_size = value.px() as f32;
             text.line_height = text.font_size * 1.2;
         }
-        Kind::FontFamily => text.family = Some(value.text().to_owned()),
-        Kind::TextAlign => text.align = text_align(value.keyword()),
-        Kind::VerticalAlign => style.vertical_align = vertical_align(value.keyword()),
-        Kind::FontWeight => text.weight = value.number() as u16,
+        Target::Text(TextField::Family) => text.family = Some(value.text().to_owned()),
+        Target::Text(TextField::Align) => text.align = text_align(value.keyword()),
+        Target::Text(TextField::VerticalAlign) => {
+            style.vertical_align = vertical_align(value.keyword())
+        }
+        Target::Text(TextField::Weight) => text.weight = value.number() as u16,
     }
     Ok(())
 }
