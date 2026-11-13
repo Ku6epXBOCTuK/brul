@@ -87,7 +87,7 @@ impl brul::Host for RecordingHost {
 
 #[test]
 fn window_config_comes_from_the_markup() {
-    let config = generated::window();
+    let config = generated::picker_window();
     assert_eq!(config.title, "bropicker");
     assert_eq!(config.width, 488);
     assert_eq!(config.height, 800);
@@ -214,7 +214,7 @@ fn markup_script_block_is_emitted() {
 #[test]
 fn the_picker_view_builds_with_its_handlers_and_bindings() {
     let component = seeded();
-    let built = generated::view(None, &component).expect("generated view");
+    let built = generated::picker_view(None, &component).expect("generated view");
     let structures = brul::take_structures();
     let Built {
         widget,
@@ -242,7 +242,7 @@ fn the_picker_view_builds_with_its_handlers_and_bindings() {
 #[test]
 fn structure_values_read_the_declared_seeds() {
     let component = seeded();
-    let _ = generated::view(None, &component).expect("generated view");
+    let _ = generated::picker_view(None, &component).expect("generated view");
     let structures = brul::take_structures();
 
     let each = structures
@@ -260,7 +260,7 @@ fn structure_values_read_the_declared_seeds() {
 #[test]
 fn structure_rebuild_rebuilds_rows() {
     let component = seeded();
-    let _ = generated::view(None, &component).expect("generated view");
+    let _ = generated::picker_view(None, &component).expect("generated view");
     let structures = brul::take_structures();
 
     let each = structures
@@ -279,7 +279,7 @@ fn structure_rebuild_rebuilds_rows() {
 #[test]
 fn component_structure_values_read_their_own_component() {
     let component = seeded();
-    let _ = generated::view(None, &component).expect("generated view");
+    let _ = generated::picker_view(None, &component).expect("generated view");
     assert_nested_values(&brul::take_structures());
 }
 
@@ -298,7 +298,7 @@ fn assert_nested_values(structures: &[brul::Structure]) {
 
 #[test]
 fn unknown_theme_is_rejected() {
-    let error = match generated::view(Some("sepia"), &seeded()) {
+    let error = match generated::picker_view(Some("sepia"), &seeded()) {
         Ok(_) => panic!("unknown theme was accepted"),
         Err(error) => error,
     };

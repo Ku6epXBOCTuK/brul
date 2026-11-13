@@ -4,7 +4,7 @@ use brul_codegen::emit;
 
 const LINES: usize = 354;
 const FUNCTIONS: usize = 18;
-const BYTES: usize = 16_033;
+const BYTES: usize = 16_024;
 
 #[test]
 fn fixed_markup_stays_within_the_output_budget() {

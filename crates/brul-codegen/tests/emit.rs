@@ -12,7 +12,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
+pub fn demo_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     component.borrow_mut().set_names(names());
     brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;
     let mut bindings = Vec::new();
@@ -51,7 +51,7 @@ fn styled(
         .map_err(|error| error.to_string())
 }
 
-pub fn window() -> brul::WindowConfig {
+pub fn demo_window() -> brul::WindowConfig {
     brul::WindowConfig {
         title: "demo".to_owned(),
         width: 960,
@@ -64,7 +64,7 @@ pub fn window() -> brul::WindowConfig {
 
 pub fn windows() -> Vec<brul::WindowDef> {
     vec![
-        brul::WindowDef { name: "Demo", config: window(), view },
+        brul::WindowDef { name: "Demo", config: demo_window(), view: demo_view },
     ]
 }
 
@@ -104,7 +104,7 @@ window Styled (title: "styled") {
 </markup>
 "#;
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
+pub fn styled_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
     component.borrow_mut().set_names(names());
     brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;
     let mut bindings = Vec::new();
@@ -165,7 +165,7 @@ fn styled(
         .map_err(|error| error.to_string())
 }
 
-pub fn window() -> brul::WindowConfig {
+pub fn styled_window() -> brul::WindowConfig {
     brul::WindowConfig {
         title: "styled".to_owned(),
         width: 960,
@@ -178,7 +178,7 @@ pub fn window() -> brul::WindowConfig {
 
 pub fn windows() -> Vec<brul::WindowDef> {
     vec![
-        brul::WindowDef { name: "Styled", config: window(), view },
+        brul::WindowDef { name: "Styled", config: styled_window(), view: styled_view },
     ]
 }
 
@@ -386,15 +386,15 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "fn structure0_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
+        "fn demo_if1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;"
+        "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;"
     ));
     assert!(module.contains("brul::Value::Bool(true) => vec!["));
     assert!(module.contains("brul::Value::Bool(false) => vec!["));
     assert!(module.contains(
-        "brul::register_structure(component, widget0.id(), false, structure0_value, structure0_rebuild);"
+        "brul::register_structure(component, widget0.id(), false, demo_if1_value, demo_if1_rebuild);"
     ));
     assert!(module.contains(r#""if condition expects Bool, got {}""#));
 }
@@ -411,10 +411,10 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "fn structure0_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
+        "fn demo_each1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn structure0_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;"
+        "fn demo_each1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;"
     ));
     assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
     assert!(module.contains(
@@ -423,10 +423,10 @@ window Demo (title: "demo") {
     assert!(module.contains(
         r#"brul::Variable { name: brul::VariableId::from_index(2), value: brul::Value::Number(position as f64) },"#
     ));
-    assert!(module.contains("let key = structure0_key(&mut component.borrow_mut()).ok();"));
+    assert!(module.contains("let key = demo_each1_key(&mut component.borrow_mut()).ok();"));
     assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count });"));
     assert!(module.contains(
-        "brul::register_structure(component, widget0.id(), true, structure0_value, structure0_rebuild);"
+        "brul::register_structure(component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);"
     ));
 }
 
@@ -509,7 +509,7 @@ window Demo (title: "demo", width: 488, height: 800, frameless: true, transparen
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "pub fn window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        ..brul::WindowConfig::default()\n    }\n}"
+        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        ..brul::WindowConfig::default()\n    }\n}"
     ));
 }
 
@@ -527,12 +527,14 @@ window Settings (title: "settings", width: 760, height: 560, frameless: false) {
 "#;
     let module = emit::module(source).expect("module");
 
-    assert!(module.contains("pub fn view1(theme: Option<&str>"));
+    assert!(module.contains("pub fn settings_view(theme: Option<&str>"));
     assert!(module.contains(
-        "pub fn window1() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,"
+        "pub fn settings_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,"
     ));
-    assert!(module.contains("name: \"Picker\", config: window(), view }"));
-    assert!(module.contains("name: \"Settings\", config: window1(), view: view1 }"));
+    assert!(module.contains("name: \"Picker\", config: picker_window(), view: picker_view }"));
+    assert!(
+        module.contains("name: \"Settings\", config: settings_window(), view: settings_view }")
+    );
 }
 
 #[test]
@@ -766,10 +768,8 @@ fn emits_imported_component() {
         ],
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
-    assert!(module.contains("pub fn component0_view(theme: Option<&str>"));
-    assert!(
-        module.contains("pub fn component0_script() -> Option<&'static brul::script::Program>")
-    );
+    assert!(module.contains("pub fn badge_view(theme: Option<&str>"));
+    assert!(module.contains("pub fn badge_script() -> Option<&'static brul::script::Program>"));
     assert!(module.contains("let built = brul::instance(component, brul::Instance {"));
     assert!(module.contains("bindings.extend(built.bindings);"));
     assert!(module.contains("props.extend(built.props);"));
@@ -796,11 +796,11 @@ fn splits_every_component_into_its_own_file() {
     let badge = &module.files[0];
     assert_eq!(badge.name, "bc_badge");
     assert!(badge.source.starts_with("use super::*;\n"));
-    assert!(badge.source.contains("pub fn component0_view"));
-    assert!(!badge.source.contains("pub fn view("));
+    assert!(badge.source.contains("pub fn badge_view"));
+    assert!(!badge.source.contains("pub fn demo_view("));
     assert!(module.root.contains("pub mod bc_badge {"));
     assert!(module.root.contains("pub use self::bc_badge::*;"));
-    assert!(module.root.contains("pub fn view("));
+    assert!(module.root.contains("pub fn demo_view("));
     assert_eq!(
         module.flat(),
         emit::module_file(&dir.join("window.brul")).unwrap()
@@ -1091,11 +1091,11 @@ window Demo (title: "demo") {
     std::fs::write(dir.join("check.png"), PNG_SIGNATURE).unwrap();
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(
-        module.contains("pub fn component0_resource_check() -> &'static [u8]"),
+        module.contains("pub fn badge_resource_check() -> &'static [u8]"),
         "{module}"
     );
     assert!(
-        module.contains("brul::gui::Image::from_bytes(component0_resource_check())"),
+        module.contains("brul::gui::Image::from_bytes(badge_resource_check())"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();

@@ -4,6 +4,8 @@ use brul_syntax::style::Stylesheet;
 
 use crate::{Import, Registry, Resource};
 
+pub(super) use structure::StructureNames;
+
 mod classes;
 mod component;
 mod element;
@@ -32,12 +34,14 @@ pub(super) struct Emit<'a> {
     registry: &'a Registry,
     imports: &'a [Import],
     resources: &'a [Resource],
+    base: &'a str,
     resource_prefix: &'a str,
     stylesheet: &'a Stylesheet,
     names: &'a Names<'a>,
     program: Option<&'a Program>,
     functions: &'a mut Vec<String>,
-    next_structure: &'a mut usize,
+    bases: &'a [String],
+    structures: &'a mut StructureNames,
     dynamic_classes: &'a mut bool,
 }
 

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use brul_syntax::error::Error;
@@ -10,6 +11,20 @@ use super::items;
 
 use brul_script::Names;
 
+#[derive(Default)]
+pub struct StructureNames {
+    counts: HashMap<String, usize>,
+}
+
+impl StructureNames {
+    fn next(&mut self, base: &str, kind: &str) -> String {
+        let key = format!("{base}_{kind}");
+        let count = self.counts.entry(key).or_insert(0);
+        *count += 1;
+        format!("{base}_{kind}{count}")
+    }
+}
+
 pub(super) fn structure_if(
     out: &mut String,
     block: &IfBlock,
@@ -17,13 +32,12 @@ pub(super) fn structure_if(
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let index = *emit.next_structure;
-    *emit.next_structure += 1;
+    let name = emit.structures.next(emit.base, "if");
     emit.functions
-        .push(value_function(index, &block.condition, emit.names));
-    let arm = rebuild_arm(index, block, emit, frame)?;
+        .push(value_function(&name, &block.condition, emit.names));
+    let arm = rebuild_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
-    inline(out, index, false, frame, counter);
+    inline(out, &name, false, frame, counter);
     Ok(())
 }
 
@@ -34,22 +48,21 @@ pub(super) fn structure_each(
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let index = *emit.next_structure;
-    *emit.next_structure += 1;
+    let name = emit.structures.next(emit.base, "each");
     emit.functions
-        .push(value_function(index, &block.collection, emit.names));
+        .push(value_function(&name, &block.collection, emit.names));
     if let Some(key) = &block.key {
-        emit.functions.push(key_function(index, key, emit.names));
+        emit.functions.push(key_function(&name, key, emit.names));
     }
-    let arm = each_arm(index, block, emit, frame)?;
+    let arm = each_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
-    inline(out, index, true, frame, counter);
+    inline(out, &name, true, frame, counter);
     Ok(())
 }
 
-fn value_function(index: usize, value: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
+fn value_function(name: &str, value: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
     format!(
-        "fn structure{index}_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
+        "fn {name}_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
     let value = {};
     Ok(value)
 }}
@@ -58,9 +71,9 @@ fn value_function(index: usize, value: &brul_syntax::ast::Expr, names: &Names<'_
     )
 }
 
-fn key_function(index: usize, key: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
+fn key_function(name: &str, key: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
     format!(
-        "fn structure{index}_key(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
+        "fn {name}_key(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
     let value = {};
     Ok(value)
 }}
@@ -69,39 +82,39 @@ fn key_function(index: usize, key: &brul_syntax::ast::Expr, names: &Names<'_>) -
     )
 }
 
-fn inline(out: &mut String, index: usize, each: bool, frame: Frame<'_>, counter: &mut usize) {
+fn inline(out: &mut String, name: &str, each: bool, frame: Frame<'_>, counter: &mut usize) {
     let pad = "    ".repeat(frame.depth());
     let inner = "    ".repeat(frame.depth() + 1);
-    let name = format!("widget{}", *counter);
+    let widget = format!("widget{}", *counter);
     *counter += 1;
     let _ = writeln!(out, "{pad}{{");
     let _ = writeln!(
         out,
-        "{inner}let (built, _rows) = structure{index}_rebuild(theme, component)?;"
+        "{inner}let (built, _rows) = {name}_rebuild(theme, component)?;"
     );
     let _ = writeln!(out, "{inner}bindings.extend(built.bindings);");
     let _ = writeln!(out, "{inner}handlers.extend(built.handlers);");
     let _ = writeln!(out, "{inner}props.extend(built.props);");
-    let _ = writeln!(out, "{inner}let {name} = built.widget;");
+    let _ = writeln!(out, "{inner}let {widget} = built.widget;");
     let _ = writeln!(
         out,
-        "{inner}brul::register_structure(component, {name}.id(), {each}, structure{index}_value, structure{index}_rebuild);"
+        "{inner}brul::register_structure(component, {widget}.id(), {each}, {name}_value, {name}_rebuild);"
     );
-    let _ = writeln!(out, "{inner}{name}");
+    let _ = writeln!(out, "{inner}{widget}");
     let _ = write!(out, "{pad}}}");
 }
 
 fn rebuild_arm(
-    index: usize,
+    name: &str,
     block: &IfBlock,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
 ) -> Result<String, Error> {
     let arm = arm_frame(emit.default_theme(), frame);
-    let mut out = arm_header(index, emit);
+    let mut out = arm_header(name, emit);
     let _ = writeln!(
         out,
-        "    let condition = structure{index}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let children = match condition {{"
+        "    let condition = {name}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let children = match condition {{"
     );
     out.push_str("        brul::Value::Bool(true) => vec![\n");
     let mut counter = 0;
@@ -120,17 +133,17 @@ fn rebuild_arm(
 }
 
 fn each_arm(
-    index: usize,
+    name: &str,
     block: &EachBlock,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
 ) -> Result<String, Error> {
     let arm = arm_frame(emit.default_theme(), frame);
-    let mut out = arm_header(index, emit);
+    let mut out = arm_header(name, emit);
     out.push_str("    let mut children = Vec::new();\n");
     let _ = writeln!(
         out,
-        "    let collection = structure{index}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let items = match collection {{"
+        "    let collection = {name}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let items = match collection {{"
     );
     out.push_str("        brul::Value::Array(items) => std::rc::Rc::unwrap_or_clone(items),\n");
     out.push_str(
@@ -155,7 +168,7 @@ fn each_arm(
         Some(_) => {
             let _ = writeln!(
                 out,
-                "        let key = structure{index}_key(&mut component.borrow_mut()).ok();"
+                "        let key = {name}_key(&mut component.borrow_mut()).ok();"
             );
         }
         None => out.push_str("        let key = None;\n"),
@@ -186,10 +199,10 @@ fn variable(name: &str, names: &Names<'_>) -> u32 {
         .index()
 }
 
-fn arm_header(index: usize, emit: &Emit<'_>) -> String {
+fn arm_header(name: &str, emit: &Emit<'_>) -> String {
     format!(
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-fn structure{index}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
+fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
     brul::gui::style::check_theme({}styles(), theme).map_err(|error| error.to_string())?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();

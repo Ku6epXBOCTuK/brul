@@ -11,6 +11,7 @@ use crate::Definition;
 use crate::error_at;
 
 use super::Emit;
+use super::StructureNames;
 use super::{classes, events, names, resources, script, style, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
@@ -59,7 +60,21 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
     let parsed = crate::parse_source(source)?;
     let registry = crate::resolve(&parsed.uses, base)?;
     let names = names::table(&parsed, &registry.definitions);
-    let mut next_structure = 0;
+    let mut used = HashSet::new();
+    let window_bases: Vec<String> = parsed
+        .windows
+        .iter()
+        .map(|window| unique(&identifier(&window.name), &mut used))
+        .collect();
+    let component_bases: Vec<String> = registry
+        .definitions
+        .iter()
+        .map(|definition| {
+            let stem = stem(&definition.path);
+            unique(&identifier(&stem), &mut used)
+        })
+        .collect();
+    let mut structures = StructureNames::default();
     let mut head = String::new();
     let mut head_functions = String::new();
     let mut configs = Vec::new();
@@ -77,19 +92,21 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
         let mut functions = Vec::new();
         view::view(
             &mut head,
-            &view_name(index),
+            &format!("{}_view", window_bases[index]),
             root,
             &window_handlers,
             &mut Emit {
                 registry: &registry,
                 imports: &registry.imports,
                 resources: &registry.resources,
+                base: &window_bases[index],
                 resource_prefix: "",
                 stylesheet: &parsed.stylesheet,
                 names: &names,
                 program: parsed.program.as_ref(),
                 functions: &mut functions,
-                next_structure: &mut next_structure,
+                bases: &component_bases,
+                structures: &mut structures,
                 dynamic_classes: &mut dynamic_classes,
             },
         )?;
@@ -109,10 +126,11 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
     let mut scripts = Vec::new();
     let mut component_bodies = Vec::new();
     let mut component_functions = String::new();
-    let mut used = HashSet::new();
     for (index, definition) in registry.definitions.iter().enumerate() {
         let root = definition_root(definition)?;
-        let prefix = format!("component{index}_");
+        let base = &component_bases[index];
+        let prefix = format!("{base}_");
+        let name = format!("bc_{base}");
         let mut body = String::new();
         let mut functions = Vec::new();
         let mut dynamic_classes = false;
@@ -126,12 +144,14 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
                 registry: &registry,
                 imports: &definition.imports,
                 resources: &definition.resources,
+                base,
                 resource_prefix: &prefix,
                 stylesheet: &definition.stylesheet,
                 names: &names,
                 program: definition.program.as_ref(),
                 functions: &mut functions,
-                next_structure: &mut next_structure,
+                bases: &component_bases,
+                structures: &mut structures,
                 dynamic_classes: &mut dynamic_classes,
             },
         )?;
@@ -139,7 +159,6 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
             classes::tables(&mut body, &prefix, &definition.stylesheet);
         }
         style::stylesheet(&mut body, &prefix, &definition.stylesheet);
-        let name = module_name(&definition.path, &mut used);
         let script_file = format!("{name}.script");
         body.push_str(&script::program(
             &format!("{prefix}script"),
@@ -169,10 +188,10 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
 
     let mut tail = String::new();
     for (index, config) in configs.iter().enumerate() {
-        window_config(&mut tail, index, config);
+        window_config(&mut tail, &window_bases[index], config);
     }
     tail.push('\n');
-    window_table(&mut tail, &parsed.windows);
+    window_table(&mut tail, &parsed.windows, &window_bases);
     tail.push_str(&script::program(
         "script",
         parsed.script.as_ref(),
@@ -226,29 +245,38 @@ pub use self::{name}::*;
     }
 }
 
-fn module_name(path: &Path, used: &mut HashSet<String>) -> String {
-    let stem = path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or("component");
-    let mut name: String = stem
+fn identifier(text: &str) -> String {
+    let mut name: String = text
         .chars()
         .map(|character| {
-            if character.is_ascii_alphanumeric() || character == '_' {
-                character
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
             } else {
                 '_'
             }
         })
         .collect();
-    name.insert_str(0, "bc_");
-    let mut candidate = name.clone();
+    if name.is_empty() || name.starts_with(|character: char| character.is_ascii_digit()) {
+        name.insert(0, '_');
+    }
+    name
+}
+
+fn unique(name: &str, used: &mut HashSet<String>) -> String {
+    let mut candidate = name.to_owned();
     let mut index = 1;
     while !used.insert(candidate.clone()) {
         candidate = format!("{name}{index}");
         index += 1;
     }
     candidate
+}
+
+fn stem(path: &Path) -> String {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("component")
+        .to_owned()
 }
 
 fn definition_root(definition: &Definition) -> Result<&Element, Error> {
@@ -279,22 +307,10 @@ fn definition_root(definition: &Definition) -> Result<&Element, Error> {
     Ok(root)
 }
 
-fn view_name(index: usize) -> String {
-    match index {
-        0 => "view".to_owned(),
-        index => format!("view{index}"),
-    }
-}
-
-fn window_config(out: &mut String, index: usize, config: &brul_window::WindowConfig) {
-    let name = if index == 0 {
-        "window".to_owned()
-    } else {
-        format!("window{index}")
-    };
+fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfig) {
     let _ = write!(
         out,
-        "pub fn {name}() -> brul::WindowConfig {{
+        "pub fn {base}_window() -> brul::WindowConfig {{
     brul::WindowConfig {{
         title: {:?}.to_owned(),
         width: {},
@@ -309,22 +325,13 @@ fn window_config(out: &mut String, index: usize, config: &brul_window::WindowCon
     );
 }
 
-fn window_table(out: &mut String, windows: &[Window]) {
+fn window_table(out: &mut String, windows: &[Window], bases: &[String]) {
     out.push_str("pub fn windows() -> Vec<brul::WindowDef> {\n    vec![\n");
     for (index, window) in windows.iter().enumerate() {
-        let config = if index == 0 {
-            "window()".to_owned()
-        } else {
-            format!("window{index}()")
-        };
-        let view = if index == 0 {
-            "view".to_owned()
-        } else {
-            format!("view: {}", view_name(index))
-        };
+        let base = &bases[index];
         let _ = writeln!(
             out,
-            "        brul::WindowDef {{ name: {:?}, config: {config}, {view} }},",
+            "        brul::WindowDef {{ name: {:?}, config: {base}_window(), view: {base}_view }},",
             window.name
         );
     }

@@ -37,7 +37,6 @@ pub(super) fn component(
     let defaults = defaults(element, definition, name, &props)?;
     write(
         out,
-        index,
         Call {
             name,
             props,
@@ -47,6 +46,7 @@ pub(super) fn component(
         frame,
         counter,
         emit.names,
+        &emit.bases[index],
     );
     Ok(())
 }
@@ -190,11 +190,11 @@ fn defaults<'a>(
 
 fn write(
     out: &mut String,
-    index: usize,
     call: Call<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
     names: &Names<'_>,
+    base: &str,
 ) {
     let Call {
         name,
@@ -212,8 +212,8 @@ fn write(
         "{inner}let built = brul::instance(component, brul::Instance {{"
     );
     let _ = writeln!(out, "{inner}    theme,");
-    let _ = writeln!(out, "{inner}    view: component{index}_view,");
-    let _ = writeln!(out, "{inner}    script: component{index}_script(),");
+    let _ = writeln!(out, "{inner}    view: {base}_view,");
+    let _ = writeln!(out, "{inner}    script: {base}_script(),");
     let _ = writeln!(out, "{inner}    name: {name:?},");
     let _ = writeln!(out, "{inner}    names: names(),");
     arguments(out, "props", &props, &inner, names);
