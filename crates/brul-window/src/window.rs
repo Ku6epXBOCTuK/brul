@@ -182,6 +182,7 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
         window: None,
         gpu: None,
         error: Rc::clone(&error),
+        revealed: false,
     };
     let result = event_loop.run_app(app);
 
@@ -311,7 +312,7 @@ pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
         .with_resizable(!config.frameless)
         .with_decorations(!config.frameless)
         .with_transparent(config.transparent)
-        .with_visible(config.visible);
+        .with_visible(false);
     if config.frameless {
         attributes = attributes
             .with_min_surface_size(size)
@@ -325,6 +326,7 @@ struct App {
     window: Option<Arc<dyn Window>>,
     gpu: Option<Gpu>,
     error: Rc<Cell<Option<WindowError>>>,
+    revealed: bool,
 }
 
 impl ApplicationHandler for App {
@@ -344,8 +346,7 @@ impl ApplicationHandler for App {
 
         self.window = Some(Arc::clone(&window));
         self.gpu = Some(gpu);
-        window.set_visible(self.config.visible);
-        window.request_redraw();
+        self.render(&window);
     }
 
     fn window_event(
@@ -439,6 +440,10 @@ impl App {
         gpu.queue.submit(Some(encoder.finish()));
         window.pre_present_notify();
         gpu.queue.present(frame);
+        if !self.revealed {
+            self.revealed = true;
+            window.set_visible(self.config.visible);
+        }
     }
 }
 
@@ -535,16 +540,14 @@ mod tests {
     }
 
     #[test]
-    fn a_hidden_window_starts_invisible() {
+    fn a_window_is_created_hidden_and_shown_with_its_first_frame() {
         let config = WindowConfig {
             visible: false,
             ..WindowConfig::default()
         };
 
-        let attributes = super::attributes(&config);
-
-        assert!(!attributes.visible);
-        assert!(super::attributes(&WindowConfig::default()).visible);
+        assert!(!super::attributes(&config).visible);
+        assert!(!super::attributes(&WindowConfig::default()).visible);
     }
 
     #[test]

@@ -103,6 +103,7 @@ pub(crate) struct TreeApp {
     ime_enabled: bool,
     ime_area: Option<CaretArea>,
     initial: Vec<WindowCommand>,
+    revealed: bool,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -155,6 +156,7 @@ pub(crate) fn tree_app(
         ime_enabled: false,
         ime_area: None,
         initial: Vec::new(),
+        revealed: false,
     };
     let (timers, initial) = split_initial(initial);
     app.timers = timers;
@@ -227,10 +229,12 @@ impl TreeApp {
         self.engine = Some(engine);
         self.frame = Some(Frame::new(size.width.max(1), size.height.max(1)));
         info!(title = %self.config.title, width = size.width, height = size.height, "window opened");
-        window.set_visible(self.config.visible);
-        window.request_redraw();
         let commands = std::mem::take(&mut self.initial);
-        self.run_commands(&window, commands)
+        let step = self.run_commands(&window, commands);
+        if !matches!(step, Step::Continue) {
+            return step;
+        }
+        self.render(&window)
     }
 
     pub(crate) fn event(&mut self, window_id: WindowId, event: &WindowEvent) -> Step {
@@ -553,8 +557,14 @@ impl TreeApp {
                 WindowCommand::Close => return Step::Close,
                 WindowCommand::Open(key) => return Step::Open(key),
                 WindowCommand::Drag => surface.drag(),
-                WindowCommand::Show => surface.set_visible(true),
-                WindowCommand::Hide => surface.set_visible(false),
+                WindowCommand::Show => {
+                    self.revealed = true;
+                    surface.set_visible(true);
+                }
+                WindowCommand::Hide => {
+                    self.revealed = true;
+                    surface.set_visible(false);
+                }
                 WindowCommand::Focus => surface.focus(),
                 WindowCommand::Every { interval, function } => {
                     self.timers.push(Timer::new(interval, function));
@@ -643,6 +653,10 @@ impl TreeApp {
         }
 
         renderer.present(surface, frame);
+        if !self.revealed {
+            self.revealed = true;
+            surface.set_visible(self.config.visible);
+        }
         Ok(())
     }
 }
@@ -1178,6 +1192,45 @@ mod tests {
 
         assert!(app.render_frame(&surface).is_ok());
         assert!(!app.tree.borrow().layout_dirty());
+    }
+
+    #[test]
+    fn the_first_frame_shows_the_window() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(Vec::new()));
+        app.engine = Some(TextEngine::new());
+        let (renderer, _) = FakeRenderer::new();
+        app.renderer = Some(Box::new(renderer));
+        app.frame = Some(Frame::new(8, 6));
+
+        assert_eq!(surface.visible.get(), None);
+        assert!(app.render_frame(&surface).is_ok());
+        assert_eq!(surface.visible.get(), Some(true));
+    }
+
+    #[test]
+    fn a_window_hidden_by_its_config_stays_hidden_after_the_first_frame() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = super::tree_app(
+            WindowConfig {
+                visible: false,
+                ..WindowConfig::default()
+            },
+            Rc::new(RefCell::new(WidgetTree::new(Widget::text("")))),
+            Some(Box::new(|_| {
+                Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))))
+            })),
+            commands(Vec::new()),
+            Rc::new(Cell::new(None)),
+            Vec::new(),
+        );
+        app.engine = Some(TextEngine::new());
+        let (renderer, _) = FakeRenderer::new();
+        app.renderer = Some(Box::new(renderer));
+        app.frame = Some(Frame::new(8, 6));
+
+        assert!(app.render_frame(&surface).is_ok());
+        assert_eq!(surface.visible.get(), Some(false));
     }
 
     #[test]
