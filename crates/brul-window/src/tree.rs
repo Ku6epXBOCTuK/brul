@@ -306,7 +306,8 @@ impl TreeApp {
     }
 
     fn press_key(&mut self, surface: &dyn Surface, code: String) -> Step {
-        self.dispatch_events(surface, vec![WidgetEvent::Key(code)])
+        let events = self.tree.borrow_mut().press_key(&code);
+        self.dispatch_events(surface, events)
     }
 
     fn move_pointer(&mut self, surface: &dyn Surface, x: f64, y: f64) -> Step {

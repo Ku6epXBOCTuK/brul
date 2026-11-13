@@ -90,6 +90,9 @@ fn element_expression(
     if events.drag {
         out.push_str(".draggable(true)");
     }
+    if events.focusable {
+        out.push_str(".focusable(true)");
+    }
     Ok(content)
 }
 
@@ -321,6 +324,7 @@ fn parameters(
                 y = Some(value);
                 continue;
             }
+            "focusable" => continue,
             _ => {
                 return Err(error_at(
                     value.position,

@@ -621,6 +621,7 @@ pub struct Widget {
     state: WidgetState,
     offset: Option<Offset>,
     draggable: bool,
+    focusable: bool,
 }
 
 enum WidgetData {
@@ -661,6 +662,7 @@ impl Widget {
             state,
             offset,
             draggable,
+            focusable,
         } = self;
         match data {
             WidgetData::View { children, .. } => children,
@@ -672,6 +674,7 @@ impl Widget {
                 state,
                 offset,
                 draggable,
+                focusable,
             }],
         }
     }
@@ -712,6 +715,7 @@ impl Widget {
             state: WidgetState::default(),
             offset: None,
             draggable: false,
+            focusable: false,
         }
     }
 
@@ -754,6 +758,11 @@ impl Widget {
 
     pub fn draggable(mut self, draggable: bool) -> Self {
         self.draggable = draggable;
+        self
+    }
+
+    pub fn focusable(mut self, focusable: bool) -> Self {
+        self.focusable = focusable;
         self
     }
 
@@ -820,6 +829,8 @@ pub enum WidgetEvent {
     Drag(WidgetId),
     Key(String),
     Timer(String),
+    Focus(WidgetId),
+    Blur(WidgetId),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -892,6 +903,7 @@ struct Node {
     state: WidgetState,
     offset: Option<Offset>,
     draggable: bool,
+    focusable: bool,
     scroll_offset: ScrollOffset,
     children: Vec<Slot>,
     transition: Option<Transition>,
@@ -952,6 +964,7 @@ pub struct WidgetTree {
     texts: HashMap<WidgetId, ShapedText>,
     hovered: Vec<Slot>,
     pressed: Vec<Slot>,
+    focused: Option<Slot>,
     dirty: HashSet<WidgetId>,
     stale: HashSet<Slot>,
     full_dirty: bool,
@@ -1037,6 +1050,7 @@ impl WidgetTree {
             texts: HashMap::new(),
             hovered: Vec::new(),
             pressed: Vec::new(),
+            focused: None,
             dirty: HashSet::new(),
             stale: HashSet::new(),
             full_dirty: true,
@@ -1055,6 +1069,7 @@ impl WidgetTree {
             state,
             offset,
             draggable,
+            focusable,
         } = widget;
         let (data, children) = match data {
             WidgetData::View {
@@ -1080,6 +1095,7 @@ impl WidgetTree {
             state,
             offset,
             draggable,
+            focusable,
             scroll_offset: ScrollOffset::ZERO,
             children: slots,
             transition: None,
@@ -1126,6 +1142,7 @@ impl WidgetTree {
             state: node.state,
             offset: node.offset,
             draggable: node.draggable,
+            focusable: node.focusable,
         };
         self.index.remove(&widget.id);
         self.free.push(slot);
@@ -1551,6 +1568,61 @@ impl WidgetTree {
             .map(|slot| self.nodes[slot.index()].id))
     }
 
+    pub fn focused(&self) -> Option<WidgetId> {
+        self.focused.map(|slot| self.nodes[slot.index()].id)
+    }
+
+    pub fn press_key(&mut self, code: &str) -> Vec<WidgetEvent> {
+        if code == "Tab" {
+            return self.focus_next();
+        }
+        vec![WidgetEvent::Key(code.to_owned())]
+    }
+
+    fn focus_next(&mut self) -> Vec<WidgetEvent> {
+        let slots = self.focusable_slots();
+        let Some(first) = slots.first().copied() else {
+            return self.focus_events(None);
+        };
+        let target = match self
+            .focused
+            .and_then(|current| slots.iter().position(|slot| *slot == current))
+        {
+            Some(index) => slots[(index + 1) % slots.len()],
+            None => first,
+        };
+        self.focus_events(Some(target))
+    }
+
+    fn focusable_slots(&self) -> Vec<Slot> {
+        let mut slots: Vec<Slot> = self
+            .index
+            .values()
+            .copied()
+            .filter(|slot| {
+                let node = &self.nodes[slot.index()];
+                node.focusable && node.state.visible && !node.state.disabled
+            })
+            .collect();
+        slots.sort_by_key(|slot| slot.index());
+        slots
+    }
+
+    fn focus_events(&mut self, slot: Option<Slot>) -> Vec<WidgetEvent> {
+        if self.focused == slot {
+            return Vec::new();
+        }
+        let mut events = Vec::with_capacity(2);
+        if let Some(previous) = self.focused {
+            events.push(WidgetEvent::Blur(self.nodes[previous.index()].id));
+        }
+        if let Some(next) = slot {
+            events.push(WidgetEvent::Focus(self.nodes[next.index()].id));
+        }
+        self.focused = slot;
+        events
+    }
+
     pub fn wheel(&mut self, x: i32, y: i32, dy: i32) -> bool {
         if dy == 0 {
             return false;
@@ -1616,7 +1688,12 @@ impl WidgetTree {
         let path = self.active_path(&self.hit_path(x, y)?);
         self.set_pressed(false);
 
-        let mut events = Vec::with_capacity(path.len());
+        let focus = path
+            .iter()
+            .rev()
+            .copied()
+            .find(|slot| self.nodes[slot.index()].focusable);
+        let mut events = self.focus_events(focus);
         for &slot in path.iter().rev() {
             let node = &mut self.nodes[slot.index()];
             node.state.pressed = true;

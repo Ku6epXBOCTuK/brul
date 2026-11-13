@@ -28,6 +28,8 @@ pub(crate) fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, H
         WidgetEvent::Release(id) => Some((Some(*id), HandlerEvent::Release)),
         WidgetEvent::PointerEnter(id) => Some((Some(*id), HandlerEvent::Enter)),
         WidgetEvent::PointerLeave(id) => Some((Some(*id), HandlerEvent::Leave)),
+        WidgetEvent::Focus(id) => Some((Some(*id), HandlerEvent::Focus)),
+        WidgetEvent::Blur(id) => Some((Some(*id), HandlerEvent::Blur)),
         WidgetEvent::Key(_) => Some((None, HandlerEvent::Key)),
         WidgetEvent::Drag(_) => None,
         WidgetEvent::Timer(_) => None,
@@ -49,6 +51,8 @@ mod tests {
             (WidgetEvent::Release(id), HandlerEvent::Release),
             (WidgetEvent::PointerEnter(id), HandlerEvent::Enter),
             (WidgetEvent::PointerLeave(id), HandlerEvent::Leave),
+            (WidgetEvent::Focus(id), HandlerEvent::Focus),
+            (WidgetEvent::Blur(id), HandlerEvent::Blur),
         ];
         for (event, expected) in cases {
             assert_eq!(handler_target(&event), Some((Some(id), expected)));

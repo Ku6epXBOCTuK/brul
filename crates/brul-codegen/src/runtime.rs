@@ -64,6 +64,8 @@ pub enum HandlerEvent {
     Leave,
     Drag,
     Key,
+    Focus,
+    Blur,
 }
 
 impl HandlerEvent {
@@ -76,6 +78,8 @@ impl HandlerEvent {
             Self::Leave => "leave",
             Self::Drag => "drag",
             Self::Key => "key",
+            Self::Focus => "focus",
+            Self::Blur => "blur",
         }
     }
 
@@ -88,6 +92,8 @@ impl HandlerEvent {
             "leave" => Some(Self::Leave),
             "drag" => Some(Self::Drag),
             "key" => Some(Self::Key),
+            "focus" => Some(Self::Focus),
+            "blur" => Some(Self::Blur),
             _ => None,
         }
     }
@@ -890,6 +896,8 @@ mod tests {
             HandlerEvent::Leave,
             HandlerEvent::Drag,
             HandlerEvent::Key,
+            HandlerEvent::Focus,
+            HandlerEvent::Blur,
         ];
         for event in events {
             assert_eq!(HandlerEvent::parse(event.name()), Some(event));

@@ -1,3 +1,4 @@
+use brul_syntax::ast::ExprKind;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Element};
@@ -9,13 +10,27 @@ use crate::window::HandlerArg;
 
 pub(super) struct Events {
     pub drag: bool,
+    pub focusable: bool,
     pub handlers: Vec<(HandlerEvent, String)>,
 }
 
 pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Events, Error> {
     let mut drag = false;
+    let mut focusable = false;
     let mut handlers = Vec::new();
     for arg in &element.args {
+        if let Arg::Named { name, value } = arg
+            && name == "focusable"
+        {
+            let ExprKind::Bool(enabled) = value.kind else {
+                return Err(error_at(
+                    value.position,
+                    "parameter 'focusable' must be a boolean literal",
+                ));
+            };
+            focusable = enabled;
+            continue;
+        }
         let Arg::Handler { event, handler } = arg else {
             continue;
         };
@@ -53,7 +68,11 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
         define(handler, program, element.position)?;
         handlers.push((event, handler.clone()));
     }
-    Ok(Events { drag, handlers })
+    Ok(Events {
+        drag,
+        focusable,
+        handlers,
+    })
 }
 
 pub(super) fn window(

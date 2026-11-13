@@ -345,6 +345,40 @@ window Demo (title: "demo") {
 }
 
 #[test]
+fn emits_the_focusable_flag_and_focus_handlers() {
+    let source = r#"<script>
+    function gained() { }
+    function lost() { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Row (focusable: true, on focus: gained, on blur: lost) { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(".focusable(true)"));
+    assert!(module.contains(r#"HandlerEvent::Focus, "gained""#));
+    assert!(module.contains(r#"HandlerEvent::Blur, "lost""#));
+}
+
+#[test]
+fn rejects_a_focusable_that_is_not_a_literal() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    Row (focusable: shown) { }
+}
+</markup>
+"#;
+    let error = emit::module(source).expect_err("error");
+    assert_eq!(
+        error.message,
+        "parameter 'focusable' must be a boolean literal"
+    );
+}
+
+#[test]
 fn emits_widget_handlers() {
     let source = r#"<script>
     function toggle() { }
