@@ -1,4 +1,93 @@
+#![allow(clippy::non_ascii_literal)]
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use brul::gui::{Size, TextEngine, WidgetKind, WidgetTree};
+use brul::{Component, ComponentHandle, Value};
 use note_obs::generated;
+
+fn seeded(presets: &[&str]) -> ComponentHandle {
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut state = component.borrow_mut();
+    state.set_names(generated::names());
+    let presets = Value::Array(Rc::new(
+        presets
+            .iter()
+            .map(|preset| Value::String((*preset).into()))
+            .collect(),
+    ));
+    for (name, value) in [
+        ("draft", Value::String("".into())),
+        ("status", Value::String("idle".into())),
+        ("live", Value::Bool(false)),
+        (
+            "hint",
+            Value::String(
+                "OBS obs · сцена Сцена · источник Источник · Ctrl+Enter — показать".into(),
+            ),
+        ),
+        ("presets", presets),
+        ("afkEnabled", Value::Bool(false)),
+        ("afkText", Value::String("".into())),
+        ("afkNote", Value::String("простой не отслеживается".into())),
+    ] {
+        state.declare(name, value, false).expect("seed");
+    }
+    drop(state);
+    component
+}
+
+fn note_view(presets: &[&str]) -> WidgetTree {
+    let built = generated::note_view(Some("dark"), &seeded(presets)).expect("generated view");
+    let _ = brul::take_structures();
+    WidgetTree::new(built.widget)
+}
+
+fn measure(tree: &mut WidgetTree) -> (i64, u32) {
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 520,
+            height: 480,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let bottom = snapshot
+        .nodes
+        .iter()
+        .map(|node| i64::from(node.y) + i64::from(node.height))
+        .max()
+        .expect("nodes");
+    let editor = snapshot
+        .nodes
+        .iter()
+        .find(|node| node.kind == WidgetKind::Input && node.width > 400)
+        .map(|node| node.height)
+        .expect("note field");
+    (bottom, editor)
+}
+
+#[test]
+fn the_note_fits_the_window_without_scrolling() {
+    for presets in [&[][..], &["готово", "позже", "думаю", "вопрос"][..]] {
+        let mut tree = note_view(presets);
+        let (bottom, editor) = measure(&mut tree);
+        assert!(
+            bottom <= 480,
+            "the content ends at {bottom} in a {}-preset window",
+            presets.len()
+        );
+        assert!(
+            editor >= 120,
+            "the note field shrinks to {editor} in a {}-preset window",
+            presets.len()
+        );
+    }
+}
 
 #[test]
 fn the_note_window_opens_centered() {
