@@ -28,6 +28,55 @@ fn column_stacks_with_padding_and_spacing() {
 }
 
 #[test]
+fn an_empty_child_takes_no_spacing() {
+    let root = LayoutNode::column(vec![
+        LayoutNode::leaf(50, 20),
+        LayoutNode::column(Vec::new()),
+        LayoutNode::leaf(50, 20),
+    ])
+    .with_style(LayoutStyle {
+        width: Dimension::Px(100),
+        height: Dimension::Px(100),
+        spacing: 5,
+        ..LayoutStyle::default()
+    });
+
+    let placed = layout(
+        &root,
+        Size {
+            width: 100,
+            height: 100,
+        },
+    )
+    .expect("layout");
+
+    assert_eq!(placed.children[0].y, 0);
+    assert_eq!(placed.children[2].y, 25);
+
+    let leading = LayoutNode::column(vec![
+        LayoutNode::column(Vec::new()),
+        LayoutNode::leaf(50, 20),
+    ])
+    .with_style(LayoutStyle {
+        width: Dimension::Px(100),
+        height: Dimension::Px(100),
+        spacing: 5,
+        ..LayoutStyle::default()
+    });
+
+    let placed = layout(
+        &leading,
+        Size {
+            width: 100,
+            height: 100,
+        },
+    )
+    .expect("layout");
+
+    assert_eq!(placed.children[1].y, 0);
+}
+
+#[test]
 fn percent_width_uses_parent_content_width() {
     let second = LayoutNode::leaf(0, 30).with_style(LayoutStyle {
         width: Dimension::Percent(50.0),

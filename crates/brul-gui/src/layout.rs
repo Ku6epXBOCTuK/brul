@@ -358,7 +358,7 @@ fn measure_container(
     }
 
     let flow = flow_indices(children);
-    let gap = gap_size(&style, flow.len());
+    let gap = gap_size(&style, occupied_count(&measured_children, &flow, direction));
     let (auto_width, auto_height) = auto_size(&style, direction, &measured_children, &flow, gap);
     let width = resolved_width.unwrap_or(auto_width);
     let height = resolved_height.unwrap_or(auto_height);
@@ -428,7 +428,11 @@ fn arrange(
     let content = content_size(style, size);
     let flow = flow_indices(children);
     let mut sizes: Vec<Size> = measured.children.iter().map(child_size).collect();
-    let gap = gap_size(style, flow.len());
+    let occupied = flow
+        .iter()
+        .filter(|&&index| main_size(sizes[index], *direction) > 0)
+        .count();
+    let gap = gap_size(style, occupied);
     let mut used_main = flow.iter().fold(0u32, |total, &index| {
         total.saturating_add(main_size(sizes[index], *direction))
     });
@@ -450,7 +454,7 @@ fn arrange(
         total.saturating_add(main_size(sizes[index], *direction))
     });
     let remaining = content_main.saturating_sub(used_main.saturating_add(gap));
-    let (start, between) = justify_offsets(style.justify, remaining, flow.len());
+    let (start, between) = justify_offsets(style.justify, remaining, occupied);
 
     let origin_x = clamp_i32(x as i64 + style.border_width as i64 + style.padding.left as i64);
     let origin_y = clamp_i32(y as i64 + style.border_width as i64 + style.padding.top as i64);
@@ -476,9 +480,11 @@ fn arrange(
             ),
         };
         spots[index] = Some((clamp_i32(position.0), clamp_i32(position.1)));
-        cursor += i64::from(main_size(sizes[index], *direction))
-            + i64::from(style.spacing)
-            + i64::from(between);
+        let main = main_size(sizes[index], *direction);
+        if main == 0 {
+            continue;
+        }
+        cursor += i64::from(main) + i64::from(style.spacing) + i64::from(between);
     }
 
     for (index, child) in children.iter().enumerate() {
@@ -590,6 +596,12 @@ fn flow_indices(children: &[LayoutNode]) -> Vec<usize> {
 
 fn gap_size(style: &LayoutStyle, count: usize) -> u32 {
     style.spacing.saturating_mul(count.saturating_sub(1) as u32)
+}
+
+fn occupied_count(children: &[Measured], flow: &[usize], direction: Direction) -> usize {
+    flow.iter()
+        .filter(|&&index| main_size(child_size(&children[index]), direction) > 0)
+        .count()
 }
 
 fn child_size(measured: &Measured) -> Size {
