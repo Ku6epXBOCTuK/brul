@@ -14,8 +14,15 @@ pub(crate) fn call(component: &ComponentHandle, function: &str, arguments: Vec<V
 
 pub(crate) fn arguments(event: &WidgetEvent) -> Vec<Value> {
     match event {
-        WidgetEvent::Key(code) => vec![Value::Object(
-            vec![("code".to_owned(), Value::String(code.as_str().into()))].into(),
+        WidgetEvent::Key { code, modifiers } => vec![Value::Object(
+            vec![
+                ("code".to_owned(), Value::String(code.as_str().into())),
+                ("ctrl".to_owned(), Value::Bool(modifiers.control)),
+                ("shift".to_owned(), Value::Bool(modifiers.shift)),
+                ("alt".to_owned(), Value::Bool(modifiers.alt)),
+                ("meta".to_owned(), Value::Bool(modifiers.meta)),
+            ]
+            .into(),
         )],
         WidgetEvent::Input(_, value, caret) => vec![Value::Object(
             vec![
@@ -39,7 +46,7 @@ pub(crate) fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, H
         WidgetEvent::Blur(id) => Some((Some(*id), HandlerEvent::Blur)),
         WidgetEvent::Input(id, _, _) => Some((Some(*id), HandlerEvent::Input)),
         WidgetEvent::Submit(id) => Some((Some(*id), HandlerEvent::Submit)),
-        WidgetEvent::Key(_) => Some((None, HandlerEvent::Key)),
+        WidgetEvent::Key { .. } => Some((None, HandlerEvent::Key)),
         WidgetEvent::Close => Some((None, HandlerEvent::Close)),
         WidgetEvent::Drag(_) => None,
         WidgetEvent::Timer(_) => None,
@@ -51,6 +58,8 @@ pub(crate) fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, H
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use brul_gui::KeyModifiers;
 
     use brul_gui::Widget;
 
@@ -93,9 +102,36 @@ mod tests {
     }
 
     #[test]
+    fn a_key_event_carries_the_modifiers() {
+        let event = WidgetEvent::Key {
+            code: "Enter".to_owned(),
+            modifiers: KeyModifiers {
+                control: true,
+                ..KeyModifiers::default()
+            },
+        };
+        assert_eq!(
+            arguments(&event),
+            vec![Value::Object(
+                vec![
+                    ("code".to_owned(), Value::String("Enter".into())),
+                    ("ctrl".to_owned(), Value::Bool(true)),
+                    ("shift".to_owned(), Value::Bool(false)),
+                    ("alt".to_owned(), Value::Bool(false)),
+                    ("meta".to_owned(), Value::Bool(false)),
+                ]
+                .into()
+            )]
+        );
+    }
+
+    #[test]
     fn handler_target_names_window_events_without_a_widget() {
         assert_eq!(
-            handler_target(&WidgetEvent::Key("Escape".to_owned())),
+            handler_target(&WidgetEvent::Key {
+                code: "Escape".to_owned(),
+                modifiers: KeyModifiers::default(),
+            }),
             Some((None, HandlerEvent::Key))
         );
         assert_eq!(

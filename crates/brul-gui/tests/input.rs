@@ -89,7 +89,10 @@ fn enter_submits_and_escape_and_tab_leave_the_field() {
     assert_eq!(tree.press_key("Enter"), vec![WidgetEvent::Submit(first_id)]);
     assert_eq!(
         tree.press_key("Escape"),
-        vec![WidgetEvent::Key("Escape".to_owned())]
+        vec![WidgetEvent::Key {
+            code: "Escape".to_owned(),
+            modifiers: KeyModifiers::default(),
+        }]
     );
     assert_eq!(
         tree.press_key("Tab"),
@@ -169,7 +172,13 @@ fn a_key_press_without_a_focused_field_still_reaches_the_window() {
     let plain = Widget::text("x").with_layout(fixed(40, 20));
     let mut tree = laid_out(Widget::column(vec![plain]).with_layout(fixed(100, 40)));
 
-    assert_eq!(tree.press_key("a"), vec![WidgetEvent::Key("a".to_owned())]);
+    assert_eq!(
+        tree.press_key("a"),
+        vec![WidgetEvent::Key {
+            code: "a".to_owned(),
+            modifiers: KeyModifiers::default(),
+        }]
+    );
 }
 
 fn multiline(value: &str) -> Widget {
@@ -466,6 +475,23 @@ fn pasting_replaces_the_selection_and_strips_newlines() {
     assert_eq!(
         tree.paste_text("x\r\ny"),
         vec![WidgetEvent::Input(id, "xy".to_owned(), 2)]
+    );
+}
+
+#[test]
+fn ctrl_enter_leaves_a_multiline_field_for_the_window() {
+    let input = multiline("a");
+    let mut tree = focused(laid_out(
+        Widget::column(vec![input]).with_layout(fixed(100, 40)),
+    ));
+    tree.set_modifiers(control());
+
+    assert_eq!(
+        tree.press_key("Enter"),
+        vec![WidgetEvent::Key {
+            code: "Enter".to_owned(),
+            modifiers: control(),
+        }]
     );
 }
 

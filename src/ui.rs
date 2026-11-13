@@ -1197,11 +1197,23 @@ mod tests {
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| {
             vec![Handler::new(&component, None, HandlerEvent::Key, "pressed")]
         });
-        ui.dispatch(&[WidgetEvent::Key("Enter".to_owned())]);
+        ui.dispatch(&[WidgetEvent::Key {
+            code: "Enter".to_owned(),
+            modifiers: brul_gui::KeyModifiers::default(),
+        }]);
         let seen = ui.component.borrow().read("seen").expect("seen");
         assert_eq!(
             seen,
-            Value::Object(vec![("code".to_owned(), Value::String("Enter".into()))].into())
+            Value::Object(
+                vec![
+                    ("code".to_owned(), Value::String("Enter".into())),
+                    ("ctrl".to_owned(), Value::Bool(false)),
+                    ("shift".to_owned(), Value::Bool(false)),
+                    ("alt".to_owned(), Value::Bool(false)),
+                    ("meta".to_owned(), Value::Bool(false)),
+                ]
+                .into()
+            )
         );
     }
 

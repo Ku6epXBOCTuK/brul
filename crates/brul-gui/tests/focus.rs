@@ -1,5 +1,6 @@
 use brul_gui::{
-    Dimension, Direction, LayoutStyle, Size, TextEngine, Widget, WidgetEvent, WidgetTree,
+    Dimension, Direction, KeyModifiers, LayoutStyle, Size, TextEngine, Widget, WidgetEvent,
+    WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -84,7 +85,10 @@ fn tab_walks_the_focusable_widgets_and_keeps_other_keys_for_the_window() {
     );
     assert_eq!(
         tree.press_key("Escape"),
-        vec![WidgetEvent::Key("Escape".to_owned())]
+        vec![WidgetEvent::Key {
+            code: "Escape".to_owned(),
+            modifiers: KeyModifiers::default(),
+        }]
     );
     assert_eq!(tree.focused(), Some(first_id));
 }

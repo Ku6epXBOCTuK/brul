@@ -545,7 +545,13 @@ mod tests {
             .create(WindowKey(1), ColorScheme::Dark)
             .expect("settings");
 
-        let commands = runtime.dispatch(WindowKey(1), &[WidgetEvent::Key("Escape".to_owned())]);
+        let commands = runtime.dispatch(
+            WindowKey(1),
+            &[WidgetEvent::Key {
+                code: "Escape".to_owned(),
+                modifiers: brul_gui::KeyModifiers::default(),
+            }],
+        );
 
         assert_eq!(commands, vec![WindowCommand::Close]);
         assert!(runtime.uis.contains_key(&WindowKey(0)));

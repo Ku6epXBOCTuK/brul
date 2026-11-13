@@ -887,7 +887,10 @@ pub enum WidgetEvent {
     Release(WidgetId),
     Click(WidgetId),
     Drag(WidgetId),
-    Key(String),
+    Key {
+        code: String,
+        modifiers: KeyModifiers,
+    },
     Close,
     Timer(String),
     Focus(WidgetId),
@@ -1747,6 +1750,13 @@ impl WidgetTree {
         reveal_carets(&mut self.nodes, &self.texts, &geometry.boxes);
     }
 
+    fn key_event(&self, code: &str) -> WidgetEvent {
+        WidgetEvent::Key {
+            code: code.to_owned(),
+            modifiers: self.modifiers,
+        }
+    }
+
     pub fn press_key(&mut self, code: &str) -> Vec<WidgetEvent> {
         if code == "Tab" {
             return if self.modifiers.shift {
@@ -1759,7 +1769,7 @@ impl WidgetTree {
             .focused
             .filter(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
         else {
-            return vec![WidgetEvent::Key(code.to_owned())];
+            return vec![self.key_event(code)];
         };
         let multiline = matches!(
             self.nodes[slot.index()].data,
@@ -1770,12 +1780,12 @@ impl WidgetTree {
         );
         let extend = self.modifiers.shift;
         match code {
-            "Escape" => vec![WidgetEvent::Key(code.to_owned())],
+            "Escape" => vec![self.key_event(code)],
             "ArrowUp" | "ArrowDown" if multiline => {
                 self.move_caret_line(slot, code == "ArrowUp", extend);
                 Vec::new()
             }
-            "ArrowUp" | "ArrowDown" => vec![WidgetEvent::Key(code.to_owned())],
+            "ArrowUp" | "ArrowDown" => vec![self.key_event(code)],
             "ArrowLeft" => {
                 self.move_caret(slot, false, extend);
                 Vec::new()
@@ -1801,6 +1811,7 @@ impl WidgetTree {
                 self.input_event(slot, changed)
             }
             "Enter" if !multiline => vec![WidgetEvent::Submit(self.nodes[slot.index()].id)],
+            "Enter" if self.modifiers.control => vec![self.key_event(code)],
             _ if self.modifiers.control => match code.to_ascii_uppercase().as_str() {
                 "A" => {
                     self.select_all(slot);
