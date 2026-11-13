@@ -15,9 +15,10 @@ use note_obs::{Config, default_path, generated};
 const USAGE: &str = "\
 nobs: текст в источник OBS
 
-Использование: nobs [--tray] [--help]
+Использование: nobs [--tray] [--quit] [--help]
 
   --tray       запустить без окна, только со значком в трее
+  --quit       попросить запущенный экземпляр выйти
   --help, -h   показать эту справку
 ";
 
@@ -74,7 +75,7 @@ fn presets(config: &Config) -> Value {
 host! { AppHost: submit, clear, set_afk, set_afk_text }
 
 fn main() -> ExitCode {
-    brul::logging::init();
+    brul::logging::init_with(&[env!("CARGO_PKG_NAME")]);
     std::panic::set_hook(Box::new(|info| error!(panic = %info, "panic")));
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -96,13 +97,26 @@ fn run() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
     let mut tray = false;
+    let mut quit = false;
     for argument in &arguments {
-        if argument == "--tray" {
-            tray = true;
-        } else {
-            return Err(format!("unknown option '{argument}', try --help").into());
+        match argument.as_str() {
+            "--tray" => tray = true,
+            "--quit" => quit = true,
+            other => return Err(format!("unknown option '{other}', try --help").into()),
         }
     }
+    if quit {
+        if let Err(failure) = note_obs::ipc::send(note_obs::ipc::QUIT) {
+            info!(%failure, "no running instance to quit");
+        }
+        return Ok(());
+    }
+
+    let Ok(socket) = note_obs::ipc::bind() else {
+        info!("another instance is running, asking it to show");
+        let _ = note_obs::ipc::send(note_obs::ipc::SHOW);
+        return Ok(());
+    };
 
     let path = default_path();
     let config = Config::load_or_create(&path)?;
@@ -140,6 +154,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Box::new(host)),
         move |handle| {
             job.start(handle.clone());
+            if let Err(failure) = note_obs::ipc::serve(socket, handle.clone()) {
+                error!(%failure, "ipc listener is unavailable");
+            }
             note_obs::tray::warn_missing(note_obs::tray::install(handle));
         },
     )

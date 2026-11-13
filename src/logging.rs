@@ -20,6 +20,15 @@ static INIT: Once = Once::new();
 /// По умолчанию уровень `info`, файл лежит в `~/.config/brul/<exe>.log` и
 /// дописывается, поэтому зависание остаётся в нём после перезапуска.
 pub fn init() {
+    init_with(&[]);
+}
+
+/// То же, что [`init`], но пишет ещё и события перечисленных крейтов.
+///
+/// Приложению нужно назвать свой крейт: фильтр знает только `brul*` и имя
+/// исполняемого файла.
+pub fn init_with(crates: &[&str]) {
+    let crates: Vec<String> = crates.iter().map(|name| name.replace('-', "_")).collect();
     INIT.call_once(|| {
         let level = std::env::var("BRUL_LOG")
             .ok()
@@ -37,7 +46,7 @@ pub fn init() {
         let file = fmt::layer()
             .with_writer(Mutex::new(file))
             .with_ansi(false)
-            .with_filter(targets(level, &stem));
+            .with_filter(targets(level, &stem, &crates));
         let _ = tracing_subscriber::registry().with(file).try_init();
     });
 }
@@ -90,7 +99,7 @@ fn open(path: &Path) -> io::Result<File> {
     fs::OpenOptions::new().create(true).append(true).open(path)
 }
 
-fn targets(level: LevelFilter, stem: &str) -> Targets {
+fn targets(level: LevelFilter, stem: &str, crates: &[String]) -> Targets {
     let mut targets = Targets::new()
         .with_target("brul", level)
         .with_target("brul_window", level)
@@ -101,6 +110,11 @@ fn targets(level: LevelFilter, stem: &str) -> Targets {
         .with_target("brul_reactive", level);
     if !stem.is_empty() {
         targets = targets.with_target(stem.to_owned(), level);
+    }
+    for target in crates {
+        if !target.is_empty() {
+            targets = targets.with_target(target.clone(), level);
+        }
     }
     targets
 }

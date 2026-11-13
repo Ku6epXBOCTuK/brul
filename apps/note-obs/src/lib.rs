@@ -6,6 +6,7 @@
 pub mod afk;
 pub mod config;
 pub mod generated;
+pub mod ipc;
 pub mod obs;
 pub mod tray;
 pub mod worker;
