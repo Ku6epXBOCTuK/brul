@@ -11,6 +11,7 @@ use brul_syntax::sfc;
 use brul_syntax::style::{self, Stylesheet};
 use brul_syntax::uses::{self, Block, Use};
 
+use crate::source::Script;
 use crate::{error_at, padded, sfc_error};
 
 pub struct Definition {
@@ -21,6 +22,7 @@ pub struct Definition {
     pub resources: Vec<Resource>,
     pub stylesheet: Rc<Stylesheet>,
     pub program: Option<Program>,
+    pub script: Option<Script>,
 }
 
 #[derive(Clone)]
@@ -158,6 +160,7 @@ impl Loader {
             resources,
             stylesheet: parsed.stylesheet,
             program: parsed.program,
+            script: parsed.script,
         });
         self.index.insert(path, index);
         Ok(index)
@@ -178,6 +181,7 @@ struct Parsed {
     uses: Block,
     stylesheet: Rc<Stylesheet>,
     program: Option<Program>,
+    script: Option<Script>,
 }
 
 fn parse(source: &str, path: &Path) -> Result<Parsed, Error> {
@@ -213,17 +217,19 @@ fn parse(source: &str, path: &Path) -> Result<Parsed, Error> {
             rules: Vec::new(),
         },
     };
-    let program = match sfc.script {
-        Some(block) => {
-            Some(script::parse(&padded(source, block)).map_err(|error| named(path, error))?)
-        }
-        None => None,
+    let (program, script) = match sfc.script {
+        Some(block) => (
+            Some(script::parse(&padded(source, block)).map_err(|error| named(path, error))?),
+            Some(Script::new(source, block)),
+        ),
+        None => (None, None),
     };
     Ok(Parsed {
         component,
         uses,
         stylesheet: Rc::new(stylesheet),
         program,
+        script,
     })
 }
 

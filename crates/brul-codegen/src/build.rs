@@ -63,6 +63,9 @@ pub fn app(entry: impl AsRef<Path>) -> Result<(), Error> {
     for file in &module.files {
         fs::write(output.join(format!("{}.rs", file.name)), &file.source)?;
     }
+    for file in &module.scripts {
+        fs::write(output.join(&file.name), &file.source)?;
+    }
     for file in sources(entry.parent().unwrap_or(&root))? {
         println!("cargo:rerun-if-changed={}", file.display());
     }

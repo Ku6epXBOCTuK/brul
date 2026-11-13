@@ -19,7 +19,7 @@ pub struct WindowDef {
 /// Запускает окна по модулю, сгенерированному из `.brul`.
 pub fn run_generated(
     windows: Vec<WindowDef>,
-    script: Option<script::Program>,
+    script: Option<&script::Program>,
     names: &'static [&'static str],
     theme: Option<&str>,
     seeds: &[(&str, Value)],
@@ -35,7 +35,7 @@ pub fn run_generated(
         "starting"
     );
 
-    let component = generated_component(names, script.as_ref(), seeds)?;
+    let component = generated_component(names, script, seeds)?;
     let keys = windows
         .iter()
         .enumerate()

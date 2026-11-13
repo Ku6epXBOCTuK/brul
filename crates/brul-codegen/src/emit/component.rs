@@ -213,10 +213,7 @@ fn write(
     );
     let _ = writeln!(out, "{inner}    theme,");
     let _ = writeln!(out, "{inner}    view: component{index}_view,");
-    let _ = writeln!(
-        out,
-        "{inner}    script: component{index}_script().as_ref(),"
-    );
+    let _ = writeln!(out, "{inner}    script: component{index}_script(),");
     let _ = writeln!(out, "{inner}    name: {name:?},");
     let _ = writeln!(out, "{inner}    names: names(),");
     arguments(out, "props", &props, &inner, names);

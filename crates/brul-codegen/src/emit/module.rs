@@ -14,6 +14,7 @@ use super::Emit;
 use super::{classes, events, names, resources, script, style, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
+const ROOT_SCRIPT: &str = "view.script";
 
 pub struct GeneratedFile {
     pub name: String,
@@ -23,6 +24,7 @@ pub struct GeneratedFile {
 pub struct Module {
     pub root: String,
     pub files: Vec<GeneratedFile>,
+    pub scripts: Vec<GeneratedFile>,
     flat: String,
 }
 
@@ -33,7 +35,7 @@ impl Module {
 }
 
 pub fn module(source: &str) -> Result<String, Error> {
-    let module = module_at(source, None)?;
+    let module = module_at(source, None, false)?;
     Ok(module.flat)
 }
 
@@ -50,10 +52,10 @@ pub fn split_module_file(path: &Path) -> Result<Module, Error> {
             format!("cannot read '{}': {error}", path.display()),
         )
     })?;
-    module_at(&source, path.parent())
+    module_at(&source, path.parent(), true)
 }
 
-fn module_at(source: &str, base: Option<&Path>) -> Result<Module, Error> {
+fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, Error> {
     let parsed = crate::parse_source(source)?;
     let registry = crate::resolve(&parsed.uses, base)?;
     let names = names::table(&parsed, &registry.definitions);
@@ -104,6 +106,7 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<Module, Error> {
     head.push_str(&resources::functions("", &registry.resources));
 
     let mut files = Vec::new();
+    let mut scripts = Vec::new();
     let mut component_bodies = Vec::new();
     let mut component_functions = String::new();
     let mut used = HashSet::new();
@@ -136,9 +139,12 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<Module, Error> {
             classes::tables(&mut body, &prefix, &definition.stylesheet);
         }
         style::stylesheet(&mut body, &prefix, &definition.stylesheet);
+        let name = module_name(&definition.path, &mut used);
+        let script_file = format!("{name}.script");
         body.push_str(&script::program(
             &format!("{prefix}script"),
-            definition.program.as_ref(),
+            definition.script.as_ref(),
+            split.then_some(script_file.as_str()),
         ));
         body.push_str(&resources::functions(&prefix, &definition.resources));
         let mut functions_block = String::new();
@@ -148,7 +154,12 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<Module, Error> {
             component_functions.push('\n');
             component_functions.push_str(function);
         }
-        let name = module_name(&definition.path, &mut used);
+        if let Some(script) = &definition.script {
+            scripts.push(GeneratedFile {
+                name: script_file,
+                source: script.text.clone(),
+            });
+        }
         let mut file = String::from("use super::*;\n");
         file.push_str(&body);
         file.push_str(&functions_block);
@@ -162,7 +173,11 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<Module, Error> {
     }
     tail.push('\n');
     window_table(&mut tail, &parsed.windows);
-    tail.push_str(&script::program("script", parsed.program.as_ref()));
+    tail.push_str(&script::program(
+        "script",
+        parsed.script.as_ref(),
+        split.then_some(ROOT_SCRIPT),
+    ));
     tail.push_str(&names::output(&names));
 
     let mut root = head.clone();
@@ -182,7 +197,19 @@ fn module_at(source: &str, base: Option<&Path>) -> Result<Module, Error> {
     flat.push('\n');
     flat.push_str(&tail);
 
-    Ok(Module { root, files, flat })
+    if let Some(script) = &parsed.script {
+        scripts.push(GeneratedFile {
+            name: ROOT_SCRIPT.to_owned(),
+            source: script.text.clone(),
+        });
+    }
+
+    Ok(Module {
+        root,
+        files,
+        scripts,
+        flat,
+    })
 }
 
 fn module_table(root: &mut String, files: &[GeneratedFile]) {

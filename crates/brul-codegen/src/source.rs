@@ -13,6 +13,21 @@ pub struct Source {
     pub stylesheet: Stylesheet,
     pub uses: Block,
     pub program: Option<Program>,
+    pub script: Option<Script>,
+}
+
+pub struct Script {
+    pub text: String,
+    pub line: usize,
+}
+
+impl Script {
+    pub fn new(source: &str, block: sfc::Block<'_>) -> Self {
+        Self {
+            text: block.content.to_owned(),
+            line: source[..block.offset].matches('\n').count() + 1,
+        }
+    }
 }
 
 pub fn parse(source: &str) -> Result<Source, Error> {
@@ -47,14 +62,18 @@ pub fn parse(source: &str) -> Result<Source, Error> {
         Some(block) => uses::parse(&padded(source, block))?,
         None => Block::default(),
     };
-    let program = match sfc.script {
-        Some(block) => Some(script::parse(&padded(source, block))?),
-        None => None,
+    let (program, script) = match sfc.script {
+        Some(block) => (
+            Some(script::parse(&padded(source, block))?),
+            Some(Script::new(source, block)),
+        ),
+        None => (None, None),
     };
     Ok(Source {
         windows,
         stylesheet,
         uses,
         program,
+        script,
     })
 }

@@ -66,7 +66,7 @@ fn seeded() -> ComponentHandle {
         .expect("alwaysAsk seed");
     drop(state);
     let script = generated::script().expect("script block");
-    brul::execute_program(&mut component.borrow_mut(), &script).expect("script");
+    brul::execute_program(&mut component.borrow_mut(), script).expect("script");
     component
 }
 

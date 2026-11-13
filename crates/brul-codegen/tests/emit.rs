@@ -77,7 +77,7 @@ pub fn windows() -> Vec<brul::WindowDef> {
     ]
 }
 
-pub fn script() -> Option<brul::script::Program> {
+pub fn script() -> Option<&'static brul::script::Program> {
     None
 }
 
@@ -194,7 +194,7 @@ pub fn windows() -> Vec<brul::WindowDef> {
     ]
 }
 
-pub fn script() -> Option<brul::script::Program> {
+pub fn script() -> Option<&'static brul::script::Program> {
     None
 }
 
@@ -587,15 +587,11 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let module = emit::module(source).expect("module");
-    assert!(module.contains("Some(brul::script::Program {"));
-    assert!(module.contains(
-        r#"brul::script::Statement::Let { constant: true, name: "limit".to_owned(), value: Some("#
-    ));
-    assert!(module.contains(
-        r#"brul::script::Function { name: "bump".to_owned(), params: vec!["step".to_owned()], body: vec![brul::script::Statement::If {"#
-    ));
-    assert!(module.contains("brul::script::Statement::Block(vec![brul::script::Statement::Expr("));
-    assert!(module.contains("brul::ast::ExprKind::Assign {"));
+    assert!(module.contains("pub fn script() -> Option<&'static brul::script::Program> {"));
+    assert!(module.contains("const SOURCE: &str = r#\""));
+    assert!(module.contains("const limit = 2;"));
+    assert!(module.contains("brul::script::parse(&text)"));
+    assert!(!module.contains("brul::script::Statement::"));
 }
 
 #[test]
@@ -783,7 +779,9 @@ fn emits_imported_component() {
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("pub fn component0_view(theme: Option<&str>"));
-    assert!(module.contains("pub fn component0_script() -> Option<brul::script::Program>"));
+    assert!(
+        module.contains("pub fn component0_script() -> Option<&'static brul::script::Program>")
+    );
     assert!(module.contains("let built = brul::instance(component, brul::Instance {"));
     assert!(module.contains("bindings.extend(built.bindings);"));
     assert!(module.contains("props.extend(built.props);"));

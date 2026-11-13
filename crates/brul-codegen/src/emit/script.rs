@@ -1,85 +1,42 @@
 use std::fmt::Write;
 
-use brul_syntax::script::{Function, Program, Statement};
+use crate::source::Script;
 
-use super::expression;
-
-pub(super) fn program(name: &str, program: Option<&Program>) -> String {
+pub(super) fn program(name: &str, script: Option<&Script>, file: Option<&str>) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "\npub fn {name}() -> Option<brul::script::Program> {{");
-    match program {
-        None => out.push_str("    None\n"),
-        Some(program) => {
-            out.push_str("    Some(brul::script::Program {\n        functions: vec![\n");
-            for function in &program.functions {
-                let _ = writeln!(out, "            {},", self::function(function));
-            }
-            out.push_str("        ],\n        statements: vec![\n");
-            for statement in &program.statements {
-                let _ = writeln!(out, "            {},", self::statement(statement));
-            }
-            out.push_str("        ],\n    })\n");
-        }
-    }
-    out.push_str("}\n");
+    let _ = writeln!(
+        out,
+        "\npub fn {name}() -> Option<&'static brul::script::Program> {{"
+    );
+    let Some(script) = script else {
+        out.push_str("    None\n}\n");
+        return out;
+    };
+    let source = match file {
+        Some(file) => format!("include_str!({file:?})"),
+        None => raw(&script.text),
+    };
+    let _ = writeln!(out, "    const SOURCE: &str = {source};");
+    out.push_str(
+        "    static PROGRAM: std::sync::LazyLock<Option<brul::script::Program>> = \
+         std::sync::LazyLock::new(|| {\n",
+    );
+    let _ = writeln!(
+        out,
+        "        let text = [\"\\n\".repeat({}).as_str(), SOURCE].concat();",
+        script.line - 1
+    );
+    out.push_str(
+        "        Some(brul::script::parse(&text).expect(\"the script was validated when the module was generated\"))\n    });\n    PROGRAM.as_ref()\n}\n",
+    );
     out
 }
 
-fn function(function: &Function) -> String {
-    let params: Vec<String> = function
-        .params
-        .iter()
-        .map(|name| format!("{name:?}.to_owned()"))
-        .collect();
-    format!(
-        "brul::script::Function {{ name: {:?}.to_owned(), params: vec![{}], body: {} }}",
-        function.name,
-        params.join(", "),
-        statements(&function.body)
-    )
-}
-
-fn statement(statement: &Statement) -> String {
-    match statement {
-        Statement::Let {
-            constant,
-            name,
-            value,
-        } => {
-            let value = value.as_ref().map_or_else(
-                || "None".to_owned(),
-                |value| format!("Some({})", expression(value)),
-            );
-            format!(
-                "brul::script::Statement::Let {{ constant: {constant}, name: {name:?}.to_owned(), value: {value} }}"
-            )
-        }
-        Statement::Expr(value) => {
-            format!("brul::script::Statement::Expr({})", expression(value))
-        }
-        Statement::Block(body) => {
-            format!("brul::script::Statement::Block({})", statements(body))
-        }
-        Statement::If {
-            condition,
-            then_branch,
-            else_branch,
-        } => {
-            let else_branch = else_branch.as_ref().map_or_else(
-                || "None".to_owned(),
-                |branch| format!("Some(Box::new({}))", self::statement(branch)),
-            );
-            format!(
-                "brul::script::Statement::If {{ condition: {}, then_branch: {}, else_branch: {} }}",
-                expression(condition),
-                statements(then_branch),
-                else_branch
-            )
-        }
+fn raw(text: &str) -> String {
+    let mut hashes = 1;
+    while text.contains(&format!("\"{}", "#".repeat(hashes))) {
+        hashes += 1;
     }
-}
-
-fn statements(body: &[Statement]) -> String {
-    let items: Vec<String> = body.iter().map(statement).collect();
-    format!("vec![{}]", items.join(", "))
+    let delimiter = "#".repeat(hashes);
+    format!("r{delimiter}\"{text}\"{delimiter}")
 }
