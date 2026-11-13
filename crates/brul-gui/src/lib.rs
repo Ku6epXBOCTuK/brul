@@ -131,12 +131,12 @@ pub use layout::{
 pub use paint::Frame;
 pub use rect::{ClipRect, Rect, RectSample, Shadow};
 pub use text::{
-    CaretPosition, CaretStop, PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize,
-    TextStyle, VerticalAlign,
+    CaretPosition, CaretStop, PlacedGlyph, SelectionRect, TextAlign, TextEngine, TextError,
+    TextLayout, TextSize, TextStyle, VerticalAlign,
 };
 pub use texture::{Texture, TextureError};
 pub use widget::{
-    Class, Dirty, Layers, StyleSet, StyleState, TextStylePatch, TextStyleSet, Transitions, Widget,
-    WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode,
-    WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Class, Dirty, KeyModifiers, Layers, StyleSet, StyleState, TextStylePatch, TextStyleSet,
+    Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot,
+    WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };

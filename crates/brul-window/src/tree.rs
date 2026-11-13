@@ -288,6 +288,10 @@ impl TreeApp {
         }
         match input {
             Input::Key(code) => self.press_key(surface, code),
+            Input::Modifiers(modifiers) => {
+                self.tree.borrow_mut().set_modifiers(modifiers);
+                Step::Continue
+            }
             Input::Moved(x, y) => self.move_pointer(surface, x, y),
             Input::Left => self.leave_pointer(surface),
             Input::Down(x, y) => self.press_pointer(surface, x, y),

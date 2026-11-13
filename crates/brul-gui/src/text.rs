@@ -96,6 +96,14 @@ pub struct CaretPosition {
     pub height: i32,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SelectionRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextLayout {
     pub size: TextSize,
@@ -118,6 +126,60 @@ impl TextLayout {
 
     pub fn caret_at(&self, x: i32, y: i32) -> usize {
         self.nearest(self.line_at(y), x)
+    }
+
+    pub fn line_start(&self, byte: usize) -> usize {
+        let line = self.caret(byte).y;
+        self.carets
+            .iter()
+            .find(|stop| stop.y == line)
+            .map_or(0, |stop| stop.byte)
+    }
+
+    pub fn line_end(&self, byte: usize) -> usize {
+        let line = self.caret(byte).y;
+        self.carets
+            .iter()
+            .rev()
+            .find(|stop| stop.y == line)
+            .map_or(0, |stop| stop.byte)
+    }
+
+    pub fn selection(&self, anchor: usize, caret: usize) -> Vec<SelectionRect> {
+        let (start, end) = if anchor <= caret {
+            (anchor, caret)
+        } else {
+            (caret, anchor)
+        };
+        let mut rects = Vec::new();
+        let mut index = 0;
+        while index < self.carets.len() {
+            let line = self.carets[index].y;
+            let first = index;
+            while index < self.carets.len() && self.carets[index].y == line {
+                index += 1;
+            }
+            let stops = &self.carets[first..index];
+            let line_start = stops.first().map_or(0, |stop| stop.byte);
+            let line_end = stops.last().map_or(0, |stop| stop.byte);
+            let from = start.max(line_start);
+            let to = end.min(line_end);
+            if from >= to {
+                continue;
+            }
+            let x = self.caret(from).x;
+            let width = self.caret(to).x.saturating_sub(x);
+            if width <= 0 {
+                continue;
+            }
+            rects.push(SelectionRect {
+                x,
+                y: stops[0].y,
+                width,
+                height: stops[0].height,
+            });
+        }
+        rects
     }
 
     pub fn caret_above(&self, byte: usize) -> Option<usize> {

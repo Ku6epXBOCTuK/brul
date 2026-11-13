@@ -1,5 +1,6 @@
+use brul_gui::KeyModifiers;
 use winit::event::{ButtonSource, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
-use winit::keyboard::{Key, NamedKey};
+use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::Theme;
 
 use crate::window::ColorScheme;
@@ -8,6 +9,7 @@ use crate::window::ColorScheme;
 pub(crate) enum Input {
     Exit,
     Key(String),
+    Modifiers(KeyModifiers),
     Moved(f64, f64),
     Left,
     Down(f64, f64),
@@ -58,10 +60,22 @@ pub(crate) fn point(x: f64, y: f64) -> (i32, i32) {
     (x.floor() as i32, y.floor() as i32)
 }
 
+pub(crate) fn modifiers(state: ModifiersState) -> KeyModifiers {
+    KeyModifiers {
+        shift: state.shift_key(),
+        control: state.control_key(),
+        alt: state.alt_key(),
+        meta: state.meta_key(),
+    }
+}
+
 pub(crate) fn window_input(event: &WindowEvent) -> Option<Input> {
     match event {
         WindowEvent::CloseRequested => Some(Input::Exit),
         WindowEvent::ThemeChanged(theme) => Some(Input::Theme(scheme(theme))),
+        WindowEvent::ModifiersChanged(modifiers_changed) => {
+            Some(Input::Modifiers(modifiers(modifiers_changed.state())))
+        }
         WindowEvent::SurfaceResized(_) | WindowEvent::ScaleFactorChanged { .. } => {
             Some(Input::Surface)
         }
@@ -117,7 +131,8 @@ fn is_left(button: &ButtonSource) -> bool {
 mod tests {
     use winit::dpi::PhysicalPosition;
     use winit::event::{
-        ButtonSource, ElementState, KeyEvent, MouseButton, PointerKind, PointerSource, WindowEvent,
+        ButtonSource, ElementState, KeyEvent, Modifiers, MouseButton, PointerKind, PointerSource,
+        WindowEvent,
     };
     use winit::keyboard::{Key, KeyCode, KeyLocation, NamedKey, PhysicalKey};
     use winit::window::Theme;
@@ -155,6 +170,32 @@ mod tests {
             button: ButtonSource::Mouse(button),
             is_macos_activation_click,
         }
+    }
+
+    #[test]
+    fn a_modifier_change_becomes_key_modifiers() {
+        let changed = WindowEvent::ModifiersChanged(Modifiers::from(ModifiersState::SHIFT));
+        assert_eq!(
+            window_input(&changed),
+            Some(Input::Modifiers(KeyModifiers {
+                shift: true,
+                ..KeyModifiers::default()
+            }))
+        );
+
+        let all = ModifiersState::SHIFT
+            | ModifiersState::CONTROL
+            | ModifiersState::ALT
+            | ModifiersState::META;
+        assert_eq!(
+            window_input(&WindowEvent::ModifiersChanged(Modifiers::from(all))),
+            Some(Input::Modifiers(KeyModifiers {
+                shift: true,
+                control: true,
+                alt: true,
+                meta: true,
+            }))
+        );
     }
 
     #[test]

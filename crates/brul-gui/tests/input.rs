@@ -1,4 +1,6 @@
-use brul_gui::{Dimension, LayoutStyle, Size, TextEngine, Widget, WidgetEvent, WidgetTree};
+use brul_gui::{
+    Dimension, KeyModifiers, LayoutStyle, Size, TextEngine, Widget, WidgetEvent, WidgetTree,
+};
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
     LayoutStyle {
@@ -291,5 +293,111 @@ fn a_click_on_the_second_line_places_the_caret_there() {
     assert_eq!(
         tree.press_key("Z"),
         vec![WidgetEvent::Input(id, "ab\ncdZ".to_owned(), 6)]
+    );
+}
+
+fn shift() -> KeyModifiers {
+    KeyModifiers {
+        shift: true,
+        ..KeyModifiers::default()
+    }
+}
+
+#[test]
+fn shift_and_arrow_select_text_that_an_arrow_collapses() {
+    let input = field("ab");
+    let id = input.id();
+    let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+    tree.press_key("Tab");
+    tree.set_modifiers(shift());
+
+    assert_eq!(tree.press_key("ArrowLeft"), Vec::new());
+    let selection = tree
+        .snapshot()
+        .expect("snapshot")
+        .node(id)
+        .expect("node")
+        .selection
+        .clone();
+    assert_eq!(selection.len(), 1);
+    assert!(selection[0].width > 0);
+
+    tree.set_modifiers(KeyModifiers::default());
+    assert_eq!(tree.press_key("ArrowLeft"), Vec::new());
+    let selection = tree
+        .snapshot()
+        .expect("snapshot")
+        .node(id)
+        .expect("node")
+        .selection
+        .clone();
+    assert!(selection.is_empty());
+}
+
+#[test]
+fn control_a_selects_everything_and_typing_replaces_it() {
+    let (mut tree, id) = focused_field("abc");
+    assert_eq!(tree.press_key("End"), Vec::new());
+    tree.set_modifiers(KeyModifiers {
+        control: true,
+        ..KeyModifiers::default()
+    });
+
+    assert_eq!(tree.press_key("a"), Vec::new());
+    tree.set_modifiers(KeyModifiers::default());
+    assert_eq!(
+        tree.press_key("Z"),
+        vec![WidgetEvent::Input(id, "Z".to_owned(), 1)]
+    );
+}
+
+#[test]
+fn dragging_across_the_field_selects_the_text() {
+    let input = field("abc");
+    let id = input.id();
+    let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+
+    let _ = tree.pointer_down(60, 5).expect("down");
+    let _ = tree.pointer_moved(0, 5).expect("move");
+    assert_eq!(
+        tree.press_key("Backspace"),
+        vec![WidgetEvent::Input(id, String::new(), 0)]
+    );
+}
+
+#[test]
+fn home_and_end_stay_on_the_current_line() {
+    let input = multiline("ab\ncd");
+    let id = input.id();
+    let mut tree = focused(laid_out(
+        Widget::column(vec![input]).with_layout(fixed(100, 40)),
+    ));
+
+    assert_eq!(tree.press_key("Home"), Vec::new());
+    assert_eq!(
+        tree.press_key("X"),
+        vec![WidgetEvent::Input(id, "ab\nXcd".to_owned(), 4)]
+    );
+    relayout(&mut tree);
+    assert_eq!(tree.press_key("End"), Vec::new());
+    assert_eq!(
+        tree.press_key("Y"),
+        vec![WidgetEvent::Input(id, "ab\nXcdY".to_owned(), 7)]
+    );
+}
+
+#[test]
+fn shift_tab_moves_the_focus_back() {
+    let (first, second, third) = (field("a"), field("b"), field("c"));
+    let (first_id, second_id) = (first.id(), second.id());
+    let mut tree =
+        laid_out(Widget::column(vec![first, second, third]).with_layout(fixed(100, 100)));
+    tree.press_key("Tab");
+    tree.press_key("Tab");
+    tree.set_modifiers(shift());
+
+    assert_eq!(
+        tree.press_key("Tab"),
+        vec![WidgetEvent::Blur(second_id), WidgetEvent::Focus(first_id)]
     );
 }

@@ -13,7 +13,8 @@ use crate::layout::{
 };
 use crate::rect::{ClipRect, Shadow};
 use crate::text::{
-    CaretPosition, TextAlign, TextEngine, TextError, TextLayout, TextStyle, VerticalAlign,
+    CaretPosition, SelectionRect, TextAlign, TextEngine, TextError, TextLayout, TextStyle,
+    VerticalAlign,
 };
 
 static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
@@ -855,9 +856,18 @@ pub struct WidgetSnapshotNode {
     pub style: WidgetStyle,
     pub text: Option<TextLayout>,
     pub caret: Option<CaretPosition>,
+    pub selection: Vec<SelectionRect>,
     pub scroll: i32,
     pub image: Option<Image>,
     pub clips: Vec<ClipRect>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct KeyModifiers {
+    pub shift: bool,
+    pub control: bool,
+    pub alt: bool,
+    pub meta: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -965,6 +975,7 @@ enum NodeData {
         value: String,
         styles: Box<TextStyleSet>,
         caret: usize,
+        anchor: usize,
         multiline: bool,
         scroll: i32,
     },
@@ -1016,6 +1027,7 @@ pub struct WidgetTree {
     hovered: Vec<Slot>,
     pressed: Vec<Slot>,
     focused: Option<Slot>,
+    modifiers: KeyModifiers,
     dirty: HashSet<WidgetId>,
     stale: HashSet<Slot>,
     full_dirty: bool,
@@ -1102,6 +1114,7 @@ impl WidgetTree {
             hovered: Vec::new(),
             pressed: Vec::new(),
             focused: None,
+            modifiers: KeyModifiers::default(),
             dirty: HashSet::new(),
             stale: HashSet::new(),
             full_dirty: true,
@@ -1140,6 +1153,7 @@ impl WidgetTree {
                     value,
                     styles,
                     caret,
+                    anchor: caret,
                     multiline,
                     scroll: 0,
                 },
@@ -1658,12 +1672,16 @@ impl WidgetTree {
         self.focused.map(|slot| self.nodes[slot.index()].id)
     }
 
-    fn place_caret(&mut self, slot: Slot, x: i32, y: i32) {
+    pub fn set_modifiers(&mut self, modifiers: KeyModifiers) {
+        self.modifiers = modifiers;
+    }
+
+    fn place_caret(&mut self, slot: Slot, x: i32, y: i32, extend: bool) {
         let Some(geometry) = self.geometry.as_ref() else {
             return;
         };
         let node = &self.nodes[slot.index()];
-        let NodeData::Input { caret, scroll, .. } = &node.data else {
+        let NodeData::Input { scroll, .. } = &node.data else {
             return;
         };
         let Some(text) = self.texts.get(&node.id) else {
@@ -1692,12 +1710,16 @@ impl WidgetTree {
                     .offset(content_height, text.variants.base.size.height) as i32,
             );
         let byte = text.variants.base.caret_at(local_x, local_y);
-        let caret = *caret;
-        if let NodeData::Input { caret, .. } = &mut self.nodes[slot.index()].data {
-            *caret = byte;
+        let NodeData::Input { caret, anchor, .. } = &mut self.nodes[slot.index()].data else {
+            return;
+        };
+        let moved = *caret != byte || (!extend && *anchor != byte);
+        *caret = byte;
+        if !extend {
+            *anchor = byte;
         }
         self.reveal_caret();
-        if caret != byte {
+        if moved {
             self.invalidate_snapshot();
         }
     }
@@ -1711,7 +1733,11 @@ impl WidgetTree {
 
     pub fn press_key(&mut self, code: &str) -> Vec<WidgetEvent> {
         if code == "Tab" {
-            return self.focus_next();
+            return if self.modifiers.shift {
+                self.focus_previous()
+            } else {
+                self.focus_next()
+            };
         }
         let Some(slot) = self
             .focused
@@ -1726,29 +1752,229 @@ impl WidgetTree {
                 ..
             }
         );
+        let extend = self.modifiers.shift;
         match code {
             "Escape" => vec![WidgetEvent::Key(code.to_owned())],
             "ArrowUp" | "ArrowDown" if multiline => {
-                self.move_caret_line(slot, code == "ArrowUp");
+                self.move_caret_line(slot, code == "ArrowUp", extend);
                 Vec::new()
             }
             "ArrowUp" | "ArrowDown" => vec![WidgetEvent::Key(code.to_owned())],
+            "ArrowLeft" => {
+                self.move_caret(slot, false, extend);
+                Vec::new()
+            }
+            "ArrowRight" => {
+                self.move_caret(slot, true, extend);
+                Vec::new()
+            }
+            "Home" => {
+                self.move_caret_edge(slot, true, extend);
+                Vec::new()
+            }
+            "End" => {
+                self.move_caret_edge(slot, false, extend);
+                Vec::new()
+            }
+            "Backspace" => {
+                let changed = self.delete_input(slot, true);
+                self.input_event(slot, changed)
+            }
+            "Delete" => {
+                let changed = self.delete_input(slot, false);
+                self.input_event(slot, changed)
+            }
             "Enter" if !multiline => vec![WidgetEvent::Submit(self.nodes[slot.index()].id)],
+            _ if self.modifiers.control => {
+                if code.eq_ignore_ascii_case("a") {
+                    self.select_all(slot);
+                }
+                Vec::new()
+            }
             text => {
                 let text = if text == "Enter" { "\n" } else { text };
-                if !self.edit_input(slot, text) {
-                    return Vec::new();
-                }
-                let node = &self.nodes[slot.index()];
-                let NodeData::Input { value, caret, .. } = &node.data else {
-                    return Vec::new();
-                };
-                vec![WidgetEvent::Input(node.id, value.clone(), *caret)]
+                let changed = self.insert_input(slot, text);
+                self.input_event(slot, changed)
             }
         }
     }
 
-    fn move_caret_line(&mut self, slot: Slot, up: bool) {
+    fn input_event(&mut self, slot: Slot, changed: bool) -> Vec<WidgetEvent> {
+        if !changed {
+            return Vec::new();
+        }
+        let node = &self.nodes[slot.index()];
+        let NodeData::Input { value, caret, .. } = &node.data else {
+            return Vec::new();
+        };
+        vec![WidgetEvent::Input(node.id, value.clone(), *caret)]
+    }
+
+    fn selection(&self, slot: Slot) -> Option<(usize, usize)> {
+        let NodeData::Input { caret, anchor, .. } = &self.nodes[slot.index()].data else {
+            return None;
+        };
+        let (start, end) = if anchor <= caret {
+            (*anchor, *caret)
+        } else {
+            (*caret, *anchor)
+        };
+        (start != end).then_some((start, end))
+    }
+
+    fn select_all(&mut self, slot: Slot) {
+        let NodeData::Input {
+            value,
+            caret,
+            anchor,
+            ..
+        } = &mut self.nodes[slot.index()].data
+        else {
+            return;
+        };
+        *anchor = 0;
+        *caret = value.len();
+        self.stale.insert(slot);
+        self.invalidate_snapshot();
+    }
+
+    fn insert_input(&mut self, slot: Slot, text: &str) -> bool {
+        if text.is_empty()
+            || text
+                .chars()
+                .any(|character| character != '\n' && character.is_control())
+        {
+            return false;
+        }
+        let selection = self.selection(slot);
+        let NodeData::Input {
+            value,
+            caret,
+            anchor,
+            ..
+        } = &mut self.nodes[slot.index()].data
+        else {
+            return false;
+        };
+        if let Some((start, end)) = selection {
+            value.replace_range(start..end, "");
+            *caret = start;
+        }
+        value.insert_str(*caret, text);
+        *caret += text.len();
+        *anchor = *caret;
+        self.stale.insert(slot);
+        self.invalidate_layout();
+        true
+    }
+
+    fn delete_input(&mut self, slot: Slot, before: bool) -> bool {
+        let selection = self.selection(slot);
+        let NodeData::Input {
+            value,
+            caret,
+            anchor,
+            ..
+        } = &mut self.nodes[slot.index()].data
+        else {
+            return false;
+        };
+        match selection {
+            Some((start, end)) => {
+                value.replace_range(start..end, "");
+                *caret = start;
+            }
+            None if before => {
+                let Some((index, _)) = value[..*caret].char_indices().next_back() else {
+                    return false;
+                };
+                value.remove(index);
+                *caret = index;
+            }
+            None => {
+                if *caret >= value.len() {
+                    return false;
+                }
+                value.remove(*caret);
+            }
+        }
+        *anchor = *caret;
+        self.stale.insert(slot);
+        self.invalidate_layout();
+        true
+    }
+
+    fn move_caret(&mut self, slot: Slot, right: bool, extend: bool) {
+        let selection = self.selection(slot);
+        let NodeData::Input {
+            value,
+            caret,
+            anchor,
+            ..
+        } = &mut self.nodes[slot.index()].data
+        else {
+            return;
+        };
+        let target = match selection {
+            Some((start, end)) if !extend => {
+                if right {
+                    end
+                } else {
+                    start
+                }
+            }
+            _ if right => value[*caret..]
+                .chars()
+                .next()
+                .map_or(*caret, |character| *caret + character.len_utf8()),
+            _ => value[..*caret]
+                .char_indices()
+                .next_back()
+                .map_or(0, |(index, _)| index),
+        };
+        *caret = target;
+        if !extend {
+            *anchor = target;
+        }
+        self.stale.insert(slot);
+        self.invalidate_snapshot();
+    }
+
+    fn move_caret_edge(&mut self, slot: Slot, home: bool, extend: bool) {
+        let id = self.nodes[slot.index()].id;
+        let layout = self.texts.get(&id).map(|cached| &cached.variants.base);
+        let NodeData::Input {
+            value,
+            caret,
+            anchor,
+            multiline,
+            ..
+        } = &mut self.nodes[slot.index()].data
+        else {
+            return;
+        };
+        *caret = if *multiline {
+            let Some(layout) = layout else {
+                return;
+            };
+            if home {
+                layout.line_start(*caret)
+            } else {
+                layout.line_end(*caret)
+            }
+        } else if home {
+            0
+        } else {
+            value.len()
+        };
+        if !extend {
+            *anchor = *caret;
+        }
+        self.stale.insert(slot);
+        self.invalidate_snapshot();
+    }
+
+    fn move_caret_line(&mut self, slot: Slot, up: bool, extend: bool) {
         let id = self.nodes[slot.index()].id;
         let Some(cached) = self.texts.get(&id) else {
             return;
@@ -1764,67 +1990,28 @@ impl WidgetTree {
         }) else {
             return;
         };
-        if let NodeData::Input { caret, .. } = &mut self.nodes[slot.index()].data {
+        if let NodeData::Input { caret, anchor, .. } = &mut self.nodes[slot.index()].data {
             *caret = target;
+            if !extend {
+                *anchor = target;
+            }
         }
         self.reveal_caret();
         self.stale.insert(slot);
         self.invalidate_snapshot();
     }
 
-    fn edit_input(&mut self, slot: Slot, code: &str) -> bool {
-        let NodeData::Input { value, caret, .. } = &mut self.nodes[slot.index()].data else {
-            return false;
-        };
-        let previous = value.clone();
-        match code {
-            "Backspace" => {
-                if let Some((index, _)) = value[..*caret].char_indices().next_back() {
-                    value.remove(index);
-                    *caret = index;
-                }
-            }
-            "Delete" => {
-                if *caret < value.len() {
-                    value.remove(*caret);
-                }
-            }
-            "ArrowLeft" => {
-                *caret = value[..*caret]
-                    .char_indices()
-                    .next_back()
-                    .map_or(0, |(index, _)| index);
-            }
-            "ArrowRight" => {
-                if let Some(character) = value[*caret..].chars().next() {
-                    *caret += character.len_utf8();
-                }
-            }
-            "Home" => *caret = 0,
-            "End" => *caret = value.len(),
-            text => {
-                if text.is_empty()
-                    || text
-                        .chars()
-                        .any(|character| character != '\n' && character.is_control())
-                {
-                    return false;
-                }
-                value.insert_str(*caret, text);
-                *caret += text.len();
-            }
-        }
-        let changed = *value != previous;
-        self.stale.insert(slot);
-        self.invalidate_layout();
-        changed
-    }
-
     pub fn set_input_text(&mut self, id: WidgetId, text: String) -> bool {
         let Some(&slot) = self.index.get(&id) else {
             return false;
         };
-        let NodeData::Input { value, caret, .. } = &mut self.nodes[slot.index()].data else {
+        let NodeData::Input {
+            value,
+            caret,
+            anchor,
+            ..
+        } = &mut self.nodes[slot.index()].data
+        else {
             return false;
         };
         if *value == text {
@@ -1835,6 +2022,7 @@ impl WidgetTree {
         while !value.is_char_boundary(*caret) {
             *caret -= 1;
         }
+        *anchor = *caret;
         self.stale.insert(slot);
         self.invalidate_layout();
         true
@@ -1851,6 +2039,21 @@ impl WidgetTree {
         {
             Some(index) => slots[(index + 1) % slots.len()],
             None => first,
+        };
+        self.focus_events(Some(target))
+    }
+
+    fn focus_previous(&mut self) -> Vec<WidgetEvent> {
+        let slots = self.focusable_slots();
+        if slots.is_empty() {
+            return self.focus_events(None);
+        }
+        let target = match self
+            .focused
+            .and_then(|current| slots.iter().position(|slot| *slot == current))
+        {
+            Some(index) => slots[(index + slots.len() - 1) % slots.len()],
+            None => slots[slots.len() - 1],
         };
         self.focus_events(Some(target))
     }
@@ -1917,6 +2120,15 @@ impl WidgetTree {
     }
 
     pub fn pointer_moved(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {
+        if let Some(slot) = self
+            .pressed
+            .iter()
+            .rev()
+            .copied()
+            .find(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
+        {
+            self.place_caret(slot, x, y, true);
+        }
         let path = self.active_path(&self.hit_path(x, y)?);
         let common = common_prefix(&self.hovered, &path);
         if common == self.hovered.len() && common == path.len() {
@@ -1957,7 +2169,7 @@ impl WidgetTree {
             .find(|slot| self.nodes[slot.index()].focusable);
         let mut events = self.focus_events(focus);
         if let Some(slot) = focus {
-            self.place_caret(slot, x, y);
+            self.place_caret(slot, x, y, self.modifiers.shift);
         }
         for &slot in path.iter().rev() {
             let node = &mut self.nodes[slot.index()];
@@ -2415,6 +2627,14 @@ fn snapshot_widget(
             .map(|cached| cached.variants.base.caret(*caret)),
         _ => None,
     };
+    let selection = match &node.data {
+        NodeData::Input { caret, anchor, .. } if focused == Some(slot) => {
+            texts.get(&node.id).map_or_else(Vec::new, |cached| {
+                cached.variants.base.selection(*anchor, *caret)
+            })
+        }
+        _ => Vec::new(),
+    };
     let scroll = match &node.data {
         NodeData::Input { scroll, .. } => *scroll,
         _ => 0,
@@ -2440,6 +2660,7 @@ fn snapshot_widget(
         style,
         text,
         caret,
+        selection,
         scroll,
         image,
         clips: node_clips,

@@ -98,6 +98,7 @@ impl Frame {
                 }
             }
             crate::WidgetKind::Input => {
+                self.paint_selection(node, &node.selection, opacity, clip);
                 if let Some(text) = &node.text {
                     self.paint_text(node, text, atlas, opacity, clip);
                 }
@@ -202,6 +203,39 @@ impl Frame {
                         ),
                     };
                     self.blend_rgba(x, y, Color::rgba(red, green, blue, alpha), opacity);
+                }
+            }
+        }
+    }
+
+    fn paint_selection(
+        &mut self,
+        node: &WidgetSnapshotNode,
+        selection: &[crate::SelectionRect],
+        opacity: f32,
+        clip: Clip,
+    ) {
+        let Some(clip) = node_clip(node, clip) else {
+            return;
+        };
+        let height = node.text.as_ref().map_or(0, |text| text.size.height as i32);
+        let offset = node
+            .style
+            .vertical_align
+            .offset(node.content_height, height as u32) as i32
+            - node.scroll;
+        let color = node.style.text.with_alpha(60);
+        for rect in selection {
+            let origin_x = node.content_x.saturating_add(rect.x);
+            let right = origin_x.saturating_add(rect.width);
+            let top = node.content_y.saturating_add(rect.y).saturating_add(offset);
+            let bottom = top.saturating_add(rect.height);
+            for y in top..bottom {
+                for x in origin_x..right {
+                    if !clip.contains(i64::from(x), i64::from(y)) || !visible(&node.clips, x, y) {
+                        continue;
+                    }
+                    self.blend_rgba(x, y, color, opacity);
                 }
             }
         }
