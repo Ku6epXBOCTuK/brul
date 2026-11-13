@@ -12,7 +12,9 @@ use crate::layout::{
     ScrollOffset, Size,
 };
 use crate::rect::{ClipRect, Shadow};
-use crate::text::{TextAlign, TextEngine, TextError, TextLayout, TextStyle, VerticalAlign};
+use crate::text::{
+    CaretPosition, TextAlign, TextEngine, TextError, TextLayout, TextStyle, VerticalAlign,
+};
 
 static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
 
@@ -638,6 +640,7 @@ enum WidgetData {
         value: String,
         styles: Box<TextStyleSet>,
         caret: usize,
+        multiline: bool,
     },
     Image(Image),
 }
@@ -723,8 +726,19 @@ impl Widget {
             value,
             styles: Box::new(styles),
             caret,
+            multiline: false,
         })
         .focusable(true)
+    }
+
+    pub fn multiline(mut self, multiline: bool) -> Self {
+        if let WidgetData::Input {
+            multiline: current, ..
+        } = &mut self.data
+        {
+            *current = multiline;
+        }
+        self
     }
 
     fn new(data: WidgetData) -> Self {
@@ -840,7 +854,8 @@ pub struct WidgetSnapshotNode {
     pub state: WidgetState,
     pub style: WidgetStyle,
     pub text: Option<TextLayout>,
-    pub caret: Option<i32>,
+    pub caret: Option<CaretPosition>,
+    pub scroll: i32,
     pub image: Option<Image>,
     pub clips: Vec<ClipRect>,
 }
@@ -950,6 +965,8 @@ enum NodeData {
         value: String,
         styles: Box<TextStyleSet>,
         caret: usize,
+        multiline: bool,
+        scroll: i32,
     },
     Image(Image),
 }
@@ -1117,11 +1134,14 @@ impl WidgetTree {
                 value,
                 styles,
                 caret,
+                multiline,
             } => (
                 NodeData::Input {
                     value,
                     styles,
                     caret,
+                    multiline,
+                    scroll: 0,
                 },
                 Vec::new(),
             ),
@@ -1182,10 +1202,13 @@ impl WidgetTree {
                 value,
                 styles,
                 caret,
+                multiline,
+                ..
             } => WidgetData::Input {
                 value: std::mem::take(value),
                 styles: Box::new(std::mem::take(&mut **styles)),
                 caret: *caret,
+                multiline: *multiline,
             },
             NodeData::Image(image) => WidgetData::Image(image.clone()),
         };
@@ -1385,6 +1408,9 @@ impl WidgetTree {
             scale,
             boxes,
         });
+        if let Some(geometry) = self.geometry.as_ref() {
+            reveal_carets(&mut self.nodes, &self.texts, &geometry.boxes);
+        }
         self.stale.clear();
         self.snapshot = None;
         self.full_dirty = true;
@@ -1632,12 +1658,12 @@ impl WidgetTree {
         self.focused.map(|slot| self.nodes[slot.index()].id)
     }
 
-    fn place_caret(&mut self, slot: Slot, x: i32) {
+    fn place_caret(&mut self, slot: Slot, x: i32, y: i32) {
         let Some(geometry) = self.geometry.as_ref() else {
             return;
         };
         let node = &self.nodes[slot.index()];
-        let NodeData::Input { caret, .. } = &node.data else {
+        let NodeData::Input { caret, scroll, .. } = &node.data else {
             return;
         };
         let Some(text) = self.texts.get(&node.id) else {
@@ -1645,26 +1671,42 @@ impl WidgetTree {
         };
         let layout_style = node.layout_style();
         let boxed = &geometry.boxes[slot.index()];
-        let origin = boxed.x.saturating_add(
+        let local_x = x.saturating_sub(boxed.x).saturating_sub(
             layout_style
                 .border_width
                 .saturating_add(layout_style.padding.left) as i32,
         );
-        let offset = x.saturating_sub(origin);
-        let byte = text
-            .variants
-            .base
-            .carets
-            .iter()
-            .min_by_key(|stop| (stop.x - offset).abs())
-            .map_or(0, |stop| stop.byte);
+        let content_height = boxed.height.saturating_sub(layout::inset_y(&layout_style));
+        let local_y = y
+            .saturating_sub(boxed.y)
+            .saturating_sub(
+                layout_style
+                    .border_width
+                    .saturating_add(layout_style.padding.top) as i32,
+            )
+            .saturating_add(*scroll)
+            .saturating_sub(
+                node.styles
+                    .resolve(node.state)
+                    .vertical_align
+                    .offset(content_height, text.variants.base.size.height) as i32,
+            );
+        let byte = text.variants.base.caret_at(local_x, local_y);
         let caret = *caret;
         if let NodeData::Input { caret, .. } = &mut self.nodes[slot.index()].data {
             *caret = byte;
         }
+        self.reveal_caret();
         if caret != byte {
             self.invalidate_snapshot();
         }
+    }
+
+    fn reveal_caret(&mut self) {
+        let Some(geometry) = self.geometry.as_ref() else {
+            return;
+        };
+        reveal_carets(&mut self.nodes, &self.texts, &geometry.boxes);
     }
 
     pub fn press_key(&mut self, code: &str) -> Vec<WidgetEvent> {
@@ -1677,14 +1719,23 @@ impl WidgetTree {
         else {
             return vec![WidgetEvent::Key(code.to_owned())];
         };
+        let multiline = matches!(
+            self.nodes[slot.index()].data,
+            NodeData::Input {
+                multiline: true,
+                ..
+            }
+        );
         match code {
-            "Escape" | "ArrowUp" | "ArrowDown" => vec![WidgetEvent::Key(code.to_owned())],
-            "Enter" => vec![WidgetEvent::Submit(self.nodes[slot.index()].id)],
-            "ArrowLeft" | "ArrowRight" | "Home" | "End" => {
-                self.edit_input(slot, code);
+            "Escape" => vec![WidgetEvent::Key(code.to_owned())],
+            "ArrowUp" | "ArrowDown" if multiline => {
+                self.move_caret_line(slot, code == "ArrowUp");
                 Vec::new()
             }
+            "ArrowUp" | "ArrowDown" => vec![WidgetEvent::Key(code.to_owned())],
+            "Enter" if !multiline => vec![WidgetEvent::Submit(self.nodes[slot.index()].id)],
             text => {
+                let text = if text == "Enter" { "\n" } else { text };
                 if !self.edit_input(slot, text) {
                     return Vec::new();
                 }
@@ -1695,6 +1746,30 @@ impl WidgetTree {
                 vec![WidgetEvent::Input(node.id, value.clone(), *caret)]
             }
         }
+    }
+
+    fn move_caret_line(&mut self, slot: Slot, up: bool) {
+        let id = self.nodes[slot.index()].id;
+        let Some(cached) = self.texts.get(&id) else {
+            return;
+        };
+        let layout = &cached.variants.base;
+        let NodeData::Input { caret, .. } = &self.nodes[slot.index()].data else {
+            return;
+        };
+        let Some(target) = (if up {
+            layout.caret_above(*caret)
+        } else {
+            layout.caret_below(*caret)
+        }) else {
+            return;
+        };
+        if let NodeData::Input { caret, .. } = &mut self.nodes[slot.index()].data {
+            *caret = target;
+        }
+        self.reveal_caret();
+        self.stale.insert(slot);
+        self.invalidate_snapshot();
     }
 
     fn edit_input(&mut self, slot: Slot, code: &str) -> bool {
@@ -1728,7 +1803,11 @@ impl WidgetTree {
             "Home" => *caret = 0,
             "End" => *caret = value.len(),
             text => {
-                if text.is_empty() || text.chars().any(char::is_control) {
+                if text.is_empty()
+                    || text
+                        .chars()
+                        .any(|character| character != '\n' && character.is_control())
+                {
                     return false;
                 }
                 value.insert_str(*caret, text);
@@ -1878,7 +1957,7 @@ impl WidgetTree {
             .find(|slot| self.nodes[slot.index()].focusable);
         let mut events = self.focus_events(focus);
         if let Some(slot) = focus {
-            self.place_caret(slot, x);
+            self.place_caret(slot, x, y);
         }
         for &slot in path.iter().rev() {
             let node = &mut self.nodes[slot.index()];
@@ -2122,8 +2201,14 @@ impl Pass<'_> {
             NodeData::Text { content, styles } => {
                 self.build_text(node, content, styles, content_width)?
             }
-            NodeData::Input { value, styles, .. } => {
-                self.build_text(node, value, styles, content_width)?
+            NodeData::Input {
+                value,
+                styles,
+                multiline,
+                ..
+            } => {
+                let width = if *multiline { content_width } else { None };
+                self.build_text(node, value, styles, width)?
             }
             NodeData::Image(image) => LayoutNode::leaf(image.width(), image.height()),
         };
@@ -2185,6 +2270,42 @@ impl Pass<'_> {
             .base
             .size;
         Ok(LayoutNode::leaf(size.width, size.height))
+    }
+}
+
+fn reveal_carets(nodes: &mut [Node], texts: &HashMap<WidgetId, ShapedText>, boxes: &[LayoutBox]) {
+    for (slot, node) in nodes.iter_mut().enumerate() {
+        let style = node.layout_style();
+        let NodeData::Input {
+            caret,
+            multiline: true,
+            scroll,
+            ..
+        } = &mut node.data
+        else {
+            continue;
+        };
+        let Some(cached) = texts.get(&node.id) else {
+            continue;
+        };
+        let Some(placed) = boxes.get(slot) else {
+            continue;
+        };
+        let content_height = placed.height.saturating_sub(layout::inset_y(&style)) as i32;
+        let position = cached.variants.base.caret(*caret);
+        let height = cached.variants.base.size.height as i32;
+        let max = height.saturating_sub(content_height);
+        let mut next = *scroll;
+        if position.y < next {
+            next = position.y;
+        }
+        if position.y.saturating_add(position.height) > next.saturating_add(content_height) {
+            next = position
+                .y
+                .saturating_add(position.height)
+                .saturating_sub(content_height);
+        }
+        *scroll = next.clamp(0, max.max(0));
     }
 }
 
@@ -2272,6 +2393,16 @@ fn snapshot_widget(
     let content_height = layout_box
         .height
         .saturating_sub(layout::inset_y(&layout_style));
+    let mut node_clips = clips.to_vec();
+    if matches!(node.data, NodeData::Input { .. }) && content_width > 0 && content_height > 0 {
+        node_clips.push(ClipRect::new(
+            content_x,
+            content_y,
+            content_width,
+            content_height,
+            0,
+        ));
+    }
     let text = match &node.data {
         NodeData::Text { .. } | NodeData::Input { .. } => texts
             .get(&node.id)
@@ -2281,8 +2412,12 @@ fn snapshot_widget(
     let caret = match &node.data {
         NodeData::Input { caret, .. } if focused == Some(slot) => texts
             .get(&node.id)
-            .map(|cached| cached.variants.base.caret_x(*caret)),
+            .map(|cached| cached.variants.base.caret(*caret)),
         _ => None,
+    };
+    let scroll = match &node.data {
+        NodeData::Input { scroll, .. } => *scroll,
+        _ => 0,
     };
     let image = match &node.data {
         NodeData::Image(image) => Some(image.clone()),
@@ -2305,8 +2440,9 @@ fn snapshot_widget(
         style,
         text,
         caret,
+        scroll,
         image,
-        clips: clips.to_vec(),
+        clips: node_clips,
     });
 
     let mut child_clips = clips.to_vec();

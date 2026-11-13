@@ -11,24 +11,22 @@ use crate::window::HandlerArg;
 pub(super) struct Events {
     pub drag: bool,
     pub focusable: bool,
+    pub multiline: bool,
     pub handlers: Vec<(HandlerEvent, String)>,
 }
 
 pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Events, Error> {
     let mut drag = false;
     let mut focusable = false;
+    let mut multiline = false;
     let mut handlers = Vec::new();
     for arg in &element.args {
-        if let Arg::Named { name, value } = arg
-            && name == "focusable"
-        {
-            let ExprKind::Bool(enabled) = value.kind else {
-                return Err(error_at(
-                    value.position,
-                    "parameter 'focusable' must be a boolean literal",
-                ));
-            };
+        if let Some(enabled) = literal_flag(arg, "focusable")? {
             focusable = enabled;
+            continue;
+        }
+        if let Some(enabled) = literal_flag(arg, "multiline")? {
+            multiline = enabled;
             continue;
         }
         let Arg::Handler { event, handler } = arg else {
@@ -71,8 +69,29 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
     Ok(Events {
         drag,
         focusable,
+        multiline,
         handlers,
     })
+}
+
+fn literal_flag(arg: &Arg, name: &str) -> Result<Option<bool>, Error> {
+    let Arg::Named {
+        name: parameter,
+        value,
+    } = arg
+    else {
+        return Ok(None);
+    };
+    if parameter != name {
+        return Ok(None);
+    }
+    let ExprKind::Bool(enabled) = value.kind else {
+        return Err(error_at(
+            value.position,
+            format!("parameter '{name}' must be a boolean literal"),
+        ));
+    };
+    Ok(Some(enabled))
 }
 
 pub(super) fn window(

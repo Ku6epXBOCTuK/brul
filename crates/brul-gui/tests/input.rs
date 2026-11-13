@@ -146,7 +146,7 @@ fn the_caret_is_snapshot_only_while_the_field_is_focused() {
         .node(id)
         .expect("node")
         .caret;
-    assert!(caret.is_some_and(|x| x >= 0));
+    assert!(caret.is_some_and(|caret| caret.x >= 0));
 }
 
 #[test]
@@ -168,4 +168,128 @@ fn a_key_press_without_a_focused_field_still_reaches_the_window() {
     let mut tree = laid_out(Widget::column(vec![plain]).with_layout(fixed(100, 40)));
 
     assert_eq!(tree.press_key("a"), vec![WidgetEvent::Key("a".to_owned())]);
+}
+
+fn multiline(value: &str) -> Widget {
+    Widget::input(value)
+        .multiline(true)
+        .with_layout(fixed(80, 20))
+}
+
+fn focused(tree: WidgetTree) -> WidgetTree {
+    let mut tree = tree;
+    tree.press_key("Tab");
+    tree
+}
+
+fn relayout(tree: &mut WidgetTree) {
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 100,
+            height: 100,
+        },
+        1.0,
+    )
+    .expect("layout");
+}
+
+#[test]
+fn a_multiline_field_inserts_a_newline_and_keeps_the_submit_for_one_line() {
+    let input = multiline("ab");
+    let id = input.id();
+    let mut tree = focused(laid_out(
+        Widget::column(vec![input]).with_layout(fixed(100, 40)),
+    ));
+
+    assert_eq!(
+        tree.press_key("Enter"),
+        vec![WidgetEvent::Input(id, "ab\n".to_owned(), 3)]
+    );
+    assert_eq!(
+        tree.press_key("Z"),
+        vec![WidgetEvent::Input(id, "ab\nZ".to_owned(), 4)]
+    );
+}
+
+#[test]
+fn vertical_arrows_move_the_caret_between_the_lines() {
+    let input = multiline("ab\ncd");
+    let id = input.id();
+    let mut tree = focused(laid_out(
+        Widget::column(vec![input]).with_layout(fixed(100, 40)),
+    ));
+
+    assert_eq!(tree.press_key("ArrowUp"), Vec::new());
+    assert_eq!(
+        tree.press_key("X"),
+        vec![WidgetEvent::Input(id, "abX\ncd".to_owned(), 3)]
+    );
+    relayout(&mut tree);
+    assert_eq!(tree.press_key("ArrowDown"), Vec::new());
+    assert_eq!(
+        tree.press_key("Y"),
+        vec![WidgetEvent::Input(id, "abX\ncdY".to_owned(), 7)]
+    );
+}
+
+#[test]
+fn a_long_line_does_not_wrap_in_a_single_line_field() {
+    let input = field("abcdefghijklmnopqrstuvwxyz");
+    let id = input.id();
+    let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+    let text = tree
+        .snapshot()
+        .expect("snapshot")
+        .node(id)
+        .and_then(|node| node.text.clone())
+        .expect("text");
+
+    let first = text.carets.first().map(|stop| stop.y);
+    assert!(text.carets.iter().all(|stop| Some(stop.y) == first));
+}
+
+#[test]
+fn a_multiline_field_wraps_its_text_and_clips_it() {
+    let input = multiline("aaaa bbbb cccc dddd");
+    let id = input.id();
+    let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+    let node = tree.snapshot().expect("snapshot").node(id).expect("node");
+    let text = node.text.as_ref().expect("text");
+
+    assert!(
+        text.carets
+            .iter()
+            .map(|stop| stop.y)
+            .collect::<Vec<_>>()
+            .windows(2)
+            .any(|pair| pair[0] != pair[1])
+    );
+    assert_eq!(node.clips.len(), 1);
+}
+
+#[test]
+fn the_field_scrolls_to_keep_the_caret_visible() {
+    let input = multiline("a\nb\nc\nd\ne\nf");
+    let id = input.id();
+    let mut tree = focused(laid_out(
+        Widget::column(vec![input]).with_layout(fixed(100, 40)),
+    ));
+    let node = tree.snapshot().expect("snapshot").node(id).expect("node");
+
+    assert!(node.scroll > 0);
+}
+
+#[test]
+fn a_click_on_the_second_line_places_the_caret_there() {
+    let input = multiline("ab\ncd");
+    let id = input.id();
+    let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+
+    let _ = tree.pointer_down(60, 18).expect("down");
+    assert_eq!(
+        tree.press_key("Z"),
+        vec![WidgetEvent::Input(id, "ab\ncdZ".to_owned(), 6)]
+    );
 }

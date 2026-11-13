@@ -384,6 +384,33 @@ window Demo (title: "demo") {
 }
 
 #[test]
+fn emits_a_multiline_text_input() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    TextInput (field, multiline: true) { draft }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(".multiline(true)"));
+}
+
+#[test]
+fn rejects_a_multiline_that_is_not_a_literal() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    TextInput (field, multiline: draft) { draft }
+}
+</markup>
+"#;
+    let error = emit::module(source).expect_err("error");
+    assert_eq!(
+        error.message,
+        "parameter 'multiline' must be a boolean literal"
+    );
+}
+
+#[test]
 fn rejects_a_focusable_that_is_not_a_literal() {
     let source = r#"<markup>
 window Demo (title: "demo") {

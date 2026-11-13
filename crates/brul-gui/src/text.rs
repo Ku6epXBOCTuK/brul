@@ -85,6 +85,15 @@ pub struct PlacedGlyph {
 pub struct CaretStop {
     pub byte: usize,
     pub x: i32,
+    pub y: i32,
+    pub height: i32,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CaretPosition {
+    pub x: i32,
+    pub y: i32,
+    pub height: i32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -95,12 +104,65 @@ pub struct TextLayout {
 }
 
 impl TextLayout {
-    pub fn caret_x(&self, byte: usize) -> i32 {
+    pub fn caret(&self, byte: usize) -> CaretPosition {
         self.carets
             .iter()
             .rev()
             .find(|stop| stop.byte <= byte)
-            .map_or(0, |stop| stop.x)
+            .map_or_default(|stop| CaretPosition {
+                x: stop.x,
+                y: stop.y,
+                height: stop.height,
+            })
+    }
+
+    pub fn caret_at(&self, x: i32, y: i32) -> usize {
+        self.nearest(self.line_at(y), x)
+    }
+
+    pub fn caret_above(&self, byte: usize) -> Option<usize> {
+        self.caret_neighbour(byte, false)
+    }
+
+    pub fn caret_below(&self, byte: usize) -> Option<usize> {
+        self.caret_neighbour(byte, true)
+    }
+
+    fn caret_neighbour(&self, byte: usize, down: bool) -> Option<usize> {
+        let current = self.caret(byte);
+        let lines = self.lines();
+        let index = lines.iter().position(|line| *line == current.y)?;
+        let neighbour = if down {
+            lines.get(index + 1)
+        } else {
+            lines.get(index.checked_sub(1)?)
+        }?;
+        Some(self.nearest(*neighbour, current.x))
+    }
+
+    fn lines(&self) -> Vec<i32> {
+        let mut lines: Vec<i32> = Vec::new();
+        for stop in &self.carets {
+            if lines.last() != Some(&stop.y) {
+                lines.push(stop.y);
+            }
+        }
+        lines
+    }
+
+    fn line_at(&self, y: i32) -> i32 {
+        self.lines()
+            .into_iter()
+            .min_by_key(|line| (*line - y).abs())
+            .unwrap_or(0)
+    }
+
+    fn nearest(&self, line: i32, x: i32) -> usize {
+        self.carets
+            .iter()
+            .filter(|stop| stop.y == line)
+            .min_by_key(|stop| ((stop.x - x).abs(), stop.byte))
+            .map_or(0, |stop| stop.byte)
     }
 }
 
@@ -218,16 +280,31 @@ fn place_glyphs(
     let mut height: f32 = 0.0;
     let mut glyphs = Vec::new();
     let mut carets = Vec::new();
+    let mut line = 0;
+    let mut line_start = 0;
+    let mut previous_len = 0;
 
     for run in buffer.layout_runs() {
         width = width.max(run.line_w);
         height = height.max(run.line_top + run.line_height);
+        if run.line_i != line {
+            line_start += previous_len + 1 + (run.line_i - line - 1);
+            line = run.line_i;
+        }
+        previous_len = run.text.len();
+        let stop = CaretStop {
+            byte: 0,
+            x: (run.line_w * scale).round() as i32,
+            y: (run.line_top * scale).round() as i32,
+            height: (run.line_height * scale).round() as i32,
+        };
 
         for glyph in run.glyphs {
             let physical = glyph.physical((0.0, run.line_y * scale), scale);
             carets.push(CaretStop {
-                byte: glyph.start,
+                byte: line_start + glyph.start,
                 x: physical.x,
+                ..stop
             });
             let Some(image) = swash.get_image(font_system, physical.cache_key) else {
                 continue;
@@ -245,8 +322,8 @@ fn place_glyphs(
             });
         }
         carets.push(CaretStop {
-            byte: run.text.len(),
-            x: (run.line_w * scale).round() as i32,
+            byte: line_start + run.text.len(),
+            ..stop
         });
     }
 

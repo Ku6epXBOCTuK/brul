@@ -131,7 +131,8 @@ pub use layout::{
 pub use paint::Frame;
 pub use rect::{ClipRect, Rect, RectSample, Shadow};
 pub use text::{
-    PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize, TextStyle, VerticalAlign,
+    CaretPosition, CaretStop, PlacedGlyph, TextAlign, TextEngine, TextError, TextLayout, TextSize,
+    TextStyle, VerticalAlign,
 };
 pub use texture::{Texture, TextureError};
 pub use widget::{

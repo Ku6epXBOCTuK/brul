@@ -167,7 +167,8 @@ impl Frame {
         let offset = node
             .style
             .vertical_align
-            .offset(node.content_height, text.size.height) as i32;
+            .offset(node.content_height, text.size.height) as i32
+            - node.scroll;
         for glyph in &text.glyphs {
             let slot = glyph.slot;
             let origin_x = node.content_x.saturating_add(glyph.x);
@@ -206,14 +207,33 @@ impl Frame {
         }
     }
 
-    fn paint_caret(&mut self, node: &WidgetSnapshotNode, x: i32, opacity: f32, clip: Clip) {
+    fn paint_caret(
+        &mut self,
+        node: &WidgetSnapshotNode,
+        caret: crate::CaretPosition,
+        opacity: f32,
+        clip: Clip,
+    ) {
         let Some(clip) = node_clip(node, clip) else {
             return;
         };
         let color = node.style.text;
-        let origin_x = node.content_x.saturating_add(x);
-        let bottom = node.content_y.saturating_add(node.content_height as i32);
-        for y in node.content_y..bottom {
+        let height = node
+            .text
+            .as_ref()
+            .map_or(caret.y, |text| text.size.height as i32);
+        let offset = node
+            .style
+            .vertical_align
+            .offset(node.content_height, height as u32) as i32
+            - node.scroll;
+        let origin_x = node.content_x.saturating_add(caret.x);
+        let top = node
+            .content_y
+            .saturating_add(caret.y)
+            .saturating_add(offset);
+        let bottom = top.saturating_add(caret.height);
+        for y in top..bottom {
             if !clip.contains(i64::from(origin_x), i64::from(y))
                 || !visible(&node.clips, origin_x, y)
             {
