@@ -16,6 +16,7 @@ brul-style             модель стиля: свойства, значени
 brul-syntax            SFC-сплиттер, лексер и парсеры DSL в AST
 brul-window            winit+wgpu: окно, цикл событий, ввод
 apps/bropicker         MVP: переключатель браузеров
+apps/note-obs          MVP: текст в источник OBS
 apps/service-panel     MVP: панель служб (планируется)
 ```
 

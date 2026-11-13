@@ -1204,6 +1204,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "note-obs"
+version = "0.1.0"
+dependencies = [
+ "brul",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
