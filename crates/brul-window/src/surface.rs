@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use brul_gui::Frame;
-use winit::window::Window;
+use winit::window::{Window, WindowLevel};
 
 use crate::gpu::Gpu;
 
@@ -12,6 +12,7 @@ pub(crate) trait Surface {
     fn set_visible(&self, visible: bool);
     fn size(&self) -> (u32, u32);
     fn pre_present_notify(&self);
+    fn set_always_on_top(&self, on_top: bool);
 }
 
 impl Surface for Arc<dyn Window> {
@@ -38,6 +39,15 @@ impl Surface for Arc<dyn Window> {
 
     fn pre_present_notify(&self) {
         self.as_ref().pre_present_notify();
+    }
+
+    fn set_always_on_top(&self, on_top: bool) {
+        let level = if on_top {
+            WindowLevel::AlwaysOnTop
+        } else {
+            WindowLevel::Normal
+        };
+        self.as_ref().set_window_level(level);
     }
 }
 

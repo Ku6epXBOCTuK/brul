@@ -530,6 +530,7 @@ impl TreeApp {
                     self.timers.push(Timer::new(interval, function));
                 }
                 WindowCommand::SetTheme(_) => {}
+                WindowCommand::AlwaysOnTop(on_top) => surface.set_always_on_top(on_top),
             }
         }
         Step::Continue
@@ -640,6 +641,7 @@ mod tests {
         drags: Cell<usize>,
         redraws: Cell<usize>,
         visible: Cell<Option<bool>>,
+        on_top: Cell<Option<bool>>,
     }
 
     impl FakeSurface {
@@ -650,6 +652,7 @@ mod tests {
                 drags: Cell::new(0),
                 redraws: Cell::new(0),
                 visible: Cell::new(None),
+                on_top: Cell::new(None),
             }
         }
     }
@@ -669,6 +672,10 @@ mod tests {
 
         fn set_visible(&self, visible: bool) {
             self.visible.set(Some(visible));
+        }
+
+        fn set_always_on_top(&self, on_top: bool) {
+            self.on_top.set(Some(on_top));
         }
 
         fn size(&self) -> (u32, u32) {
@@ -966,6 +973,16 @@ mod tests {
 
         app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
         assert_eq!(surface.visible.get(), Some(true));
+    }
+
+    #[test]
+    fn an_always_on_top_command_raises_the_window() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(vec![WindowCommand::AlwaysOnTop(true)]));
+        let widget = Widget::text("x").id();
+
+        app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(surface.on_top.get(), Some(true));
     }
 
     #[test]

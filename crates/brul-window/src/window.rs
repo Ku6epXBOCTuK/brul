@@ -168,6 +168,7 @@ pub enum WindowCommand {
         function: String,
     },
     SetTheme(String),
+    AlwaysOnTop(bool),
 }
 
 pub fn run_tree(

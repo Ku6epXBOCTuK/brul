@@ -85,6 +85,25 @@ impl Host for CommandHost {
                 .push(WindowCommand::SetTheme(theme.to_string()));
             return Ok(Value::Null);
         }
+        if name == "setAlwaysOnTop" {
+            if arguments.len() != 1 {
+                return Err(Error::Arity {
+                    name: name.to_owned(),
+                    expected: "one",
+                });
+            }
+            let Value::Bool(on_top) = &arguments[0] else {
+                return Err(Error::Argument {
+                    name: "setAlwaysOnTop",
+                    expected: "Bool",
+                    found: arguments[0].type_name(),
+                });
+            };
+            self.commands
+                .borrow_mut()
+                .push(WindowCommand::AlwaysOnTop(*on_top));
+            return Ok(Value::Null);
+        }
         if name == "openWindow" {
             return self.open_window(arguments);
         }
@@ -871,6 +890,31 @@ mod tests {
             *commands.borrow(),
             vec![WindowCommand::SetTheme("dark".to_owned())]
         );
+    }
+
+    #[test]
+    fn set_always_on_top_takes_exactly_one_flag() {
+        let (mut host, commands) = command_host(None);
+        assert_eq!(
+            host.call("setAlwaysOnTop", &[]),
+            Err(Error::Arity {
+                name: "setAlwaysOnTop".to_owned(),
+                expected: "one",
+            })
+        );
+        assert_eq!(
+            host.call("setAlwaysOnTop", &[Value::Number(1.0)]),
+            Err(Error::Argument {
+                name: "setAlwaysOnTop",
+                expected: "Bool",
+                found: "Number",
+            })
+        );
+        assert_eq!(
+            host.call("setAlwaysOnTop", &[Value::Bool(true)]),
+            Ok(Value::Null)
+        );
+        assert_eq!(*commands.borrow(), vec![WindowCommand::AlwaysOnTop(true)]);
     }
 
     #[test]
