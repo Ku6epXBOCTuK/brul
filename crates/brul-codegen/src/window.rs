@@ -1,7 +1,7 @@
-use brul_syntax::ast::{Expr, ExprKind, Position};
+use brul_syntax::ast::{Expr, ExprKind, Position, UnaryOp};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Element, Member, Window};
-use brul_window::WindowConfig;
+use brul_window::{WindowConfig, WindowPosition};
 
 use crate::error_at;
 
@@ -18,9 +18,15 @@ pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Err
         ..WindowConfig::default()
     };
     let mut handlers = Vec::new();
+    let mut x = None;
+    let mut y = None;
     for arg in &window.args {
         match arg {
-            Arg::Named { name, value } => apply(&mut config, name, value)?,
+            Arg::Named { name, value } => match name.as_str() {
+                "x" => x = Some(coordinate(value, "x")?),
+                "y" => y = Some(coordinate(value, "y")?),
+                _ => apply(&mut config, name, value)?,
+            },
             Arg::Handler { event, handler } => handlers.push(HandlerArg {
                 event: event.clone(),
                 function: handler.clone(),
@@ -31,7 +37,50 @@ pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Err
             }
         }
     }
+    config.position = match (x, y) {
+        (Some(x), Some(y)) => Some(WindowPosition { x, y }),
+        (None, None) => None,
+        _ => {
+            return Err(error_at(
+                window.position,
+                "window position needs both 'x' and 'y'",
+            ));
+        }
+    };
+    if config.centered && config.position.is_some() {
+        return Err(error_at(
+            window.position,
+            "'centered' conflicts with 'x' and 'y'",
+        ));
+    }
+    config.validate().map_err(|error| {
+        error_at(
+            window.position,
+            format!("window arguments are invalid: {error}"),
+        )
+    })?;
     Ok((config, handlers))
+}
+
+fn coordinate(value: &Expr, name: &str) -> Result<f64, Error> {
+    let number = match &value.kind {
+        ExprKind::Number(number) => Some(*number),
+        ExprKind::Unary {
+            op: UnaryOp::Neg,
+            operand,
+        } => match &operand.kind {
+            ExprKind::Number(number) => Some(-number),
+            _ => None,
+        },
+        _ => None,
+    };
+    match number {
+        Some(number) if number.is_finite() => Ok(number),
+        _ => Err(error_at(
+            value.position,
+            format!("window argument '{name}' must be a finite number"),
+        )),
+    }
 }
 
 fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Error> {
@@ -42,6 +91,7 @@ fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Erro
         "frameless" => config.frameless = flag(value, "frameless")?,
         "transparent" => config.transparent = flag(value, "transparent")?,
         "visible" => config.visible = flag(value, "visible")?,
+        "centered" => config.centered = flag(value, "centered")?,
         _ => {
             return Err(error_at(
                 value.position,
@@ -124,6 +174,43 @@ mod tests {
             name: name.to_owned(),
             value: Expr::new(ExprKind::Bool(value), Position::default()),
         }
+    }
+
+    fn number_arg(name: &str, value: f64) -> Arg {
+        Arg::Named {
+            name: name.to_owned(),
+            value: Expr::new(ExprKind::Number(value), Position::default()),
+        }
+    }
+
+    #[test]
+    fn a_window_can_be_placed_or_centered() {
+        let args = vec![number_arg("x", -40.0), number_arg("y", 120.0)];
+        let (config, _) = arguments(&window(args)).expect("arguments");
+        assert_eq!(config.position, Some(WindowPosition { x: -40.0, y: 120.0 }));
+
+        let (config, _) = arguments(&window(vec![flag_arg("centered", true)])).expect("arguments");
+        assert!(config.centered);
+        assert!(config.position.is_none());
+    }
+
+    #[test]
+    fn a_half_position_is_rejected() {
+        let error = arguments(&window(vec![number_arg("x", 10.0)]))
+            .err()
+            .expect("error");
+        assert_eq!(error.message, "window position needs both 'x' and 'y'");
+    }
+
+    #[test]
+    fn a_centered_window_cannot_carry_a_position() {
+        let args = vec![
+            flag_arg("centered", true),
+            number_arg("x", 0.0),
+            number_arg("y", 0.0),
+        ];
+        let error = arguments(&window(args)).err().expect("error");
+        assert_eq!(error.message, "'centered' conflicts with 'x' and 'y'");
     }
 
     #[test]

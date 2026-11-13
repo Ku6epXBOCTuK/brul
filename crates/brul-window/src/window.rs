@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use tracing::error;
 use winit::application::ApplicationHandler;
-use winit::dpi::LogicalSize;
+use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
@@ -22,6 +22,12 @@ const CLEAR: wgpu::Color = wgpu::Color {
     a: 0.85,
 };
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowPosition {
+    pub x: f64,
+    pub y: f64,
+}
+
 #[derive(Clone, Debug)]
 pub struct WindowConfig {
     pub title: String,
@@ -31,6 +37,8 @@ pub struct WindowConfig {
     pub frameless: bool,
     pub transparent: bool,
     pub visible: bool,
+    pub centered: bool,
+    pub position: Option<WindowPosition>,
 }
 
 impl Default for WindowConfig {
@@ -43,6 +51,8 @@ impl Default for WindowConfig {
             frameless: true,
             transparent: true,
             visible: true,
+            centered: false,
+            position: None,
         }
     }
 }
@@ -54,6 +64,12 @@ impl WindowConfig {
         }
         if self.header_height > self.height {
             return Err(WindowError::HeaderTooTall);
+        }
+        if self
+            .position
+            .is_some_and(|position| !position.x.is_finite() || !position.y.is_finite())
+        {
+            return Err(WindowError::InvalidPosition);
         }
         Ok(())
     }
@@ -88,6 +104,7 @@ pub struct WindowSpec {
 pub enum WindowError {
     EmptySize,
     HeaderTooTall,
+    InvalidPosition,
     NoSurfaceConfig,
     Stage {
         stage: &'static str,
@@ -109,6 +126,7 @@ impl std::fmt::Display for WindowError {
         match self {
             Self::EmptySize => formatter.write_str("window size must be greater than zero"),
             Self::HeaderTooTall => formatter.write_str("header is taller than the window"),
+            Self::InvalidPosition => formatter.write_str("window position must be finite"),
             Self::NoSurfaceConfig => formatter.write_str("no suitable surface configuration"),
             Self::Stage { stage, message } => write!(formatter, "{stage}: {message}"),
         }
@@ -202,10 +220,47 @@ pub(crate) fn create_window(
     event_loop: &dyn ActiveEventLoop,
     config: &WindowConfig,
 ) -> Result<Arc<dyn Window>, WindowError> {
+    let attributes = attributes(config);
+    let attributes = match placement(event_loop, config) {
+        Some(placement) => attributes.with_position(placement),
+        None => attributes,
+    };
     event_loop
-        .create_window(attributes(config))
+        .create_window(attributes)
         .map(Arc::from)
         .map_err(|error| WindowError::stage("window creation", error))
+}
+
+fn placement(event_loop: &dyn ActiveEventLoop, config: &WindowConfig) -> Option<Position> {
+    if let Some(position) = config.position {
+        return Some(Position::Logical(LogicalPosition::new(
+            position.x, position.y,
+        )));
+    }
+    if !config.centered {
+        return None;
+    }
+    let monitor = event_loop.primary_monitor()?;
+    let scale = monitor.scale_factor();
+    let width = (f64::from(config.width) * scale).round() as i32;
+    let height = (f64::from(config.height) * scale).round() as i32;
+    let origin = monitor.position()?;
+    let area = monitor.current_video_mode()?.size();
+    Some(Position::Physical(centered_position(
+        origin,
+        area,
+        (width, height),
+    )))
+}
+
+fn centered_position(
+    origin: PhysicalPosition<i32>,
+    area: PhysicalSize<u32>,
+    window: (i32, i32),
+) -> PhysicalPosition<i32> {
+    let x = origin.x + (area.width as i32 - window.0) / 2;
+    let y = origin.y + (area.height as i32 - window.1) / 2;
+    PhysicalPosition::new(x, y)
 }
 
 pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
@@ -349,11 +404,38 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::{WindowConfig, WindowError};
+    use super::{WindowConfig, WindowError, WindowPosition};
 
     #[test]
     fn default_config_is_valid() {
         assert!(WindowConfig::default().validate().is_ok());
+    }
+
+    #[test]
+    fn a_non_finite_position_is_rejected() {
+        let config = WindowConfig {
+            position: Some(WindowPosition {
+                x: f64::INFINITY,
+                y: 0.0,
+            }),
+            ..WindowConfig::default()
+        };
+        assert!(matches!(
+            config.validate(),
+            Err(WindowError::InvalidPosition)
+        ));
+    }
+
+    #[test]
+    fn a_window_is_centered_on_its_monitor() {
+        let monitor = super::PhysicalPosition::new(0, 0);
+        let area = super::PhysicalSize::new(1920, 1080);
+        let centered = super::centered_position(monitor, area, (488, 800));
+        assert_eq!((centered.x, centered.y), (716, 140));
+
+        let second = super::PhysicalPosition::new(1920, 0);
+        let centered = super::centered_position(second, area, (488, 800));
+        assert_eq!((centered.x, centered.y), (2636, 140));
     }
 
     #[test]
@@ -380,6 +462,7 @@ mod tests {
         let messages = [
             WindowError::EmptySize.to_string(),
             WindowError::HeaderTooTall.to_string(),
+            WindowError::InvalidPosition.to_string(),
             WindowError::NoSurfaceConfig.to_string(),
         ];
         let mut unique = messages.to_vec();

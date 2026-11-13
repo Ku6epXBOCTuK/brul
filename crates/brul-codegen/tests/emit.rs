@@ -59,6 +59,8 @@ pub fn demo_window() -> brul::WindowConfig {
         frameless: false,
         transparent: false,
         visible: true,
+        centered: false,
+        position: None,
         ..brul::WindowConfig::default()
     }
 }
@@ -174,6 +176,8 @@ pub fn styled_window() -> brul::WindowConfig {
         frameless: false,
         transparent: false,
         visible: true,
+        centered: false,
+        position: None,
         ..brul::WindowConfig::default()
     }
 }
@@ -550,6 +554,29 @@ window Demo (title: "demo", on close: hide) {
 }
 
 #[test]
+fn emits_a_window_position() {
+    let source = r#"<markup>
+window Demo (title: "demo", x: -40, y: 12.5) {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        "        centered: false,\n        position: Some(brul::WindowPosition { x: -40.0, y: 12.5 }),"
+    ));
+
+    let centered = r#"<markup>
+window Demo (title: "demo", centered: true) {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(centered).expect("module");
+    assert!(module.contains("        centered: true,\n        position: None,"));
+}
+
+#[test]
 fn rejects_invalid_events() {
     let unknown = r#"<markup>
 window Demo (title: "demo") {
@@ -621,7 +648,7 @@ window Demo (title: "demo", width: 488, height: 800, frameless: true, transparen
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        visible: true,\n        ..brul::WindowConfig::default()\n    }\n}"
+        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        visible: true,\n        centered: false,\n        position: None,\n        ..brul::WindowConfig::default()\n    }\n}"
     ));
 }
 
@@ -641,7 +668,7 @@ window Settings (title: "settings", width: 760, height: 560, frameless: false) {
 
     assert!(module.contains("pub fn settings_view(theme: Option<&str>"));
     assert!(module.contains(
-        "pub fn settings_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,\n        visible: true,"
+        "pub fn settings_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,\n        visible: true,\n        centered: false,\n        position: None,"
     ));
     assert!(module.contains("name: \"Picker\", config: picker_window(), view: picker_view }"));
     assert!(

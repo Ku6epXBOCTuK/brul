@@ -308,6 +308,13 @@ fn definition_root(definition: &Definition) -> Result<&Element, Error> {
 }
 
 fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfig) {
+    let position = match config.position {
+        Some(position) => format!(
+            "Some(brul::WindowPosition {{ x: {:?}, y: {:?} }})",
+            position.x, position.y
+        ),
+        None => String::from("None"),
+    };
     let _ = write!(
         out,
         "pub fn {base}_window() -> brul::WindowConfig {{
@@ -318,6 +325,8 @@ fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfi
         frameless: {},
         transparent: {},
         visible: {},
+        centered: {},
+        position: {position},
         ..brul::WindowConfig::default()
     }}
 }}
@@ -327,7 +336,8 @@ fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfi
         config.height,
         config.frameless,
         config.transparent,
-        config.visible
+        config.visible,
+        config.centered
     );
 }
 
