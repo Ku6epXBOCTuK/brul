@@ -25,6 +25,6 @@ mod window;
 mod windows;
 
 pub use window::{
-    ColorScheme, WindowCommand, WindowConfig, WindowError, WindowKey, WindowPosition, WindowSpec,
-    run, run_tree, run_tree_themed, run_windows,
+    ColorScheme, Waker, WindowCommand, WindowConfig, WindowError, WindowKey, WindowPosition,
+    WindowSpec, run, run_tree, run_tree_themed, run_windows,
 };

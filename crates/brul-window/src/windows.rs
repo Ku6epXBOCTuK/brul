@@ -12,24 +12,29 @@ use winit::window::WindowId;
 
 use crate::input::{scheme, system_scheme};
 use crate::tree::{Step, TreeApp, tree_app, wakeup_at};
-use crate::window::{ColorScheme, WindowCommand, WindowError, WindowKey, WindowSpec};
+use crate::window::{ColorScheme, Waker, WindowCommand, WindowError, WindowKey, WindowSpec};
 
-pub(crate) fn run<C, H, F>(
+pub(crate) fn run<C, H, F, R, W>(
     initial: WindowKey,
     create: C,
     handler: H,
     closed: F,
+    ready: R,
+    wake: W,
 ) -> Result<(), WindowError>
 where
     C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
+    R: FnOnce(Waker) + 'static,
+    W: FnMut() + 'static,
 {
     let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
+    ready(Waker::new(event_loop.create_proxy()));
     let error = Rc::new(Cell::new(None));
-    let app = Windows::new(initial, create, handler, closed, Rc::clone(&error));
+    let app = Windows::new(initial, create, handler, closed, wake, Rc::clone(&error));
     let result = event_loop.run_app(app);
 
     if let Some(error) = error.take() {
@@ -38,27 +43,30 @@ where
     result.map_err(|error| WindowError::stage("event loop", error))
 }
 
-struct Windows<C, H, F> {
+struct Windows<C, H, F, W> {
     initial: WindowKey,
     create: Rc<RefCell<C>>,
     handler: Rc<RefCell<H>>,
     closed: F,
+    wake: W,
     error: Rc<Cell<Option<WindowError>>>,
     windows: Vec<(WindowKey, TreeApp)>,
     opened: bool,
 }
 
-impl<C, H, F> Windows<C, H, F>
+impl<C, H, F, W> Windows<C, H, F, W>
 where
     C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
+    W: FnMut() + 'static,
 {
     fn new(
         initial: WindowKey,
         create: C,
         handler: H,
         closed: F,
+        wake: W,
         error: Rc<Cell<Option<WindowError>>>,
     ) -> Self {
         Self {
@@ -66,6 +74,7 @@ where
             create: Rc::new(RefCell::new(create)),
             handler: Rc::new(RefCell::new(handler)),
             closed,
+            wake,
             error,
             windows: Vec::new(),
             opened: false,
@@ -168,13 +177,44 @@ where
             Step::Exit => event_loop.exit(),
         }
     }
+
+    fn pump(&mut self, event_loop: &dyn ActiveEventLoop, now: Instant) {
+        let mut index = 0;
+        while index < self.windows.len() {
+            let step = self.windows[index].1.pump(now);
+            match step {
+                Step::Close => {
+                    self.close(event_loop, index);
+                    if self.windows.is_empty() {
+                        return;
+                    }
+                    continue;
+                }
+                Step::Open(key) => self.open(event_loop, key),
+                Step::Exit => {
+                    event_loop.exit();
+                    return;
+                }
+                Step::Continue => {}
+            }
+            index += 1;
+        }
+
+        let deadline = self
+            .windows
+            .iter()
+            .filter_map(|(_, app)| app.deadline())
+            .min();
+        event_loop.set_control_flow(wakeup_at(deadline));
+    }
 }
 
-impl<C, H, F> ApplicationHandler for Windows<C, H, F>
+impl<C, H, F, W> ApplicationHandler for Windows<C, H, F, W>
 where
     C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
+    W: FnMut() + 'static,
 {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
         if self.opened {
@@ -212,33 +252,11 @@ where
     }
 
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
-        let now = Instant::now();
-        let mut index = 0;
-        while index < self.windows.len() {
-            let step = self.windows[index].1.pump(now);
-            match step {
-                Step::Close => {
-                    self.close(event_loop, index);
-                    if self.windows.is_empty() {
-                        return;
-                    }
-                    continue;
-                }
-                Step::Open(key) => self.open(event_loop, key),
-                Step::Exit => {
-                    event_loop.exit();
-                    return;
-                }
-                Step::Continue => {}
-            }
-            index += 1;
-        }
+        self.pump(event_loop, Instant::now());
+    }
 
-        let deadline = self
-            .windows
-            .iter()
-            .filter_map(|(_, app)| app.deadline())
-            .min();
-        event_loop.set_control_flow(wakeup_at(deadline));
+    fn proxy_wake_up(&mut self, event_loop: &dyn ActiveEventLoop) {
+        (self.wake)();
+        self.pump(event_loop, Instant::now());
     }
 }

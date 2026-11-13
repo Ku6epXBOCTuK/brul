@@ -2,6 +2,7 @@
 
 mod each;
 mod event;
+mod handle;
 pub mod logging;
 mod run;
 mod ui;
@@ -24,5 +25,6 @@ pub use brul_syntax::ast;
 pub use brul_syntax::markup::PropType;
 pub use brul_syntax::script;
 pub use brul_window::{WindowConfig, WindowPosition};
-pub use run::{WindowDef, run_generated};
+pub use handle::{Handle, Signal};
+pub use run::{WindowDef, run_generated, run_generated_with};
 pub use ui::Ui;

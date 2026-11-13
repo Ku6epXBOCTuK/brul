@@ -7,7 +7,7 @@ use tracing::error;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position};
 use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use brul_gui::{WidgetEvent, WidgetTree};
@@ -87,6 +87,21 @@ pub enum ColorScheme {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct WindowKey(pub u64);
+
+/// Будит цикл событий из другого потока: [`Waker::wake`] безопасен после выхода
+/// из цикла и тогда ничего не делает.
+#[derive(Clone, Debug)]
+pub struct Waker(EventLoopProxy);
+
+impl Waker {
+    pub(crate) fn new(proxy: EventLoopProxy) -> Self {
+        Self(proxy)
+    }
+
+    pub fn wake(&self) {
+        self.0.wake_up();
+    }
+}
 
 impl std::fmt::Display for WindowKey {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -213,8 +228,10 @@ pub fn run_windows(
     create: impl FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
     handler: impl FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
     closed: impl FnMut(WindowKey) + 'static,
+    ready: impl FnOnce(Waker) + 'static,
+    wake: impl FnMut() + 'static,
 ) -> Result<(), WindowError> {
-    crate::windows::run(initial, create, handler, closed)
+    crate::windows::run(initial, create, handler, closed, ready, wake)
 }
 
 pub(crate) fn create_window(

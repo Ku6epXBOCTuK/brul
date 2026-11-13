@@ -1,10 +1,12 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use brul_gui::WidgetEvent;
 use brul_window::{ColorScheme, WindowCommand, WindowKey, WindowSpec, run_windows};
 
+use crate::handle::{Handle, Message, take};
 use crate::ui::CommandHost;
 use crate::{
     Built, Component, ComponentHandle, Host, Ui, Value, WindowConfig, execute_program, script,
@@ -24,6 +26,20 @@ pub fn run_generated(
     theme: Option<&str>,
     seeds: &[(&str, Value)],
     host: Option<Box<dyn Host>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    run_generated_with(windows, script, names, theme, seeds, host, |_| {})
+}
+
+/// Как [`run_generated`], но отдаёт [`Handle`] до старта цикла событий:
+/// фоновый поток пишет им в DSL, цикл просыпается и перерисовывает окна.
+pub fn run_generated_with(
+    windows: Vec<WindowDef>,
+    script: Option<&script::Program>,
+    names: &'static [&'static str],
+    theme: Option<&str>,
+    seeds: &[(&str, Value)],
+    host: Option<Box<dyn Host>>,
+    ready: impl FnOnce(Handle) + 'static,
 ) -> Result<(), Box<dyn std::error::Error>> {
     crate::logging::init();
     if windows.is_empty() {
@@ -57,11 +73,21 @@ pub fn run_generated(
     let creator = Rc::clone(&runtime);
     let handler = Rc::clone(&runtime);
     let closed = Rc::clone(&runtime);
+    let waking = Rc::clone(&runtime);
+    let queue = Arc::new(Mutex::new(Vec::new()));
+    let waking_queue = Arc::clone(&queue);
     run_windows(
         WindowKey(0),
         move |key, scheme| creator.borrow_mut().create(key, scheme),
         move |key, events| handler.borrow_mut().dispatch(key, events),
         move |key| closed.borrow_mut().close(key),
+        move |waker| ready(Handle::new(queue, waker)),
+        move || {
+            let messages = take(&waking_queue);
+            if !messages.is_empty() {
+                waking.borrow_mut().apply(messages);
+            }
+        },
     )?;
     Ok(())
 }
@@ -239,6 +265,27 @@ impl Runtime {
         tracing::info!(%key, "closing window");
         self.uis.remove(&key);
     }
+
+    fn apply(&mut self, messages: Vec<Message>) {
+        for message in messages {
+            match message {
+                Message::Set(name, signal) => {
+                    if let Err(error) = self.component.borrow_mut().assign(&name, signal.value()) {
+                        tracing::error!(%error, %name, "handle set failed");
+                    }
+                }
+                Message::Call(function) => {
+                    if let Err(error) = self.component.borrow_mut().call(&function, &[]) {
+                        tracing::error!(%error, %function, "handle call failed");
+                    }
+                }
+            }
+        }
+        brul_reactive::flush();
+        for ui in self.uis.values_mut() {
+            ui.settle();
+        }
+    }
 }
 
 pub(crate) fn scheme_theme(fixed: Option<&str>, scheme: ColorScheme) -> &str {
@@ -257,6 +304,7 @@ mod tests {
     use brul_gui::{Widget, WidgetEvent, WidgetId};
     use brul_syntax::ast::{Expr, ExprKind, Position};
 
+    use crate::handle::Signal;
     use crate::ui::{CommandHost, Ui};
     use crate::{Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, Value};
 
@@ -447,6 +495,55 @@ mod tests {
             SEEN.with(|seen| seen.borrow().last().cloned()),
             Some("light".to_owned())
         );
+    }
+
+    thread_local! {
+        static LAST_ID: RefCell<Option<WidgetId>> = const { RefCell::new(None) };
+    }
+
+    fn seeded_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+        let widget = Widget::text("");
+        let id = widget.id();
+        LAST_ID.with(|slot| *slot.borrow_mut() = Some(id));
+        Ok(Built {
+            widget,
+            bindings: vec![Binding::new(component, id, BindingTarget::Text(name))],
+            handlers: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn a_handle_message_reaches_the_component() {
+        let seeds = [("name", Value::String("".into()))];
+        let component = generated_component(NAMES, None, &seeds).expect("component");
+        let defs = vec![WindowDef {
+            name: "Only",
+            config: WindowConfig::default(),
+            view: seeded_view,
+        }];
+        let mut runtime = Runtime::new(
+            defs,
+            component,
+            Rc::new(RefCell::new(Vec::new())),
+            None,
+            Rc::new(RefCell::new(None)),
+            Vec::new(),
+        );
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("window");
+        let id = LAST_ID
+            .with(|slot| slot.borrow_mut().take())
+            .expect("widget");
+
+        runtime.apply(vec![Message::Set(
+            "name".to_owned(),
+            Signal::Text("live".to_owned()),
+        )]);
+
+        let tree = &mut runtime.uis[&WindowKey(0)].tree.borrow_mut();
+        assert!(!tree.set_text(id, "live".to_owned()));
     }
 
     #[test]
