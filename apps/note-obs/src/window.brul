@@ -1,6 +1,6 @@
 <script>
-    function changeDraft(value, caret) {
-        draft = value;
+    function changeDraft(ev) {
+        draft = ev.value;
     }
 
     function showNote() {
@@ -29,8 +29,8 @@
         status = setAfk(afkEnabled);
     }
 
-    function changeAfk(value, caret) {
-        afkText = value;
+    function changeAfk(ev) {
+        afkText = ev.value;
         setAfkText(afkText);
     }
 
