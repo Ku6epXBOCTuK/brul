@@ -96,14 +96,14 @@
             TextInput (editor, multiline: true, on input: changeDraft) { draft }
             if (len(presets) > 0) {
                 Row (presets) {
-                    Column (preset-column) {
+                    Column (preset-column, preset-left) {
                         each (presets as preset, index) {
                             if (index % 2 == 0) {
                                 PresetButton (index: index, label: preset, on chosen: applyPreset) { }
                             }
                         }
                     }
-                    Column (preset-column) {
+                    Column (preset-column, preset-right) {
                         each (presets as preset, index) {
                             if (index % 2 == 1) {
                                 PresetButton (index: index, label: preset, on chosen: applyPreset) { }
@@ -190,11 +190,17 @@
     }
     .presets {
         width: 100%;
-        spacing: 10px;
+        spacing: 0px;
     }
     .preset-column {
         width: 50%;
         spacing: 8px;
+    }
+    .preset-left {
+        padding-right: 5px;
+    }
+    .preset-right {
+        padding-left: 5px;
     }
     .primary {
         height: 34px;

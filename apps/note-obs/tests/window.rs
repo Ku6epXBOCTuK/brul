@@ -1,9 +1,10 @@
 #![allow(clippy::non_ascii_literal)]
 
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use brul::gui::{Size, TextEngine, WidgetKind, WidgetTree};
+use brul::gui::{Size, TextEngine, WidgetKind, WidgetSnapshot, WidgetTree};
 use brul::{Component, ComponentHandle, Value};
 use note_obs::generated;
 
@@ -42,6 +43,20 @@ fn note_view(presets: &[&str]) -> WidgetTree {
     let built = generated::note_view(Some("dark"), &seeded(presets)).expect("generated view");
     let _ = brul::take_structures();
     WidgetTree::new(built.widget)
+}
+
+fn laid_out(tree: &mut WidgetTree) -> WidgetSnapshot {
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 520,
+            height: 480,
+        },
+        1.0,
+    )
+    .expect("layout");
+    tree.snapshot().expect("snapshot").clone()
 }
 
 fn measure(tree: &mut WidgetTree) -> (i64, u32) {
@@ -85,6 +100,46 @@ fn the_note_fits_the_window_without_scrolling() {
             editor >= 120,
             "the note field shrinks to {editor} in a {}-preset window",
             presets.len()
+        );
+    }
+}
+
+#[test]
+fn the_preset_columns_line_up() {
+    let mut tree = note_view(&["готово", "позже", "думаю", "вопрос"]);
+    let snapshot = laid_out(&mut tree);
+    let mut cells: Vec<(i32, i32, u32)> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| {
+            node.kind == WidgetKind::View
+                && node.height == 30
+                && node.width > 200
+                && node.width < 480
+                && (230..320).contains(&node.y)
+        })
+        .map(|node| (node.y, node.x, node.width))
+        .collect();
+    cells.sort_unstable();
+    cells.dedup();
+
+    let mut rows: BTreeMap<i32, Vec<(i32, u32)>> = BTreeMap::new();
+    for (y, x, width) in cells {
+        rows.entry(y).or_default().push((x, width));
+    }
+
+    assert_eq!(
+        rows.len(),
+        2,
+        "presets are not spread over two rows: {rows:?}"
+    );
+    for (y, row) in rows {
+        assert_eq!(row.len(), 2, "row {y} has {} buttons", row.len());
+        assert_eq!(row[0].1, row[1].1, "row {y} has buttons of different width");
+        assert_eq!(
+            row[1].0 - (row[0].0 + row[0].1 as i32),
+            10,
+            "row {y} has no gutter between the columns"
         );
     }
 }
