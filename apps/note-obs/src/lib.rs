@@ -5,5 +5,7 @@
 
 pub mod config;
 pub mod generated;
+pub mod obs;
+pub mod worker;
 
 pub use config::{Config, ConfigError, default_path};

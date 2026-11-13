@@ -1,15 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(clippy::non_ascii_literal)]
 
-use std::cell::RefCell;
 use std::error::Error;
 use std::process::ExitCode;
-use std::rc::Rc;
 
 use brul::Value;
 use brul::logging::{error, info};
 use brul::{command, host};
 
+use note_obs::worker::Worker;
 use note_obs::{Config, default_path, generated};
 
 const USAGE: &str = "\
@@ -20,29 +19,27 @@ nobs: текст в источник OBS
   --help, -h   показать эту справку
 ";
 
-struct State {
-    status: String,
-}
-
 struct AppHost {
-    state: Rc<RefCell<State>>,
+    worker: Worker,
 }
 
 #[command]
 fn submit(host: &mut AppHost, text: String) -> Result<Value, brul::Error> {
     let status = if text.trim().is_empty() {
-        "нечего показывать"
+        String::from("нечего показывать")
     } else {
-        "OBS не подключён"
+        sent(host.worker.show(text), "отправляю в OBS")
     };
-    host.state.borrow_mut().status = status.to_owned();
     Ok(Value::String(status.into()))
 }
 
 #[command]
 fn clear(host: &mut AppHost) -> Result<Value, brul::Error> {
-    host.state.borrow_mut().status = String::from("idle");
-    Ok(Value::String(String::from("idle").into()))
+    Ok(Value::String(sent(host.worker.clear(), "очищаю").into()))
+}
+
+fn sent(result: Result<(), String>, done: &str) -> String {
+    result.map_or_else(|message| message, |()| String::from(done))
 }
 
 host! { AppHost: submit, clear }
@@ -83,24 +80,21 @@ fn run() -> Result<(), Box<dyn Error>> {
         config.scene,
         config.source
     );
-    let state = Rc::new(RefCell::new(State {
-        status: String::from("idle"),
-    }));
-    let host = AppHost {
-        state: Rc::clone(&state),
-    };
+    let (worker, job) = note_obs::worker::worker(config);
+    let host = AppHost { worker };
     let seeds = [
         ("draft", Value::String(String::new().into())),
         ("status", Value::String(String::from("idle").into())),
         ("hint", Value::String(hint.into())),
     ];
 
-    brul::run_generated(
+    brul::run_generated_with(
         generated::windows(),
         generated::script(),
         generated::names(),
         None,
         &seeds,
         Some(Box::new(host)),
+        move |handle| job.start(handle),
     )
 }
