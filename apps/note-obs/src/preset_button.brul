@@ -1,0 +1,44 @@
+<script>
+    function choosePreset() {
+        chosen(index);
+    }
+</script>
+
+<markup>
+    component PresetButton {
+        prop index: Number = 0;
+        prop label: String = "";
+        event chosen(i: Number);
+
+        View (preset, on click: choosePreset) {
+            Text (preset-label) { label }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        surface: #1c2028;
+        border: #334155;
+        text: #ffffff;
+    }
+    theme light {
+        surface: #ffffff;
+        border: #e2e8f0;
+        text: #0f172a;
+    }
+    .preset {
+        width: 100%;
+        height: 30px;
+        padding-left: 12px;
+        padding-right: 12px;
+        align-items: center;
+        background: theme.surface;
+        border: 1px theme.border;
+        radius: 8px;
+    }
+    .preset:hover {
+        background: theme.border;
+    }
+    .preset-label { color: theme.text; font-size: 13px; }
+</style>

@@ -3,6 +3,7 @@
 
 use std::error::Error;
 use std::process::ExitCode;
+use std::rc::Rc;
 
 use brul::Value;
 use brul::logging::{error, info};
@@ -40,6 +41,15 @@ fn clear(host: &mut AppHost) -> Result<Value, brul::Error> {
 
 fn sent(result: Result<(), String>, done: &str) -> String {
     result.map_or_else(|message| message, |()| String::from(done))
+}
+
+fn presets(config: &Config) -> Value {
+    let items = config
+        .presets
+        .iter()
+        .map(|preset| Value::String(preset.as_str().into()))
+        .collect();
+    Value::Array(Rc::new(items))
 }
 
 host! { AppHost: submit, clear }
@@ -80,12 +90,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         config.scene,
         config.source
     );
-    let (worker, job) = note_obs::worker::worker(config);
+    let (worker, job) = note_obs::worker::worker(config.clone());
     let host = AppHost { worker };
     let seeds = [
         ("draft", Value::String(String::new().into())),
         ("status", Value::String(String::from("idle").into())),
         ("hint", Value::String(hint.into())),
+        ("presets", presets(&config)),
     ];
 
     brul::run_generated_with(
@@ -97,4 +108,22 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Box::new(host)),
         move |handle| job.start(handle),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Config, Value, presets};
+
+    #[test]
+    fn presets_become_a_script_array() {
+        let config = Config {
+            presets: vec![String::from("one"), String::from("two")],
+            ..Config::default()
+        };
+
+        let Value::Array(items) = presets(&config) else {
+            panic!("presets are not an array");
+        };
+        assert_eq!(items.len(), 2);
+    }
 }

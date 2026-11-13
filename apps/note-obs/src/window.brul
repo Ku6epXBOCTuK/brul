@@ -12,6 +12,11 @@
         status = clear();
     }
 
+    function applyPreset(i) {
+        draft = presets[i];
+        status = submit(draft);
+    }
+
     function handleKey(ev) {
         if (ev.ctrl) {
             if (ev.code == "Enter") {
@@ -20,6 +25,10 @@
         }
     }
 </script>
+
+<use>
+    import PresetButton from "./preset_button.brul";
+</use>
 
 <markup>
     window Note (
@@ -35,6 +44,24 @@
                 Text (status) { status }
             }
             TextInput (editor, multiline: true, on input: changeDraft) { draft }
+            if (len(presets) > 0) {
+                Row (presets) {
+                    Column (preset-column) {
+                        each (presets as preset, index) {
+                            if (index % 2 == 0) {
+                                PresetButton (index: index, label: preset, on chosen: applyPreset) { }
+                            }
+                        }
+                    }
+                    Column (preset-column) {
+                        each (presets as preset, index) {
+                            if (index % 2 == 1) {
+                                PresetButton (index: index, label: preset, on chosen: applyPreset) { }
+                            }
+                        }
+                    }
+                }
+            }
             Row (actions) {
                 View (primary, on click: showNote) {
                     Text (primary-label) { "Show in OBS" }
@@ -95,6 +122,14 @@
         width: 100%;
         spacing: 10px;
         align-items: center;
+    }
+    .presets {
+        width: 100%;
+        spacing: 10px;
+    }
+    .preset-column {
+        width: 50%;
+        spacing: 8px;
     }
     .primary {
         height: 34px;

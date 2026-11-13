@@ -17,7 +17,7 @@ fn the_note_window_opens_centered() {
 fn the_script_seeds_are_named() {
     let names = generated::names();
 
-    for name in ["draft", "status", "hint"] {
+    for name in ["draft", "status", "hint", "presets"] {
         assert!(names.contains(&name), "{name} is not declared");
     }
 }
