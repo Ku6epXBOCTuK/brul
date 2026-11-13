@@ -147,7 +147,75 @@ fn run() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Config, Value, presets};
+    use super::{AppHost, Config, Value, presets};
+    use brul::Host;
+    use std::path::PathBuf;
+
+    fn text(value: Value) -> String {
+        match value {
+            Value::String(text) => text.to_string(),
+            other => panic!("expected a string, got {other:?}"),
+        }
+    }
+
+    fn host() -> (AppHost, note_obs::worker::Job) {
+        let (worker, job) = note_obs::worker::worker(Config::default(), PathBuf::from("nobs.toml"));
+        (AppHost { worker }, job)
+    }
+
+    fn call(host: &mut AppHost, name: &str, arguments: &[Value]) -> String {
+        text(host.call(name, arguments).expect("command"))
+    }
+
+    #[test]
+    fn an_empty_note_is_not_sent() {
+        let (mut host, _job) = host();
+        let status = call(&mut host, "submit", &[Value::String("  ".into())]);
+        assert_eq!(status, "нечего показывать");
+    }
+
+    #[test]
+    fn a_note_goes_to_the_worker() {
+        let (mut host, _job) = host();
+        let status = call(&mut host, "submit", &[Value::String("hello".into())]);
+        assert_eq!(status, "отправляю в OBS");
+    }
+
+    #[test]
+    fn clearing_asks_the_worker() {
+        let (mut host, _job) = host();
+        assert_eq!(call(&mut host, "clear", &[]), "очищаю");
+    }
+
+    #[test]
+    fn a_stopped_worker_is_named_in_the_status() {
+        let (mut host, job) = host();
+        drop(job);
+        let status = call(&mut host, "submit", &[Value::String("hello".into())]);
+        assert_eq!(status, "OBS worker stopped");
+    }
+
+    #[test]
+    fn the_afk_switch_reports_its_state() {
+        let (mut host, _job) = host();
+        assert_eq!(
+            call(&mut host, "setAfk", &[Value::Bool(false)]),
+            "простой не отслеживается"
+        );
+        assert_eq!(
+            call(&mut host, "setAfk", &[Value::Bool(true)]),
+            "простой отслеживается"
+        );
+    }
+
+    #[test]
+    fn the_afk_text_reaches_the_worker() {
+        let (mut host, _job) = host();
+        let status = host
+            .call("setAfkText", &[Value::String("away".into())])
+            .expect("command");
+        assert!(matches!(status, Value::Null));
+    }
 
     #[test]
     fn presets_become_a_script_array() {

@@ -251,6 +251,19 @@ mod tests {
     }
 
     #[test]
+    fn a_partial_file_falls_back_to_the_defaults() {
+        let path = temp_file("partial");
+        std::fs::write(&path, "port = 4500\n").expect("write config");
+
+        let loaded = Config::load(&path).expect("load config");
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(loaded.port, 4500);
+        assert_eq!(loaded.source, "note-text");
+        assert_eq!(loaded.afk_after_secs, 300);
+    }
+
+    #[test]
     fn an_override_wins_over_the_executable_directory() {
         // NOTE: the variable is process-wide, so the test sets it and reads it alone.
         unsafe { std::env::set_var("NOBS_CONFIG", "picked.toml") };
