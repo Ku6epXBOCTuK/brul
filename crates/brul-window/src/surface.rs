@@ -9,6 +9,7 @@ pub(crate) trait Surface {
     fn scale_factor(&self) -> f64;
     fn drag(&self);
     fn redraw(&self);
+    fn set_visible(&self, visible: bool);
     fn size(&self) -> (u32, u32);
     fn pre_present_notify(&self);
 }
@@ -24,6 +25,10 @@ impl Surface for Arc<dyn Window> {
 
     fn redraw(&self) {
         self.as_ref().request_redraw();
+    }
+
+    fn set_visible(&self, visible: bool) {
+        self.as_ref().set_visible(visible);
     }
 
     fn size(&self) -> (u32, u32) {

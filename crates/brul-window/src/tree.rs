@@ -212,7 +212,7 @@ impl TreeApp {
         self.engine = Some(engine);
         self.frame = Some(Frame::new(size.width.max(1), size.height.max(1)));
         info!(title = %self.config.title, width = size.width, height = size.height, "window opened");
-        window.set_visible(true);
+        window.set_visible(self.config.visible);
         window.request_redraw();
         Step::Continue
     }
@@ -524,6 +524,8 @@ impl TreeApp {
                 WindowCommand::Close => return Step::Close,
                 WindowCommand::Open(key) => return Step::Open(key),
                 WindowCommand::Drag => surface.drag(),
+                WindowCommand::Show => surface.set_visible(true),
+                WindowCommand::Hide => surface.set_visible(false),
                 WindowCommand::Every { interval, function } => {
                     self.timers.push(Timer::new(interval, function));
                 }
@@ -637,6 +639,7 @@ mod tests {
         size: (u32, u32),
         drags: Cell<usize>,
         redraws: Cell<usize>,
+        visible: Cell<Option<bool>>,
     }
 
     impl FakeSurface {
@@ -646,6 +649,7 @@ mod tests {
                 size: (8, 6),
                 drags: Cell::new(0),
                 redraws: Cell::new(0),
+                visible: Cell::new(None),
             }
         }
     }
@@ -661,6 +665,10 @@ mod tests {
 
         fn redraw(&self) {
             self.redraws.set(self.redraws.get() + 1);
+        }
+
+        fn set_visible(&self, visible: bool) {
+            self.visible.set(Some(visible));
         }
 
         fn size(&self) -> (u32, u32) {
@@ -921,6 +929,27 @@ mod tests {
 
         app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
         assert_eq!(surface.drags.get(), 1);
+    }
+
+    #[test]
+    fn a_hide_command_hides_the_window() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(vec![WindowCommand::Hide]));
+        let widget = Widget::text("x").id();
+
+        let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(step, Step::Continue);
+        assert_eq!(surface.visible.get(), Some(false));
+    }
+
+    #[test]
+    fn a_show_command_shows_the_window() {
+        let surface = FakeSurface::new(1.0);
+        let mut app = tree_app(commands(vec![WindowCommand::Show]));
+        let widget = Widget::text("x").id();
+
+        app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+        assert_eq!(surface.visible.get(), Some(true));
     }
 
     #[test]

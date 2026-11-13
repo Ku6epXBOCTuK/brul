@@ -30,6 +30,7 @@ pub struct WindowConfig {
     pub header_height: u32,
     pub frameless: bool,
     pub transparent: bool,
+    pub visible: bool,
 }
 
 impl Default for WindowConfig {
@@ -41,6 +42,7 @@ impl Default for WindowConfig {
             header_height: 48,
             frameless: true,
             transparent: true,
+            visible: true,
         }
     }
 }
@@ -141,6 +143,8 @@ pub enum WindowCommand {
     Close,
     Open(WindowKey),
     Drag,
+    Show,
+    Hide,
     Every {
         interval: Duration,
         function: String,
@@ -212,7 +216,7 @@ pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
         .with_resizable(!config.frameless)
         .with_decorations(!config.frameless)
         .with_transparent(config.transparent)
-        .with_visible(false);
+        .with_visible(config.visible);
     if config.frameless {
         attributes = attributes
             .with_min_surface_size(size)
@@ -245,7 +249,7 @@ impl ApplicationHandler for App {
 
         self.window = Some(Arc::clone(&window));
         self.gpu = Some(gpu);
-        window.set_visible(true);
+        window.set_visible(self.config.visible);
         window.request_redraw();
     }
 
@@ -405,6 +409,19 @@ mod tests {
         assert!(attributes.transparent);
         assert!(attributes.min_surface_size.is_some());
         assert!(attributes.max_surface_size.is_some());
+    }
+
+    #[test]
+    fn a_hidden_window_starts_invisible() {
+        let config = WindowConfig {
+            visible: false,
+            ..WindowConfig::default()
+        };
+
+        let attributes = super::attributes(&config);
+
+        assert!(!attributes.visible);
+        assert!(super::attributes(&WindowConfig::default()).visible);
     }
 
     #[test]

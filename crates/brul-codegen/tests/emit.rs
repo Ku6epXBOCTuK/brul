@@ -58,6 +58,7 @@ pub fn demo_window() -> brul::WindowConfig {
         height: 640,
         frameless: false,
         transparent: false,
+        visible: true,
         ..brul::WindowConfig::default()
     }
 }
@@ -172,6 +173,7 @@ pub fn styled_window() -> brul::WindowConfig {
         height: 640,
         frameless: false,
         transparent: false,
+        visible: true,
         ..brul::WindowConfig::default()
     }
 }
@@ -590,7 +592,7 @@ window Demo (title: "demo", width: 488, height: 800, frameless: true, transparen
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        ..brul::WindowConfig::default()\n    }\n}"
+        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        visible: true,\n        ..brul::WindowConfig::default()\n    }\n}"
     ));
 }
 
@@ -610,7 +612,7 @@ window Settings (title: "settings", width: 760, height: 560, frameless: false) {
 
     assert!(module.contains("pub fn settings_view(theme: Option<&str>"));
     assert!(module.contains(
-        "pub fn settings_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,"
+        "pub fn settings_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,\n        visible: true,"
     ));
     assert!(module.contains("name: \"Picker\", config: picker_window(), view: picker_view }"));
     assert!(

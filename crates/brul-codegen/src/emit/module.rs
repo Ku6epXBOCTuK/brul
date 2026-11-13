@@ -317,11 +317,17 @@ fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfi
         height: {},
         frameless: {},
         transparent: {},
+        visible: {},
         ..brul::WindowConfig::default()
     }}
 }}
 ",
-        config.title, config.width, config.height, config.frameless, config.transparent
+        config.title,
+        config.width,
+        config.height,
+        config.frameless,
+        config.transparent,
+        config.visible
     );
 }
 

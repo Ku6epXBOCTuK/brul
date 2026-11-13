@@ -90,6 +90,8 @@ impl Host for CommandHost {
         let command = match name {
             "exit" | "closeWindow" => WindowCommand::Close,
             "dragWindow" => WindowCommand::Drag,
+            "showWindow" => WindowCommand::Show,
+            "hideWindow" => WindowCommand::Hide,
             _ => return self.delegate(name, arguments),
         };
         if !arguments.is_empty() {
@@ -864,6 +866,8 @@ mod tests {
         assert_eq!(host.call("exit", &[]), Ok(Value::Null));
         assert_eq!(host.call("closeWindow", &[]), Ok(Value::Null));
         assert_eq!(host.call("dragWindow", &[]), Ok(Value::Null));
+        assert_eq!(host.call("showWindow", &[]), Ok(Value::Null));
+        assert_eq!(host.call("hideWindow", &[]), Ok(Value::Null));
         assert_eq!(
             host.call("exit", &[Value::Number(1.0)]),
             Err(Error::Arity {
@@ -876,7 +880,9 @@ mod tests {
             vec![
                 WindowCommand::Close,
                 WindowCommand::Close,
-                WindowCommand::Drag
+                WindowCommand::Drag,
+                WindowCommand::Show,
+                WindowCommand::Hide
             ]
         );
     }

@@ -41,6 +41,7 @@ fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Erro
         "height" => config.height = size(value, "height")?,
         "frameless" => config.frameless = flag(value, "frameless")?,
         "transparent" => config.transparent = flag(value, "transparent")?,
+        "visible" => config.visible = flag(value, "visible")?,
         _ => {
             return Err(error_at(
                 value.position,
@@ -131,6 +132,15 @@ mod tests {
 
         assert!(!config.frameless);
         assert!(!config.transparent);
+    }
+
+    #[test]
+    fn a_window_can_start_hidden() {
+        let args = vec![flag_arg("visible", false)];
+        let (config, _) = arguments(&window(args)).expect("arguments");
+
+        assert!(!config.visible);
+        assert!(WindowConfig::default().visible);
     }
 
     #[test]
