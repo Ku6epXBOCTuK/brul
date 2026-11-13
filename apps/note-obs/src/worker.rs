@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -25,24 +26,42 @@ pub enum Command {
 #[derive(Clone)]
 pub struct Worker {
     commands: Sender<Command>,
+    shared: Arc<Mutex<afk::Snapshot>>,
 }
 
 pub struct Job {
     config: Config,
     path: PathBuf,
     inbox: Receiver<Command>,
+    afk: afk::Afk,
+    shared: Arc<Mutex<afk::Snapshot>>,
 }
 
 pub fn worker(config: Config, path: PathBuf) -> (Worker, Job) {
     let (commands, inbox) = mpsc::channel();
+    let afk = afk::Afk::new(
+        config.afk_enabled,
+        config.afk_text.clone(),
+        config.afk_after_secs,
+    );
+    let shared = Arc::new(Mutex::new(afk.snapshot(afk::idle_secs())));
     (
-        Worker { commands },
+        Worker {
+            commands,
+            shared: Arc::clone(&shared),
+        },
         Job {
             config,
             path,
             inbox,
+            afk,
+            shared,
         },
     )
+}
+
+fn guard(shared: &Mutex<afk::Snapshot>) -> MutexGuard<'_, afk::Snapshot> {
+    shared.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Worker {
@@ -62,6 +81,10 @@ impl Worker {
         self.send(Command::AfkText(text))
     }
 
+    pub fn afk_note(&self) -> String {
+        afk::describe(*guard(&self.shared))
+    }
+
     fn send(&self, command: Command) -> Result<(), String> {
         self.commands
             .send(command)
@@ -75,13 +98,10 @@ impl Job {
             mut config,
             path,
             inbox,
+            mut afk,
+            shared,
         } = self;
         thread::spawn(move || {
-            let mut afk = afk::Afk::new(
-                config.afk_enabled,
-                config.afk_text.clone(),
-                config.afk_after_secs,
-            );
             let mut save_at: Option<Instant> = None;
             loop {
                 match inbox.recv_timeout(POLL) {
@@ -106,11 +126,13 @@ impl Job {
                     Err(RecvTimeoutError::Timeout) => {}
                     Err(RecvTimeoutError::Disconnected) => break,
                 }
-                match afk.poll(afk::idle_secs(), Instant::now()) {
+                let idle = afk::idle_secs();
+                match afk.poll(idle, Instant::now()) {
                     Some(Action::Away) => write(&config, afk.text(), "отошёл", &handle),
                     Some(Action::Back) => write(&config, "", "idle", &handle),
                     None => {}
                 }
+                *guard(&shared) = afk.snapshot(idle);
                 let due = save_at.is_some_and(|at| Instant::now() >= at);
                 if due {
                     save_at = None;

@@ -34,6 +34,12 @@
         setAfkText(afkText);
     }
 
+    function tick() {
+        afkNote = afkStatus();
+    }
+
+    every(1000, tick);
+
     function trayShow() {
         showWindow();
     }
@@ -115,6 +121,7 @@
                 }
                 TextInput (afk-input, on input: changeAfk) { afkText }
             }
+            Text (afk-note) { afkNote }
             Text (hint) { hint }
         }
     }
@@ -225,6 +232,7 @@
     }
     .afk-mark { color: #ffffff; font-size: 12px; }
     .afk-label { color: theme.muted; font-size: 13px; }
+    .afk-note { color: theme.muted; font-size: 12px; }
     .afk-input {
         stretch: 1;
         height: 30px;

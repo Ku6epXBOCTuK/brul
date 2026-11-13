@@ -59,6 +59,11 @@ fn set_afk_text(host: &mut AppHost, text: String) -> Result<Value, brul::Error> 
     Ok(Value::Null)
 }
 
+#[command]
+fn afk_status(host: &mut AppHost) -> Result<Value, brul::Error> {
+    Ok(Value::String(host.worker.afk_note().into()))
+}
+
 fn sent(result: Result<(), String>, done: &str) -> String {
     result.map_or_else(|message| message, |()| String::from(done))
 }
@@ -72,7 +77,7 @@ fn presets(config: &Config) -> Value {
     Value::Array(Rc::new(items))
 }
 
-host! { AppHost: submit, clear, set_afk, set_afk_text }
+host! { AppHost: submit, clear, set_afk, set_afk_text, afk_status }
 
 fn main() -> ExitCode {
     brul::logging::init_with(&[env!("CARGO_PKG_NAME")]);
@@ -129,6 +134,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         config.source
     );
     let (worker, job) = note_obs::worker::worker(config.clone(), path.clone());
+    let afk_note = worker.afk_note();
     let host = AppHost { worker };
     let seeds = [
         ("draft", Value::String(String::new().into())),
@@ -138,6 +144,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         ("presets", presets(&config)),
         ("afkEnabled", Value::Bool(config.afk_enabled)),
         ("afkText", Value::String(config.afk_text.as_str().into())),
+        ("afkNote", Value::String(afk_note.into())),
     ];
 
     let mut windows = generated::windows();
@@ -232,6 +239,13 @@ mod tests {
             .call("setAfkText", &[Value::String("away".into())])
             .expect("command");
         assert!(matches!(status, Value::Null));
+    }
+
+    #[test]
+    fn the_afk_note_is_reported() {
+        let (mut host, _job) = host();
+        let note = call(&mut host, "afkStatus", &[]);
+        assert!(!note.is_empty(), "afk note is empty");
     }
 
     #[test]

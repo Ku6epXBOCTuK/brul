@@ -31,6 +31,16 @@ pub enum Action {
     Back,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Snapshot {
+    pub enabled: bool,
+    pub live: bool,
+    pub active: bool,
+    pub idle: Option<u64>,
+    pub after_secs: u64,
+    pub silent: bool,
+}
+
 pub struct Afk {
     enabled: bool,
     text: String,
@@ -75,6 +85,17 @@ impl Afk {
         self.live = false;
     }
 
+    pub fn snapshot(&self, idle: Option<u64>) -> Snapshot {
+        Snapshot {
+            enabled: self.enabled,
+            live: self.live,
+            active: self.active,
+            idle,
+            after_secs: self.after.as_secs(),
+            silent: self.text.trim().is_empty(),
+        }
+    }
+
     pub fn poll(&mut self, idle: Option<u64>, now: Instant) -> Option<Action> {
         if self.live {
             self.active = false;
@@ -108,9 +129,33 @@ impl Afk {
     }
 }
 
+pub fn describe(snapshot: Snapshot) -> String {
+    if !snapshot.enabled || snapshot.silent {
+        return String::from("AFK выключен");
+    }
+    let Some(idle) = snapshot.idle else {
+        return String::from("простой недоступен");
+    };
+    if snapshot.active {
+        return format!("AFK на экране · простой {}", clock(idle));
+    }
+    if snapshot.live {
+        return format!("AFK на паузе: на экране заметка · простой {}", clock(idle));
+    }
+    format!(
+        "простой {} · AFK через {}",
+        clock(idle),
+        clock(snapshot.after_secs.saturating_sub(idle))
+    )
+}
+
+fn clock(secs: u64) -> String {
+    format!("{:02}:{:02}", secs / 60, secs % 60)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Action, Afk};
+    use super::{Action, Afk, Snapshot, describe};
     use std::time::{Duration, Instant};
 
     fn afk() -> Afk {
@@ -166,5 +211,74 @@ mod tests {
         assert_eq!(off.poll(Some(600), Instant::now()), None);
         let mut empty = Afk::new(true, String::new(), 5);
         assert_eq!(empty.poll(Some(600), Instant::now()), None);
+    }
+
+    fn snapshot() -> Snapshot {
+        Snapshot {
+            enabled: true,
+            live: false,
+            active: false,
+            idle: Some(83),
+            after_secs: 300,
+            silent: false,
+        }
+    }
+
+    #[test]
+    fn a_countdown_names_the_idle_time_and_the_rest() {
+        assert_eq!(describe(snapshot()), "простой 01:23 · AFK через 03:37");
+    }
+
+    #[test]
+    fn a_live_note_pauses_the_countdown() {
+        let live = Snapshot {
+            live: true,
+            ..snapshot()
+        };
+        assert_eq!(
+            describe(live),
+            "AFK на паузе: на экране заметка · простой 01:23"
+        );
+    }
+
+    #[test]
+    fn an_away_text_is_named_on_screen() {
+        let active = Snapshot {
+            active: true,
+            ..snapshot()
+        };
+        assert_eq!(describe(active), "AFK на экране · простой 01:23");
+    }
+
+    #[test]
+    fn a_disabled_or_silent_afk_is_off() {
+        let off = Snapshot {
+            enabled: false,
+            ..snapshot()
+        };
+        assert_eq!(describe(off), "AFK выключен");
+        let silent = Snapshot {
+            silent: true,
+            ..snapshot()
+        };
+        assert_eq!(describe(silent), "AFK выключен");
+    }
+
+    #[test]
+    fn an_unknown_idle_time_is_named() {
+        let unknown = Snapshot {
+            idle: None,
+            ..snapshot()
+        };
+        assert_eq!(describe(unknown), "простой недоступен");
+    }
+
+    #[test]
+    fn a_pause_past_the_threshold_shows_no_time_left() {
+        let away = Snapshot {
+            idle: Some(400),
+            ..snapshot()
+        };
+        assert_eq!(describe(away), "простой 06:40 · AFK через 00:00");
     }
 }
