@@ -63,7 +63,11 @@ struct BlitTarget {
 
 impl Gpu {
     pub(crate) fn new(window: &Arc<dyn Window>) -> Result<Self, WindowError> {
-        let instance = wgpu::Instance::default();
+        // NOTE: the GL backend parks a hidden window on a thread that pumps no messages, and a
+        // keyboard layout switch then waits for it forever (wgpu#10504)
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+        descriptor.backends = wgpu::Backends::PRIMARY;
+        let instance = wgpu::Instance::new(descriptor);
         let surface = instance
             .create_surface(Arc::clone(window))
             .map_err(|error| WindowError::stage("surface", error))?;
