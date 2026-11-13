@@ -17,7 +17,8 @@ static INIT: Once = Once::new();
 
 /// Включает лог в файл; уровень задаёт `BRUL_LOG`, путь — `BRUL_LOG_FILE`.
 ///
-/// По умолчанию уровень `info`, файл лежит в `~/.config/brul/<exe>.log`.
+/// По умолчанию уровень `info`, файл лежит в `~/.config/brul/<exe>.log` и
+/// дописывается, поэтому зависание остаётся в нём после перезапуска.
 pub fn init() {
     INIT.call_once(|| {
         let level = std::env::var("BRUL_LOG")
@@ -86,7 +87,7 @@ fn open(path: &Path) -> io::Result<File> {
     {
         fs::create_dir_all(parent)?;
     }
-    File::create(path)
+    fs::OpenOptions::new().create(true).append(true).open(path)
 }
 
 fn targets(level: LevelFilter, stem: &str) -> Targets {
