@@ -94,18 +94,18 @@
                 Text (status) { status }
             }
             TextInput (editor, multiline: true, on input: changeDraft) { draft }
-            if (len(presets) > 0) {
+            @if (len(presets) > 0) {
                 Row (presets) {
                     Column (preset-column) {
-                        each (presets as preset, index) {
-                            if (index % 2 == 0) {
+                        @each (presets as preset, index) {
+                            @if (index % 2 == 0) {
                                 PresetButton (index: index, label: preset, on chosen: applyPreset) { }
                             }
                         }
                     }
                     Column (preset-column) {
-                        each (presets as preset, index) {
-                            if (index % 2 == 1) {
+                        @each (presets as preset, index) {
+                            @if (index % 2 == 1) {
                                 PresetButton (index: index, label: preset, on chosen: applyPreset) { }
                             }
                         }
@@ -123,7 +123,7 @@
             Row (afk-row) {
                 Row (afk-toggle, on click: toggleAfk) {
                     View (afk-box, checked: afkEnabled) {
-                        if (afkEnabled) {
+                        @if (afkEnabled) {
                             Text (afk-mark) { "✓" }
                         }
                     }

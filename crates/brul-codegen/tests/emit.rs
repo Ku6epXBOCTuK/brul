@@ -497,9 +497,9 @@ fn emits_if_structure() {
     let source = r#"<markup>
 window Demo (title: "demo") {
     Column {
-        if (shown) {
+        @if (shown) {
             Text { "a" }
-        } else {
+        } @else {
             Text { "b" }
         }
     }
@@ -528,7 +528,7 @@ fn emits_each_structure() {
     let source = r#"<markup>
 window Demo (title: "demo") {
     Column {
-        each (items as item, position (item.name)) { Text { item.name } }
+        @each (items as item, position (item.name)) { Text { item.name } }
     }
 }
 </markup>
@@ -1134,7 +1134,7 @@ fn emits_names_in_first_appearance_order() {
 <markup>
 window Demo (title: "demo") {
     Column {
-        each (browsers as browser, index (browser.name)) {
+        @each (browsers as browser, index (browser.name)) {
             Text { browser.name }
         }
         Text { selected }

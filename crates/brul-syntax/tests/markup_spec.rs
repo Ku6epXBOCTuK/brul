@@ -158,7 +158,7 @@ fn malformed_examples_are_rejected() {
         ("component A { Text { View { } } }", "leaf widget"),
         ("component A { View (x) { }", "expected '}'"),
         (
-            "component A { Row { each (items from item) { } } }",
+            "component A { Row { @each (items from item) { } } }",
             "expected 'as'",
         ),
         (

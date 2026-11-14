@@ -17,13 +17,13 @@
             Text (heading) { "picker" }
             Row (bar) {
                 View (class: kind) { }
-                if (kind != "") {
+                @if (kind != "") {
                     Text (hint) { "on" }
-                } else {
+                } @else {
                     Text (hint) { "off" }
                 }
             }
-            each (items as item) {
+            @each (items as item) {
                 Text (row) { item }
             }
             Badge (label: "badge", active: kind != "", on clicked: toggle) { }

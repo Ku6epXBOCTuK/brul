@@ -90,7 +90,7 @@
                 }
                 View (rule) { }
                 Column (list) {
-                    each (browsers as browser, index (browser.name)) {
+                    @each (browsers as browser, index (browser.name)) {
                         BrowserItem (index: index, icon: browser.icon, emoji: browser.emoji,
                                     masked: browser.masked, name: browser.name,
                                     isDefault: browser.isDefault,
@@ -140,7 +140,7 @@
                         Text (settings-action, on click: redetect) { "Autodetect" }
                     }
                     Column (settings-list) {
-                        each (browsers as browser, index (browser.name)) {
+                        @each (browsers as browser, index (browser.name)) {
                             SettingsRow (name: browser.name, detail: browser.path,
                                         on removed: removeBrowserRow) { }
                         }
@@ -151,7 +151,7 @@
                         Text (muted) { "Saved domains" }
                     }
                     Column (settings-list) {
-                        each (remembered as record, index (record.domain)) {
+                        @each (remembered as record, index (record.domain)) {
                             SettingsRow (name: record.domain, detail: record.browser,
                                         on removed: removeRememberedRow) { }
                         }

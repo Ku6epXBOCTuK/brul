@@ -25,24 +25,24 @@
             View (panel, on click: choose, selected: selected) {
                 Row (body) {
                     View (plate, class: tones[index % 4]) {
-                        if (emoji != "") {
+                        @if (emoji != "") {
                             Text (plate-emoji) { emoji }
-                        } else {
+                        } @else {
                             Image (plate-icon, class: masked ? "plate-icon-masked" : "") { icon }
                         }
                     }
                     Row (details) {
                         Text (item-name) { name }
-                        if (isDefault) {
+                        @if (isDefault) {
                             View (default-badge) {
                                 Text (badge-text) { "По умолчанию" }
                             }
                         }
                     }
                     View (tail, class: selected ? "tail-selected" : "") {
-                        if (selected) {
+                        @if (selected) {
                             Image (tail-check) { check }
-                        } else {
+                        } @else {
                             Text (tail-chevron) { "›" }
                         }
                     }

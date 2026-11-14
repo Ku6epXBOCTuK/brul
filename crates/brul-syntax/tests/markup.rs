@@ -331,8 +331,8 @@ fn member_errors_point_at_the_source() {
 fn if_else_blocks_parse() {
     let source = r#"component CheckRow {
         Row {
-            if (done) { Span { } } else { View { } }
-            if (failed) { Text { "no" } }
+            @if (done) { Span { } } @else { View { } }
+            @if (failed) { Text { "no" } }
         }
     }"#;
     let file = parse_file(source).unwrap();
@@ -387,16 +387,38 @@ fn if_else_blocks_parse() {
 
 #[test]
 fn if_errors_point_at_the_source() {
-    let error = parse_file("component A { Row { if x { } } }").unwrap_err();
+    let error = parse_file("component A { Row { @if x { } } }").unwrap_err();
     assert_eq!(error.message, "expected '('");
-    assert_eq!((error.line, error.column), (1, 24));
+    assert_eq!((error.line, error.column), (1, 25));
 
-    let error = parse_file("component A { Row { if (x) } } }").unwrap_err();
+    let error = parse_file("component A { Row { @if (x) } } }").unwrap_err();
     assert_eq!(error.message, "expected '{'");
-    assert_eq!((error.line, error.column), (1, 28));
 
-    let error = parse_file("component A { Row { if (x) { } else View { } } }").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
+    let error = parse_file("component A { Row { @if (x) { } else View { } } }").unwrap_err();
+    assert_eq!(
+        error.message,
+        "expected '@else': block constructs start with '@'"
+    );
+}
+
+#[test]
+fn block_constructs_require_the_at_marker() {
+    let error = parse_file("component A { Row { if (x) { } } }").unwrap_err();
+    assert_eq!(
+        error.message,
+        "expected '@if': block constructs start with '@'"
+    );
+    assert_eq!((error.line, error.column), (1, 21));
+
+    let error = parse_file("component A { Row { each (items as item) { } } }").unwrap_err();
+    assert_eq!(
+        error.message,
+        "expected '@each': block constructs start with '@'"
+    );
+    assert_eq!((error.line, error.column), (1, 21));
+
+    let error = parse_file("component A { Row { @slot { } } }").unwrap_err();
+    assert_eq!(error.message, "unexpected directive '@slot'");
 }
 
 #[test]
@@ -517,10 +539,10 @@ fn leaf_block_errors_point_at_the_source() {
 fn each_blocks_parse() {
     let source = r#"component List {
         Column {
-            each (items as item) { Row { } }
-            each (items as item, idx) { Row (number: idx) { } }
-            each (items as item (item.id)) { Row { } }
-            each (groups[0] as item, idx (item.id)) { Row { } }
+            @each (items as item) { Row { } }
+            @each (items as item, idx) { Row (number: idx) { } }
+            @each (items as item (item.id)) { Row { } }
+            @each (groups[0] as item, idx (item.id)) { Row { } }
         }
     }"#;
     let file = parse_file(source).unwrap();
@@ -600,19 +622,20 @@ fn each_blocks_parse() {
 
 #[test]
 fn each_errors_point_at_the_source() {
-    let error = parse_file("component A { Row { each items as item { } } }").unwrap_err();
+    let error = parse_file("component A { Row { @each items as item { } } }").unwrap_err();
     assert_eq!(error.message, "expected '('");
-    assert_eq!((error.line, error.column), (1, 26));
+    assert_eq!((error.line, error.column), (1, 27));
 
-    let error = parse_file("component A { Row { each (items item) { } } }").unwrap_err();
+    let error = parse_file("component A { Row { @each (items item) { } } }").unwrap_err();
     assert_eq!(error.message, "expected 'as'");
 
-    let error = parse_file("component A { Row { each (items as item, ) { } } }").unwrap_err();
+    let error = parse_file("component A { Row { @each (items as item, ) { } } }").unwrap_err();
     assert_eq!(error.message, "expected name");
 
-    let error = parse_file("component A { Row { each (items as item (item.id { } } }").unwrap_err();
+    let error =
+        parse_file("component A { Row { @each (items as item (item.id { } } }").unwrap_err();
     assert_eq!(error.message, "expected ')'");
 
-    let error = parse_file("component A { Row { each (items as item) } }").unwrap_err();
+    let error = parse_file("component A { Row { @each (items as item) } }").unwrap_err();
     assert_eq!(error.message, "expected '{'");
 }

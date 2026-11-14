@@ -180,12 +180,38 @@ impl Cursor<'_> {
     }
 
     fn block_item(&mut self) -> Result<BlockItem, Error> {
+        self.skip_trivia();
         let start = self.pos();
+        if self.eat('@') {
+            let name = self.ident()?;
+            return match name.as_str() {
+                "if" => self.if_block().map(BlockItem::If),
+                "each" => self.each_block().map(BlockItem::Each),
+                _ => Err(self.error_at(start, format!("unexpected directive '@{name}'"))),
+            };
+        }
         let name = self.ident()?;
-        match name.as_str() {
-            "if" => self.if_block().map(BlockItem::If),
-            "each" => self.each_block().map(BlockItem::Each),
-            _ => self.element(name, start).map(BlockItem::Element),
+        if matches!(name.as_str(), "if" | "each" | "else") {
+            return Err(self.error_at(
+                start,
+                format!("expected '@{name}': block constructs start with '@'"),
+            ));
+        }
+        self.element(name, start).map(BlockItem::Element)
+    }
+
+    fn eat_directive(&mut self, name: &str) -> bool {
+        self.skip_trivia();
+        if self.peek() != Some('@') {
+            return false;
+        }
+        let start = self.pos();
+        self.bump();
+        if self.eat_keyword(name) {
+            true
+        } else {
+            self.set_pos(start);
+            false
         }
     }
 
@@ -233,7 +259,7 @@ impl Cursor<'_> {
         self.set_pos(end);
         self.expect(')')?;
         let then_block = self.block()?;
-        let else_block = if self.eat_keyword("else") {
+        let else_block = if self.eat_directive("else") {
             Some(self.block()?)
         } else {
             None

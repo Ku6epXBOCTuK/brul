@@ -20,7 +20,7 @@ View (item-panel, selected: selected, on click: panelClicked) {
 - в скобках: голые идентификаторы = **классы стилей**, `имя: выражение` =
   **параметры**, `on событие: функция` = **обработчик** (только по ссылке, без
   инлайн-тел);
-- в фигурных скобках: структура — дочерние элементы, `if`/`each`; у листовых
+- в фигурных скобках: структура — дочерние элементы, `@if`/`@each`; у листовых
   виджетов (`Text`) — одно выражение-содержимое. Блок `component` — известное
   исключение: в нём рядом со структурой объявляются `prop` и `event`.
 
@@ -33,9 +33,10 @@ View (item-panel, selected: selected, on click: panelClicked) {
 - Имена встроенных виджетов и компонентов: `PascalCase`.
 - Классы: `kebab-case`. Свойства/события: `camelCase`. Ключи тем: `kebab-case`.
 - Пробелы и переводы строк незначимы (кроме тел строк-литералов).
-- Ключевые слова: `component`, `window`, `prop`, `event`, `on`, `if`, `else`,
-  `each`, `in`, `import`, `from`; типы пропов — `Bool`, `Number`, `String`,
-  `Image`.
+- Ключевые слова: `component`, `window`, `prop`, `event`, `on`, `in`, `import`,
+  `from`; типы пропов — `Bool`, `Number`, `String`, `Image`.
+- Блочные конструкции пишутся с `@`: `@if`, `@else`, `@each`. Маркер отличает их
+  от имён виджетов и компонентов.
 - Ключевые слова не бывают идентификаторами: `on` в скобках начинает обработчик,
   классом или параметром с этим именем быть нельзя.
 
@@ -278,19 +279,19 @@ event clicked(i: Number);       // событие с типизированны�
 ### Управление детьми
 
 ```brul
-if (isDefault) {
+@if (isDefault) {
     View (default-badge) { Text (badge-text) { "По умолчанию" } }
-} else {
+} @else {
     Text (hint) { "—" }
 }
 
-each (browsers as item, idx (item.index)) {
+@each (browsers as item, idx (item.index)) {
     BrowserItem (index: idx, name: item.name, emoji: item.emoji) { }
 }
 ```
 
-- `if`/`else` — условное включение поддерева.
-- `each` — повторение по массиву; заголовок в скобках: коллекция, `as` и имя
+- `@if`/`@else` — условное включение поддерева.
+- `@each` — повторение по массиву; заголовок в скобках: коллекция, `as` и имя
   элемента, необязательные имя индекса и выражение ключа.
 - Пересоздание или переиспользование элементов при изменении модели — деталь
   компилятора (keyed-reuse отложено; MVP — перестроение диапазона).
@@ -380,7 +381,7 @@ component BrowserItem {
         View (item-panel, selected: selected, on click: itemClicked) {
 
             View (item-icon) {
-                if (emoji == "") {
+                @if (emoji == "") {
                     Image (item-image) { icon }
                 }
             }
@@ -388,7 +389,7 @@ component BrowserItem {
             Column (item-body) {
                 Row (item-title) {
                     Text (text-main) { name }
-                    if (isDefault) {
+                    @if (isDefault) {
                         View (default-badge) {
                             Text (badge-text) { "По умолчанию" }
                         }
@@ -438,7 +439,7 @@ window Picker (title: "bropicker", width: 488, height: 800,
                frameless: true, transparent: true, on key: handleKey) {
     Column (root) {
         Header (url: currentUrl) { }
-        each (browsers as item, idx (item.index)) {
+        @each (browsers as item, idx (item.index)) {
             BrowserItem (index: idx, name: item.name, icon: item.icon,
                          emoji: item.emoji, isDefault: item.isDefault,
                          selected: idx == selectedIndex,
