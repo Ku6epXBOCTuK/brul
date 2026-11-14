@@ -31,6 +31,10 @@ harness = false
 name = "read"
 harness = false
 
+[[bench]]
+name = "layout"
+harness = false
+
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*"]
