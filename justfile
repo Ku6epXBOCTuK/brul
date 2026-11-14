@@ -1,5 +1,7 @@
 set shell := ["powershell.exe", "-NoProfile", "-Command"]
 
+target_dir := trim(`cargo metadata --format-version 1 --no-deps | ConvertFrom-Json | ForEach-Object target_directory`)
+
 generate-rules:
     cargo run -p brul-syntax --bin rules
 
@@ -16,7 +18,7 @@ build-nobs:
 install-nobs: build-nobs
     New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
     Get-Process nobs -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 400
-    Copy-Item -Force "target\release\nobs.exe" "$HOME\bin\nobs.exe"
+    Copy-Item -Force "{{target_dir}}\release\nobs.exe" "$HOME\bin\nobs.exe"
     Write-Output "installed: $HOME\bin\nobs.exe"
 
 uninstall-nobs:
@@ -36,13 +38,13 @@ check:
     cargo test --workspace --doc
 
 cov:
-    cargo llvm-cov --workspace --lcov --output-path target/lcov.info --include-build-script
+    cargo llvm-cov --workspace --lcov --output-path {{target_dir}}/lcov.info --include-build-script
 
 crap: cov
-    cargo crap --lcov target/lcov.info --workspace --threshold 15
+    cargo crap --lcov {{target_dir}}/lcov.info --workspace --threshold 15
 
 mutants:
-    git diff main > target/phase.diff
-    cargo mutants --workspace -D target/phase.diff
+    git diff main > {{target_dir}}/phase.diff
+    cargo mutants --workspace -D {{target_dir}}/phase.diff
 
 debt: crap mutants
