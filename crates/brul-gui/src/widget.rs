@@ -619,7 +619,8 @@ impl TextStyleSet {
 
 pub struct Widget {
     id: WidgetId,
-    data: WidgetData,
+    data: Content,
+    children: Vec<Widget>,
     layout: LayoutStyle,
     styles: StyleSet,
     state: WidgetState,
@@ -628,10 +629,9 @@ pub struct Widget {
     focusable: bool,
 }
 
-enum WidgetData {
+enum Content {
     View {
         direction: Direction,
-        children: Vec<Widget>,
     },
     Text {
         content: String,
@@ -641,51 +641,43 @@ enum WidgetData {
         value: String,
         styles: Box<TextStyleSet>,
         caret: usize,
+        anchor: usize,
         multiline: bool,
+        scroll: i32,
+        preedit: String,
     },
     Image(Image),
 }
 
+impl Content {
+    fn kind(&self) -> WidgetKind {
+        match self {
+            Self::View { .. } => WidgetKind::View,
+            Self::Text { .. } => WidgetKind::Text,
+            Self::Input { .. } => WidgetKind::Input,
+            Self::Image(_) => WidgetKind::Image,
+        }
+    }
+}
+
 impl Widget {
     pub fn view(direction: Direction, children: Vec<Self>) -> Self {
-        Self::new(WidgetData::View {
-            direction,
-            children,
-        })
+        let mut widget = Self::new(Content::View { direction });
+        widget.children = children;
+        widget
     }
 
     pub fn set_children(&mut self, children: Vec<Self>) {
-        if let WidgetData::View {
-            children: current, ..
-        } = &mut self.data
-        {
-            *current = children;
+        if matches!(&self.data, Content::View { .. }) {
+            self.children = children;
         }
     }
 
     pub fn into_children(self) -> Vec<Self> {
-        let Widget {
-            id,
-            data,
-            layout,
-            styles,
-            state,
-            offset,
-            draggable,
-            focusable,
-        } = self;
-        match data {
-            WidgetData::View { children, .. } => children,
-            data => vec![Widget {
-                id,
-                data,
-                layout,
-                styles,
-                state,
-                offset,
-                draggable,
-                focusable,
-            }],
+        if matches!(&self.data, Content::View { .. }) {
+            self.children
+        } else {
+            vec![self]
         }
     }
 
@@ -706,14 +698,14 @@ impl Widget {
     }
 
     pub fn text_with_styles(content: impl Into<String>, styles: TextStyleSet) -> Self {
-        Self::new(WidgetData::Text {
+        Self::new(Content::Text {
             content: content.into(),
             styles: Box::new(styles),
         })
     }
 
     pub fn image(image: impl Into<Image>) -> Self {
-        Self::new(WidgetData::Image(image.into()))
+        Self::new(Content::Image(image.into()))
     }
 
     pub fn input(value: impl Into<String>) -> Self {
@@ -723,17 +715,20 @@ impl Widget {
     pub fn input_with_styles(value: impl Into<String>, styles: TextStyleSet) -> Self {
         let value = value.into();
         let caret = value.len();
-        Self::new(WidgetData::Input {
+        Self::new(Content::Input {
             value,
             styles: Box::new(styles),
             caret,
+            anchor: caret,
             multiline: false,
+            scroll: 0,
+            preedit: String::new(),
         })
         .focusable(true)
     }
 
     pub fn multiline(mut self, multiline: bool) -> Self {
-        if let WidgetData::Input {
+        if let Content::Input {
             multiline: current, ..
         } = &mut self.data
         {
@@ -742,10 +737,11 @@ impl Widget {
         self
     }
 
-    fn new(data: WidgetData) -> Self {
+    fn new(data: Content) -> Self {
         Self {
             id: WidgetId(NEXT_WIDGET_ID.fetch_add(1, Ordering::Relaxed)),
             data,
+            children: Vec::new(),
             layout: LayoutStyle::default(),
             styles: StyleSet::default(),
             state: WidgetState::default(),
@@ -760,12 +756,7 @@ impl Widget {
     }
 
     pub fn kind(&self) -> WidgetKind {
-        match &self.data {
-            WidgetData::View { .. } => WidgetKind::View,
-            WidgetData::Text { .. } => WidgetKind::Text,
-            WidgetData::Input { .. } => WidgetKind::Input,
-            WidgetData::Image(_) => WidgetKind::Image,
-        }
+        self.data.kind()
     }
 
     pub fn with_layout(mut self, layout: LayoutStyle) -> Self {
@@ -780,13 +771,13 @@ impl Widget {
 
     pub fn with_text_styles(mut self, styles: TextStyleSet) -> Self {
         match &mut self.data {
-            WidgetData::Text {
+            Content::Text {
                 styles: current, ..
             }
-            | WidgetData::Input {
+            | Content::Input {
                 styles: current, ..
             } => **current = styles,
-            WidgetData::View { .. } | WidgetData::Image(_) => {}
+            Content::View { .. } | Content::Image(_) => {}
         }
         self
     }
@@ -964,7 +955,7 @@ impl Slot {
 
 struct Node {
     id: WidgetId,
-    data: NodeData,
+    data: Content,
     layout: LayoutStyle,
     styles: StyleSet,
     class: Option<Class>,
@@ -978,36 +969,7 @@ struct Node {
     shown: WidgetStyle,
 }
 
-enum NodeData {
-    View {
-        direction: Direction,
-    },
-    Text {
-        content: String,
-        styles: Box<TextStyleSet>,
-    },
-    Input {
-        value: String,
-        styles: Box<TextStyleSet>,
-        caret: usize,
-        anchor: usize,
-        multiline: bool,
-        scroll: i32,
-        preedit: String,
-    },
-    Image(Image),
-}
-
 impl Node {
-    fn kind(&self) -> WidgetKind {
-        match &self.data {
-            NodeData::View { .. } => WidgetKind::View,
-            NodeData::Text { .. } => WidgetKind::Text,
-            NodeData::Input { .. } => WidgetKind::Input,
-            NodeData::Image(_) => WidgetKind::Image,
-        }
-    }
-
     fn style(&self) -> WidgetStyle {
         match &self.transition {
             Some(transition) => transition.style(),
@@ -1148,6 +1110,7 @@ impl WidgetTree {
         let Widget {
             id,
             data,
+            children,
             layout,
             styles,
             state,
@@ -1155,33 +1118,6 @@ impl WidgetTree {
             draggable,
             focusable,
         } = widget;
-        let (data, children) = match data {
-            WidgetData::View {
-                direction,
-                children,
-            } => (NodeData::View { direction }, children),
-            WidgetData::Text { content, styles } => {
-                (NodeData::Text { content, styles }, Vec::new())
-            }
-            WidgetData::Input {
-                value,
-                styles,
-                caret,
-                multiline,
-            } => (
-                NodeData::Input {
-                    value,
-                    styles,
-                    caret,
-                    anchor: caret,
-                    multiline,
-                    scroll: 0,
-                    preedit: String::new(),
-                },
-                Vec::new(),
-            ),
-            WidgetData::Image(image) => (NodeData::Image(image), Vec::new()),
-        };
         let mut slots = Vec::with_capacity(children.len());
         for child in children {
             slots.push(self.insert(child));
@@ -1224,32 +1160,17 @@ impl WidgetTree {
             .map(|child| self.extract(child))
             .collect();
         let node = &mut self.nodes[slot.index()];
-        let data = match &mut node.data {
-            NodeData::View { direction } => WidgetData::View {
-                direction: *direction,
-                children,
+        // NOTE: the slot is freed and refilled by insert, so the placeholder never reaches a snapshot
+        let data = std::mem::replace(
+            &mut node.data,
+            Content::View {
+                direction: Direction::Column,
             },
-            NodeData::Text { content, styles } => WidgetData::Text {
-                content: std::mem::take(content),
-                styles: Box::new(std::mem::take(&mut **styles)),
-            },
-            NodeData::Input {
-                value,
-                styles,
-                caret,
-                multiline,
-                ..
-            } => WidgetData::Input {
-                value: std::mem::take(value),
-                styles: Box::new(std::mem::take(&mut **styles)),
-                caret: *caret,
-                multiline: *multiline,
-            },
-            NodeData::Image(image) => WidgetData::Image(image.clone()),
-        };
+        );
         let widget = Widget {
             id: node.id,
             data,
+            children,
             layout: node.layout,
             styles: node.styles.clone(),
             state: node.state,
@@ -1305,7 +1226,7 @@ impl WidgetTree {
         let Some(slot) = self.index.get(&parent).copied() else {
             return false;
         };
-        if !matches!(self.nodes[slot.index()].data, NodeData::View { .. }) {
+        if !matches!(self.nodes[slot.index()].data, Content::View { .. }) {
             return false;
         }
         let current = self.nodes[slot.index()].children.len();
@@ -1336,7 +1257,7 @@ impl WidgetTree {
         let Some(slot) = self.index.get(&parent).copied() else {
             return false;
         };
-        if !matches!(self.nodes[slot.index()].data, NodeData::View { .. }) {
+        if !matches!(self.nodes[slot.index()].data, Content::View { .. }) {
             return false;
         }
         let count = self.nodes[slot.index()].children.len();
@@ -1345,7 +1266,7 @@ impl WidgetTree {
 
     pub fn take_children(&mut self, parent: WidgetId) -> Option<Vec<Widget>> {
         let slot = *self.index.get(&parent)?;
-        if !matches!(self.nodes[slot.index()].data, NodeData::View { .. }) {
+        if !matches!(self.nodes[slot.index()].data, Content::View { .. }) {
             return None;
         }
         self.clear_interaction();
@@ -1616,7 +1537,7 @@ impl WidgetTree {
         let Some(&slot) = self.index.get(&id) else {
             return false;
         };
-        let NodeData::Text {
+        let Content::Text {
             content: current, ..
         } = &mut self.nodes[slot.index()].data
         else {
@@ -1635,7 +1556,7 @@ impl WidgetTree {
         let Some(&slot) = self.index.get(&id) else {
             return false;
         };
-        let NodeData::Image(current) = &mut self.nodes[slot.index()].data else {
+        let Content::Image(current) = &mut self.nodes[slot.index()].data else {
             return false;
         };
         if current.ptr_eq(&image) {
@@ -1706,7 +1627,7 @@ impl WidgetTree {
             return;
         };
         let node = &self.nodes[slot.index()];
-        let NodeData::Input { scroll, .. } = &node.data else {
+        let Content::Input { scroll, .. } = &node.data else {
             return;
         };
         let Some(text) = self.texts.get(&node.id) else {
@@ -1735,7 +1656,7 @@ impl WidgetTree {
                     .offset(content_height, text.variants.base.size.height) as i32,
             );
         let byte = text.variants.base.caret_at(local_x, local_y);
-        let NodeData::Input { caret, anchor, .. } = &mut self.nodes[slot.index()].data else {
+        let Content::Input { caret, anchor, .. } = &mut self.nodes[slot.index()].data else {
             return;
         };
         let moved = *caret != byte || (!extend && *anchor != byte);
@@ -1773,13 +1694,13 @@ impl WidgetTree {
         }
         let Some(slot) = self
             .focused
-            .filter(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
+            .filter(|slot| matches!(self.nodes[slot.index()].data, Content::Input { .. }))
         else {
             return vec![self.key_event(code)];
         };
         let multiline = matches!(
             self.nodes[slot.index()].data,
-            NodeData::Input {
+            Content::Input {
                 multiline: true,
                 ..
             }
@@ -1841,14 +1762,14 @@ impl WidgetTree {
             return Vec::new();
         }
         let node = &self.nodes[slot.index()];
-        let NodeData::Input { value, caret, .. } = &node.data else {
+        let Content::Input { value, caret, .. } = &node.data else {
             return Vec::new();
         };
         vec![WidgetEvent::Input(node.id, value.clone(), *caret)]
     }
 
     fn selection(&self, slot: Slot) -> Option<(usize, usize)> {
-        let NodeData::Input { caret, anchor, .. } = &self.nodes[slot.index()].data else {
+        let Content::Input { caret, anchor, .. } = &self.nodes[slot.index()].data else {
             return None;
         };
         let (start, end) = if anchor <= caret {
@@ -1860,7 +1781,7 @@ impl WidgetTree {
     }
 
     fn select_all(&mut self, slot: Slot) {
-        let NodeData::Input {
+        let Content::Input {
             value,
             caret,
             anchor,
@@ -1877,7 +1798,7 @@ impl WidgetTree {
 
     fn selected_text(&self, slot: Slot) -> Option<String> {
         let (start, end) = self.selection(slot)?;
-        let NodeData::Input { value, .. } = &self.nodes[slot.index()].data else {
+        let Content::Input { value, .. } = &self.nodes[slot.index()].data else {
             return None;
         };
         value.get(start..end).map(str::to_owned)
@@ -1911,7 +1832,7 @@ impl WidgetTree {
         let Some(slot) = self.focused_input() else {
             return false;
         };
-        let NodeData::Input { preedit, .. } = &mut self.nodes[slot.index()].data else {
+        let Content::Input { preedit, .. } = &mut self.nodes[slot.index()].data else {
             return false;
         };
         if preedit == text {
@@ -1942,7 +1863,7 @@ impl WidgetTree {
             let changed = self.delete_input(slot, true);
             return self.input_event(slot, changed);
         }
-        let NodeData::Input {
+        let Content::Input {
             value,
             caret,
             anchor,
@@ -1965,7 +1886,7 @@ impl WidgetTree {
     }
 
     fn clear_preedit(&mut self, slot: Slot) -> bool {
-        let NodeData::Input { preedit, .. } = &mut self.nodes[slot.index()].data else {
+        let Content::Input { preedit, .. } = &mut self.nodes[slot.index()].data else {
             return false;
         };
         if preedit.is_empty() {
@@ -1979,13 +1900,13 @@ impl WidgetTree {
 
     fn focused_input(&self) -> Option<Slot> {
         self.focused
-            .filter(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
+            .filter(|slot| matches!(self.nodes[slot.index()].data, Content::Input { .. }))
     }
 
     fn field_text(&self, slot: Slot, text: &str) -> String {
         let multiline = matches!(
             self.nodes[slot.index()].data,
-            NodeData::Input {
+            Content::Input {
                 multiline: true,
                 ..
             }
@@ -2008,7 +1929,7 @@ impl WidgetTree {
             return false;
         }
         let selection = self.selection(slot);
-        let NodeData::Input {
+        let Content::Input {
             value,
             caret,
             anchor,
@@ -2031,7 +1952,7 @@ impl WidgetTree {
 
     fn delete_input(&mut self, slot: Slot, before: bool) -> bool {
         let selection = self.selection(slot);
-        let NodeData::Input {
+        let Content::Input {
             value,
             caret,
             anchor,
@@ -2067,7 +1988,7 @@ impl WidgetTree {
 
     fn move_caret(&mut self, slot: Slot, right: bool, extend: bool) {
         let selection = self.selection(slot);
-        let NodeData::Input {
+        let Content::Input {
             value,
             caret,
             anchor,
@@ -2104,7 +2025,7 @@ impl WidgetTree {
     fn move_caret_edge(&mut self, slot: Slot, home: bool, extend: bool) {
         let id = self.nodes[slot.index()].id;
         let layout = self.texts.get(&id).map(|cached| &cached.variants.base);
-        let NodeData::Input {
+        let Content::Input {
             value,
             caret,
             anchor,
@@ -2141,7 +2062,7 @@ impl WidgetTree {
             return;
         };
         let layout = &cached.variants.base;
-        let NodeData::Input { caret, .. } = &self.nodes[slot.index()].data else {
+        let Content::Input { caret, .. } = &self.nodes[slot.index()].data else {
             return;
         };
         let Some(target) = (if up {
@@ -2151,7 +2072,7 @@ impl WidgetTree {
         }) else {
             return;
         };
-        if let NodeData::Input { caret, anchor, .. } = &mut self.nodes[slot.index()].data {
+        if let Content::Input { caret, anchor, .. } = &mut self.nodes[slot.index()].data {
             *caret = target;
             if !extend {
                 *anchor = target;
@@ -2166,7 +2087,7 @@ impl WidgetTree {
         let Some(&slot) = self.index.get(&id) else {
             return false;
         };
-        let NodeData::Input {
+        let Content::Input {
             value,
             caret,
             anchor,
@@ -2193,7 +2114,7 @@ impl WidgetTree {
         let slot = self.focused_input()?;
         let geometry = self.geometry.as_ref()?;
         let node = &self.nodes[slot.index()];
-        let NodeData::Input { caret, scroll, .. } = &node.data else {
+        let Content::Input { caret, scroll, .. } = &node.data else {
             return None;
         };
         let cached = self.texts.get(&node.id)?;
@@ -2294,7 +2215,7 @@ impl WidgetTree {
         };
         let target = path.iter().rev().copied().find(|slot| {
             let node = &self.nodes[slot.index()];
-            matches!(node.data, NodeData::View { .. })
+            matches!(node.data, Content::View { .. })
                 && (node.styles.resolve(node.state).scroll
                     || (self.root_scroll && *slot == self.root))
         });
@@ -2324,7 +2245,7 @@ impl WidgetTree {
             .iter()
             .rev()
             .copied()
-            .find(|slot| matches!(self.nodes[slot.index()].data, NodeData::Input { .. }))
+            .find(|slot| matches!(self.nodes[slot.index()].data, Content::Input { .. }))
         {
             self.place_caret(slot, x, y, true);
         }
@@ -2597,7 +2518,7 @@ impl Pass<'_> {
             .map(|width| width.saturating_sub(layout::inset_x(&layout_style)));
 
         let layout_node = match &node.data {
-            NodeData::View { direction } => {
+            Content::View { direction } => {
                 let mut children = Vec::with_capacity(node.children.len());
                 for &child in &node.children {
                     children.push(self.build(child, content_width)?);
@@ -2609,10 +2530,10 @@ impl Pass<'_> {
                     }
                 }
             }
-            NodeData::Text { content, styles } => {
+            Content::Text { content, styles } => {
                 self.build_text(node, content, styles, content_width, "")?
             }
-            NodeData::Input {
+            Content::Input {
                 value,
                 styles,
                 multiline,
@@ -2622,7 +2543,7 @@ impl Pass<'_> {
                 let width = if *multiline { content_width } else { None };
                 self.build_text(node, value, styles, width, preedit)?
             }
-            NodeData::Image(image) => LayoutNode::leaf(image.width(), image.height()),
+            Content::Image(image) => LayoutNode::leaf(image.width(), image.height()),
         };
 
         let layout_node = layout_node.with_style(layout_style);
@@ -2711,7 +2632,7 @@ fn boundary_before(value: &str, mut index: usize) -> usize {
 fn reveal_carets(nodes: &mut [Node], texts: &HashMap<WidgetId, ShapedText>, boxes: &[LayoutBox]) {
     for (slot, node) in nodes.iter_mut().enumerate() {
         let style = node.layout_style();
-        let NodeData::Input {
+        let Content::Input {
             caret,
             multiline: true,
             scroll,
@@ -2829,7 +2750,7 @@ fn snapshot_widget(
         .height
         .saturating_sub(layout::inset_y(&layout_style));
     let mut node_clips = clips.to_vec();
-    if matches!(node.data, NodeData::Input { .. }) && content_width > 0 && content_height > 0 {
+    if matches!(node.data, Content::Input { .. }) && content_width > 0 && content_height > 0 {
         node_clips.push(ClipRect::new(
             content_x,
             content_y,
@@ -2839,19 +2760,19 @@ fn snapshot_widget(
         ));
     }
     let text = match &node.data {
-        NodeData::Text { .. } | NodeData::Input { .. } => texts
+        Content::Text { .. } | Content::Input { .. } => texts
             .get(&node.id)
             .map(|cached| cached.variants.resolve(node.state)),
         _ => None,
     };
     let preedit = match &node.data {
-        NodeData::Input { .. } if focused == Some(slot) => texts
+        Content::Input { .. } if focused == Some(slot) => texts
             .get(&node.id)
             .and_then(|cached| cached.preedit.clone()),
         _ => None,
     };
     let caret = match &node.data {
-        NodeData::Input { caret, .. } if focused == Some(slot) => {
+        Content::Input { caret, .. } if focused == Some(slot) => {
             texts.get(&node.id).map(|cached| {
                 let mut position = cached.variants.base.caret(*caret);
                 if let Some(preedit) = &cached.preedit {
@@ -2863,7 +2784,7 @@ fn snapshot_widget(
         _ => None,
     };
     let selection = match &node.data {
-        NodeData::Input { caret, anchor, .. } if focused == Some(slot) => {
+        Content::Input { caret, anchor, .. } if focused == Some(slot) => {
             texts.get(&node.id).map_or_else(Vec::new, |cached| {
                 cached.variants.base.selection(*anchor, *caret)
             })
@@ -2871,17 +2792,17 @@ fn snapshot_widget(
         _ => Vec::new(),
     };
     let scroll = match &node.data {
-        NodeData::Input { scroll, .. } => *scroll,
+        Content::Input { scroll, .. } => *scroll,
         _ => 0,
     };
     let image = match &node.data {
-        NodeData::Image(image) => Some(image.clone()),
+        Content::Image(image) => Some(image.clone()),
         _ => None,
     };
 
     nodes.push(WidgetSnapshotNode {
         id: node.id,
-        kind: node.kind(),
+        kind: node.data.kind(),
         x: layout_box.x,
         y: layout_box.y,
         width: layout_box.width,

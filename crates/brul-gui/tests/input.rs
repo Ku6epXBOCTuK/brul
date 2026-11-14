@@ -572,3 +572,37 @@ fn delete_surrounding_removes_whole_characters_around_the_caret() {
         vec![WidgetEvent::Input(id, "\u{438}".to_owned(), 0)]
     );
 }
+
+#[test]
+fn reusing_children_keeps_input_selection_and_preedit() {
+    let input = field("abcd");
+    let id = input.id();
+    let root = Widget::column(vec![input]).with_layout(fixed(100, 40));
+    let parent = root.id();
+    let mut tree = laid_out(root);
+
+    tree.press_key("Tab");
+    tree.press_key("Home");
+    tree.set_modifiers(KeyModifiers {
+        shift: true,
+        ..KeyModifiers::default()
+    });
+    tree.press_key("ArrowRight");
+    tree.press_key("ArrowRight");
+    tree.set_modifiers(KeyModifiers::default());
+    assert!(tree.set_preedit("ni"));
+
+    let children = tree.take_children(parent).expect("children");
+    assert!(tree.replace_all_children(parent, children));
+    relayout(&mut tree);
+
+    let node = tree
+        .snapshot()
+        .expect("snapshot")
+        .node(id)
+        .expect("node")
+        .clone();
+    assert!(node.preedit.is_some());
+    assert_eq!(node.selection.len(), 1);
+    assert!(tree.caret_area().is_some());
+}
