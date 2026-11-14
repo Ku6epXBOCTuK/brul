@@ -5,14 +5,17 @@ use std::collections::{HashMap, HashSet};
 
 pub(super) struct Pass<'a> {
     pub(super) tree: &'a [Node],
-    pub(super) engine: &'a mut TextEngine,
-    pub(super) texts: &'a mut HashMap<WidgetId, ShapedText>,
-    pub(super) layouter: &'a mut Layouter,
-    pub(super) scale: f32,
+    pub(super) layouter: &'a mut Layouter<Measure>,
     pub(super) cached: Option<&'a [LayoutBox]>,
     pub(super) blocked: Vec<bool>,
     pub(super) order: Vec<Slot>,
     pub(super) frozen: Vec<(Slot, LayoutBox)>,
+}
+
+#[derive(Clone, PartialEq)]
+pub(super) enum Measure {
+    Widget(Slot),
+    Fixed(Size),
 }
 
 pub(super) fn dirty_subtrees(tree: &[Node], root: Slot, stale: &HashSet<Slot>) -> Vec<bool> {
@@ -68,7 +71,7 @@ impl Pass<'_> {
                     style: &layout_style,
                     direction: Direction::Row,
                     offset: node.offset,
-                    content: size,
+                    content: Measure::Fixed(size),
                     prepared,
                     children: &[],
                 },
@@ -101,48 +104,25 @@ impl Pass<'_> {
                 };
                 (*direction, children)
             }
-            Content::Text { content, styles } => (
-                Direction::Row,
-                self.build_text(node, content, styles, prepared.available.width, "")?,
-            ),
-            Content::Input {
-                value,
-                styles,
-                multiline,
-                preedit,
-                ..
-            } => {
-                let width = if *multiline {
-                    prepared.available.width
-                } else {
-                    None
-                };
-                (
-                    Direction::Row,
-                    self.build_text(node, value, styles, width, preedit)?,
-                )
+            Content::Text { .. } | Content::Input { .. } | Content::Image(_) => {
+                (Direction::Row, LayoutNode::leaf(0, 0))
             }
-            Content::Image(image) => (
-                Direction::Row,
-                LayoutNode::leaf(image.width(), image.height()),
-            ),
         };
 
-        let content = match &layout_node {
-            LayoutNode::Leaf { size, .. } => *size,
-            LayoutNode::Container { .. } => Size::default(),
-        };
         self.layouter.node(
             key,
             NodeShape {
                 style: &layout_style,
                 direction,
                 offset: node.offset,
-                content,
+                content: Measure::Widget(slot),
                 prepared,
                 children: &keys,
             },
         );
+        if self.blocked[slot.index()] {
+            self.layouter.touch(key);
+        }
 
         let layout_node = layout_node.with_style(layout_style);
         let layout_node = match node.offset {
@@ -151,73 +131,87 @@ impl Pass<'_> {
         };
         Ok((layout_node, key))
     }
+}
 
-    fn build_text(
-        &mut self,
-        node: &Node,
-        content: &str,
-        styles: &TextStyleSet,
-        content_width: Option<u32>,
-        preedit: &str,
-    ) -> Result<LayoutNode, WidgetError> {
-        let mut styles = styles.clone();
-        if let Some(class) = &node.class {
-            styles.apply_layers(&class.text);
+pub(super) fn measure_text(
+    node: &Node,
+    engine: &mut TextEngine,
+    texts: &mut HashMap<WidgetId, ShapedText>,
+    width: Option<u32>,
+    scale: f32,
+) -> Result<Size, WidgetError> {
+    let (content, styles, width, preedit) = match &node.data {
+        Content::Text { content, styles } => (content.as_str(), styles, width, ""),
+        Content::Input {
+            value,
+            styles,
+            multiline,
+            preedit,
+            ..
+        } => (
+            value.as_str(),
+            styles,
+            if *multiline { width } else { None },
+            preedit.as_str(),
+        ),
+        Content::Image(image) => {
+            return Ok(Size {
+                width: image.width(),
+                height: image.height(),
+            });
         }
-        let max_width = content_width.map(|width| width as f32 / self.scale);
-        let cached = self.texts.get(&node.id).filter(|cached| {
-            cached.width == content_width
-                && cached.scale == self.scale
-                && cached.content == content
-                && cached.preedit_text == preedit
-        });
-        if cached.is_none() {
-            let mut variants = TextVariants::new(self.engine.layout(
-                content,
-                styles.base(),
-                max_width,
-                self.scale,
-            )?);
-            for state in StyleState::ALL {
-                let style = styles.resolve(state.flags());
-                if style == *styles.base() {
-                    continue;
-                }
-                variants = variants.with(
-                    state,
-                    self.engine.layout(content, &style, max_width, self.scale)?,
-                );
-            }
-            let preedit_text = preedit.to_owned();
-            let preedit = if preedit_text.is_empty() {
-                None
-            } else {
-                Some(
-                    self.engine
-                        .layout(&preedit_text, styles.base(), None, self.scale)?,
-                )
-            };
-            self.texts.insert(
-                node.id,
-                ShapedText {
-                    content: content.to_owned(),
-                    width: content_width,
-                    scale: self.scale,
-                    variants,
-                    preedit,
-                    preedit_text,
-                },
-            );
-        }
-        let size = self
-            .texts
-            .get(&node.id)
-            .expect("shaped text cached")
-            .variants
-            .base
-            .size;
-        Ok(LayoutNode::leaf(size.width, size.height))
+        _ => return Ok(Size::default()),
+    };
+
+    let mut styles = styles.clone();
+    if let Some(class) = &node.class {
+        styles.apply_layers(&class.text);
     }
+    let max_width = width.map(|width| width as f32 / scale);
+    let cached = texts.get(&node.id).filter(|cached| {
+        cached.width == width
+            && cached.scale == scale
+            && cached.content == content
+            && cached.preedit_text == preedit
+    });
+    if cached.is_none() {
+        let mut variants =
+            TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
+        for state in StyleState::ALL {
+            let style = styles.resolve(state.flags());
+            if style == *styles.base() {
+                continue;
+            }
+            variants = variants.with(state, engine.layout(content, &style, max_width, scale)?);
+        }
+        let preedit_text = preedit.to_owned();
+        let preedit = if preedit_text.is_empty() {
+            None
+        } else {
+            Some(engine.layout(&preedit_text, styles.base(), None, scale)?)
+        };
+        texts.insert(
+            node.id,
+            ShapedText {
+                content: content.to_owned(),
+                width,
+                scale,
+                variants,
+                preedit,
+                preedit_text,
+            },
+        );
+    }
+    let size = texts
+        .get(&node.id)
+        .expect("shaped text cached")
+        .variants
+        .base
+        .size;
+    Ok(Size {
+        width: size.width,
+        height: size.height,
+    })
 }
 
 pub(super) fn max_scroll_offset(nodes: &[Node], slot: Slot, boxes: &[LayoutBox]) -> Option<i32> {

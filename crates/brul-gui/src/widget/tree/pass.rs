@@ -1,5 +1,5 @@
 use super::frame::{build_snapshot, reveal_carets};
-use super::render::{Pass, dirty_subtrees, flatten_boxes, move_children};
+use super::render::{Measure, Pass, dirty_subtrees, flatten_boxes, measure_text, move_children};
 use super::style::Transition;
 use super::*;
 use crate::layout::{Available, LayoutBox, Size};
@@ -44,10 +44,7 @@ impl WidgetTree {
             self.layouter.begin();
             let mut pass = Pass {
                 tree: &self.nodes,
-                engine,
-                texts: &mut self.texts,
                 layouter: &mut self.layouter,
-                scale,
                 cached: reuse.then_some(&boxes),
                 blocked: dirty_subtrees(&self.nodes, self.root, &self.stale),
                 order: Vec::with_capacity(self.nodes.len()),
@@ -64,8 +61,30 @@ impl WidgetTree {
         };
         self.texts.retain(|id, _| self.index.contains_key(id));
 
+        let mut failed = None;
         self.layouter.finish();
-        self.layouter.compute(key, viewport);
+        self.layouter.compute(key, viewport, |content, width| {
+            let size = match content {
+                Measure::Widget(slot) => measure_text(
+                    &self.nodes[slot.index()],
+                    engine,
+                    &mut self.texts,
+                    width,
+                    scale,
+                ),
+                Measure::Fixed(size) => Ok(*size),
+            };
+            match size {
+                Ok(size) => size,
+                Err(error) => {
+                    failed = Some(error);
+                    Size::default()
+                }
+            }
+        });
+        if let Some(error) = failed {
+            return Err(error);
+        }
         let placed = self.layouter.collect(key, &node);
         let mut cursor = 0;
         flatten_boxes(&placed, &order, &mut cursor, &mut boxes);

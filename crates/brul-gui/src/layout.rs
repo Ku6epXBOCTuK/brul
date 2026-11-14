@@ -4,8 +4,9 @@ use std::fmt;
 use taffy::style_helpers::TaffyAuto;
 use taffy::{
     AlignItems, AvailableSpace, BoxSizing, Dimension as TaffyDimension, FlexDirection,
-    JustifyContent, LengthPercentage, LengthPercentageAuto, NodeId, Position, Rect as TaffyRect,
-    Size as TaffySize, Style as TaffyStyle, TaffyTree, compute_leaf_layout,
+    JustifyContent, LayoutInput, LayoutOutput, LengthPercentage, LengthPercentageAuto, NodeId,
+    Position, Rect as TaffyRect, Size as TaffySize, Style as TaffyStyle, TaffyTree,
+    compute_leaf_layout,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -308,29 +309,34 @@ pub(crate) fn prepare(style: &LayoutStyle, available: Available) -> Result<Prepa
     })
 }
 
-pub(crate) struct NodeShape<'a> {
+pub(crate) struct NodeShape<'a, C> {
     pub(crate) style: &'a LayoutStyle,
     pub(crate) direction: Direction,
     pub(crate) offset: Option<Offset>,
-    pub(crate) content: Size,
+    pub(crate) content: C,
     pub(crate) prepared: Prepared,
     pub(crate) children: &'a [u32],
 }
 
-struct Entry {
+struct Ctx<C> {
+    content: C,
+    inset: Size,
+}
+
+struct Entry<C> {
     node: NodeId,
     style: TaffyStyle,
-    content: Size,
+    content: C,
     children: Vec<u32>,
 }
 
-pub(crate) struct Layouter {
-    tree: TaffyTree<Size>,
-    entries: HashMap<u32, Entry>,
+pub(crate) struct Layouter<C> {
+    tree: TaffyTree<Ctx<C>>,
+    entries: HashMap<u32, Entry<C>>,
     live: HashSet<u32>,
 }
 
-impl Layouter {
+impl<C: PartialEq + Clone> Layouter<C> {
     pub(crate) fn new() -> Self {
         Self {
             tree: TaffyTree::new(),
@@ -356,7 +362,7 @@ impl Layouter {
         }
     }
 
-    pub(crate) fn node(&mut self, key: u32, shape: NodeShape) {
+    pub(crate) fn node(&mut self, key: u32, shape: NodeShape<C>) {
         let taffy = taffy_style(
             shape.style,
             shape.direction,
@@ -364,6 +370,13 @@ impl Layouter {
             shape.prepared.height,
             shape.offset,
         );
+        let context = Ctx {
+            content: shape.content.clone(),
+            inset: Size {
+                width: inset_x(shape.style),
+                height: inset_y(shape.style),
+            },
+        };
         let nodes = shape
             .children
             .iter()
@@ -377,10 +390,10 @@ impl Layouter {
                     entry.style = taffy.clone();
                     self.tree.set_style(entry.node, taffy).expect("layout tree");
                 }
-                if entry.content != shape.content {
-                    entry.content = shape.content;
+                if entry.content != context.content {
+                    entry.content = context.content.clone();
                     self.tree
-                        .set_node_context(entry.node, Some(shape.content))
+                        .set_node_context(entry.node, Some(context))
                         .expect("layout tree");
                 }
                 if entry.children.as_slice() != shape.children {
@@ -393,7 +406,7 @@ impl Layouter {
             None => {
                 let node = self
                     .tree
-                    .new_leaf_with_context(taffy.clone(), shape.content)
+                    .new_leaf_with_context(taffy.clone(), context)
                     .expect("layout tree");
                 if !nodes.is_empty() {
                     self.tree.set_children(node, &nodes).expect("layout tree");
@@ -410,10 +423,44 @@ impl Layouter {
             }
         }
     }
+}
 
-    pub(crate) fn compute(&mut self, root: u32, viewport: Size) {
+impl<C> Layouter<C> {
+    pub(crate) fn touch(&mut self, key: u32) {
+        if let Some(entry) = self.entries.get(&key) {
+            self.tree.mark_dirty(entry.node).expect("layout tree");
+        }
+    }
+
+    pub(crate) fn compute(
+        &mut self,
+        root: u32,
+        viewport: Size,
+        mut measure: impl FnMut(&mut C, Option<u32>) -> Size,
+    ) {
         let node = self.entries.get(&root).expect("layout root").node;
-        compute(&mut self.tree, node, viewport);
+
+        // NOTE: taffy only rejects ids it did not create, and every id here comes from this tree
+        self.tree
+            .compute_layout_with_measure(
+                node,
+                TaffySize {
+                    width: AvailableSpace::Definite(viewport.width as f32),
+                    height: AvailableSpace::Definite(viewport.height as f32),
+                },
+                |inputs, _node, context, style| {
+                    let content = match context {
+                        Some(context) => {
+                            let width = measured_width(inputs)
+                                .map(|width| width.saturating_sub(context.inset.width));
+                            measure(&mut context.content, width)
+                        }
+                        None => Size::default(),
+                    };
+                    leaf_layout(inputs, style, content)
+                },
+            )
+            .expect("layout tree");
     }
 
     pub(crate) fn collect(&self, root: u32, shape: &LayoutNode) -> LayoutBox {
@@ -422,7 +469,7 @@ impl Layouter {
     }
 }
 
-impl Default for Layouter {
+impl<C: PartialEq + Clone> Default for Layouter<C> {
     fn default() -> Self {
         Self::new()
     }
@@ -477,6 +524,26 @@ fn build(
     Ok(id)
 }
 
+fn measured_width(inputs: LayoutInput) -> Option<u32> {
+    inputs
+        .known_dimensions
+        .width
+        .or(inputs.available_space.width.into_option())
+        .map(|width| width.max(0.0) as u32)
+}
+
+fn leaf_layout(inputs: LayoutInput, style: &TaffyStyle, content: Size) -> LayoutOutput {
+    compute_leaf_layout(
+        inputs,
+        style,
+        |_, _| 0.0,
+        |_, _| TaffySize {
+            width: content.width as f32,
+            height: content.height as f32,
+        },
+    )
+}
+
 fn compute(tree: &mut TaffyTree<Size>, root: NodeId, viewport: Size) {
     // NOTE: taffy only rejects ids it did not create, and every id here comes from this tree
     tree.compute_layout_with_measure(
@@ -487,15 +554,7 @@ fn compute(tree: &mut TaffyTree<Size>, root: NodeId, viewport: Size) {
         },
         |inputs, _node, context, style| {
             let content = context.map(|size| *size).unwrap_or_default();
-            compute_leaf_layout(
-                inputs,
-                style,
-                |_, _| 0.0,
-                |_, _| TaffySize {
-                    width: content.width as f32,
-                    height: content.height as f32,
-                },
-            )
+            leaf_layout(inputs, style, content)
         },
     )
     .expect("layout tree");
@@ -569,7 +628,7 @@ fn taffy_style(
     output
 }
 
-fn collect(tree: &TaffyTree<Size>, id: NodeId, node: &LayoutNode, x: i32, y: i32) -> LayoutBox {
+fn collect<C>(tree: &TaffyTree<C>, id: NodeId, node: &LayoutNode, x: i32, y: i32) -> LayoutBox {
     let placed = tree.layout(id).expect("layout tree");
     let mut output = LayoutBox {
         x,
