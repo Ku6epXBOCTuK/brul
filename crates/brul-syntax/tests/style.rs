@@ -454,7 +454,9 @@ fn class_states_parse() {
 #[test]
 fn mvp_properties_accept_their_types() {
     let source = r#".a {
-        stretch: 2;
+        flex-grow: 2;
+        flex-shrink: 0;
+        flex-basis: 0px;
         align-items: stretch;
         font-weight: 700;
         opacity: 1;
@@ -675,10 +677,10 @@ fn errors_point_at_the_source() {
             6,
         ),
         (
-            ".a { stretch: theme.x; }",
-            "expected number for 'stretch'",
+            ".a { flex-grow: theme.x; }",
+            "expected number for 'flex-grow'",
             1,
-            15,
+            17,
         ),
     ];
     for (source, message, line, column) in sources {

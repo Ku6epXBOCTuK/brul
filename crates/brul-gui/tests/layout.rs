@@ -154,14 +154,14 @@ fn percent_height_inside_auto_container_uses_available_height() {
 }
 
 #[test]
-fn stretch_distributes_remaining_main_space() {
+fn flex_grow_distributes_remaining_main_space() {
     let first = LayoutNode::leaf(50, 10);
     let second = LayoutNode::leaf(50, 10).with_style(LayoutStyle {
-        stretch: 1.0,
+        flex_grow: 1.0,
         ..LayoutStyle::default()
     });
     let third = LayoutNode::leaf(50, 10).with_style(LayoutStyle {
-        stretch: 2.0,
+        flex_grow: 2.0,
         ..LayoutStyle::default()
     });
     let root = LayoutNode::row(vec![first, second, third]).with_style(LayoutStyle {
@@ -363,9 +363,9 @@ fn invalid_dimension_is_rejected() {
 }
 
 #[test]
-fn invalid_stretch_is_rejected() {
+fn invalid_flex_is_rejected() {
     let root = LayoutNode::leaf(10, 10).with_style(LayoutStyle {
-        stretch: -1.0,
+        flex_grow: -1.0,
         ..LayoutStyle::default()
     });
 
@@ -377,6 +377,6 @@ fn invalid_stretch_is_rejected() {
                 height: 100
             }
         ),
-        Err(LayoutError::InvalidStretch)
+        Err(LayoutError::InvalidFlex)
     );
 }

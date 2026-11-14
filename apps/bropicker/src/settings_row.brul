@@ -43,7 +43,7 @@
         background: theme.surface;
         radius: 10px;
     }
-    .details { stretch: 1; spacing: 2px; }
+    .details { flex-grow: 1; spacing: 2px; }
     .name { color: theme.text; font-size: 14px; font-weight: 600; }
     .detail-text { color: theme.muted; font-size: 11px; }
     .remove { color: theme.danger; font-size: 12px; padding: 6px; }

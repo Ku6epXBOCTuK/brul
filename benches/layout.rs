@@ -105,7 +105,7 @@ fn note_obs() -> LayoutNode {
         height: Dimension::Px(120),
         padding: Padding::all(12),
         border_width: 1,
-        stretch: 1.0,
+        flex_grow: 1.0,
         ..LayoutStyle::default()
     };
     let presets = LayoutStyle {
@@ -146,7 +146,7 @@ fn note_obs() -> LayoutNode {
             ..Padding::default()
         },
         border_width: 1,
-        stretch: 1.0,
+        flex_grow: 1.0,
         ..LayoutStyle::default()
     };
 

@@ -842,14 +842,14 @@ fn a_class_carrying_a_layout_relayouts_the_widget() {
 }
 
 #[test]
-fn a_stretched_branch_is_laid_out_again_when_its_sibling_shrinks() {
+fn a_grown_branch_is_laid_out_again_when_its_sibling_shrinks() {
     fn build(left: &str) -> (WidgetTree, WidgetId, WidgetId, WidgetId) {
         let left_widget = Widget::text(left);
         let left_id = left_widget.id();
         let inner = Widget::text("ok");
         let inner_id = inner.id();
         let right = Widget::column(vec![inner]).with_layout(LayoutStyle {
-            stretch: 1.0,
+            flex_grow: 1.0,
             ..LayoutStyle::default()
         });
         let right_id = right.id();

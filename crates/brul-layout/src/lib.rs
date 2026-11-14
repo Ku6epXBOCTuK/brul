@@ -72,7 +72,9 @@ pub struct LayoutStyle {
     pub padding: Padding,
     pub border_width: u32,
     pub spacing: u32,
-    pub stretch: f32,
+    pub flex_grow: f32,
+    pub flex_shrink: f32,
+    pub flex_basis: Dimension,
     pub justify: Justify,
     pub align: Align,
 }
@@ -84,7 +86,9 @@ pub struct LayoutPatch {
     pub padding: Option<Padding>,
     pub border_width: Option<u32>,
     pub spacing: Option<u32>,
-    pub stretch: Option<f32>,
+    pub flex_grow: Option<f32>,
+    pub flex_shrink: Option<f32>,
+    pub flex_basis: Option<Dimension>,
     pub justify: Option<Justify>,
     pub align: Option<Align>,
 }
@@ -96,7 +100,9 @@ impl LayoutPatch {
             && self.padding.is_none()
             && self.border_width.is_none()
             && self.spacing.is_none()
-            && self.stretch.is_none()
+            && self.flex_grow.is_none()
+            && self.flex_shrink.is_none()
+            && self.flex_basis.is_none()
             && self.justify.is_none()
             && self.align.is_none()
     }
@@ -119,8 +125,14 @@ impl LayoutStyle {
         if let Some(spacing) = patch.spacing {
             self.spacing = spacing;
         }
-        if let Some(stretch) = patch.stretch {
-            self.stretch = stretch;
+        if let Some(flex_grow) = patch.flex_grow {
+            self.flex_grow = flex_grow;
+        }
+        if let Some(flex_shrink) = patch.flex_shrink {
+            self.flex_shrink = flex_shrink;
+        }
+        if let Some(flex_basis) = patch.flex_basis {
+            self.flex_basis = flex_basis;
         }
         if let Some(justify) = patch.justify {
             self.justify = justify;
@@ -262,14 +274,16 @@ pub struct LayoutBox {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LayoutError {
     InvalidDimension,
-    InvalidStretch,
+    InvalidFlex,
 }
 
 impl fmt::Display for LayoutError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::InvalidDimension => "invalid size: percent must be finite and non-negative",
-            Self::InvalidStretch => "invalid stretch: factor must be finite and non-negative",
+            Self::InvalidFlex => {
+                "invalid flex: factors and basis percent must be finite and non-negative"
+            }
         };
         formatter.write_str(message)
     }
@@ -291,7 +305,7 @@ pub struct Prepared {
 }
 
 pub fn prepare(style: &LayoutStyle, available: Available) -> Result<Prepared, LayoutError> {
-    validate_stretch(style)?;
+    validate_flex(style)?;
     let width = resolve(style.width, available.width)?;
     let height = resolve(style.height, available.height)?;
     Ok(Prepared {
@@ -653,8 +667,13 @@ fn taffy_style(
             Justify::End => JustifyContent::END,
             Justify::SpaceBetween => JustifyContent::SPACE_BETWEEN,
         },
-        flex_grow: style.stretch,
-        flex_shrink: 0.0,
+        flex_grow: style.flex_grow,
+        flex_shrink: style.flex_shrink,
+        flex_basis: match style.flex_basis {
+            Dimension::Auto => TaffyDimension::AUTO,
+            Dimension::Px(value) => TaffyDimension::length(value as f32),
+            Dimension::Percent(percent) => TaffyDimension::percent(percent / 100.0),
+        },
         ..TaffyStyle::default()
     };
 
@@ -770,9 +789,18 @@ fn resolve(dimension: Dimension, base: Option<u32>) -> Result<Option<u32>, Layou
     }
 }
 
-fn validate_stretch(style: &LayoutStyle) -> Result<(), LayoutError> {
-    if !style.stretch.is_finite() || style.stretch < 0.0 {
-        return Err(LayoutError::InvalidStretch);
+fn validate_flex(style: &LayoutStyle) -> Result<(), LayoutError> {
+    let factors = [style.flex_grow, style.flex_shrink];
+    if factors
+        .iter()
+        .any(|factor| !factor.is_finite() || *factor < 0.0)
+    {
+        return Err(LayoutError::InvalidFlex);
+    }
+    if let Dimension::Percent(percent) = style.flex_basis
+        && (!percent.is_finite() || percent < 0.0)
+    {
+        return Err(LayoutError::InvalidFlex);
     }
     Ok(())
 }
@@ -800,7 +828,7 @@ mod tests {
 
     #[test]
     fn every_layout_error_has_its_own_message() {
-        let messages = [LayoutError::InvalidDimension, LayoutError::InvalidStretch]
+        let messages = [LayoutError::InvalidDimension, LayoutError::InvalidFlex]
             .map(|error| error.to_string());
 
         assert!(messages.iter().all(|message| !message.is_empty()));
@@ -887,5 +915,48 @@ mod tests {
         let mut second = vec![LayoutBox::default(); 2];
         layouter.collect_into(0, &mut second);
         assert_eq!(second, first);
+    }
+
+    fn columns(grow: f32, basis: Dimension) -> LayoutNode {
+        let style = LayoutStyle {
+            flex_grow: grow,
+            flex_basis: basis,
+            ..LayoutStyle::default()
+        };
+        let root = LayoutStyle {
+            width: Dimension::Px(200),
+            spacing: 8,
+            ..LayoutStyle::default()
+        };
+        LayoutNode::row(vec![
+            LayoutNode::leaf(20, 10).with_style(style),
+            LayoutNode::leaf(40, 10).with_style(style),
+        ])
+        .with_style(root)
+    }
+
+    #[test]
+    fn flex_zero_basis_splits_the_whole_row() {
+        let viewport = Size {
+            width: 200,
+            height: 50,
+        };
+        let placed = layout(&columns(1.0, Dimension::Px(0)), viewport).expect("layout");
+
+        assert_eq!(placed.children[0].width, 96);
+        assert_eq!(placed.children[1].width, 96);
+        assert_eq!(placed.children[1].x, 104);
+    }
+
+    #[test]
+    fn flex_without_basis_grows_from_content() {
+        let viewport = Size {
+            width: 200,
+            height: 50,
+        };
+        let placed = layout(&columns(1.0, Dimension::Auto), viewport).expect("layout");
+
+        assert_eq!(placed.children[0].width, 86);
+        assert_eq!(placed.children[1].width, 106);
     }
 }

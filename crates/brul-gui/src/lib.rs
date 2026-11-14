@@ -55,9 +55,10 @@
 //!
 //! Лейаут — крейт `brul-layout`, [`layout()`] считает через `taffy` по
 //! flexbox-модели.
-//! [`Dimension`] задаёт auto/px/%, [`LayoutStyle::stretch`] — `flex-grow`,
-//! `justify` и `align` двигают по главной и поперечной осям. Координаты и
-//! размеры результата — целые физические пиксели.
+//! [`Dimension`] задаёт auto/px/%, [`LayoutStyle::flex_grow`] и
+//! [`LayoutStyle::flex_basis`] — веса и базу главной оси, `justify` и `align`
+//! двигают по главной и поперечной осям. Координаты и размеры результата —
+//! целые физические пиксели.
 //!
 //! ```
 //! use brul_gui::{Dimension, LayoutNode, LayoutStyle, Padding, Size, layout};

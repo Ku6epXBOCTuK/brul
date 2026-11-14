@@ -130,7 +130,9 @@ fn layout_patch(layout: &LayoutStyle) -> LayoutPatch {
         padding: (layout.padding != default.padding).then_some(layout.padding),
         border_width: (layout.border_width != default.border_width).then_some(layout.border_width),
         spacing: (layout.spacing != default.spacing).then_some(layout.spacing),
-        stretch: (layout.stretch != default.stretch).then_some(layout.stretch),
+        flex_grow: (layout.flex_grow != default.flex_grow).then_some(layout.flex_grow),
+        flex_shrink: (layout.flex_shrink != default.flex_shrink).then_some(layout.flex_shrink),
+        flex_basis: (layout.flex_basis != default.flex_basis).then_some(layout.flex_basis),
         justify: (layout.justify != default.justify).then_some(layout.justify),
         align: (layout.align != default.align).then_some(layout.align),
     }
@@ -307,7 +309,9 @@ fn apply(
     match kind.target() {
         Target::Layout(LayoutField::Width) => layout.width = value.length(),
         Target::Layout(LayoutField::Height) => layout.height = value.length(),
-        Target::Layout(LayoutField::Stretch) => layout.stretch = value.number() as f32,
+        Target::Layout(LayoutField::FlexGrow) => layout.flex_grow = value.number() as f32,
+        Target::Layout(LayoutField::FlexShrink) => layout.flex_shrink = value.number() as f32,
+        Target::Layout(LayoutField::FlexBasis) => layout.flex_basis = value.length(),
         Target::Layout(LayoutField::Padding(side)) => {
             *edge(&mut layout.padding, side) = value.px();
         }

@@ -9,11 +9,12 @@ fn resolved(style: &str) -> brul_codegen::styles::Resolved {
 }
 
 #[test]
-fn size_takes_px_percent_and_a_stretch_factor() {
-    let resolved = resolved(".a { width: 40px; height: 25%; stretch: 2; }");
+fn size_and_flex_take_px_percent_and_factors() {
+    let resolved = resolved(".a { width: 40px; height: 25%; flex-grow: 2; flex-basis: 0px; }");
     assert_eq!(resolved.layout.width, Dimension::Px(40));
     assert_eq!(resolved.layout.height, Dimension::Percent(25.0));
-    assert_eq!(resolved.layout.stretch, 2.0);
+    assert_eq!(resolved.layout.flex_grow, 2.0);
+    assert_eq!(resolved.layout.flex_basis, Dimension::Px(0));
 }
 
 #[test]

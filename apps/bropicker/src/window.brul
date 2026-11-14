@@ -226,7 +226,7 @@
         tint: #ffffff;
     }
     .header-titles {
-        stretch: 1;
+        flex-grow: 1;
         spacing: 4px;
         justify-content: center;
     }
@@ -261,7 +261,7 @@
     .muted { color: theme.muted; font-size: 12px; }
     .list {
         width: 100%;
-        stretch: 1;
+        flex-grow: 1;
         spacing: 0px;
         padding-left: 12px;
         padding-right: 12px;
@@ -277,7 +277,7 @@
     }
     .footer-content {
         width: 100%;
-        stretch: 1;
+        flex-grow: 1;
         padding-left: 16px;
         padding-right: 12px;
         spacing: 16px;
@@ -327,8 +327,8 @@
         background: theme.background;
     }
     .settings-title { color: theme.text; font-size: 20px; font-weight: 600; }
-    .settings-columns { width: 100%; stretch: 1; spacing: 14px; }
-    .settings-panel { stretch: 1; spacing: 8px; }
+    .settings-columns { width: 100%; flex-grow: 1; spacing: 14px; }
+    .settings-panel { flex-grow: 1; spacing: 8px; }
     .settings-head {
         width: 100%;
         height: 26px;
@@ -346,7 +346,7 @@
     .settings-action:hover { color: theme.text; }
     .settings-list {
         width: 100%;
-        stretch: 1;
+        flex-grow: 1;
         spacing: 6px;
         clip: true;
         scroll: true;

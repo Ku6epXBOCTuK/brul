@@ -19,7 +19,9 @@ pub enum Target {
 pub enum LayoutField {
     Width,
     Height,
-    Stretch,
+    FlexGrow,
+    FlexShrink,
+    FlexBasis,
     Padding(Side),
     Spacing,
     BorderWidth,
@@ -56,7 +58,9 @@ pub enum TextField {
 pub enum Kind {
     Width,
     Height,
-    Stretch,
+    FlexGrow,
+    FlexShrink,
+    FlexBasis,
     PaddingSide(Side),
     Spacing,
     BorderWidth,
@@ -117,7 +121,9 @@ macro_rules! properties {
 properties! {
     Kind::Width => ("width", Type::Length, Forbidden, layout(Width)),
     Kind::Height => ("height", Type::Length, Forbidden, layout(Height)),
-    Kind::Stretch => ("stretch", Type::Number, Forbidden, layout(Stretch)),
+    Kind::FlexGrow => ("flex-grow", Type::Number, Forbidden, layout(FlexGrow)),
+    Kind::FlexShrink => ("flex-shrink", Type::Number, Forbidden, layout(FlexShrink)),
+    Kind::FlexBasis => ("flex-basis", Type::Length, Forbidden, layout(FlexBasis)),
     Kind::PaddingSide(Side::Left) => ("padding-left", Type::Px, Forbidden, layout(Padding(Side::Left))),
     Kind::PaddingSide(Side::Right) => ("padding-right", Type::Px, Forbidden, layout(Padding(Side::Right))),
     Kind::PaddingSide(Side::Top) => ("padding-top", Type::Px, Forbidden, layout(Padding(Side::Top))),

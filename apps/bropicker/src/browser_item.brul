@@ -143,7 +143,7 @@
         height: 30px;
     }
     .plate-icon-masked { tint: #ffffff; }
-    .details { stretch: 1; spacing: 8px; align-items: center; }
+    .details { flex-grow: 1; spacing: 8px; align-items: center; }
     .item-name {
         color: theme.text;
         font-size: 16px;
