@@ -219,11 +219,14 @@ impl Cursor<'_> {
             None
         };
         self.skip_trivia();
-        if self.peek() == Some('{') {
-            return Err(self.error_at(start, "slot content is written at the call site"));
-        }
+        let block = if self.peek() == Some('{') {
+            Some(self.block()?)
+        } else {
+            None
+        };
         Ok(BlockItem::Slot(Slot {
             name,
+            block,
             position: position(self, start),
         }))
     }

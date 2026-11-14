@@ -3,14 +3,14 @@ use std::fmt::Write;
 use brul_script::Names;
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Block, Element, Event, Member, Prop, PropType};
+use brul_syntax::markup::{Arg, Block, BlockItem, Element, Event, Member, Prop, PropType};
 
 use crate::error_at;
 use crate::loader::Definition;
 
 use super::Emit;
 use super::Frame;
-use super::{contains_slot, events, expression, items_spliced};
+use super::{events, expression, items_spliced};
 
 type Props<'a> = Vec<(&'a str, PropType, &'a Expr)>;
 type Events<'a> = Vec<(&'a str, &'a str, Vec<PropType>)>;
@@ -20,9 +20,26 @@ struct Call<'a> {
     props: Props<'a>,
     defaults: Props<'a>,
     events: Events<'a>,
-    slot: Option<&'a str>,
+    slots: Vec<SlotFill<'a>>,
     classes: Vec<&'a str>,
     class: Option<&'a Expr>,
+}
+
+struct SlotFill<'a> {
+    name: Option<&'a str>,
+    view: String,
+}
+
+#[derive(Default)]
+struct Declared<'a> {
+    default: bool,
+    named: Vec<&'a str>,
+}
+
+impl Declared<'_> {
+    fn any(&self) -> bool {
+        self.default || !self.named.is_empty()
+    }
 }
 
 pub(super) fn component(
@@ -35,7 +52,6 @@ pub(super) fn component(
 ) -> Result<(), Error> {
     let definition = &emit.registry.definitions[index];
     let name = &definition.name;
-    check_shape(element, definition)?;
     let classes = element
         .args
         .iter()
@@ -50,11 +66,13 @@ pub(super) fn component(
     });
     let (props, events) = collect(element, definition, name, emit)?;
     let defaults = defaults(element, definition, name, &props)?;
-    let slot = if element.block.items.is_empty() {
-        None
-    } else {
-        Some(filler(&element.block, emit)?)
-    };
+    let mut slots = Vec::new();
+    for (name, block) in fills(element, definition)? {
+        slots.push(SlotFill {
+            name,
+            view: filler(&block, emit)?,
+        });
+    }
     write(
         out,
         Call {
@@ -62,7 +80,7 @@ pub(super) fn component(
             props,
             defaults,
             events,
-            slot: slot.as_deref(),
+            slots,
             classes,
             class,
         },
@@ -74,24 +92,116 @@ pub(super) fn component(
     Ok(())
 }
 
-fn declares_slot(definition: &Definition) -> bool {
-    definition
-        .component
-        .members
-        .iter()
-        .any(|member| match member {
-            Member::Element(root) => contains_slot(&root.block),
-            Member::Prop(_) | Member::Event(_) => false,
-        })
+fn fills<'a>(
+    element: &'a Element,
+    definition: &'a Definition,
+) -> Result<Vec<(Option<&'a str>, Block)>, Error> {
+    let declared = declared_slots(definition)?;
+    let mut named = Vec::new();
+    let mut default = Vec::new();
+    for item in &element.block.items {
+        match item {
+            BlockItem::Slot(slot) => match &slot.block {
+                Some(block) => {
+                    let Some(name) = slot.name.as_deref() else {
+                        return Err(error_at(
+                            slot.position,
+                            "fill the default slot with plain children",
+                        ));
+                    };
+                    if !declared.named.contains(&name) {
+                        return Err(error_at(
+                            slot.position,
+                            format!("component '{}' has no slot '{name}'", definition.name),
+                        ));
+                    }
+                    if named.iter().any(|(existing, _)| *existing == Some(name)) {
+                        return Err(error_at(
+                            slot.position,
+                            format!("slot '{name}' is filled twice"),
+                        ));
+                    }
+                    named.push((Some(name), block.clone()));
+                }
+                None => default.push(item.clone()),
+            },
+            _ => default.push(item.clone()),
+        }
+    }
+    let mut fills = Vec::new();
+    if !default.is_empty() {
+        if !declared.default {
+            let message = if declared.any() {
+                format!("component '{}' has no default slot", definition.name)
+            } else {
+                format!("component '{}' does not accept children", definition.name)
+            };
+            return Err(error_at(element.position, message));
+        }
+        fills.push((None, Block { items: default }));
+    }
+    fills.extend(named);
+    Ok(fills)
 }
 
-fn check_shape(element: &Element, definition: &Definition) -> Result<(), Error> {
-    let name = &definition.name;
-    if !element.block.items.is_empty() && !declares_slot(definition) {
-        return Err(error_at(
-            element.position,
-            format!("component '{name}' does not accept children"),
-        ));
+fn declared_slots(definition: &Definition) -> Result<Declared<'_>, Error> {
+    let mut declared = Declared::default();
+    for member in &definition.component.members {
+        if let Member::Element(root) = member {
+            walk_slots(root, definition, &mut declared)?;
+        }
+    }
+    Ok(declared)
+}
+
+fn walk_slots<'a>(
+    element: &'a Element,
+    definition: &Definition,
+    declared: &mut Declared<'a>,
+) -> Result<(), Error> {
+    let call = element.widget.is_none()
+        && definition
+            .imports
+            .iter()
+            .any(|import| import.name == element.name);
+    walk_block(&element.block, definition, declared, call)
+}
+
+fn walk_block<'a>(
+    block: &'a Block,
+    definition: &Definition,
+    declared: &mut Declared<'a>,
+    call: bool,
+) -> Result<(), Error> {
+    for item in &block.items {
+        match item {
+            BlockItem::Slot(slot) => {
+                if slot.block.is_some() {
+                    if call {
+                        continue;
+                    }
+                    return Err(error_at(
+                        slot.position,
+                        "slot content is written at the call site",
+                    ));
+                }
+                match &slot.name {
+                    Some(name) => declared.named.push(name.as_str()),
+                    None => declared.default = true,
+                }
+            }
+            BlockItem::If(structure) => {
+                walk_block(&structure.then_block, definition, declared, false)?;
+                if let Some(else_block) = &structure.else_block {
+                    walk_block(else_block, definition, declared, false)?;
+                }
+            }
+            BlockItem::Each(structure) => {
+                walk_block(&structure.block, definition, declared, false)?;
+            }
+            BlockItem::Element(child) => walk_slots(child, definition, declared)?,
+            BlockItem::Expr(_) => {}
+        }
     }
     Ok(())
 }
@@ -271,7 +381,7 @@ fn write(
         props,
         defaults,
         events,
-        slot,
+        slots,
         classes,
         class,
     } = call;
@@ -304,18 +414,22 @@ fn write(
         );
     }
     let _ = writeln!(out, "{inner}    ],");
-    match slot {
-        Some(slot) => {
-            let _ = writeln!(out, "{inner}    slots: &[");
+    if slots.is_empty() {
+        let _ = writeln!(out, "{inner}    slots: &[],");
+    } else {
+        let _ = writeln!(out, "{inner}    slots: &[");
+        for slot in &slots {
+            let name = match slot.name {
+                Some(name) => format!("{name:?}"),
+                None => "brul::DEFAULT_SLOT".to_owned(),
+            };
             let _ = writeln!(
                 out,
-                "{inner}        brul::SlotArgument {{ name: brul::DEFAULT_SLOT, view: {slot} }},"
+                "{inner}        brul::SlotArgument {{ name: {name}, view: {} }},",
+                slot.view
             );
-            let _ = writeln!(out, "{inner}    ],");
         }
-        None => {
-            let _ = writeln!(out, "{inner}    slots: &[],");
-        }
+        let _ = writeln!(out, "{inner}    ],");
     }
     let _ = writeln!(out, "{inner}}})?;");
     for field in ["bindings", "handlers", "props"] {

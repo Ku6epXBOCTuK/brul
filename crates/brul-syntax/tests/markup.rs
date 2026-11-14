@@ -417,9 +417,6 @@ fn block_constructs_require_the_at_marker() {
     );
     assert_eq!((error.line, error.column), (1, 21));
 
-    let error = parse_file("component A { Row { @slot { } } }").unwrap_err();
-    assert_eq!(error.message, "slot content is written at the call site");
-
     let error = parse_file("component A { Row { slot } }").unwrap_err();
     assert_eq!(
         error.message,
@@ -440,6 +437,7 @@ fn slots_parse() {
         panic!("expected a slot");
     };
     assert_eq!(slot.name, None);
+    assert!(slot.block.is_none());
 
     let file = parse_file("component Card { Column { @slot(header) } }").unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
@@ -452,6 +450,21 @@ fn slots_parse() {
         panic!("expected a slot");
     };
     assert_eq!(slot.name.as_deref(), Some("header"));
+    assert!(slot.block.is_none());
+
+    let file =
+        parse_file("component Card { Column { @slot(header) { Text { \"x\" } } } }").unwrap();
+    let Declaration::Component(component) = &file.declarations[0] else {
+        panic!("expected a component");
+    };
+    let Member::Element(root) = &component.members[0] else {
+        panic!("expected a root element");
+    };
+    let [BlockItem::Slot(slot)] = root.block.items.as_slice() else {
+        panic!("expected a slot");
+    };
+    assert_eq!(slot.name.as_deref(), Some("header"));
+    assert!(slot.block.is_some());
 }
 
 #[test]

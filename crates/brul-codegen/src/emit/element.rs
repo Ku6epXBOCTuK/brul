@@ -349,15 +349,19 @@ fn slot_item(
             "slot is only allowed inside a component",
         ));
     }
-    if slot.name.is_some() {
-        return Err(error_at(slot.position, "named slots are not supported yet"));
+    if slot.block.is_some() {
+        return Err(error_at(
+            slot.position,
+            "slot content is written at the call site",
+        ));
     }
+    let target = match &slot.name {
+        Some(name) => format!("{name:?}"),
+        None => "brul::DEFAULT_SLOT".to_owned(),
+    };
     let pad = "    ".repeat(frame.depth());
     let _ = writeln!(out, "{pad}{{");
-    let _ = writeln!(
-        out,
-        "{pad}    let built = brul::slot(theme, brul::DEFAULT_SLOT)?;"
-    );
+    let _ = writeln!(out, "{pad}    let built = brul::slot(theme, {target})?;");
     for field in ["bindings", "handlers", "props"] {
         let _ = writeln!(out, "{pad}    {field}.extend(built.{field});");
     }

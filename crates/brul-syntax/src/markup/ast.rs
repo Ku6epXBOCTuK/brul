@@ -75,6 +75,7 @@ pub enum BlockItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Slot {
     pub name: Option<String>,
+    pub block: Option<Block>,
     pub position: Position,
 }
 

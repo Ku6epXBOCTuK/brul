@@ -1129,7 +1129,7 @@ fn emits_component_slot() {
         &[
             (
                 "badge.brul",
-                "<markup>\ncomponent Badge {\n    View {\n        @slot\n    }\n}\n</markup>\n",
+                "<markup>\ncomponent Badge {\n    View {\n        Row {\n            @slot\n        }\n    }\n}\n</markup>\n",
             ),
             (
                 "window.brul",
@@ -1217,23 +1217,81 @@ window Demo (title: "demo") {
 }
 
 #[test]
-fn rejects_a_named_slot() {
+fn emits_named_slots() {
     let dir = scratch(
-        "named-slot",
+        "named-slots",
         &[
             (
                 "badge.brul",
-                "<markup>\ncomponent Badge {\n    View {\n        @slot(header)\n    }\n}\n</markup>\n",
+                "<markup>\ncomponent Badge {\n    View {\n        @slot(header)\n        @slot\n    }\n}\n</markup>\n",
             ),
             (
                 "window.brul",
-                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge { }\n    }\n}\n</markup>\n",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge {\n            @slot(header) { Text { \"head\" } }\n            Text { \"body\" }\n        }\n    }\n}\n</markup>\n",
             ),
         ],
     );
-    let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
-    assert_eq!(error.message, "named slots are not supported yet");
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(
+        module.contains("brul::slot(theme, \"header\")?;"),
+        "{module}"
+    );
+    assert!(
+        module.contains("brul::slot(theme, brul::DEFAULT_SLOT)?;"),
+        "{module}"
+    );
+    assert!(
+        module.contains("brul::SlotArgument { name: brul::DEFAULT_SLOT, view: demo_slot1 },"),
+        "{module}"
+    );
+    assert!(
+        module.contains("brul::SlotArgument { name: \"header\", view: demo_slot2 },"),
+        "{module}"
+    );
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn rejects_malformed_slot_fills() {
+    let cases = [
+        (
+            "<markup>\ncomponent Badge {\n    View {\n        @slot(header)\n    }\n}\n</markup>\n",
+            "Badge { Text { \"x\" } }",
+            "component 'Badge' has no default slot",
+        ),
+        (
+            "<markup>\ncomponent Badge {\n    View {\n        @slot\n    }\n}\n</markup>\n",
+            "Badge { @slot(header) { } }",
+            "component 'Badge' has no slot 'header'",
+        ),
+        (
+            "<markup>\ncomponent Badge {\n    View {\n        @slot(header)\n    }\n}\n</markup>\n",
+            "Badge { @slot(header) { } @slot(header) { } }",
+            "slot 'header' is filled twice",
+        ),
+        (
+            "<markup>\ncomponent Badge {\n    View {\n        @slot\n    }\n}\n</markup>\n",
+            "Badge { @slot { Text { \"x\" } } }",
+            "fill the default slot with plain children",
+        ),
+    ];
+    for (badge, call, expected) in cases {
+        let dir = scratch(
+            "slot-error",
+            &[
+                ("badge.brul", badge),
+                (
+                    "window.brul",
+                    &format!(
+                        "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {{\n    Column {{\n        {call}\n    }}\n}}\n</markup>\n"
+                    ),
+                ),
+            ],
+        );
+        let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+        assert_eq!(error.message, expected);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }
 
 #[test]
