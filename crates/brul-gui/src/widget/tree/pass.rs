@@ -1,5 +1,5 @@
 use super::frame::{build_snapshot, reveal_carets};
-use super::render::{Measure, Pass, dirty_subtrees, flatten_boxes, measure_text, move_children};
+use super::render::{Pass, measure_text};
 use super::style::Transition;
 use super::*;
 use crate::layout::{Available, LayoutBox, Size};
@@ -17,15 +17,11 @@ impl WidgetTree {
             return Err(WidgetError::InvalidScale);
         }
 
-        let reuse = self
+        let frame_changed = !self
             .geometry
             .as_ref()
             .is_some_and(|geometry| geometry.viewport == viewport && geometry.scale == scale);
-        let frame_changed = !reuse;
-        if self.layout_pass(engine, viewport, scale, reuse, frame_changed)? {
-            self.layout_pass(engine, viewport, scale, false, frame_changed)?;
-        }
-        Ok(())
+        self.layout_pass(engine, viewport, scale, frame_changed)
     }
 
     fn layout_pass(
@@ -33,47 +29,39 @@ impl WidgetTree {
         engine: &mut TextEngine,
         viewport: Size,
         scale: f32,
-        reuse: bool,
         frame_changed: bool,
-    ) -> Result<bool, WidgetError> {
+    ) -> Result<(), WidgetError> {
         let previous = self.geometry.take();
         let mut boxes = previous.map(|geometry| geometry.boxes).unwrap_or_default();
         boxes.resize(self.nodes.len(), LayoutBox::default());
 
-        let (node, key, order, frozen) = {
-            self.layouter.begin();
+        self.layouter.begin();
+        let key = {
             let mut pass = Pass {
                 tree: &self.nodes,
                 layouter: &mut self.layouter,
-                cached: reuse.then_some(&boxes),
-                blocked: dirty_subtrees(&self.nodes, self.root, &self.stale),
-                order: Vec::with_capacity(self.nodes.len()),
-                frozen: Vec::new(),
+                stale: &self.stale,
             };
-            let (node, key) = pass.build(
+            pass.build(
                 self.root,
                 Available {
                     width: Some(viewport.width),
                     height: None,
                 },
-            )?;
-            (node, key, pass.order, pass.frozen)
+            )?
         };
         self.texts.retain(|id, _| self.index.contains_key(id));
 
         let mut failed = None;
         self.layouter.finish();
         self.layouter.compute(key, viewport, |content, width| {
-            let size = match content {
-                Measure::Widget(slot) => measure_text(
-                    &self.nodes[slot.index()],
-                    engine,
-                    &mut self.texts,
-                    width,
-                    scale,
-                ),
-                Measure::Fixed(size) => Ok(*size),
-            };
+            let size = measure_text(
+                &self.nodes[content.index()],
+                engine,
+                &mut self.texts,
+                width,
+                scale,
+            );
             match size {
                 Ok(size) => size,
                 Err(error) => {
@@ -85,28 +73,7 @@ impl WidgetTree {
         if let Some(error) = failed {
             return Err(error);
         }
-        let placed = self.layouter.collect(key, &node);
-        let mut cursor = 0;
-        flatten_boxes(&placed, &order, &mut cursor, &mut boxes);
-
-        let resized = frozen.iter().any(|(slot, cached)| {
-            let placed = &boxes[slot.index()];
-            placed.x != cached.x
-                || placed.y != cached.y
-                || placed.width != cached.width
-                || placed.height != cached.height
-        });
-        if resized {
-            return Ok(true);
-        }
-        for (slot, cached) in frozen {
-            let placed = &boxes[slot.index()];
-            let dx = placed.x - cached.x;
-            let dy = placed.y - cached.y;
-            if dx != 0 || dy != 0 {
-                move_children(&self.nodes, slot, dx, dy, &mut boxes);
-            }
-        }
+        self.layouter.collect_into(key, &mut boxes);
 
         self.geometry = Some(Geometry {
             viewport,
@@ -124,7 +91,7 @@ impl WidgetTree {
         if frame_changed {
             self.clear_interaction();
         }
-        Ok(false)
+        Ok(())
     }
 
     pub fn relayout(&mut self, engine: &mut TextEngine) -> Result<(), WidgetError> {

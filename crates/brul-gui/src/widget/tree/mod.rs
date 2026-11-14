@@ -2,7 +2,6 @@ use super::style::Transition;
 use super::*;
 use crate::layout::{LayoutBox, Layouter, Offset, ScrollOffset, Size};
 use crate::text::TextLayout;
-use render::Measure;
 use std::collections::{HashMap, HashSet};
 
 mod caret;
@@ -81,7 +80,7 @@ pub struct WidgetTree {
     stale: HashSet<Slot>,
     full_dirty: bool,
     layout_dirty: bool,
-    layouter: Layouter<Measure>,
+    layouter: Layouter<Slot>,
 }
 
 struct Geometry {

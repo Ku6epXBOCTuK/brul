@@ -312,6 +312,7 @@ pub(crate) struct NodeShape<'a, C> {
     pub(crate) style: &'a LayoutStyle,
     pub(crate) direction: Direction,
     pub(crate) offset: Option<Offset>,
+    pub(crate) scroll: ScrollOffset,
     pub(crate) content: C,
     pub(crate) prepared: Prepared,
     pub(crate) children: &'a [u32],
@@ -320,6 +321,10 @@ pub(crate) struct NodeShape<'a, C> {
 struct Entry<C> {
     node: NodeId,
     style: TaffyStyle,
+    layout: LayoutStyle,
+    direction: Direction,
+    offset: Option<Offset>,
+    scroll: ScrollOffset,
     content: C,
     children: Vec<u32>,
 }
@@ -374,6 +379,10 @@ impl<C: PartialEq + Clone> Layouter<C> {
 
         match self.entries.get_mut(&key) {
             Some(entry) => {
+                entry.layout = *shape.style;
+                entry.direction = shape.direction;
+                entry.offset = shape.offset;
+                entry.scroll = shape.scroll;
                 if entry.style != taffy {
                     entry.style = taffy.clone();
                     self.tree.set_style(entry.node, taffy).expect("layout tree");
@@ -404,6 +413,10 @@ impl<C: PartialEq + Clone> Layouter<C> {
                     Entry {
                         node,
                         style: taffy,
+                        layout: *shape.style,
+                        direction: shape.direction,
+                        offset: shape.offset,
+                        scroll: shape.scroll,
                         content: shape.content,
                         children: shape.children.to_vec(),
                     },
@@ -460,9 +473,52 @@ impl<C> Layouter<C> {
             .expect("layout tree");
     }
 
-    pub(crate) fn collect(&self, root: u32, shape: &LayoutNode) -> LayoutBox {
-        let node = self.entries.get(&root).expect("layout root").node;
-        collect(&self.tree, node, shape, 0, 0)
+    pub(crate) fn collect_into(&self, root: u32, boxes: &mut [LayoutBox]) {
+        self.collect_entry(root, 0, 0, boxes);
+    }
+
+    fn collect_entry(&self, key: u32, x: i32, y: i32, boxes: &mut [LayoutBox]) {
+        let entry = self.entries.get(&key).expect("layout entry");
+        let placed = self.tree.layout(entry.node).expect("layout tree");
+        boxes[key as usize] = LayoutBox {
+            x,
+            y,
+            width: placed.size.width.max(0.0) as u32,
+            height: placed.size.height.max(0.0) as u32,
+            children: Vec::new(),
+        };
+
+        let ids = self.tree.children(entry.node).expect("layout tree");
+        let origin = (
+            clamp_i32(
+                i64::from(x)
+                    + i64::from(entry.layout.border_width)
+                    + i64::from(entry.layout.padding.left),
+            ),
+            clamp_i32(
+                i64::from(y)
+                    + i64::from(entry.layout.border_width)
+                    + i64::from(entry.layout.padding.top),
+            ),
+        );
+        let scroll = entry.scroll.pixels();
+        for (child_key, child_id) in entry.children.iter().zip(ids) {
+            let child = self.entries.get(child_key).expect("layout child");
+            let child_placed = self.tree.layout(child_id).expect("layout tree");
+            let location = (
+                child_placed.location.x as i32,
+                child_placed.location.y as i32,
+            );
+            let (child_x, child_y) = child_position(
+                entry.direction,
+                scroll,
+                (x, y),
+                origin,
+                child.offset,
+                location,
+            );
+            self.collect_entry(*child_key, child_x, child_y, boxes);
+        }
     }
 }
 
@@ -637,42 +693,52 @@ fn collect<C>(tree: &TaffyTree<C>, id: NodeId, node: &LayoutNode, x: i32, y: i32
     };
 
     let ids = tree.children(id).expect("layout tree");
-    let origin_x =
-        clamp_i32(i64::from(x) + i64::from(style.border_width) + i64::from(style.padding.left));
-    let origin_y =
-        clamp_i32(i64::from(y) + i64::from(style.border_width) + i64::from(style.padding.top));
+    let origin = (
+        clamp_i32(i64::from(x) + i64::from(style.border_width) + i64::from(style.padding.left)),
+        clamp_i32(i64::from(y) + i64::from(style.border_width) + i64::from(style.padding.top)),
+    );
     let scroll = scroll_offset.pixels();
 
     output.children.reserve(children.len());
     for (child, child_id) in children.iter().zip(ids) {
         let child_placed = tree.layout(child_id).expect("layout tree");
-        let (child_x, child_y) = match child.offset() {
-            Some(offset) => (
-                clamp_i32(i64::from(origin_x) + i64::from(offset.x)),
-                clamp_i32(i64::from(origin_y) + i64::from(offset.y)),
-            ),
-            None => {
-                let mut child_x =
-                    clamp_i32(i64::from(x) + i64::from(child_placed.location.x as i32));
-                let mut child_y =
-                    clamp_i32(i64::from(y) + i64::from(child_placed.location.y as i32));
-                match direction {
-                    Direction::Row => {
-                        child_x = clamp_i32(i64::from(child_x) - i64::from(scroll));
-                    }
-                    Direction::Column => {
-                        child_y = clamp_i32(i64::from(child_y) - i64::from(scroll));
-                    }
-                }
-                (child_x, child_y)
-            }
-        };
+        let location = (
+            child_placed.location.x as i32,
+            child_placed.location.y as i32,
+        );
+        let (child_x, child_y) =
+            child_position(*direction, scroll, (x, y), origin, child.offset(), location);
         output
             .children
             .push(collect(tree, child_id, child, child_x, child_y));
     }
 
     output
+}
+
+fn child_position(
+    direction: Direction,
+    scroll: i32,
+    frame: (i32, i32),
+    origin: (i32, i32),
+    offset: Option<Offset>,
+    location: (i32, i32),
+) -> (i32, i32) {
+    match offset {
+        Some(offset) => (
+            clamp_i32(i64::from(origin.0) + i64::from(offset.x)),
+            clamp_i32(i64::from(origin.1) + i64::from(offset.y)),
+        ),
+        None => {
+            let mut x = clamp_i32(i64::from(frame.0) + i64::from(location.0));
+            let mut y = clamp_i32(i64::from(frame.1) + i64::from(location.1));
+            match direction {
+                Direction::Row => x = clamp_i32(i64::from(x) - i64::from(scroll)),
+                Direction::Column => y = clamp_i32(i64::from(y) - i64::from(scroll)),
+            }
+            (x, y)
+        }
+    }
 }
 
 pub(crate) fn inset_x(style: &LayoutStyle) -> u32 {
@@ -716,7 +782,21 @@ fn clamp_i32(value: i64) -> i32 {
 }
 #[cfg(test)]
 mod tests {
-    use super::LayoutError;
+    use super::*;
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    #[derive(Clone)]
+    struct Probe {
+        id: u32,
+        calls: Rc<Cell<usize>>,
+    }
+
+    impl PartialEq for Probe {
+        fn eq(&self, other: &Self) -> bool {
+            self.id == other.id
+        }
+    }
 
     #[test]
     fn every_layout_error_has_its_own_message() {
@@ -725,5 +805,87 @@ mod tests {
 
         assert!(messages.iter().all(|message| !message.is_empty()));
         assert_ne!(messages[0], messages[1]);
+    }
+
+    #[test]
+    fn a_clean_tree_is_not_measured_again() {
+        let calls = Rc::new(Cell::new(0));
+        let available = Available {
+            width: Some(100),
+            height: Some(50),
+        };
+        let root_style = LayoutStyle {
+            width: Dimension::Px(100),
+            height: Dimension::Px(50),
+            ..LayoutStyle::default()
+        };
+        let child_style = LayoutStyle {
+            width: Dimension::Px(20),
+            height: Dimension::Px(10),
+            ..LayoutStyle::default()
+        };
+        let viewport = Size {
+            width: 100,
+            height: 50,
+        };
+        let mut layouter = Layouter::<Probe>::new();
+
+        let build = |layouter: &mut Layouter<Probe>| {
+            layouter.begin();
+            layouter.node(
+                1,
+                NodeShape {
+                    style: &child_style,
+                    direction: Direction::Row,
+                    offset: None,
+                    scroll: ScrollOffset::ZERO,
+                    content: Probe {
+                        id: 1,
+                        calls: Rc::clone(&calls),
+                    },
+                    prepared: prepare(&child_style, available).expect("child style"),
+                    children: &[],
+                },
+            );
+            layouter.node(
+                0,
+                NodeShape {
+                    style: &root_style,
+                    direction: Direction::Column,
+                    offset: None,
+                    scroll: ScrollOffset::ZERO,
+                    content: Probe {
+                        id: 0,
+                        calls: Rc::clone(&calls),
+                    },
+                    prepared: prepare(&root_style, available).expect("root style"),
+                    children: &[1],
+                },
+            );
+            layouter.finish();
+            layouter.compute(0, viewport, |content, _width| {
+                content.calls.set(content.calls.get() + 1);
+                Size {
+                    width: 20,
+                    height: 10,
+                }
+            });
+        };
+
+        build(&mut layouter);
+        let measured = calls.get();
+        assert!(measured >= 1);
+
+        let mut first = vec![LayoutBox::default(); 2];
+        layouter.collect_into(0, &mut first);
+        assert_eq!(first[1].width, 20);
+        assert_eq!(first[0].width, 100);
+
+        build(&mut layouter);
+        assert_eq!(calls.get(), measured);
+
+        let mut second = vec![LayoutBox::default(); 2];
+        layouter.collect_into(0, &mut second);
+        assert_eq!(second, first);
     }
 }
