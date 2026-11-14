@@ -34,9 +34,8 @@ fn {prefix}styled(
     widget: brul::gui::Widget,
     classes: &[&str],
     theme: Option<&str>,
-) -> Result<brul::gui::Widget, String> {{
-    brul::gui::style::styled(widget, {prefix}styles(), classes, theme)
-        .map_err(|error| error.to_string())
+) -> Result<brul::gui::Widget, brul::ViewError> {{
+    Ok(brul::gui::style::styled(widget, {prefix}styles(), classes, theme)?)
 }}
 ",
         list(&themes, "        "),

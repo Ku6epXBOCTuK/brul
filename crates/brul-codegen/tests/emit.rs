@@ -12,9 +12,9 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn demo_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
+pub fn demo_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
     component.borrow_mut().set_names(names());
-    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;
+    brul::gui::style::check_theme(styles(), theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
@@ -46,9 +46,8 @@ fn styled(
     widget: brul::gui::Widget,
     classes: &[&str],
     theme: Option<&str>,
-) -> Result<brul::gui::Widget, String> {
-    brul::gui::style::styled(widget, styles(), classes, theme)
-        .map_err(|error| error.to_string())
+) -> Result<brul::gui::Widget, brul::ViewError> {
+    Ok(brul::gui::style::styled(widget, styles(), classes, theme)?)
 }
 
 pub fn demo_window() -> brul::WindowConfig {
@@ -108,9 +107,9 @@ window Styled (title: "styled") {
 </markup>
 "#;
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn styled_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {
+pub fn styled_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
     component.borrow_mut().set_names(names());
-    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;
+    brul::gui::style::check_theme(styles(), theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
@@ -164,9 +163,8 @@ fn styled(
     widget: brul::gui::Widget,
     classes: &[&str],
     theme: Option<&str>,
-) -> Result<brul::gui::Widget, String> {
-    brul::gui::style::styled(widget, styles(), classes, theme)
-        .map_err(|error| error.to_string())
+) -> Result<brul::gui::Widget, brul::ViewError> {
+    Ok(brul::gui::style::styled(widget, styles(), classes, theme)?)
 }
 
 pub fn styled_window() -> brul::WindowConfig {
@@ -513,14 +511,16 @@ window Demo (title: "demo") {
         "fn demo_if1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;"
+        "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme)?;"
     ));
     assert!(module.contains("brul::Value::Bool(true) => vec!["));
     assert!(module.contains("brul::Value::Bool(false) => vec!["));
     assert!(module.contains(
         "brul::register_structure(component, widget0.id(), false, demo_if1_value, demo_if1_rebuild);"
     ));
-    assert!(module.contains(r#""if condition expects Bool, got {}""#));
+    assert!(
+        module.contains(r#"brul::ViewError::expected("if condition", "Bool", other.type_name())"#)
+    );
 }
 
 #[test]
@@ -538,7 +538,7 @@ window Demo (title: "demo") {
         "fn demo_each1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn demo_each1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme).map_err(|error| error.to_string())?;"
+        "fn demo_each1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme)?;"
     ));
     assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
     assert!(module.contains(

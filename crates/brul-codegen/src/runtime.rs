@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -161,8 +162,78 @@ pub enum BindingTarget {
     },
 }
 
+#[derive(Debug)]
+pub enum ViewError {
+    Script(ScriptError),
+    Style(brul_gui::style::StyleError),
+    Expected {
+        target: String,
+        expected: &'static str,
+        found: &'static str,
+    },
+}
+
+impl ViewError {
+    pub fn expected(
+        target: impl Into<String>,
+        expected: &'static str,
+        found: &'static str,
+    ) -> Self {
+        Self::Expected {
+            target: target.into(),
+            expected,
+            found,
+        }
+    }
+
+    pub fn is_unknown_theme(&self) -> bool {
+        matches!(
+            self,
+            Self::Style(brul_gui::style::StyleError::Snapshot(
+                brul_syntax::style::SnapshotError::UnknownTheme(_)
+            ))
+        )
+    }
+}
+
+impl fmt::Display for ViewError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Script(error) => error.fmt(formatter),
+            Self::Style(error) => error.fmt(formatter),
+            Self::Expected {
+                target,
+                expected,
+                found,
+            } => write!(formatter, "{target} expects {expected}, got {found}"),
+        }
+    }
+}
+
+impl std::error::Error for ViewError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Script(error) => Some(error),
+            Self::Style(error) => Some(error),
+            Self::Expected { .. } => None,
+        }
+    }
+}
+
+impl From<ScriptError> for ViewError {
+    fn from(error: ScriptError) -> Self {
+        Self::Script(error)
+    }
+}
+
+impl From<brul_gui::style::StyleError> for ViewError {
+    fn from(error: brul_gui::style::StyleError) -> Self {
+        Self::Style(error)
+    }
+}
+
 pub type StructureValue = fn(&mut Component) -> Result<Value, ScriptError>;
-pub type Rebuilt = Result<(Built, Vec<RowInfo>), String>;
+pub type Rebuilt = Result<(Built, Vec<RowInfo>), ViewError>;
 pub type StructureRebuild = fn(Option<&str>, &ComponentHandle) -> Rebuilt;
 
 #[derive(Clone)]
@@ -231,7 +302,7 @@ pub fn take_structures() -> Vec<Structure> {
     })
 }
 
-pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, String>;
+pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>;
 
 pub struct PropArgument {
     pub name: VariableId,
@@ -307,7 +378,7 @@ impl Host for EventHost {
     }
 }
 
-pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Built, String> {
+pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Built, ViewError> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
     component.borrow_mut().set_names(instance.names);
     start(&component, &instance)?;
@@ -318,7 +389,7 @@ pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Buil
     Ok(built)
 }
 
-fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), String> {
+fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), ViewError> {
     if !instance.events.is_empty() {
         component.borrow_mut().set_host(EventHost {
             events: instance
@@ -335,7 +406,7 @@ fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), Str
     }
     match instance.script {
         Some(program) => {
-            execute_program(&mut component.borrow_mut(), program).map_err(|error| error.reason())
+            execute_program(&mut component.borrow_mut(), program).map_err(ViewError::from)
         }
         None => Ok(()),
     }
@@ -346,7 +417,7 @@ fn declare_props(
     parent: &ComponentHandle,
     props: &[PropArgument],
     name: &str,
-) -> Result<Vec<VariableId>, String> {
+) -> Result<Vec<VariableId>, ViewError> {
     let mut given = Vec::new();
     for argument in props {
         let value = evaluate_argument(parent, argument)?;
@@ -361,7 +432,7 @@ fn declare_defaults(
     defaults: &[PropArgument],
     given: &[VariableId],
     name: &str,
-) -> Result<(), String> {
+) -> Result<(), ViewError> {
     for argument in defaults {
         if given.contains(&argument.name) {
             continue;
@@ -395,8 +466,8 @@ fn bind(
 fn evaluate_argument(
     component: &ComponentHandle,
     argument: &PropArgument,
-) -> Result<Value, String> {
-    (argument.expression)(&mut component.borrow_mut()).map_err(|error| error.reason())
+) -> Result<Value, ViewError> {
+    (argument.expression)(&mut component.borrow_mut()).map_err(ViewError::from)
 }
 
 fn assign(
@@ -404,19 +475,19 @@ fn assign(
     argument: &PropArgument,
     value: Value,
     name: &str,
-) -> Result<(), String> {
+) -> Result<(), ViewError> {
     if !accepts_prop(&value, argument.ty) {
         let property = component.borrow().name(argument.name);
-        return Err(format!(
-            "property '{property}' of component '{name}' expects {}, got {}",
+        return Err(ViewError::expected(
+            format!("property '{property}' of component '{name}'"),
             prop_name(argument.ty),
-            value.type_name()
+            value.type_name(),
         ));
     }
     component
         .borrow_mut()
         .declare_property(argument.name, value)
-        .map_err(|error| error.reason())
+        .map_err(ViewError::from)
 }
 
 pub fn accepts_prop(value: &Value, ty: PropType) -> bool {
@@ -653,37 +724,37 @@ pub fn set_offset(tree: &mut WidgetTree, widget: WidgetId, x: Option<i32>, y: Op
     }
 }
 
-pub fn text(component: &mut Component, expression: Expression) -> Result<String, String> {
-    let value = expression(component).map_err(|error| error.reason())?;
+pub fn text(component: &mut Component, expression: Expression) -> Result<String, ViewError> {
+    let value = expression(component)?;
     value
         .as_text()
         .map(str::to_owned)
-        .ok_or_else(|| format!("Text content expects String, got {}", value.type_name()))
+        .ok_or_else(|| ViewError::expected("Text content", "String", value.type_name()))
 }
 
 pub fn boolean(
     component: &mut Component,
     expression: Expression,
     name: &str,
-) -> Result<bool, String> {
-    let value = expression(component).map_err(|error| error.reason())?;
-    value
-        .as_flag()
-        .ok_or_else(|| format!("parameter '{name}' expects Bool, got {}", value.type_name()))
+) -> Result<bool, ViewError> {
+    let value = expression(component)?;
+    value.as_flag().ok_or_else(|| {
+        ViewError::expected(format!("parameter '{name}'"), "Bool", value.type_name())
+    })
 }
 
 pub fn offset(
     component: &mut Component,
     expression: Option<Expression>,
     name: &str,
-) -> Result<i32, String> {
+) -> Result<i32, ViewError> {
     let Some(expression) = expression else {
         return Ok(0);
     };
-    let value = expression(component).map_err(|error| error.reason())?;
-    value
-        .as_pixels()
-        .ok_or_else(|| format!("parameter '{name}' expects a Number"))
+    let value = expression(component)?;
+    value.as_pixels().ok_or_else(|| {
+        ViewError::expected(format!("parameter '{name}'"), "Number", value.type_name())
+    })
 }
 
 fn offset_value(component: &RefCell<Component>, expression: Option<Expression>) -> Option<i32> {
@@ -837,38 +908,43 @@ mod tests {
     #[test]
     fn text_returns_the_string_and_names_the_actual_type() {
         let mut component = declared("name", Value::String("hello".into()));
-        assert_eq!(text(&mut component, expr!("name")), Ok("hello".to_owned()));
+        assert_eq!(text(&mut component, expr!("name")).unwrap(), "hello");
 
         let mut component = declared("name", Value::Number(3.0));
         let error = text(&mut component, expr!("name")).unwrap_err();
-        assert!(error.contains(Value::Number(3.0).type_name()));
+        assert!(matches!(
+            error,
+            ViewError::Expected { found, .. } if found == Value::Number(3.0).type_name()
+        ));
     }
 
     #[test]
     fn boolean_returns_the_flag_and_names_the_parameter() {
         let name = "visible";
         let mut component = declared(name, Value::Bool(true));
-        assert_eq!(boolean(&mut component, expr!("visible"), name), Ok(true));
+        assert!(boolean(&mut component, expr!("visible"), name).unwrap());
 
         let mut component = declared(name, Value::String("yes".into()));
         let error = boolean(&mut component, expr!("visible"), name).unwrap_err();
-        assert!(error.contains(name));
+        assert!(
+            matches!(error, ViewError::Expected { target, .. } if target == format!("parameter '{name}'"))
+        );
     }
 
     #[test]
     fn an_absent_offset_is_zero() {
         let mut component = Component::new();
-        assert_eq!(offset(&mut component, None, "x"), Ok(0));
+        assert_eq!(offset(&mut component, None, "x").unwrap(), 0);
     }
 
     #[test]
     fn offset_rounds_fractions_and_rejects_the_rest() {
         let name = "x";
         let mut component = declared(name, Value::Number(-7.0));
-        assert_eq!(offset(&mut component, Some(expr!("x")), name), Ok(-7));
+        assert_eq!(offset(&mut component, Some(expr!("x")), name).unwrap(), -7);
 
         let mut component = declared(name, Value::Number(2.5));
-        assert_eq!(offset(&mut component, Some(expr!("x")), name), Ok(3));
+        assert_eq!(offset(&mut component, Some(expr!("x")), name).unwrap(), 3);
 
         for value in [f64::NAN, f64::from(i32::MAX) + 1.0] {
             let mut component = declared(name, Value::Number(value));

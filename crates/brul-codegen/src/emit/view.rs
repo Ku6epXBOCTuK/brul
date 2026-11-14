@@ -18,12 +18,12 @@ pub(super) fn view(
 ) -> Result<(), Error> {
     let _ = writeln!(
         out,
-        "pub fn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, String> {{"
+        "pub fn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
     );
     out.push_str("    component.borrow_mut().set_names(names());\n");
     let _ = writeln!(
         out,
-        "    brul::gui::style::check_theme({}styles(), theme).map_err(|error| error.to_string())?;",
+        "    brul::gui::style::check_theme({}styles(), theme)?;",
         emit.resource_prefix
     );
     out.push_str("    let mut bindings = Vec::new();\n");

@@ -9,13 +9,14 @@ use brul_window::{ColorScheme, Waker, WindowCommand, WindowKey, WindowSpec, run_
 use crate::handle::{Handle, Message, take};
 use crate::ui::CommandHost;
 use crate::{
-    Built, Component, ComponentHandle, Host, Ui, Value, WindowConfig, execute_program, script,
+    Built, Component, ComponentHandle, Host, Ui, Value, ViewError, WindowConfig, execute_program,
+    script,
 };
 
 pub struct WindowDef {
     pub name: &'static str,
     pub config: WindowConfig,
-    pub view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+    pub view: fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>,
 }
 
 /// Запускает окна по модулю, сгенерированному из `.brul`.
@@ -114,7 +115,7 @@ pub(crate) fn generated_component(
 
 #[cfg(test)]
 pub(crate) fn generated_built(
-    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>,
     names: &'static [&'static str],
     theme: Option<&str>,
     seeds: &[(&str, Value)],
@@ -179,7 +180,7 @@ impl Runtime {
         *self.shown.borrow_mut() = Some(theme.to_owned());
         for ui in self.uis.values_mut() {
             if let Err(error) = ui.set_theme(theme)
-                && !error.message.contains("unknown theme")
+                && !error.is_unknown_theme()
             {
                 tracing::error!(%error, "theme change failed");
             }
@@ -212,7 +213,7 @@ impl Runtime {
         if let Some(ui) = self.uis.get_mut(&key) {
             tracing::debug!(%key, %theme, "reusing window");
             if let Err(error) = ui.set_theme(&theme)
-                && !error.message.contains("unknown theme")
+                && !error.is_unknown_theme()
             {
                 tracing::error!(%error, "theme change failed");
             }
@@ -228,7 +229,8 @@ impl Runtime {
 
         tracing::info!(%key, %theme, "creating window");
         let _ = crate::take_structures();
-        let built = view(self.fixed_theme.as_deref(), &self.component)?;
+        let built = view(self.fixed_theme.as_deref(), &self.component)
+            .map_err(|error| error.to_string())?;
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
             built,
@@ -238,7 +240,7 @@ impl Runtime {
             config.scroll,
         );
         if let Err(error) = ui.set_theme(&theme)
-            && !error.message.contains("unknown theme")
+            && !error.is_unknown_theme()
         {
             tracing::error!(%error, "theme change failed");
         }
@@ -332,13 +334,22 @@ mod tests {
 
     const NAMES: &[&str] = &["name"];
 
+    fn unknown_theme() -> ViewError {
+        ViewError::from(crate::gui::style::StyleError::from(
+            crate::style::SnapshotError::UnknownTheme("sepia".to_owned()),
+        ))
+    }
+
     fn name(component: &mut crate::Component) -> Result<Value, crate::Error> {
         component.read("name")
     }
 
-    fn generated_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn generated_view(
+        theme: Option<&str>,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         if theme == Some("sepia") {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         let widget = Widget::text("");
         let id = widget.id();
@@ -471,7 +482,7 @@ mod tests {
         Ok(theme)
     }
 
-    fn theme_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn theme_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
         let widget = Widget::text("");
         let id = widget.id();
         Ok(Built {
@@ -523,7 +534,7 @@ mod tests {
         static LAST_ID: RefCell<Option<WidgetId>> = const { RefCell::new(None) };
     }
 
-    fn seeded_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn seeded_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
         let widget = Widget::text("");
         let id = widget.id();
         LAST_ID.with(|slot| *slot.borrow_mut() = Some(id));
@@ -629,7 +640,7 @@ mod tests {
         assert!(runtime.uis.is_empty());
     }
 
-    fn key_view(component: &ComponentHandle, function: &str) -> Result<Built, String> {
+    fn key_view(component: &ComponentHandle, function: &str) -> Result<Built, ViewError> {
         let widget = Widget::text("");
         Ok(Built {
             widget,
@@ -639,11 +650,14 @@ mod tests {
         })
     }
 
-    fn picker_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn picker_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
         key_view(component, "handleKey")
     }
 
-    fn settings_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn settings_view(
+        _theme: Option<&str>,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         key_view(component, "handleSettingsKey")
     }
 

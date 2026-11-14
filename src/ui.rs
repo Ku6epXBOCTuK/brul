@@ -12,7 +12,7 @@ use crate::each::reconcile_each;
 use crate::event::{arguments, call, handler_target};
 use crate::{
     Binding, Built, ComponentHandle, Error, Handler, HandlerEvent, Host, PropBinding, RowInfo,
-    Structure, Value,
+    Structure, Value, ViewError,
 };
 
 const EVENT_DEPTH: usize = 64;
@@ -28,7 +28,7 @@ pub struct Ui {
     structures: Vec<OwnedStructure>,
     rows: Vec<(WidgetId, Vec<RowInfo>)>,
     requests: Rc<RefCell<Vec<WidgetId>>>,
-    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>,
     pub(crate) theme: Option<String>,
     textures: runtime::Textures,
     scope: EffectScope,
@@ -168,7 +168,7 @@ impl Ui {
     pub(crate) fn assemble(
         component: ComponentHandle,
         built: Built,
-        view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+        view: fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>,
         theme: Option<String>,
         host: Option<Box<dyn Host>>,
     ) -> Self {
@@ -193,7 +193,7 @@ impl Ui {
     pub(crate) fn assemble_with(
         component: ComponentHandle,
         built: Built,
-        view: fn(Option<&str>, &ComponentHandle) -> Result<Built, String>,
+        view: fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>,
         theme: Option<String>,
         commands: Rc<RefCell<Vec<WindowCommand>>>,
         scroll: bool,
@@ -320,15 +320,11 @@ impl Ui {
         }
     }
 
-    fn rebuild(&mut self) -> Result<(), brul_syntax::error::Error> {
+    fn rebuild(&mut self) -> Result<(), ViewError> {
         let _ = runtime::take_structures();
         let built = (self.view)(self.theme.as_deref(), &self.component);
         let structures = runtime::take_structures();
-        let built = built.map_err(|message| brul_syntax::error::Error {
-            message,
-            line: 1,
-            column: 1,
-        })?;
+        let built = built?;
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
@@ -345,7 +341,7 @@ impl Ui {
         Ok(())
     }
 
-    pub(crate) fn set_theme(&mut self, theme: &str) -> Result<(), brul_syntax::error::Error> {
+    pub(crate) fn set_theme(&mut self, theme: &str) -> Result<(), ViewError> {
         if self.theme.as_deref() == Some(theme) {
             return Ok(());
         }
@@ -559,6 +555,12 @@ mod tests {
         "accent", "missing", "icon",
     ];
 
+    fn unknown_theme() -> ViewError {
+        ViewError::from(crate::gui::style::StyleError::from(
+            crate::style::SnapshotError::UnknownTheme("sepia".to_owned()),
+        ))
+    }
+
     macro_rules! read {
         ($name:literal) => {{
             fn read(component: &mut Component) -> Result<Value, Error> {
@@ -577,9 +579,9 @@ mod tests {
     fn rebuild_shown(
         theme: Option<&str>,
         component: &ComponentHandle,
-    ) -> Result<(Built, Vec<RowInfo>), String> {
+    ) -> Result<(Built, Vec<RowInfo>), ViewError> {
         if theme.is_some() {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         let mut widget = Widget::view(Direction::Column, Vec::new());
         let flag = shown(&mut component.borrow_mut())
@@ -599,9 +601,12 @@ mod tests {
         ))
     }
 
-    fn structured_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn structured_view(
+        theme: Option<&str>,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         if theme.is_some() {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         let widget = Widget::view(Direction::Column, Vec::new());
         runtime::register_structure(component, widget.id(), false, shown, rebuild_shown);
@@ -650,9 +655,9 @@ mod tests {
         assert_eq!(child_count(&ui, parent), 1);
     }
 
-    fn bound_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn bound_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
         if theme.is_some() {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         let holder = Widget::view(Direction::Column, Vec::new());
         runtime::register_structure(component, holder.id(), false, shown, rebuild_bound);
@@ -667,9 +672,9 @@ mod tests {
     fn rebuild_bound(
         theme: Option<&str>,
         component: &ComponentHandle,
-    ) -> Result<(Built, Vec<RowInfo>), String> {
+    ) -> Result<(Built, Vec<RowInfo>), ViewError> {
         if theme.is_some() {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         let mut children = Vec::new();
         let mut bindings = Vec::new();
@@ -1011,7 +1016,7 @@ mod tests {
         );
     }
 
-    fn themed_view(theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, String> {
+    fn themed_view(theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, ViewError> {
         Ok(Built {
             widget: Widget::text(theme.unwrap_or("none")),
             bindings: Vec::new(),
@@ -1020,9 +1025,12 @@ mod tests {
         })
     }
 
-    fn rejecting_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn rejecting_view(
+        theme: Option<&str>,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         if theme.is_some() {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         themed_view(None, component)
     }
@@ -1060,9 +1068,9 @@ mod tests {
         component.read("icon")
     }
 
-    fn image_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn image_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
         if theme.is_some() {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         let widget = Widget::image(Texture::empty());
         let id = widget.id();
@@ -1379,9 +1387,9 @@ mod tests {
         ))
     }
 
-    fn child_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn child_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
         if theme.is_some() {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         let text = Widget::text("child");
         let id = text.id();
@@ -1398,9 +1406,9 @@ mod tests {
         })
     }
 
-    fn raising_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, String> {
+    fn raising_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
         if theme.is_some() {
-            return Err("unknown theme".to_owned());
+            return Err(unknown_theme());
         }
         let program = script::Program {
             functions: vec![function("raise", Vec::new(), vec![raise("clicked")])],

@@ -179,7 +179,7 @@ fn container(
     let direction = if row { "Row" } else { "Column" };
     let _ = writeln!(out, "brul::gui::Widget::{call}(vec![");
     let spacing = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
-        .map_err(|message| error_at(element.position, message))?
+        .map_err(|error| error_at(element.position, error.to_string()))?
         .layout
         .spacing;
     let children = frame.deeper(2).inside(direction, spacing);

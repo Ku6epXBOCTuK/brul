@@ -302,5 +302,8 @@ fn unknown_theme_is_rejected() {
         Ok(_) => panic!("unknown theme was accepted"),
         Err(error) => error,
     };
-    assert!(error.contains("unknown theme 'sepia'"), "{error}");
+    assert!(
+        error.to_string().contains("unknown theme 'sepia'"),
+        "{error}"
+    );
 }

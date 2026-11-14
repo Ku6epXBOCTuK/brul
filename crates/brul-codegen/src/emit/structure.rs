@@ -114,7 +114,7 @@ fn rebuild_arm(
     let mut out = arm_header(name, emit);
     let _ = writeln!(
         out,
-        "    let condition = {name}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let children = match condition {{"
+        "    let condition = {name}_value(&mut component.borrow_mut())\n        .map_err(brul::ViewError::from)?;\n    let children = match condition {{"
     );
     out.push_str("        brul::Value::Bool(true) => vec![\n");
     let mut counter = 0;
@@ -126,7 +126,7 @@ fn rebuild_arm(
     }
     out.push_str("        ],\n");
     out.push_str(
-        "        other => return Err(format!(\"if condition expects Bool, got {}\", other.type_name())),\n    };\n",
+        "        other => return Err(brul::ViewError::expected(\"if condition\", \"Bool\", other.type_name())),\n    };\n",
     );
     widget(&mut out, arm);
     Ok(out)
@@ -143,11 +143,11 @@ fn each_arm(
     out.push_str("    let mut children = Vec::new();\n");
     let _ = writeln!(
         out,
-        "    let collection = {name}_value(&mut component.borrow_mut())\n        .map_err(|error| error.reason())?;\n    let items = match collection {{"
+        "    let collection = {name}_value(&mut component.borrow_mut())\n        .map_err(brul::ViewError::from)?;\n    let items = match collection {{"
     );
     out.push_str("        brul::Value::Array(items) => std::rc::Rc::unwrap_or_clone(items),\n");
     out.push_str(
-        "        other => return Err(format!(\"each expects Array, got {}\", other.type_name())),\n    };\n",
+        "        other => return Err(brul::ViewError::expected(\"each\", \"Array\", other.type_name())),\n    };\n",
     );
     out.push_str("    for (position, item) in items.into_iter().enumerate() {\n");
     out.push_str("        component.borrow_mut().push_build_scope(vec![\n");
@@ -203,7 +203,7 @@ fn arm_header(name: &str, emit: &Emit<'_>) -> String {
     format!(
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
-    brul::gui::style::check_theme({}styles(), theme).map_err(|error| error.to_string())?;
+    brul::gui::style::check_theme({}styles(), theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
