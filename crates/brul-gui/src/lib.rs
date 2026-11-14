@@ -53,10 +53,10 @@
 //! assert_eq!(layout.glyphs.len(), 5);
 //! ```
 //!
-//! Лейаут — [`layout`]: меряет листья снизу вверх, затем размещает контейнеры
-//! сверху вниз. [`Dimension`] задаёт auto/px/%, [`LayoutStyle::stretch`] делит
-//! остаток главной оси, `justify` и `align` двигают по главной и поперечной.
-//! Координаты и размеры результата — целые физические пиксели.
+//! Лейаут — [`layout`]: раскладку считает `taffy` по flexbox-модели.
+//! [`Dimension`] задаёт auto/px/%, [`LayoutStyle::stretch`] — `flex-grow`,
+//! `justify` и `align` двигают по главной и поперечной осям. Координаты и
+//! размеры результата — целые физические пиксели.
 //!
 //! ```
 //! use brul_gui::{Dimension, LayoutNode, LayoutStyle, Padding, Size, layout};
