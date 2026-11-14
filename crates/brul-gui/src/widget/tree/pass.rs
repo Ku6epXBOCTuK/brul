@@ -2,7 +2,7 @@ use super::frame::{build_snapshot, reveal_carets};
 use super::render::{Pass, dirty_subtrees, flatten_boxes, move_children};
 use super::style::Transition;
 use super::*;
-use crate::layout::{self, LayoutBox, Size};
+use crate::layout::{Available, LayoutBox, Size};
 use crate::text::TextEngine;
 use std::time::Duration;
 
@@ -40,23 +40,33 @@ impl WidgetTree {
         let mut boxes = previous.map(|geometry| geometry.boxes).unwrap_or_default();
         boxes.resize(self.nodes.len(), LayoutBox::default());
 
-        let (node, order, frozen) = {
+        let (node, key, order, frozen) = {
+            self.layouter.begin();
             let mut pass = Pass {
                 tree: &self.nodes,
                 engine,
                 texts: &mut self.texts,
+                layouter: &mut self.layouter,
                 scale,
                 cached: reuse.then_some(&boxes),
                 blocked: dirty_subtrees(&self.nodes, self.root, &self.stale),
                 order: Vec::with_capacity(self.nodes.len()),
                 frozen: Vec::new(),
             };
-            let node = pass.build(self.root, Some(viewport.width))?;
-            (node, pass.order, pass.frozen)
+            let (node, key) = pass.build(
+                self.root,
+                Available {
+                    width: Some(viewport.width),
+                    height: None,
+                },
+            )?;
+            (node, key, pass.order, pass.frozen)
         };
         self.texts.retain(|id, _| self.index.contains_key(id));
 
-        let placed = layout::layout(&node, viewport)?;
+        self.layouter.finish();
+        self.layouter.compute(key, viewport);
+        let placed = self.layouter.collect(key, &node);
         let mut cursor = 0;
         flatten_boxes(&placed, &order, &mut cursor, &mut boxes);
 

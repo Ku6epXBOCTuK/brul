@@ -1,5 +1,5 @@
 use super::*;
-use crate::layout::{self, LayoutBox, LayoutNode};
+use crate::layout::{self, Available, LayoutBox, LayoutNode, Layouter, NodeShape};
 use crate::text::TextEngine;
 use std::collections::{HashMap, HashSet};
 
@@ -7,6 +7,7 @@ pub(super) struct Pass<'a> {
     pub(super) tree: &'a [Node],
     pub(super) engine: &'a mut TextEngine,
     pub(super) texts: &'a mut HashMap<WidgetId, ShapedText>,
+    pub(super) layouter: &'a mut Layouter,
     pub(super) scale: f32,
     pub(super) cached: Option<&'a [LayoutBox]>,
     pub(super) blocked: Vec<bool>,
@@ -42,11 +43,13 @@ impl Pass<'_> {
     pub(super) fn build(
         &mut self,
         slot: Slot,
-        available_width: Option<u32>,
-    ) -> Result<LayoutNode, WidgetError> {
+        available: Available,
+    ) -> Result<(LayoutNode, u32), WidgetError> {
         let node = &self.tree[slot.index()];
         let layout_style = node.layout_style();
+        let prepared = layout::prepare(&layout_style, available)?;
         self.order.push(slot);
+        let key = node.id.index();
         if let (Some(cached), false) = (self.cached, self.blocked[slot.index()])
             && let Some(previous) = cached.get(slot.index())
         {
@@ -59,34 +62,49 @@ impl Pass<'_> {
                     .saturating_sub(layout::inset_y(&layout_style)),
             };
             self.frozen.push((slot, previous.clone()));
+            self.layouter.node(
+                key,
+                NodeShape {
+                    style: &layout_style,
+                    direction: Direction::Row,
+                    offset: node.offset,
+                    content: size,
+                    prepared,
+                    children: &[],
+                },
+            );
             let layout_node = LayoutNode::leaf(size.width, size.height).with_style(layout_style);
-            return Ok(match node.offset {
-                Some(offset) => layout_node.with_offset(offset.x, offset.y),
-                None => layout_node,
-            });
+            return Ok((
+                match node.offset {
+                    Some(offset) => layout_node.with_offset(offset.x, offset.y),
+                    None => layout_node,
+                },
+                key,
+            ));
         }
 
-        let resolved = layout::resolve(layout_style.width, available_width)?;
-        let content_width = resolved
-            .or(available_width)
-            .map(|width| width.saturating_sub(layout::inset_x(&layout_style)));
-
-        let layout_node = match &node.data {
+        let mut keys = Vec::new();
+        let (direction, layout_node) = match &node.data {
             Content::View { direction } => {
                 let mut children = Vec::with_capacity(node.children.len());
+                keys.reserve(node.children.len());
                 for &child in &node.children {
-                    children.push(self.build(child, content_width)?);
+                    let (child_node, child_key) = self.build(child, prepared.available)?;
+                    children.push(child_node);
+                    keys.push(child_key);
                 }
-                match direction {
+                let children = match direction {
                     Direction::Row => LayoutNode::row(children),
                     Direction::Column => {
                         LayoutNode::column(children).with_scroll(node.scroll_offset)
                     }
-                }
+                };
+                (*direction, children)
             }
-            Content::Text { content, styles } => {
-                self.build_text(node, content, styles, content_width, "")?
-            }
+            Content::Text { content, styles } => (
+                Direction::Row,
+                self.build_text(node, content, styles, prepared.available.width, "")?,
+            ),
             Content::Input {
                 value,
                 styles,
@@ -94,17 +112,44 @@ impl Pass<'_> {
                 preedit,
                 ..
             } => {
-                let width = if *multiline { content_width } else { None };
-                self.build_text(node, value, styles, width, preedit)?
+                let width = if *multiline {
+                    prepared.available.width
+                } else {
+                    None
+                };
+                (
+                    Direction::Row,
+                    self.build_text(node, value, styles, width, preedit)?,
+                )
             }
-            Content::Image(image) => LayoutNode::leaf(image.width(), image.height()),
+            Content::Image(image) => (
+                Direction::Row,
+                LayoutNode::leaf(image.width(), image.height()),
+            ),
         };
 
+        let content = match &layout_node {
+            LayoutNode::Leaf { size, .. } => *size,
+            LayoutNode::Container { .. } => Size::default(),
+        };
+        self.layouter.node(
+            key,
+            NodeShape {
+                style: &layout_style,
+                direction,
+                offset: node.offset,
+                content,
+                prepared,
+                children: &keys,
+            },
+        );
+
         let layout_node = layout_node.with_style(layout_style);
-        Ok(match node.offset {
+        let layout_node = match node.offset {
             Some(offset) => layout_node.with_offset(offset.x, offset.y),
             None => layout_node,
-        })
+        };
+        Ok((layout_node, key))
     }
 
     fn build_text(

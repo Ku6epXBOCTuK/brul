@@ -23,6 +23,12 @@ pub use tree::WidgetTree;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct WidgetId(u32);
 
+impl WidgetId {
+    pub(crate) fn index(self) -> u32 {
+        self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WidgetKind {
     View,

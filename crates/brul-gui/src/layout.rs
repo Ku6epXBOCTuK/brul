@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use taffy::style_helpers::TaffyAuto;
@@ -277,22 +278,209 @@ impl fmt::Display for LayoutError {
 impl std::error::Error for LayoutError {}
 
 #[derive(Clone, Copy, Debug, Default)]
-struct Available {
+pub(crate) struct Available {
+    pub(crate) width: Option<u32>,
+    pub(crate) height: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Prepared {
+    pub(crate) available: Available,
     width: Option<u32>,
     height: Option<u32>,
 }
 
+pub(crate) fn prepare(style: &LayoutStyle, available: Available) -> Result<Prepared, LayoutError> {
+    validate_stretch(style)?;
+    let width = resolve(style.width, available.width)?;
+    let height = resolve(style.height, available.height)?;
+    Ok(Prepared {
+        available: Available {
+            width: width
+                .or(available.width)
+                .map(|value| value.saturating_sub(inset_x(style))),
+            height: height
+                .or(available.height)
+                .map(|value| value.saturating_sub(inset_y(style))),
+        },
+        width,
+        height,
+    })
+}
+
+pub(crate) struct NodeShape<'a> {
+    pub(crate) style: &'a LayoutStyle,
+    pub(crate) direction: Direction,
+    pub(crate) offset: Option<Offset>,
+    pub(crate) content: Size,
+    pub(crate) prepared: Prepared,
+    pub(crate) children: &'a [u32],
+}
+
+struct Entry {
+    node: NodeId,
+    style: TaffyStyle,
+    content: Size,
+    children: Vec<u32>,
+}
+
+pub(crate) struct Layouter {
+    tree: TaffyTree<Size>,
+    entries: HashMap<u32, Entry>,
+    live: HashSet<u32>,
+}
+
+impl Layouter {
+    pub(crate) fn new() -> Self {
+        Self {
+            tree: TaffyTree::new(),
+            entries: HashMap::new(),
+            live: HashSet::new(),
+        }
+    }
+
+    pub(crate) fn begin(&mut self) {
+        self.live.clear();
+    }
+
+    pub(crate) fn finish(&mut self) {
+        let gone = self
+            .entries
+            .keys()
+            .filter(|key| !self.live.contains(key))
+            .copied()
+            .collect::<Vec<_>>();
+        for key in gone {
+            let entry = self.entries.remove(&key).expect("layout entry");
+            self.tree.remove(entry.node).expect("layout tree");
+        }
+    }
+
+    pub(crate) fn node(&mut self, key: u32, shape: NodeShape) {
+        let taffy = taffy_style(
+            shape.style,
+            shape.direction,
+            shape.prepared.width,
+            shape.prepared.height,
+            shape.offset,
+        );
+        let nodes = shape
+            .children
+            .iter()
+            .map(|child| self.entries.get(child).expect("layout child").node)
+            .collect::<Vec<_>>();
+        self.live.insert(key);
+
+        match self.entries.get_mut(&key) {
+            Some(entry) => {
+                if entry.style != taffy {
+                    entry.style = taffy.clone();
+                    self.tree.set_style(entry.node, taffy).expect("layout tree");
+                }
+                if entry.content != shape.content {
+                    entry.content = shape.content;
+                    self.tree
+                        .set_node_context(entry.node, Some(shape.content))
+                        .expect("layout tree");
+                }
+                if entry.children.as_slice() != shape.children {
+                    entry.children = shape.children.to_vec();
+                    self.tree
+                        .set_children(entry.node, &nodes)
+                        .expect("layout tree");
+                }
+            }
+            None => {
+                let node = self
+                    .tree
+                    .new_leaf_with_context(taffy.clone(), shape.content)
+                    .expect("layout tree");
+                if !nodes.is_empty() {
+                    self.tree.set_children(node, &nodes).expect("layout tree");
+                }
+                self.entries.insert(
+                    key,
+                    Entry {
+                        node,
+                        style: taffy,
+                        content: shape.content,
+                        children: shape.children.to_vec(),
+                    },
+                );
+            }
+        }
+    }
+
+    pub(crate) fn compute(&mut self, root: u32, viewport: Size) {
+        let node = self.entries.get(&root).expect("layout root").node;
+        compute(&mut self.tree, node, viewport);
+    }
+
+    pub(crate) fn collect(&self, root: u32, shape: &LayoutNode) -> LayoutBox {
+        let node = self.entries.get(&root).expect("layout root").node;
+        collect(&self.tree, node, shape, 0, 0)
+    }
+}
+
+impl Default for Layouter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn layout(root: &LayoutNode, viewport: Size) -> Result<LayoutBox, LayoutError> {
-    let mut tree = TaffyTree::<Size>::new();
     let available = Available {
         width: Some(viewport.width),
         height: Some(viewport.height),
     };
+    let mut tree = TaffyTree::<Size>::new();
     let root_id = build(&mut tree, root, available)?;
+    compute(&mut tree, root_id, viewport);
+    Ok(collect(&tree, root_id, root, 0, 0))
+}
 
+fn build(
+    tree: &mut TaffyTree<Size>,
+    node: &LayoutNode,
+    available: Available,
+) -> Result<NodeId, LayoutError> {
+    let style = node.style();
+    let prepared = prepare(style, available)?;
+
+    let id = match node {
+        LayoutNode::Leaf { size, offset, .. } => {
+            let taffy = taffy_style(
+                style,
+                Direction::Row,
+                prepared.width,
+                prepared.height,
+                *offset,
+            );
+            tree.new_leaf_with_context(taffy, *size)
+                .expect("layout tree")
+        }
+        LayoutNode::Container {
+            direction,
+            children,
+            offset,
+            ..
+        } => {
+            let ids = children
+                .iter()
+                .map(|child| build(tree, child, prepared.available))
+                .collect::<Result<Vec<_>, LayoutError>>()?;
+            let taffy = taffy_style(style, *direction, prepared.width, prepared.height, *offset);
+            tree.new_with_children(taffy, &ids).expect("layout tree")
+        }
+    };
+
+    Ok(id)
+}
+
+fn compute(tree: &mut TaffyTree<Size>, root: NodeId, viewport: Size) {
     // NOTE: taffy only rejects ids it did not create, and every id here comes from this tree
     tree.compute_layout_with_measure(
-        root_id,
+        root,
         TaffySize {
             width: AvailableSpace::Definite(viewport.width as f32),
             height: AvailableSpace::Definite(viewport.height as f32),
@@ -311,50 +499,6 @@ pub fn layout(root: &LayoutNode, viewport: Size) -> Result<LayoutBox, LayoutErro
         },
     )
     .expect("layout tree");
-
-    Ok(collect(&tree, root_id, root, 0, 0))
-}
-
-fn build(
-    tree: &mut TaffyTree<Size>,
-    node: &LayoutNode,
-    available: Available,
-) -> Result<NodeId, LayoutError> {
-    let style = node.style();
-    validate_stretch(style)?;
-    let width = resolve(style.width, available.width)?;
-    let height = resolve(style.height, available.height)?;
-    let inner = Available {
-        width: width
-            .or(available.width)
-            .map(|value| value.saturating_sub(inset_x(style))),
-        height: height
-            .or(available.height)
-            .map(|value| value.saturating_sub(inset_y(style))),
-    };
-
-    let id = match node {
-        LayoutNode::Leaf { size, offset, .. } => {
-            let taffy = taffy_style(style, Direction::Row, width, height, *offset);
-            tree.new_leaf_with_context(taffy, *size)
-                .expect("layout tree")
-        }
-        LayoutNode::Container {
-            direction,
-            children,
-            offset,
-            ..
-        } => {
-            let ids = children
-                .iter()
-                .map(|child| build(tree, child, inner))
-                .collect::<Result<Vec<_>, LayoutError>>()?;
-            let taffy = taffy_style(style, *direction, width, height, *offset);
-            tree.new_with_children(taffy, &ids).expect("layout tree")
-        }
-    };
-
-    Ok(id)
 }
 
 fn taffy_style(

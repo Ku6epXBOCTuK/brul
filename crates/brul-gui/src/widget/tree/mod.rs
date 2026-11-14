@@ -1,6 +1,6 @@
 use super::style::Transition;
 use super::*;
-use crate::layout::{LayoutBox, Offset, ScrollOffset, Size};
+use crate::layout::{LayoutBox, Layouter, Offset, ScrollOffset, Size};
 use crate::text::TextLayout;
 use std::collections::{HashMap, HashSet};
 
@@ -80,6 +80,7 @@ pub struct WidgetTree {
     stale: HashSet<Slot>,
     full_dirty: bool,
     layout_dirty: bool,
+    layouter: Layouter,
 }
 
 struct Geometry {
@@ -170,6 +171,7 @@ impl WidgetTree {
             stale: HashSet::new(),
             full_dirty: true,
             layout_dirty: true,
+            layouter: Layouter::new(),
         };
         tree.root = tree.insert(root);
         tree
