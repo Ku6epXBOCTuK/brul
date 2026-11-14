@@ -7,11 +7,11 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+brul-layout = { workspace = true }
 brul-style = { workspace = true }
 cosmic-text = { workspace = true }
 image = { workspace = true, features = ["png"] }
 resvg = { workspace = true }
-taffy = { workspace = true }
 
 [dev-dependencies]
 brul-reactive = { workspace = true }

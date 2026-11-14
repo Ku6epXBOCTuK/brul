@@ -53,7 +53,8 @@
 //! assert_eq!(layout.glyphs.len(), 5);
 //! ```
 //!
-//! Лейаут — [`layout`]: раскладку считает `taffy` по flexbox-модели.
+//! Лейаут — крейт `brul-layout`, [`layout()`] считает через `taffy` по
+//! flexbox-модели.
 //! [`Dimension`] задаёт auto/px/%, [`LayoutStyle::stretch`] — `flex-grow`,
 //! `justify` и `align` двигают по главной и поперечной осям. Координаты и
 //! размеры результата — целые физические пиксели.
@@ -111,13 +112,14 @@ mod atlas;
 mod color;
 mod gradient;
 mod image;
-mod layout;
 mod paint;
 mod rect;
 pub mod style;
 mod text;
 mod texture;
 mod widget;
+
+use brul_layout as layout;
 
 pub use animation::{Track, Tween, ease_out};
 pub use atlas::{Atlas, AtlasFormat, AtlasSlot};

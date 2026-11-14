@@ -278,19 +278,19 @@ impl fmt::Display for LayoutError {
 impl std::error::Error for LayoutError {}
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct Available {
-    pub(crate) width: Option<u32>,
-    pub(crate) height: Option<u32>,
+pub struct Available {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Prepared {
-    pub(crate) available: Available,
+pub struct Prepared {
+    pub available: Available,
     width: Option<u32>,
     height: Option<u32>,
 }
 
-pub(crate) fn prepare(style: &LayoutStyle, available: Available) -> Result<Prepared, LayoutError> {
+pub fn prepare(style: &LayoutStyle, available: Available) -> Result<Prepared, LayoutError> {
     validate_stretch(style)?;
     let width = resolve(style.width, available.width)?;
     let height = resolve(style.height, available.height)?;
@@ -308,14 +308,14 @@ pub(crate) fn prepare(style: &LayoutStyle, available: Available) -> Result<Prepa
     })
 }
 
-pub(crate) struct NodeShape<'a, C> {
-    pub(crate) style: &'a LayoutStyle,
-    pub(crate) direction: Direction,
-    pub(crate) offset: Option<Offset>,
-    pub(crate) scroll: ScrollOffset,
-    pub(crate) content: C,
-    pub(crate) prepared: Prepared,
-    pub(crate) children: &'a [u32],
+pub struct NodeShape<'a, C> {
+    pub style: &'a LayoutStyle,
+    pub direction: Direction,
+    pub offset: Option<Offset>,
+    pub scroll: ScrollOffset,
+    pub content: C,
+    pub prepared: Prepared,
+    pub children: &'a [u32],
 }
 
 struct Entry<C> {
@@ -329,14 +329,14 @@ struct Entry<C> {
     children: Vec<u32>,
 }
 
-pub(crate) struct Layouter<C> {
+pub struct Layouter<C> {
     tree: TaffyTree<C>,
     entries: HashMap<u32, Entry<C>>,
     live: HashSet<u32>,
 }
 
 impl<C: PartialEq + Clone> Layouter<C> {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             tree: TaffyTree::new(),
             entries: HashMap::new(),
@@ -344,11 +344,11 @@ impl<C: PartialEq + Clone> Layouter<C> {
         }
     }
 
-    pub(crate) fn begin(&mut self) {
+    pub fn begin(&mut self) {
         self.live.clear();
     }
 
-    pub(crate) fn finish(&mut self) {
+    pub fn finish(&mut self) {
         let gone = self
             .entries
             .keys()
@@ -361,7 +361,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
         }
     }
 
-    pub(crate) fn node(&mut self, key: u32, shape: NodeShape<C>) {
+    pub fn node(&mut self, key: u32, shape: NodeShape<C>) {
         let taffy = taffy_style(
             shape.style,
             shape.direction,
@@ -427,13 +427,13 @@ impl<C: PartialEq + Clone> Layouter<C> {
 }
 
 impl<C> Layouter<C> {
-    pub(crate) fn touch(&mut self, key: u32) {
+    pub fn touch(&mut self, key: u32) {
         if let Some(entry) = self.entries.get(&key) {
             self.tree.mark_dirty(entry.node).expect("layout tree");
         }
     }
 
-    pub(crate) fn compute(
+    pub fn compute(
         &mut self,
         root: u32,
         viewport: Size,
@@ -473,7 +473,7 @@ impl<C> Layouter<C> {
             .expect("layout tree");
     }
 
-    pub(crate) fn collect_into(&self, root: u32, boxes: &mut [LayoutBox]) {
+    pub fn collect_into(&self, root: u32, boxes: &mut [LayoutBox]) {
         self.collect_entry(root, 0, 0, boxes);
     }
 
@@ -741,7 +741,7 @@ fn child_position(
     }
 }
 
-pub(crate) fn inset_x(style: &LayoutStyle) -> u32 {
+pub fn inset_x(style: &LayoutStyle) -> u32 {
     style
         .border_width
         .saturating_mul(2)
@@ -749,7 +749,7 @@ pub(crate) fn inset_x(style: &LayoutStyle) -> u32 {
         .saturating_add(style.padding.right)
 }
 
-pub(crate) fn inset_y(style: &LayoutStyle) -> u32 {
+pub fn inset_y(style: &LayoutStyle) -> u32 {
     style
         .border_width
         .saturating_mul(2)
@@ -757,7 +757,7 @@ pub(crate) fn inset_y(style: &LayoutStyle) -> u32 {
         .saturating_add(style.padding.bottom)
 }
 
-pub(crate) fn resolve(dimension: Dimension, base: Option<u32>) -> Result<Option<u32>, LayoutError> {
+fn resolve(dimension: Dimension, base: Option<u32>) -> Result<Option<u32>, LayoutError> {
     match dimension {
         Dimension::Auto => Ok(None),
         Dimension::Px(value) => Ok(Some(value)),
