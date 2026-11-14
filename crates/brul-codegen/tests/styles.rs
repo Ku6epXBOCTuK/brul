@@ -23,13 +23,13 @@ fn padding_covers_every_side_and_the_gap_between_children() {
     assert_eq!(all.layout.padding, brul_gui::Padding::all(4));
 
     let sides = resolved(
-        ".a { padding-left: 1px; padding-right: 2px; padding-top: 3px; padding-bottom: 4px; spacing: 5px; }",
+        ".a { padding-left: 1px; padding-right: 2px; padding-top: 3px; padding-bottom: 4px; gap: 5px; }",
     );
     assert_eq!(sides.layout.padding.left, 1);
     assert_eq!(sides.layout.padding.right, 2);
     assert_eq!(sides.layout.padding.top, 3);
     assert_eq!(sides.layout.padding.bottom, 4);
-    assert_eq!(sides.layout.spacing, 5);
+    assert_eq!(sides.layout.gap, 5);
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn align_items_maps_every_keyword() {
 #[test]
 fn paint_covers_background_border_color_tint_and_the_gradient() {
     let resolved = resolved(
-        ".a { background: #102030; border: 2px #405060; color: #708090; tint: #a0b0c0; radius: 6px; opacity: 0.5; }",
+        ".a { background: #102030; border: 2px #405060; color: #708090; tint: #a0b0c0; border-radius: 6px; opacity: 0.5; }",
     );
     let style = resolved.styles.base();
     assert_eq!(
@@ -82,7 +82,7 @@ fn paint_covers_background_border_color_tint_and_the_gradient() {
     assert_eq!(style.border, brul_gui::Color::rgb(0x40, 0x50, 0x60));
     assert_eq!(style.text, brul_gui::Color::rgb(0x70, 0x80, 0x90));
     assert_eq!(style.tint, Some(brul_gui::Color::rgb(0xa0, 0xb0, 0xc0)));
-    assert_eq!(style.radius, 6);
+    assert_eq!(style.border_radius, 6);
     assert_eq!(style.opacity, 0.5);
 }
 

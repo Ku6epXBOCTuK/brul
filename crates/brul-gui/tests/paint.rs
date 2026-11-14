@@ -47,7 +47,7 @@ fn paints_background_and_rounds_corners() {
         })
         .with_styles(StyleSet::new(WidgetStyle {
             background: Paint::Color(red),
-            radius: 8,
+            border_radius: 8,
             ..WidgetStyle::default()
         }));
     let mut engine = TextEngine::new();
@@ -465,7 +465,7 @@ fn clips_children_to_a_rounded_parent() {
         })
         .with_styles(StyleSet::new(WidgetStyle {
             clip: true,
-            radius: 4,
+            border_radius: 4,
             ..Default::default()
         }));
     let mut tree = WidgetTree::new(parent);

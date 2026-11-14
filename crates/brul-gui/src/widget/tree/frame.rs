@@ -184,7 +184,7 @@ pub(super) fn snapshot_widget(
             layout_box.y,
             layout_box.width,
             layout_box.height,
-            style.radius,
+            style.border_radius,
         ));
     }
     for &child in &node.children {
@@ -218,7 +218,7 @@ pub(super) fn collect_hit(
             layout_box.y,
             layout_box.width,
             layout_box.height,
-            style.radius,
+            style.border_radius,
         ));
     }
 

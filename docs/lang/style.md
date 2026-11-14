@@ -14,7 +14,7 @@
 ```css
 .checkbox {
     width: 20px;
-    radius: 6px;
+    border-radius: 6px;
     background: transparent;
     border: 2px theme.border-main;
 }
@@ -57,14 +57,14 @@
 | `flex-shrink`                                          | число                             | 0 (в CSS — 1)           | ❌ геометрия                    |
 | `flex-basis`                                           | px \| %                           | auto                    | ❌ геометрия                    |
 | `padding` (1–4 значения, `-left/right/top/bottom`)     | px                                | 0                       | ❌ геометрия                    |
-| `spacing`                                              | px                                | 0 (только Row/Column)   | ❌ геометрия                    |
+| `gap`                                                  | px                                | 0 (только Row/Column)   | ❌ геометрия                    |
 | `justify-content`                                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
 | `align-items`                                          | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
 | `background`                                           | Color \| Gradient                 | transparent             | ✅                              |
 | `border` (шорткат: ширина+цвет)                        | px + (Color \| theme.*)           | 0, transparent          | ❌ (только `border-color`)      |
 | `border-width`                                         | px                                | 0                       | ❌ геометрия                    |
 | `border-color`                                         | Color                             | transparent             | ✅                              |
-| `radius`                                               | px                                | 0                       | ❌ геометрия                    |
+| `border-radius`                                        | px                                | 0                       | ❌ геометрия                    |
 | `color`                                                | Color                             | theme-зависимый         | ✅                              |
 | `font-size`                                            | px                                | 14                      | ❌ (размер текста — компоновка) |
 | `font-family`                                          | String                            | наследуется от окна     | ❌                              |
@@ -103,7 +103,7 @@ _«Меняется по состоянию?» = разрешено ли сво�
 `box-shadow` — шорткат из смещения по x, смещения по y, размытия и цвета:
 `box-shadow: 0px 10px 15px #3b82f640`. Смещения и размытие — px, смещения могут
 быть отрицательными; цвет — Color или `theme.*`. Тень рисуется под border-box
-узла с тем же `radius`, без «spread» и без `inset`. Геометрия тени в
+узла с тем же `border-radius`, без «spread» и без `inset`. Геометрия тени в
 `.class:state` запрещена, как у `border`: по состоянию меняется только
 `box-shadow-color`, поэтому тень появляется и исчезает без релайаута.
 
@@ -114,7 +114,8 @@ _«Меняется по состоянию?» = разрешено ли сво�
 цветом, и при смене темы градиент пересобирается из новых цветов. Сами ключи
 темы по-прежнему хранят только цвет или px, а не градиент.
 
-`clip: true` режет содержимое по border-box узла; скругление — по его `radius`.
+`clip: true` режет содержимое по border-box узла; скругление — по его
+`border-radius`.
 
 `scroll: true` делает контейнер прокручиваемым колесом: содержимое уезжает вверх
 внутри его `clip`, смещение ограничено размером содержимого. Нужен `clip: true`;
@@ -210,7 +211,7 @@ theme dark {
 Не поддерживается и не будет ([причина](../dev/architecture.md#лейаут-и-стили)):
 
 - каскад, специфичность, наследование, `!important`;
-- схлопывание margin — вместо него `spacing` и `padding`;
+- схлопывание margin — вместо него `gap` и `padding`;
 - `float` — вместо него зоны исключения;
 - состояния через пересчёт каскада;
 - устаревшие свойства веба.
@@ -250,11 +251,11 @@ theme dark {
 ### 1. Стили CheckRow (из markup.md)
 
 ```css
-.check-row { width: 100%; spacing: 12px; padding: 4px; }
+.check-row { width: 100%; gap: 12px; padding: 4px; }
 .checkbox {
     width: 20px;
     height: 20px;
-    radius: 6px;
+    border-radius: 6px;
     background: transparent;
     border: 2px theme.border-main;
 }
@@ -271,7 +272,7 @@ theme dark {
 .browser-item { height: 84px; background: transparent; }
 .item-panel {
     height: 76px;
-    radius: 12px;
+    border-radius: 12px;
     background: theme.surface-item;
     border: 2px transparent;
 }
@@ -280,11 +281,11 @@ theme dark {
     border-color: theme.accent-ring;
 }
 .item-panel:hover { background: theme.surface-hover; }
-.item-icon { width: 48px; radius: 12px; background: theme.surface-elevated; }
+.item-icon { width: 48px; border-radius: 12px; background: theme.surface-elevated; }
 .item-image { width: 30px; height: 30px; tint: theme.text-muted; }
 .default-badge {
     height: 22px;
-    radius: 11px;
+    border-radius: 11px;
     background: theme.accent-soft;
     padding: 0px 10px;
 }
@@ -329,7 +330,7 @@ theme dark {
 .app-icon {
   width: 48px;
   height: 48px;
-  radius: 12px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #3b82f6, #06b6d4);
 }
 ```
@@ -340,7 +341,7 @@ theme dark {
 .raised {
   width: 44px;
   height: 44px;
-  radius: 12px;
+  border-radius: 12px;
   background: #3b82f6;
   box-shadow: 0px 10px 15px transparent;
   animate background: 300ms;

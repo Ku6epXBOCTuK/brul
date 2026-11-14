@@ -45,7 +45,7 @@
         padding: 8px;
         background: theme.surface;
     }
-    .bar { spacing: 4px; align-items: center; }
+    .bar { gap: 4px; align-items: center; }
     .bar:hover { background: theme.accent; }
     .hint {
         font-size: 12px;

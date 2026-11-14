@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let base = WidgetStyle {
         background: Paint::Color(Color::rgb(40, 44, 52)),
         text: Color::rgb(240, 240, 240),
-        radius: 12,
+        border_radius: 12,
         ..WidgetStyle::default()
     };
     let active = brul_gui::WidgetStylePatch {

@@ -196,7 +196,7 @@
         height: 100%;
         background: theme.surface-main;
         border: 1px theme.border;
-        radius: 16px;
+        border-radius: 16px;
         clip: true;
     }
     .header {
@@ -205,17 +205,17 @@
         padding-right: 12px;
         padding-top: 20px;
         padding-bottom: 12px;
-        spacing: 12px;
+        gap: 12px;
     }
     .header-top {
         width: 100%;
-        spacing: 12px;
+        gap: 12px;
         align-items: center;
     }
     .app-icon {
         width: 48px;
         height: 48px;
-        radius: 12px;
+        border-radius: 12px;
         align-items: center;
         justify-content: center;
         background: linear-gradient(135deg, #3b82f6, #06b6d4);
@@ -227,7 +227,7 @@
     }
     .header-titles {
         flex-grow: 1;
-        spacing: 4px;
+        gap: 4px;
         justify-content: center;
     }
     .title { color: theme.text; font-size: 18px; font-weight: 600; }
@@ -237,11 +237,11 @@
         height: 44px;
         padding-left: 16px;
         padding-right: 16px;
-        spacing: 8px;
+        gap: 8px;
         align-items: center;
         background: theme.surface-elevated;
         border: 1px theme.border;
-        radius: 12px;
+        border-radius: 12px;
     }
     .url-icon {
         width: 16px;
@@ -262,14 +262,14 @@
     .list {
         width: 100%;
         flex-grow: 1;
-        spacing: 0px;
+        gap: 0px;
         padding-left: 12px;
         padding-right: 12px;
     }
     .choices {
         width: 100%;
         padding: 12px 0px 8px 4px;
-        spacing: 8px;
+        gap: 8px;
     }
     .footer {
         width: 100%;
@@ -280,12 +280,12 @@
         flex-grow: 1;
         padding-left: 16px;
         padding-right: 12px;
-        spacing: 16px;
+        gap: 16px;
         align-items: center;
         justify-content: space-between;
     }
     .footer-actions {
-        spacing: 16px;
+        gap: 16px;
         align-items: center;
     }
     .icon-button {
@@ -309,7 +309,7 @@
         align-items: center;
         justify-content: center;
         background: linear-gradient(135deg, #3b82f6, #06b6d4);
-        radius: 12px;
+        border-radius: 12px;
         box-shadow: 0px 10px 15px transparent;
         animate box-shadow-color: 300ms;
     }
@@ -323,16 +323,16 @@
         width: 100%;
         height: 100%;
         padding: 20px;
-        spacing: 14px;
+        gap: 14px;
         background: theme.background;
     }
     .settings-title { color: theme.text; font-size: 20px; font-weight: 600; }
-    .settings-columns { width: 100%; flex-grow: 1; spacing: 14px; }
-    .settings-panel { flex-grow: 1; spacing: 8px; }
+    .settings-columns { width: 100%; flex-grow: 1; gap: 14px; }
+    .settings-panel { flex-grow: 1; gap: 8px; }
     .settings-head {
         width: 100%;
         height: 26px;
-        spacing: 8px;
+        gap: 8px;
         align-items: center;
         justify-content: space-between;
     }
@@ -341,13 +341,13 @@
         font-size: 12px;
         padding: 4px 10px;
         background: theme.surface;
-        radius: 8px;
+        border-radius: 8px;
     }
     .settings-action:hover { color: theme.text; }
     .settings-list {
         width: 100%;
         flex-grow: 1;
-        spacing: 6px;
+        gap: 6px;
         clip: true;
         scroll: true;
     }

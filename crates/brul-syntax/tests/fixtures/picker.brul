@@ -67,7 +67,7 @@ theme dark {
 
 .checkbox {
     width: 20px;
-    radius: 6px;
+    border-radius: 6px;
     background: transparent;
     border: 2px theme.border-main;
 }

@@ -1341,7 +1341,7 @@ fn emits_clip_only_when_it_is_set() {
         "{module}"
     );
 
-    let plain = "<style>\n.panel { radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (panel) { }\n}\n</markup>\n";
+    let plain = "<style>\n.panel { border-radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (panel) { }\n}\n</markup>\n";
     let module = emit::module(plain).unwrap();
     assert!(!module.contains("s::Kind::Clip"), "{module}");
 }
@@ -1355,7 +1355,7 @@ fn emits_scroll_only_when_it_is_set() {
         "{module}"
     );
 
-    let plain = "<style>\n.list { radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (list) { }\n}\n</markup>\n";
+    let plain = "<style>\n.list { border-radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (list) { }\n}\n</markup>\n";
     let module = emit::module(plain).unwrap();
     assert!(!module.contains("s::Kind::Scroll"), "{module}");
 }

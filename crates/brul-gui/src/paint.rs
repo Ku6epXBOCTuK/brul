@@ -80,7 +80,7 @@ impl Frame {
     fn paint_node(&mut self, node: &WidgetSnapshotNode, atlas: &Atlas, clip: Clip) {
         let opacity = opacity(node.style.opacity);
         let rect = Rect::new(node.x, node.y, node.width, node.height)
-            .with_radius(node.style.radius)
+            .with_radius(node.style.border_radius)
             .with_fill(node.style.background)
             .with_border(node.border_width, node.style.border);
         self.paint_shadow(node, &rect, opacity, clip);

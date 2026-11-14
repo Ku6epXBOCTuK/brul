@@ -75,7 +75,7 @@ fn draggable_widget_reports_a_drag_on_press() {
 }
 
 #[test]
-fn children_are_placed_inside_padding_and_spacing() {
+fn children_are_placed_inside_padding_and_gap() {
     let first = Widget::column(vec![]).with_layout(fixed(40, 20));
     let first_id = first.id();
     let second = Widget::column(vec![]).with_layout(fixed(40, 20));
@@ -84,7 +84,7 @@ fn children_are_placed_inside_padding_and_spacing() {
         width: Dimension::Px(200),
         height: Dimension::Px(100),
         padding: Padding::all(10),
-        spacing: 5,
+        gap: 5,
         ..LayoutStyle::default()
     });
     let root_id = root.id();
@@ -126,7 +126,7 @@ fn percent_width_inside_an_auto_container_fills_the_available_width() {
     });
     let item_id = item.id();
     let rows = Widget::view(Direction::Column, vec![item]).with_layout(LayoutStyle {
-        spacing: 8,
+        gap: 8,
         ..LayoutStyle::default()
     });
     let root = Widget::column(vec![rows]).with_layout(LayoutStyle {
@@ -398,7 +398,7 @@ fn a_clipped_child_is_not_hit() {
         .with_layout(fixed(16, 16))
         .with_styles(StyleSet::new(WidgetStyle {
             clip: true,
-            radius: 4,
+            border_radius: 4,
             ..WidgetStyle::default()
         }));
     let parent_id = parent.id();

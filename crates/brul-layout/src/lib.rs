@@ -71,7 +71,7 @@ pub struct LayoutStyle {
     pub height: Dimension,
     pub padding: Padding,
     pub border_width: u32,
-    pub spacing: u32,
+    pub gap: u32,
     pub flex_grow: f32,
     pub flex_shrink: f32,
     pub flex_basis: Dimension,
@@ -85,7 +85,7 @@ pub struct LayoutPatch {
     pub height: Option<Dimension>,
     pub padding: Option<Padding>,
     pub border_width: Option<u32>,
-    pub spacing: Option<u32>,
+    pub gap: Option<u32>,
     pub flex_grow: Option<f32>,
     pub flex_shrink: Option<f32>,
     pub flex_basis: Option<Dimension>,
@@ -99,7 +99,7 @@ impl LayoutPatch {
             && self.height.is_none()
             && self.padding.is_none()
             && self.border_width.is_none()
-            && self.spacing.is_none()
+            && self.gap.is_none()
             && self.flex_grow.is_none()
             && self.flex_shrink.is_none()
             && self.flex_basis.is_none()
@@ -122,8 +122,8 @@ impl LayoutStyle {
         if let Some(border_width) = patch.border_width {
             self.border_width = border_width;
         }
-        if let Some(spacing) = patch.spacing {
-            self.spacing = spacing;
+        if let Some(gap) = patch.gap {
+            self.gap = gap;
         }
         if let Some(flex_grow) = patch.flex_grow {
             self.flex_grow = flex_grow;
@@ -648,8 +648,8 @@ fn taffy_style(
             bottom: length(style.border_width),
         },
         gap: TaffySize {
-            width: length(style.spacing),
-            height: length(style.spacing),
+            width: length(style.gap),
+            height: length(style.gap),
         },
         flex_direction: match direction {
             Direction::Row => FlexDirection::Row,
@@ -925,7 +925,7 @@ mod tests {
         };
         let root = LayoutStyle {
             width: Dimension::Px(200),
-            spacing: 8,
+            gap: 8,
             ..LayoutStyle::default()
         };
         LayoutNode::row(vec![

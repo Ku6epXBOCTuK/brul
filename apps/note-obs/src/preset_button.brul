@@ -35,7 +35,7 @@
         align-items: center;
         background: theme.surface;
         border: 1px theme.border;
-        radius: 8px;
+        border-radius: 8px;
     }
     .preset:hover {
         background: theme.border;

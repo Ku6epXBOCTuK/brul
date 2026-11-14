@@ -105,7 +105,7 @@
         height: 100%;
         background: theme.surface-item;
         border: 2px transparent;
-        radius: 12px;
+        border-radius: 12px;
         animate background: 300ms;
         animate border-color: 300ms;
     }
@@ -119,13 +119,13 @@
         height: 100%;
         padding-left: 14px;
         padding-right: 14px;
-        spacing: 16px;
+        gap: 16px;
         align-items: center;
     }
     .plate {
         width: 48px;
         height: 48px;
-        radius: 12px;
+        border-radius: 12px;
         align-items: center;
         justify-content: center;
     }
@@ -143,7 +143,7 @@
         height: 30px;
     }
     .plate-icon-masked { tint: #ffffff; }
-    .details { flex-grow: 1; spacing: 8px; align-items: center; }
+    .details { flex-grow: 1; gap: 8px; align-items: center; }
     .item-name {
         color: theme.text;
         font-size: 16px;
@@ -157,7 +157,7 @@
         align-items: center;
         justify-content: center;
         background: theme.accent-soft;
-        radius: 11px;
+        border-radius: 11px;
     }
     .badge-text {
         color: theme.badge-text;
@@ -168,7 +168,7 @@
         width: 32px;
         height: 32px;
         background: theme.icon-backplate;
-        radius: 16px;
+        border-radius: 16px;
         align-items: center;
         justify-content: center;
     }

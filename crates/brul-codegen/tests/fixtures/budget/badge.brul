@@ -22,7 +22,7 @@
         height: 20px;
         padding-left: 6px;
         padding-right: 6px;
-        spacing: 4px;
+        gap: 4px;
     }
     .badge:hover { background: #ff0000; }
     .badge-label { font-size: 11px; vertical-align: center; }

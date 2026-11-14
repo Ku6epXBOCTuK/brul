@@ -38,12 +38,12 @@
         height: 52px;
         padding-left: 12px;
         padding-right: 10px;
-        spacing: 12px;
+        gap: 12px;
         align-items: center;
         background: theme.surface;
-        radius: 10px;
+        border-radius: 10px;
     }
-    .details { flex-grow: 1; spacing: 2px; }
+    .details { flex-grow: 1; gap: 2px; }
     .name { color: theme.text; font-size: 14px; font-weight: 600; }
     .detail-text { color: theme.muted; font-size: 11px; }
     .remove { color: theme.danger; font-size: 12px; padding: 6px; }

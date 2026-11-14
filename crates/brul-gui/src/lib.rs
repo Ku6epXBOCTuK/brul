@@ -71,7 +71,7 @@
 //!     width: Dimension::Px(200),
 //!     height: Dimension::Px(120),
 //!     padding: Padding::all(10),
-//!     spacing: 5,
+//!     gap: 5,
 //!     ..LayoutStyle::default()
 //! });
 //! let placed = layout(&root, Size { width: 200, height: 120 }).expect("layout");

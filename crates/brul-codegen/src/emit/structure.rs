@@ -189,7 +189,7 @@ fn each_arm(
 }
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
-    Frame::root(theme, 3).inside(frame.direction(), frame.spacing())
+    Frame::root(theme, 3).inside(frame.direction(), frame.gap())
 }
 
 fn variable(name: &str, names: &Names<'_>) -> u32 {
@@ -215,10 +215,10 @@ fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> bru
 
 fn widget(out: &mut String, frame: Frame<'_>) {
     let direction = frame.direction();
-    let spacing = frame.spacing();
+    let gap = frame.gap();
     let _ = writeln!(
         out,
-        "    let widget = brul::gui::Widget::view(brul::gui::Direction::{direction}, children)\n        .with_layout(brul::gui::LayoutStyle {{ spacing: {spacing}, ..Default::default() }});"
+        "    let widget = brul::gui::Widget::view(brul::gui::Direction::{direction}, children)\n        .with_layout(brul::gui::LayoutStyle {{ gap: {gap}, ..Default::default() }});"
     );
     out.push_str("    Ok((brul::Built { widget, bindings, handlers, props }, rows))\n}\n");
 }

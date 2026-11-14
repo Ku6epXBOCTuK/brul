@@ -158,7 +158,7 @@
         width: 100%;
         height: 100%;
         padding: 18px;
-        spacing: 14px;
+        gap: 14px;
         background: theme.background;
         border: 2px theme.background;
     }
@@ -166,7 +166,7 @@
     .header {
         width: 100%;
         height: 32px;
-        spacing: 12px;
+        gap: 12px;
         align-items: center;
         justify-content: space-between;
     }
@@ -179,23 +179,23 @@
         padding: 12px;
         background: theme.surface;
         border: 1px theme.border;
-        radius: 12px;
+        border-radius: 12px;
         color: theme.text;
         font-size: 15px;
     }
     .actions {
         width: 100%;
-        spacing: 10px;
+        gap: 10px;
         align-items: center;
     }
     .presets {
         width: 100%;
-        spacing: 10px;
+        gap: 10px;
     }
     .preset-column {
         flex-grow: 1;
         flex-basis: 0px;
-        spacing: 8px;
+        gap: 8px;
     }
     .primary {
         height: 34px;
@@ -204,7 +204,7 @@
         align-items: center;
         justify-content: center;
         background: theme.accent;
-        radius: 10px;
+        border-radius: 10px;
     }
     .primary-label { color: #ffffff; font-size: 14px; }
     .secondary {
@@ -215,18 +215,18 @@
         justify-content: center;
         background: theme.surface;
         border: 1px theme.border;
-        radius: 10px;
+        border-radius: 10px;
     }
     .secondary-label { color: theme.text; font-size: 14px; }
     .hint { color: theme.muted; font-size: 12px; }
     .afk-row {
         width: 100%;
-        spacing: 12px;
+        gap: 12px;
         align-items: center;
     }
     .afk-toggle {
         height: 28px;
-        spacing: 10px;
+        gap: 10px;
         align-items: center;
     }
     .afk-box {
@@ -234,7 +234,7 @@
         height: 20px;
         background: transparent;
         border: 2px theme.border;
-        radius: 6px;
+        border-radius: 6px;
         align-items: center;
         justify-content: center;
     }
@@ -252,7 +252,7 @@
         padding-right: 10px;
         background: theme.surface;
         border: 1px theme.border;
-        radius: 8px;
+        border-radius: 8px;
         color: theme.text;
         font-size: 13px;
     }

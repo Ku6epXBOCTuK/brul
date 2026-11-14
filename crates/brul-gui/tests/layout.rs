@@ -3,13 +3,13 @@ use brul_gui::{
 };
 
 #[test]
-fn column_stacks_with_padding_and_spacing() {
+fn column_stacks_with_padding_and_gap() {
     let root = LayoutNode::column(vec![LayoutNode::leaf(50, 20), LayoutNode::leaf(50, 20)])
         .with_style(LayoutStyle {
             width: Dimension::Px(200),
             height: Dimension::Px(300),
             padding: Padding::all(10),
-            spacing: 5,
+            gap: 5,
             ..LayoutStyle::default()
         });
 
@@ -28,7 +28,7 @@ fn column_stacks_with_padding_and_spacing() {
 }
 
 #[test]
-fn an_empty_child_takes_spacing() {
+fn an_empty_child_takes_gap() {
     let root = LayoutNode::column(vec![
         LayoutNode::leaf(50, 20),
         LayoutNode::column(Vec::new()),
@@ -37,7 +37,7 @@ fn an_empty_child_takes_spacing() {
     .with_style(LayoutStyle {
         width: Dimension::Px(100),
         height: Dimension::Px(100),
-        spacing: 5,
+        gap: 5,
         ..LayoutStyle::default()
     });
 
@@ -60,7 +60,7 @@ fn an_empty_child_takes_spacing() {
     .with_style(LayoutStyle {
         width: Dimension::Px(100),
         height: Dimension::Px(100),
-        spacing: 5,
+        gap: 5,
         ..LayoutStyle::default()
     });
 
@@ -261,7 +261,7 @@ fn auto_parent_fits_content() {
     let root = LayoutNode::column(vec![LayoutNode::leaf(30, 10), LayoutNode::leaf(30, 10)])
         .with_style(LayoutStyle {
             padding: Padding::all(5),
-            spacing: 2,
+            gap: 2,
             ..LayoutStyle::default()
         });
 

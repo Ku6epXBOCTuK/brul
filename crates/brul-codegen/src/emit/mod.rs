@@ -49,7 +49,7 @@ pub(super) struct Emit<'a> {
 pub(super) struct Frame<'a> {
     theme: Option<&'a str>,
     direction: &'a str,
-    spacing: u32,
+    gap: u32,
     depth: usize,
 }
 
@@ -58,7 +58,7 @@ impl<'a> Frame<'a> {
         Self {
             theme,
             direction: "Column",
-            spacing: 0,
+            gap: 0,
             depth,
         }
     }
@@ -77,10 +77,10 @@ impl<'a> Frame<'a> {
         }
     }
 
-    pub(super) fn inside(self, direction: &'a str, spacing: u32) -> Self {
+    pub(super) fn inside(self, direction: &'a str, gap: u32) -> Self {
         Self {
             direction,
-            spacing,
+            gap,
             ..self
         }
     }
@@ -93,8 +93,8 @@ impl<'a> Frame<'a> {
         self.direction
     }
 
-    pub(super) fn spacing(&self) -> u32 {
-        self.spacing
+    pub(super) fn gap(&self) -> u32 {
+        self.gap
     }
 
     pub(super) fn depth(&self) -> usize {

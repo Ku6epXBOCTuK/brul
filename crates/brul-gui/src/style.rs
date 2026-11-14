@@ -129,7 +129,7 @@ fn layout_patch(layout: &LayoutStyle) -> LayoutPatch {
         height: (layout.height != default.height).then_some(layout.height),
         padding: (layout.padding != default.padding).then_some(layout.padding),
         border_width: (layout.border_width != default.border_width).then_some(layout.border_width),
-        spacing: (layout.spacing != default.spacing).then_some(layout.spacing),
+        gap: (layout.gap != default.gap).then_some(layout.gap),
         flex_grow: (layout.flex_grow != default.flex_grow).then_some(layout.flex_grow),
         flex_shrink: (layout.flex_shrink != default.flex_shrink).then_some(layout.flex_shrink),
         flex_basis: (layout.flex_basis != default.flex_basis).then_some(layout.flex_basis),
@@ -315,7 +315,7 @@ fn apply(
         Target::Layout(LayoutField::Padding(side)) => {
             *edge(&mut layout.padding, side) = value.px();
         }
-        Target::Layout(LayoutField::Spacing) => layout.spacing = value.px(),
+        Target::Layout(LayoutField::Gap) => layout.gap = value.px(),
         Target::Layout(LayoutField::BorderWidth) => layout.border_width = value.px(),
         Target::Layout(LayoutField::Justify) => layout.justify = justify(value.keyword()),
         Target::Layout(LayoutField::Align) => layout.align = align(value.keyword()),
@@ -323,7 +323,7 @@ fn apply(
         Target::Style(StyleField::Border) => style.border = value.color(),
         Target::Style(StyleField::Text) => style.text = value.color(),
         Target::Style(StyleField::Tint) => style.tint = Some(value.color()),
-        Target::Style(StyleField::Radius) => style.radius = value.px(),
+        Target::Style(StyleField::BorderRadius) => style.border_radius = value.px(),
         Target::Style(StyleField::Opacity) => style.opacity = value.number() as f32,
         Target::Style(StyleField::Clip) => style.clip = value.flag(),
         Target::Style(StyleField::Scroll) => style.scroll = value.flag(),

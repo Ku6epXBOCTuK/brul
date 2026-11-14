@@ -57,7 +57,7 @@ fn preset(label: u32) -> LayoutNode {
 fn preset_column(padding_right: u32) -> LayoutNode {
     let style = LayoutStyle {
         width: Dimension::Percent(50.0),
-        spacing: 8,
+        gap: 8,
         padding: Padding {
             right: padding_right,
             ..Padding::default()
@@ -89,13 +89,13 @@ fn note_obs() -> LayoutNode {
         height: Dimension::Percent(100.0),
         padding: Padding::all(18),
         border_width: 2,
-        spacing: 14,
+        gap: 14,
         ..LayoutStyle::default()
     };
     let header = LayoutStyle {
         width: Dimension::Percent(100.0),
         height: Dimension::Px(32),
-        spacing: 12,
+        gap: 12,
         justify: Justify::SpaceBetween,
         align: Align::Center,
         ..LayoutStyle::default()
@@ -114,19 +114,19 @@ fn note_obs() -> LayoutNode {
     };
     let actions = LayoutStyle {
         width: Dimension::Percent(100.0),
-        spacing: 10,
+        gap: 10,
         align: Align::Center,
         ..LayoutStyle::default()
     };
     let afk_row = LayoutStyle {
         width: Dimension::Percent(100.0),
-        spacing: 12,
+        gap: 12,
         align: Align::Center,
         ..LayoutStyle::default()
     };
     let afk_toggle = LayoutStyle {
         height: Dimension::Px(28),
-        spacing: 10,
+        gap: 10,
         align: Align::Center,
         ..LayoutStyle::default()
     };
@@ -175,7 +175,7 @@ fn synthetic(rows: usize, per_row: usize) -> LayoutNode {
     let row = LayoutStyle {
         width: Dimension::Percent(100.0),
         height: Dimension::Px(24),
-        spacing: 4,
+        gap: 4,
         ..LayoutStyle::default()
     };
     let cell = LayoutStyle {
@@ -196,7 +196,7 @@ fn synthetic(rows: usize, per_row: usize) -> LayoutNode {
     LayoutNode::column(children).with_style(LayoutStyle {
         width: Dimension::Percent(100.0),
         height: Dimension::Percent(100.0),
-        spacing: 2,
+        gap: 2,
         ..LayoutStyle::default()
     })
 }
