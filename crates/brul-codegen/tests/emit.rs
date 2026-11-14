@@ -1123,6 +1123,120 @@ fn rejects_component_children() {
 }
 
 #[test]
+fn emits_component_slot() {
+    let dir = scratch(
+        "slot",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    View {\n        @slot\n    }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge { Text { \"x\" } }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(
+        module.contains("brul::slot(theme, brul::DEFAULT_SLOT)?;"),
+        "{module}"
+    );
+    assert!(
+        module.contains("fn demo_slot1(theme: Option<&str>"),
+        "{module}"
+    );
+    assert!(
+        module.contains("children.push(brul::gui::Widget::text(\"x\"));"),
+        "{module}"
+    );
+    assert!(
+        module.contains("brul::SlotArgument { name: brul::DEFAULT_SLOT, view: demo_slot1 },"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn emits_an_empty_slot_without_children() {
+    let dir = scratch(
+        "empty-slot",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    View {\n        @slot\n    }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge { }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(module.contains("slots: &[],"), "{module}");
+    assert!(!module.contains("demo_slot1"), "{module}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn emits_a_slot_inside_a_structure() {
+    let dir = scratch(
+        "slot-structure",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    prop shown: Bool = false;\n    View {\n        @if (shown) {\n            @slot\n        }\n    }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge { Text { \"x\" } }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(module.contains("brul::Value::Bool(true) => {"), "{module}");
+    assert!(
+        module.contains("children.extend(built.widget.into_children());"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn rejects_a_slot_outside_a_component() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    Column {
+        @slot
+    }
+}
+</markup>
+"#;
+    let error = emit::module(source).unwrap_err();
+    assert_eq!(error.message, "slot is only allowed inside a component");
+}
+
+#[test]
+fn rejects_a_named_slot() {
+    let dir = scratch(
+        "named-slot",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    View {\n        @slot(header)\n    }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge { }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+    assert_eq!(error.message, "named slots are not supported yet");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn emits_names_in_first_appearance_order() {
     let source = r#"<script>
     let selected = 0;

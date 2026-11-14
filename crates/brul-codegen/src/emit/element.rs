@@ -3,7 +3,7 @@ use std::fmt::Write;
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Block, BlockItem, Element, Widget};
+use brul_syntax::markup::{Arg, Block, BlockItem, Element, Slot, Widget};
 
 use crate::error_at;
 use crate::styles;
@@ -177,12 +177,21 @@ fn container(
         return Ok(());
     }
     let direction = if row { "Row" } else { "Column" };
-    let _ = writeln!(out, "brul::gui::Widget::{call}(vec![");
     let gap = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
         .map_err(|error| error_at(element.position, error.to_string()))?
         .layout
         .gap;
     let children = frame.deeper(2).inside(direction, gap);
+    if contains_slot(&element.block) {
+        let inner = "    ".repeat(frame.depth() + 1);
+        let _ = writeln!(out, "brul::gui::Widget::{call}({{");
+        let _ = writeln!(out, "{inner}let mut children = Vec::new();");
+        items_spliced(out, &element.block, emit, children.shallower(1), counter)?;
+        let _ = writeln!(out, "{inner}children");
+        let _ = write!(out, "{}}})", "    ".repeat(frame.depth()));
+        return Ok(());
+    }
+    let _ = writeln!(out, "brul::gui::Widget::{call}(vec![");
     items(out, &element.block, emit, children, counter)?;
     let inner = "    ".repeat(frame.depth() + 1);
     let _ = write!(out, "{inner}])");
@@ -247,6 +256,12 @@ pub(crate) fn items(
                 structure::structure_each(out, structure, emit, frame, counter)?;
                 out.push_str(",\n");
             }
+            BlockItem::Slot(slot) => {
+                return Err(error_at(
+                    slot.position,
+                    "a slot cannot be spliced into this container",
+                ));
+            }
             BlockItem::Expr(expression) => {
                 return Err(error_at(
                     expression.position,
@@ -255,6 +270,102 @@ pub(crate) fn items(
             }
         }
     }
+    Ok(())
+}
+
+pub(crate) fn contains_slot(block: &Block) -> bool {
+    block.items.iter().any(|item| match item {
+        BlockItem::Slot(_) => true,
+        BlockItem::If(structure) => {
+            contains_slot(&structure.then_block)
+                || structure.else_block.as_ref().is_some_and(contains_slot)
+        }
+        BlockItem::Each(structure) => contains_slot(&structure.block),
+        BlockItem::Element(_) | BlockItem::Expr(_) => false,
+    })
+}
+
+pub(crate) fn items_spliced(
+    out: &mut String,
+    block: &Block,
+    emit: &mut Emit<'_>,
+    frame: Frame<'_>,
+    counter: &mut usize,
+) -> Result<(), Error> {
+    for item in &block.items {
+        match item {
+            BlockItem::Element(child) => {
+                push(out, child, emit, frame, counter)?;
+            }
+            BlockItem::If(structure) => {
+                let mut arm = String::new();
+                structure::structure_if(&mut arm, structure, emit, frame, counter)?;
+                push_text(out, &arm, frame);
+            }
+            BlockItem::Each(structure) => {
+                let mut arm = String::new();
+                structure::structure_each(&mut arm, structure, emit, frame, counter)?;
+                push_text(out, &arm, frame);
+            }
+            BlockItem::Slot(slot) => slot_item(out, slot, emit, frame)?,
+            BlockItem::Expr(expression) => {
+                return Err(error_at(
+                    expression.position,
+                    "unexpected expression in a container",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn push(
+    out: &mut String,
+    child: &Element,
+    emit: &mut Emit<'_>,
+    frame: Frame<'_>,
+    counter: &mut usize,
+) -> Result<(), Error> {
+    let mut item = String::new();
+    widget(&mut item, child, emit, frame, counter)?;
+    push_text(out, &item, frame);
+    Ok(())
+}
+
+fn push_text(out: &mut String, item: &str, frame: Frame<'_>) {
+    let pad = "    ".repeat(frame.depth());
+    let _ = writeln!(out, "{pad}children.push({});", item.trim_start());
+}
+
+fn slot_item(
+    out: &mut String,
+    slot: &Slot,
+    emit: &Emit<'_>,
+    frame: Frame<'_>,
+) -> Result<(), Error> {
+    if !emit.slots {
+        return Err(error_at(
+            slot.position,
+            "slot is only allowed inside a component",
+        ));
+    }
+    if slot.name.is_some() {
+        return Err(error_at(slot.position, "named slots are not supported yet"));
+    }
+    let pad = "    ".repeat(frame.depth());
+    let _ = writeln!(out, "{pad}{{");
+    let _ = writeln!(
+        out,
+        "{pad}    let built = brul::slot(theme, brul::DEFAULT_SLOT)?;"
+    );
+    for field in ["bindings", "handlers", "props"] {
+        let _ = writeln!(out, "{pad}    {field}.extend(built.{field});");
+    }
+    let _ = writeln!(
+        out,
+        "{pad}    children.extend(built.widget.into_children());"
+    );
+    let _ = write!(out, "{pad}}}");
     Ok(())
 }
 

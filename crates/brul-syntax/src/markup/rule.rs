@@ -16,6 +16,7 @@ rule! {
         HandlerRef,
         Block,
         BlockItem,
+        Slot,
         IfBlock,
         EachBlock,
         EventName,

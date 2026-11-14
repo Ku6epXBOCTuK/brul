@@ -7,7 +7,7 @@ use brul_syntax::markup::{EachBlock, IfBlock};
 use super::Emit;
 use super::Frame;
 use super::expression::operation;
-use super::items;
+use super::{contains_slot, items, items_spliced};
 
 use brul_script::Names;
 
@@ -17,7 +17,7 @@ pub struct StructureNames {
 }
 
 impl StructureNames {
-    fn next(&mut self, base: &str, kind: &str) -> String {
+    pub(super) fn next(&mut self, base: &str, kind: &str) -> String {
         let key = format!("{base}_{kind}");
         let count = self.counts.entry(key).or_insert(0);
         *count += 1;
@@ -116,20 +116,41 @@ fn rebuild_arm(
         out,
         "    let condition = {name}_value(&mut component.borrow_mut())\n        .map_err(brul::ViewError::from)?;\n    let children = match condition {{"
     );
-    out.push_str("        brul::Value::Bool(true) => vec![\n");
+    out.push_str("        brul::Value::Bool(true) => ");
     let mut counter = 0;
-    items(&mut out, &block.then_block, emit, arm, &mut counter)?;
-    out.push_str("        ],\n");
-    out.push_str("        brul::Value::Bool(false) => vec![\n");
-    if let Some(else_block) = &block.else_block {
-        items(&mut out, else_block, emit, arm, &mut counter)?;
+    arm_body(&mut out, &block.then_block, emit, arm, &mut counter)?;
+    out.push_str("        brul::Value::Bool(false) => ");
+    match &block.else_block {
+        Some(else_block) => arm_body(&mut out, else_block, emit, arm, &mut counter)?,
+        None => out.push_str("vec![],\n"),
     }
-    out.push_str("        ],\n");
     out.push_str(
         "        other => return Err(brul::ViewError::expected(\"if condition\", \"Bool\", other.type_name())),\n    };\n",
     );
     widget(&mut out, arm);
     Ok(out)
+}
+
+fn arm_body(
+    out: &mut String,
+    block: &brul_syntax::markup::Block,
+    emit: &mut Emit<'_>,
+    frame: Frame<'_>,
+    counter: &mut usize,
+) -> Result<(), Error> {
+    if contains_slot(block) {
+        out.push_str("{\n");
+        let pad = "    ".repeat(frame.depth());
+        let _ = writeln!(out, "{pad}let mut children = Vec::new();");
+        items_spliced(out, block, emit, frame, counter)?;
+        let _ = writeln!(out, "{pad}children");
+        out.push_str("        },\n");
+    } else {
+        out.push_str("vec![\n");
+        items(out, block, emit, frame, counter)?;
+        out.push_str("        ],\n");
+    }
+    Ok(())
 }
 
 fn each_arm(
@@ -174,7 +195,10 @@ fn each_arm(
         None => out.push_str("        let key = None;\n"),
     }
     out.push_str("        let start = children.len();\n");
-    if !block.block.items.is_empty() {
+    if contains_slot(&block.block) {
+        let mut counter = 0;
+        items_spliced(&mut out, &block.block, emit, arm, &mut counter)?;
+    } else if !block.block.items.is_empty() {
         out.push_str("        children.extend([\n");
         let mut counter = 0;
         items(&mut out, &block.block, emit, arm, &mut counter)?;

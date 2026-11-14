@@ -28,7 +28,7 @@ pub fn identifiers(expression: &brul_syntax::ast::Expr) -> Names<'_> {
     names
 }
 
-pub(super) use element::items;
+pub(super) use element::{contains_slot, items, items_spliced};
 
 pub(super) struct Emit<'a> {
     registry: &'a Registry,
@@ -43,6 +43,7 @@ pub(super) struct Emit<'a> {
     bases: &'a [String],
     structures: &'a mut StructureNames,
     dynamic_classes: &'a mut bool,
+    slots: bool,
 }
 
 #[derive(Clone, Copy)]

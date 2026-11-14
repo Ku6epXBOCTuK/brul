@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use brul_gui::{Class, Image, Texture, Widget, WidgetId, WidgetTree};
+use brul_gui::{Class, Direction, Image, Texture, Widget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{
     Component, Error as ScriptError, Host, Value, Variable, VariableId, execute_program,
@@ -242,6 +242,7 @@ pub struct Structure {
     pub each: bool,
     pub component: ComponentHandle,
     pub scopes: Rc<[Rc<[Variable]>]>,
+    pub slots: Option<Rc<Slots>>,
     pub value: StructureValue,
     pub rebuild: StructureRebuild,
 }
@@ -277,6 +278,7 @@ pub fn register_structure(
         each,
         component: Rc::clone(component),
         scopes: component.borrow().build_scopes(),
+        slots: current_slots(),
         value,
         rebuild,
     };
@@ -304,6 +306,67 @@ pub fn take_structures() -> Vec<Structure> {
 
 pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>;
 
+pub const DEFAULT_SLOT: &str = "";
+
+#[derive(Clone, Copy)]
+pub struct SlotArgument {
+    pub name: &'static str,
+    pub view: View,
+}
+
+#[derive(Clone)]
+pub struct Slots {
+    pub component: ComponentHandle,
+    pub scopes: Rc<[Rc<[Variable]>]>,
+    pub parent: Option<Rc<Slots>>,
+    entries: Vec<SlotArgument>,
+}
+
+thread_local! {
+    static SLOTS: RefCell<Option<Rc<Slots>>> = const { RefCell::new(None) };
+}
+
+fn current_slots() -> Option<Rc<Slots>> {
+    SLOTS.with(|slots| slots.borrow().clone())
+}
+
+fn with_slots<T>(slots: Option<Rc<Slots>>, body: impl FnOnce() -> T) -> T {
+    let previous = SLOTS.with(|current| current.replace(slots));
+    let result = body();
+    SLOTS.with(|current| *current.borrow_mut() = previous);
+    result
+}
+
+pub fn slot(theme: Option<&str>, name: &str) -> Result<Built, ViewError> {
+    let Some(slots) = current_slots() else {
+        return Ok(empty_built());
+    };
+    let Some(argument) = slots.entries.iter().find(|argument| argument.name == name) else {
+        return Ok(empty_built());
+    };
+    let component = Rc::clone(&slots.component);
+    let count = slots.scopes.len();
+    component.borrow_mut().push_binding_scopes(&slots.scopes);
+    let rendered = with_slots(slots.parent.clone(), || (argument.view)(theme, &component));
+    component.borrow_mut().pop_binding_scopes(count);
+    rendered
+}
+
+fn empty_built() -> Built {
+    Built {
+        widget: Widget::view(Direction::Column, Vec::new()),
+        bindings: Vec::new(),
+        handlers: Vec::new(),
+        props: Vec::new(),
+    }
+}
+
+pub fn rebuild_structure(structure: &Structure, theme: Option<&str>) -> Rebuilt {
+    with_slots(structure.slots.clone(), || {
+        (structure.rebuild)(theme, &structure.component)
+    })
+}
+
 pub struct PropArgument {
     pub name: VariableId,
     pub ty: PropType,
@@ -319,6 +382,7 @@ pub struct Instance<'a> {
     pub props: &'a [PropArgument],
     pub defaults: &'a [PropArgument],
     pub events: &'a [ComponentEvent],
+    pub slots: &'a [SlotArgument],
 }
 
 pub struct ComponentEvent {
@@ -384,7 +448,15 @@ pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Buil
     start(&component, &instance)?;
     let given = declare_props(&component, parent, instance.props, instance.name)?;
     declare_defaults(&component, instance.defaults, &given, instance.name)?;
-    let mut built = (instance.view)(instance.theme, &component)?;
+    let slots = (!instance.slots.is_empty()).then(|| {
+        Rc::new(Slots {
+            component: Rc::clone(parent),
+            scopes: parent.borrow().build_scopes(),
+            parent: current_slots(),
+            entries: instance.slots.to_vec(),
+        })
+    });
+    let mut built = with_slots(slots, || (instance.view)(instance.theme, &component))?;
     bind(&mut built, parent, &component, instance.props);
     Ok(built)
 }

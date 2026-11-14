@@ -4,7 +4,7 @@ use crate::error::Error;
 use crate::lexer::Span;
 use crate::markup::ast::{
     Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
-    IfBlock, Member, Prop, PropType, Window,
+    IfBlock, Member, Prop, PropType, Slot, Window,
 };
 use crate::markup::widget::Widget;
 
@@ -80,6 +80,14 @@ impl Cursor<'_> {
     fn member(&mut self) -> Result<Member, Error> {
         self.skip_trivia();
         let start = self.pos();
+        if self.eat('@') {
+            let name = self.ident()?;
+            let message = match name.as_str() {
+                "slot" => "slot is not allowed at the component root: wrap it in a container",
+                _ => return Err(self.error_at(start, format!("unexpected directive '@{name}'"))),
+            };
+            return Err(self.error_at(start, message));
+        }
         let name = self.ident()?;
         match name.as_str() {
             "prop" => self.prop(),
@@ -187,17 +195,37 @@ impl Cursor<'_> {
             return match name.as_str() {
                 "if" => self.if_block().map(BlockItem::If),
                 "each" => self.each_block().map(BlockItem::Each),
+                "slot" => self.slot(start),
                 _ => Err(self.error_at(start, format!("unexpected directive '@{name}'"))),
             };
         }
         let name = self.ident()?;
-        if matches!(name.as_str(), "if" | "each" | "else") {
+        if matches!(name.as_str(), "if" | "each" | "else" | "slot") {
             return Err(self.error_at(
                 start,
                 format!("expected '@{name}': block constructs start with '@'"),
             ));
         }
         self.element(name, start).map(BlockItem::Element)
+    }
+
+    fn slot(&mut self, start: usize) -> Result<BlockItem, Error> {
+        let name = if self.peek() == Some('(') {
+            self.bump();
+            let name = self.ident()?;
+            self.expect(')')?;
+            Some(name)
+        } else {
+            None
+        };
+        self.skip_trivia();
+        if self.peek() == Some('{') {
+            return Err(self.error_at(start, "slot content is written at the call site"));
+        }
+        Ok(BlockItem::Slot(Slot {
+            name,
+            position: position(self, start),
+        }))
     }
 
     fn eat_directive(&mut self, name: &str) -> bool {

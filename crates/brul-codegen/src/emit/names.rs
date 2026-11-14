@@ -81,6 +81,7 @@ fn block_node<'a>(block: &'a Block, names: &mut Names<'a>) {
                 block_node(&each.block, names);
             }
             BlockItem::Expr(expr) => expression(expr, names),
+            BlockItem::Slot(_) => {}
         }
     }
 }

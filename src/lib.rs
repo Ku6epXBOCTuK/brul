@@ -12,9 +12,9 @@ pub mod build {
 }
 
 pub use brul_codegen::runtime::{
-    Binding, BindingTarget, Built, ClassTable, ComponentEvent, ComponentHandle, Handler,
-    HandlerEvent, Instance, PropArgument, PropBinding, Rebuilt, RowInfo, Structure, View,
-    ViewError, instance, register_structure, take_structures,
+    Binding, BindingTarget, Built, ClassTable, ComponentEvent, ComponentHandle, DEFAULT_SLOT,
+    Handler, HandlerEvent, Instance, PropArgument, PropBinding, Rebuilt, RowInfo, SlotArgument,
+    Slots, Structure, View, ViewError, instance, register_structure, slot, take_structures,
 };
 pub use brul_gui as gui;
 pub use brul_macros::{command, host};

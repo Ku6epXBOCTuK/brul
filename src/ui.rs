@@ -437,7 +437,7 @@ impl Ui {
                 .borrow_mut()
                 .push_binding_scopes(&structure.scopes);
             let _ = runtime::take_structures();
-            let rebuilt = (structure.rebuild)(self.theme.as_deref(), &component);
+            let rebuilt = runtime::rebuild_structure(&structure, self.theme.as_deref());
             let added = runtime::take_structures();
             component.borrow_mut().pop_binding_scopes(count);
             let (built, rebuilt_rows) = match rebuilt {
@@ -653,6 +653,76 @@ mod tests {
         brul_reactive::flush();
         ui.settle();
         assert_eq!(child_count(&ui, parent), 1);
+    }
+
+    fn slot_child_view(
+        _theme: Option<&str>,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
+        let holder = Widget::view(Direction::Column, Vec::new());
+        runtime::register_structure(component, holder.id(), false, shown, rebuild_slot);
+        Ok(Built {
+            widget: holder,
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    fn rebuild_slot(
+        _theme: Option<&str>,
+        _component: &ComponentHandle,
+    ) -> Result<(Built, Vec<RowInfo>), ViewError> {
+        let built = runtime::slot(None, runtime::DEFAULT_SLOT)?;
+        Ok((
+            Built {
+                widget: Widget::view(Direction::Column, built.widget.into_children()),
+                bindings: built.bindings,
+                handlers: built.handlers,
+                props: built.props,
+            },
+            Vec::new(),
+        ))
+    }
+
+    fn slot_fill(_theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, ViewError> {
+        Ok(Built {
+            widget: Widget::view(Direction::Column, vec![Widget::text("filled")]),
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    fn slot_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
+        let slots = [runtime::SlotArgument {
+            name: runtime::DEFAULT_SLOT,
+            view: slot_fill,
+        }];
+        runtime::instance(
+            component,
+            runtime::Instance {
+                theme,
+                view: slot_child_view,
+                script: None,
+                name: "Slot",
+                names: NAMES,
+                props: &[],
+                defaults: &[],
+                events: &[],
+                slots: &slots,
+            },
+        )
+    }
+
+    #[test]
+    fn a_slot_survives_a_structure_rebuild() {
+        let (_component, _built) =
+            generated_built(slot_view, NAMES, None, &[], None).expect("launch");
+        let structures = runtime::take_structures();
+        assert_eq!(structures.len(), 1);
+        let rebuilt = runtime::rebuild_structure(&structures[0], None).expect("rebuild");
+        assert_eq!(rebuilt.0.widget.into_children().len(), 1);
     }
 
     fn bound_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
@@ -1431,6 +1501,7 @@ mod tests {
                 props: &[],
                 defaults: &[],
                 events: &events,
+                slots: &[],
             },
         )?;
         let text = Widget::text("");

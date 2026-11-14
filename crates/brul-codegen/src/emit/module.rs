@@ -108,6 +108,7 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
                 bases: &component_bases,
                 structures: &mut structures,
                 dynamic_classes: &mut dynamic_classes,
+                slots: false,
             },
         )?;
         for function in &functions {
@@ -153,6 +154,7 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
                 bases: &component_bases,
                 structures: &mut structures,
                 dynamic_classes: &mut dynamic_classes,
+                slots: true,
             },
         )?;
         if dynamic_classes {

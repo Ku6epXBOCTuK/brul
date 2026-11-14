@@ -3,14 +3,14 @@ use std::fmt::Write;
 use brul_script::Names;
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Element, Event, Member, Prop, PropType};
+use brul_syntax::markup::{Arg, Block, Element, Event, Member, Prop, PropType};
 
 use crate::error_at;
 use crate::loader::Definition;
 
 use super::Emit;
 use super::Frame;
-use super::{events, expression};
+use super::{contains_slot, events, expression, items_spliced};
 
 type Props<'a> = Vec<(&'a str, PropType, &'a Expr)>;
 type Events<'a> = Vec<(&'a str, &'a str, Vec<PropType>)>;
@@ -20,6 +20,7 @@ struct Call<'a> {
     props: Props<'a>,
     defaults: Props<'a>,
     events: Events<'a>,
+    slot: Option<&'a str>,
 }
 
 pub(super) fn component(
@@ -32,9 +33,14 @@ pub(super) fn component(
 ) -> Result<(), Error> {
     let definition = &emit.registry.definitions[index];
     let name = &definition.name;
-    check_shape(element, name)?;
+    check_shape(element, definition)?;
     let (props, events) = collect(element, definition, name, emit)?;
     let defaults = defaults(element, definition, name, &props)?;
+    let slot = if element.block.items.is_empty() {
+        None
+    } else {
+        Some(filler(&element.block, emit)?)
+    };
     write(
         out,
         Call {
@@ -42,6 +48,7 @@ pub(super) fn component(
             props,
             defaults,
             events,
+            slot: slot.as_deref(),
         },
         frame,
         counter,
@@ -51,20 +58,59 @@ pub(super) fn component(
     Ok(())
 }
 
-fn check_shape(element: &Element, name: &str) -> Result<(), Error> {
+fn declares_slot(definition: &Definition) -> bool {
+    definition
+        .component
+        .members
+        .iter()
+        .any(|member| match member {
+            Member::Element(root) => contains_slot(&root.block),
+            Member::Prop(_) | Member::Event(_) => false,
+        })
+}
+
+fn check_shape(element: &Element, definition: &Definition) -> Result<(), Error> {
+    let name = &definition.name;
     if element.args.iter().any(|arg| matches!(arg, Arg::Class(_))) {
         return Err(error_at(
             element.position,
             format!("component '{name}' does not accept classes yet"),
         ));
     }
-    if !element.block.items.is_empty() {
+    if !element.block.items.is_empty() && !declares_slot(definition) {
         return Err(error_at(
             element.position,
             format!("component '{name}' does not accept children"),
         ));
     }
     Ok(())
+}
+
+fn filler(block: &Block, emit: &mut Emit<'_>) -> Result<String, Error> {
+    let name = emit.structures.next(emit.base, "slot");
+    let theme = emit.default_theme();
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\nfn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
+    );
+    let _ = writeln!(
+        out,
+        "    brul::gui::style::check_theme({}styles(), theme)?;",
+        emit.resource_prefix
+    );
+    out.push_str("    let mut bindings = Vec::new();\n");
+    out.push_str("    let mut handlers = Vec::new();\n");
+    out.push_str("    let mut props = Vec::new();\n");
+    out.push_str("    let mut children = Vec::new();\n");
+    let mut counter = 0;
+    items_spliced(&mut out, block, emit, Frame::root(theme, 1), &mut counter)?;
+    out.push_str(
+        "    let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);\n",
+    );
+    out.push_str("    Ok(brul::Built { widget, bindings, handlers, props })\n}\n");
+    emit.functions.push(out);
+    Ok(name)
 }
 
 fn collect<'a>(
@@ -206,6 +252,7 @@ fn write(
         props,
         defaults,
         events,
+        slot,
     } = call;
     let widget = format!("widget{}", *counter);
     *counter += 1;
@@ -236,6 +283,19 @@ fn write(
         );
     }
     let _ = writeln!(out, "{inner}    ],");
+    match slot {
+        Some(slot) => {
+            let _ = writeln!(out, "{inner}    slots: &[");
+            let _ = writeln!(
+                out,
+                "{inner}        brul::SlotArgument {{ name: brul::DEFAULT_SLOT, view: {slot} }},"
+            );
+            let _ = writeln!(out, "{inner}    ],");
+        }
+        None => {
+            let _ = writeln!(out, "{inner}    slots: &[],");
+        }
+    }
     let _ = writeln!(out, "{inner}}})?;");
     for field in ["bindings", "handlers", "props"] {
         let _ = writeln!(out, "{inner}{field}.extend(built.{field});");
