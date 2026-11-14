@@ -1,4 +1,4 @@
-use brul_syntax::markup::parse_file;
+use brul_syntax::markup::{Widget, parse_file};
 
 const MARKUP: &str = include_str!("../../../docs/lang/markup.md");
 
@@ -18,6 +18,11 @@ struct Example {
 
 const EXAMPLES_HEADING: &str =
     "## \u{422}\u{435}\u{441}\u{442}-\u{43f}\u{440}\u{438}\u{43c}\u{435}\u{440}\u{44b}";
+
+const WIDGETS_HEADING: &str =
+    "## \u{412}\u{441}\u{442}\u{440}\u{43e}\u{435}\u{43d}\u{43d}\u{44b}\u{435}";
+
+const EXPRESSION: &str = "\u{432}\u{44b}\u{440}\u{430}\u{436}\u{435}\u{43d}\u{438}\u{435}";
 
 fn examples(document: &str) -> Vec<Example> {
     let mut out = Vec::new();
@@ -104,6 +109,47 @@ fn opt_out_and_invalid_markers_are_honored() {
     assert_eq!(examples[2].kind, Kind::Parse);
     assert!(parse_file(&examples[1].body).is_err());
     assert!(parse_file(&examples[2].body).is_ok());
+}
+
+#[test]
+fn widget_table_matches_the_catalog() {
+    let mut listed = Vec::new();
+    let mut inside = false;
+    for line in MARKUP.lines() {
+        if line.starts_with("## ") {
+            inside = line.starts_with(WIDGETS_HEADING);
+            continue;
+        }
+        if !inside || !line.starts_with('|') {
+            continue;
+        }
+        let cells: Vec<&str> = line
+            .split('|')
+            .map(str::trim)
+            .filter(|cell| !cell.is_empty())
+            .collect();
+        let [names, children, ..] = cells.as_slice() else {
+            continue;
+        };
+        for name in names.split('`').skip(1).step_by(2) {
+            let Some(widget) = Widget::from_name(name) else {
+                panic!("markup.md lists widget `{name}`, which the catalog lacks");
+            };
+            assert_eq!(
+                widget.is_leaf(),
+                *children == EXPRESSION,
+                "markup.md and `Widget::is_leaf` disagree about `{name}`"
+            );
+            listed.push(widget.name());
+        }
+    }
+    let mut expected: Vec<&str> = Widget::ALL.iter().map(|widget| widget.name()).collect();
+    expected.sort_unstable();
+    listed.sort_unstable();
+    assert_eq!(
+        listed, expected,
+        "markup.md and the catalog list different widgets"
+    );
 }
 
 #[test]

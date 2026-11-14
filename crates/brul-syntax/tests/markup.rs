@@ -1,7 +1,7 @@
 use brul_syntax::ast::{BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::markup::{
     Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
-    IfBlock, Member, Prop, PropType, Window, parse_file,
+    IfBlock, Member, Prop, PropType, Widget, Window, parse_file,
 };
 
 fn expr(kind: ExprKind) -> Expr {
@@ -71,6 +71,7 @@ fn element_args_parse_handlers_and_expressions() {
         vec![Member::Element(Element {
             position: Position::default(),
             name: "Button".to_owned(),
+            widget: None,
             args: vec![
                 Arg::Class("check-row".to_owned()),
                 Arg::Named {
@@ -248,6 +249,7 @@ fn nested_elements_parse() {
     let view = || Element {
         position: Position::default(),
         name: "View".to_owned(),
+        widget: Some(Widget::View),
         args: Vec::new(),
         block: Block { items: Vec::new() },
     };
@@ -256,12 +258,14 @@ fn nested_elements_parse() {
         vec![Member::Element(Element {
             position: Position::default(),
             name: "Row".to_owned(),
+            widget: Some(Widget::Row),
             args: Vec::new(),
             block: Block {
                 items: vec![
                     BlockItem::Element(Element {
                         position: Position::default(),
                         name: "Text".to_owned(),
+                        widget: Some(Widget::Text),
                         args: Vec::new(),
                         block: Block {
                             items: vec![BlockItem::Expr(string("hi"))],
@@ -270,6 +274,7 @@ fn nested_elements_parse() {
                     BlockItem::Element(Element {
                         position: Position::default(),
                         name: "View".to_owned(),
+                        widget: Some(Widget::View),
                         args: Vec::new(),
                         block: Block {
                             items: vec![BlockItem::Element(view())],
@@ -337,6 +342,7 @@ fn if_else_blocks_parse() {
     let element = |name: &str| Element {
         position: Position::default(),
         name: name.to_owned(),
+        widget: Widget::from_name(name),
         args: Vec::new(),
         block: Block { items: Vec::new() },
     };
@@ -345,6 +351,7 @@ fn if_else_blocks_parse() {
         vec![Member::Element(Element {
             position: Position::default(),
             name: "Row".to_owned(),
+            widget: Some(Widget::Row),
             args: Vec::new(),
             block: Block {
                 items: vec![
@@ -363,6 +370,7 @@ fn if_else_blocks_parse() {
                             items: vec![BlockItem::Element(Element {
                                 position: Position::default(),
                                 name: "Text".to_owned(),
+                                widget: Some(Widget::Text),
                                 args: Vec::new(),
                                 block: Block {
                                     items: vec![BlockItem::Expr(string("no"))],
@@ -427,6 +435,7 @@ fn leaf_blocks_hold_one_expression() {
         BlockItem::Element(Element {
             position: Position::default(),
             name: "Text".to_owned(),
+            widget: Some(Widget::Text),
             args: Vec::new(),
             block,
         })
@@ -436,12 +445,14 @@ fn leaf_blocks_hold_one_expression() {
         vec![Member::Element(Element {
             position: Position::default(),
             name: "Row".to_owned(),
+            widget: Some(Widget::Row),
             args: Vec::new(),
             block: Block {
                 items: vec![
                     BlockItem::Element(Element {
                         position: Position::default(),
                         name: "Text".to_owned(),
+                        widget: Some(Widget::Text),
                         args: vec![Arg::Class("text-main".to_owned())],
                         block: Block {
                             items: vec![BlockItem::Expr(expr(ExprKind::Binary {
@@ -454,6 +465,7 @@ fn leaf_blocks_hold_one_expression() {
                     BlockItem::Element(Element {
                         position: Position::default(),
                         name: "Image".to_owned(),
+                        widget: Some(Widget::Image),
                         args: vec![Arg::Class("item-image".to_owned())],
                         block: Block {
                             items: vec![BlockItem::Expr(ident("icon"))],
@@ -518,6 +530,7 @@ fn each_blocks_parse() {
     let element = |name: &str| Element {
         position: Position::default(),
         name: name.to_owned(),
+        widget: Widget::from_name(name),
         args: Vec::new(),
         block: Block { items: Vec::new() },
     };
@@ -533,6 +546,7 @@ fn each_blocks_parse() {
         vec![Member::Element(Element {
             position: Position::default(),
             name: "Column".to_owned(),
+            widget: Some(Widget::Column),
             args: Vec::new(),
             block: Block {
                 items: vec![
@@ -552,6 +566,7 @@ fn each_blocks_parse() {
                             items: vec![BlockItem::Element(Element {
                                 position: Position::default(),
                                 name: "Row".to_owned(),
+                                widget: Some(Widget::Row),
                                 args: vec![Arg::Named {
                                     name: "number".to_owned(),
                                     value: ident("idx"),

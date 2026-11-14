@@ -1,5 +1,7 @@
 use crate::ast::{Expr, Position};
 
+use super::widget::Widget;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct File {
     pub declarations: Vec<Declaration>,
@@ -41,6 +43,7 @@ pub enum Member {
 #[derive(Debug, Clone)]
 pub struct Element {
     pub name: String,
+    pub widget: Option<Widget>,
     pub args: Vec<Arg>,
     pub block: Block,
     pub position: Position,
@@ -48,7 +51,10 @@ pub struct Element {
 
 impl PartialEq for Element {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.args == other.args && self.block == other.block
+        self.name == other.name
+            && self.widget == other.widget
+            && self.args == other.args
+            && self.block == other.block
     }
 }
 

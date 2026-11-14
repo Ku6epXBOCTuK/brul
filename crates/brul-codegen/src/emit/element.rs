@@ -3,7 +3,7 @@ use std::fmt::Write;
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Block, BlockItem, Element};
+use brul_syntax::markup::{Arg, Block, BlockItem, Element, Widget};
 
 use crate::error_at;
 use crate::styles;
@@ -103,10 +103,10 @@ fn content_needed(element: &Element, emit: &Emit<'_>) -> bool {
     let [BlockItem::Expr(expression)] = element.block.items.as_slice() else {
         return false;
     };
-    match element.name.as_str() {
-        "Text" | "TextInput" => !matches!(expression.kind, ExprKind::String(_)),
-        "Image" => resource(expression, emit).is_none(),
-        _ => false,
+    match element.widget {
+        Some(Widget::Text | Widget::TextInput) => !matches!(expression.kind, ExprKind::String(_)),
+        Some(Widget::Image) => resource(expression, emit).is_none(),
+        Some(Widget::View | Widget::Row | Widget::Column) | None => false,
     }
 }
 
@@ -144,17 +144,21 @@ fn kind(
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<Option<Content>, Error> {
-    match element.name.as_str() {
-        "View" | "Row" | "Column" => {
-            container(out, element, emit, frame, counter)?;
+    match element.widget {
+        Some(Widget::Row) => {
+            container(out, element, true, emit, frame, counter)?;
             Ok(None)
         }
-        "Text" => Ok(text_widget(out, element)?.map(Content::Text)),
-        "TextInput" => Ok(input_widget(out, element)?.map(Content::Input)),
-        "Image" => Ok(image_widget(out, element, emit)?.map(Content::Image)),
-        name => Err(error_at(
+        Some(Widget::View | Widget::Column) => {
+            container(out, element, false, emit, frame, counter)?;
+            Ok(None)
+        }
+        Some(Widget::Text) => Ok(text_widget(out, element)?.map(Content::Text)),
+        Some(Widget::TextInput) => Ok(input_widget(out, element)?.map(Content::Input)),
+        Some(Widget::Image) => Ok(image_widget(out, element, emit)?.map(Content::Image)),
+        None => Err(error_at(
             element.position,
-            format!("widget '{name}' is not generated yet"),
+            format!("widget '{}' is not generated yet", element.name),
         )),
     }
 }
@@ -162,11 +166,11 @@ fn kind(
 fn container(
     out: &mut String,
     element: &Element,
+    row: bool,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let row = element.name == "Row";
     let call = if row { "row" } else { "column" };
     if element.block.items.is_empty() {
         let _ = write!(out, "brul::gui::Widget::{call}(vec![])");

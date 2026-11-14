@@ -1,6 +1,7 @@
 mod ast;
 mod parser;
 mod rule;
+mod widget;
 
 pub use ast::{
     Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
@@ -8,3 +9,4 @@ pub use ast::{
 };
 pub use parser::parse_file;
 pub use rule::Rule;
+pub use widget::Widget;

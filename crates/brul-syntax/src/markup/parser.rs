@@ -6,6 +6,7 @@ use crate::markup::ast::{
     Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
     IfBlock, Member, Prop, PropType, Window,
 };
+use crate::markup::widget::Widget;
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
     let mut cursor = Cursor::new(source);
@@ -89,18 +90,20 @@ impl Cursor<'_> {
 
     fn element(&mut self, name: String, start: usize) -> Result<Element, Error> {
         self.skip_trivia();
+        let widget = Widget::from_name(&name);
         let args = if self.peek() == Some('(') {
             self.arg_list()?
         } else {
             Vec::new()
         };
-        let block = if name == "Text" || name == "TextInput" || name == "Image" {
+        let block = if widget.is_some_and(Widget::is_leaf) {
             self.leaf_block(&name)?
         } else {
             self.block()?
         };
         Ok(Element {
             name,
+            widget,
             args,
             block,
             position: position(self, start),
