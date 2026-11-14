@@ -1,5 +1,12 @@
 use std::fmt;
 
+use taffy::style_helpers::TaffyAuto;
+use taffy::{
+    AlignItems, AvailableSpace, BoxSizing, Dimension as TaffyDimension, FlexDirection,
+    JustifyContent, LengthPercentage, LengthPercentageAuto, NodeId, Position, Rect as TaffyRect,
+    Size as TaffySize, Style as TaffyStyle, TaffyTree, compute_leaf_layout,
+};
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Dimension {
     #[default]
@@ -270,149 +277,163 @@ impl fmt::Display for LayoutError {
 impl std::error::Error for LayoutError {}
 
 #[derive(Clone, Copy, Debug, Default)]
-struct Constraints {
+struct Available {
     width: Option<u32>,
     height: Option<u32>,
 }
 
-#[derive(Clone, Debug)]
-struct Measured {
-    width: u32,
-    height: u32,
-    auto_width: bool,
-    auto_height: bool,
-    children: Vec<Measured>,
-}
-
 pub fn layout(root: &LayoutNode, viewport: Size) -> Result<LayoutBox, LayoutError> {
-    let constraints = Constraints {
+    let mut tree = TaffyTree::<Size>::new();
+    let available = Available {
         width: Some(viewport.width),
         height: Some(viewport.height),
     };
-    let measured = measure(root, constraints)?;
-    let size = Size {
-        width: measured.width,
-        height: measured.height,
-    };
-    let mut result = LayoutBox {
-        width: size.width,
-        height: size.height,
-        ..LayoutBox::default()
-    };
-    arrange(root, &measured, size, 0, 0, &mut result);
-    Ok(result)
+    let root_id = build(&mut tree, root, available)?;
+
+    // NOTE: taffy only rejects ids it did not create, and every id here comes from this tree
+    tree.compute_layout_with_measure(
+        root_id,
+        TaffySize {
+            width: AvailableSpace::Definite(viewport.width as f32),
+            height: AvailableSpace::Definite(viewport.height as f32),
+        },
+        |inputs, _node, context, style| {
+            let content = context.map(|size| *size).unwrap_or_default();
+            compute_leaf_layout(
+                inputs,
+                style,
+                |_, _| 0.0,
+                |_, _| TaffySize {
+                    width: content.width as f32,
+                    height: content.height as f32,
+                },
+            )
+        },
+    )
+    .expect("layout tree");
+
+    Ok(collect(&tree, root_id, root, 0, 0))
 }
 
-fn measure(node: &LayoutNode, constraints: Constraints) -> Result<Measured, LayoutError> {
-    match node {
-        LayoutNode::Leaf { style, size, .. } => measure_leaf(*style, *size, constraints),
+fn build(
+    tree: &mut TaffyTree<Size>,
+    node: &LayoutNode,
+    available: Available,
+) -> Result<NodeId, LayoutError> {
+    let style = node.style();
+    validate_stretch(style)?;
+    let width = resolve(style.width, available.width)?;
+    let height = resolve(style.height, available.height)?;
+    let inner = Available {
+        width: width
+            .or(available.width)
+            .map(|value| value.saturating_sub(inset_x(style))),
+        height: height
+            .or(available.height)
+            .map(|value| value.saturating_sub(inset_y(style))),
+    };
+
+    let id = match node {
+        LayoutNode::Leaf { size, offset, .. } => {
+            let taffy = taffy_style(style, Direction::Row, width, height, *offset);
+            tree.new_leaf_with_context(taffy, *size)
+                .expect("layout tree")
+        }
         LayoutNode::Container {
-            style,
             direction,
             children,
+            offset,
             ..
-        } => measure_container(*style, *direction, children, constraints),
-    }
-}
-
-fn measure_leaf(
-    style: LayoutStyle,
-    size: Size,
-    constraints: Constraints,
-) -> Result<Measured, LayoutError> {
-    validate_stretch(&style)?;
-    let resolved_width = resolve(style.width, constraints.width)?;
-    let resolved_height = resolve(style.height, constraints.height)?;
-    let width = resolved_width.unwrap_or_else(|| size.width.saturating_add(inset_x(&style)));
-    let height = resolved_height.unwrap_or_else(|| size.height.saturating_add(inset_y(&style)));
-
-    Ok(Measured {
-        width,
-        height,
-        auto_width: resolved_width.is_none(),
-        auto_height: resolved_height.is_none(),
-        children: Vec::new(),
-    })
-}
-
-fn measure_container(
-    style: LayoutStyle,
-    direction: Direction,
-    children: &[LayoutNode],
-    constraints: Constraints,
-) -> Result<Measured, LayoutError> {
-    validate_stretch(&style)?;
-    let resolved_width = resolve(style.width, constraints.width)?;
-    let resolved_height = resolve(style.height, constraints.height)?;
-    let child_constraints = Constraints {
-        width: resolved_width
-            .or(constraints.width)
-            .map(|width| width.saturating_sub(inset_x(&style))),
-        height: resolved_height
-            .or(constraints.height)
-            .map(|height| height.saturating_sub(inset_y(&style))),
+        } => {
+            let ids = children
+                .iter()
+                .map(|child| build(tree, child, inner))
+                .collect::<Result<Vec<_>, LayoutError>>()?;
+            let taffy = taffy_style(style, *direction, width, height, *offset);
+            tree.new_with_children(taffy, &ids).expect("layout tree")
+        }
     };
-    let mut measured_children = Vec::with_capacity(children.len());
-    for child in children {
-        measured_children.push(measure(child, child_constraints)?);
-    }
 
-    let flow = flow_indices(children);
-    let gap = gap_size(&style, occupied_count(&measured_children, &flow, direction));
-    let (auto_width, auto_height) = auto_size(&style, direction, &measured_children, &flow, gap);
-    let width = resolved_width.unwrap_or(auto_width);
-    let height = resolved_height.unwrap_or(auto_height);
-
-    Ok(Measured {
-        width,
-        height,
-        auto_width: resolved_width.is_none(),
-        auto_height: resolved_height.is_none(),
-        children: measured_children,
-    })
+    Ok(id)
 }
 
-fn auto_size(
+fn taffy_style(
     style: &LayoutStyle,
     direction: Direction,
-    children: &[Measured],
-    flow: &[usize],
-    gap: u32,
-) -> (u32, u32) {
-    let sum_main = flow
-        .iter()
-        .fold(0u32, |total, &index| {
-            total.saturating_add(main_size(child_size(&children[index]), direction))
-        })
-        .saturating_add(gap);
-    let max_cross = flow.iter().fold(0u32, |max, &index| {
-        max.max(cross_size(child_size(&children[index]), direction))
-    });
+    width: Option<u32>,
+    height: Option<u32>,
+    offset: Option<Offset>,
+) -> TaffyStyle {
+    let length = |value: u32| LengthPercentage::length(value as f32);
+    let mut output = TaffyStyle {
+        box_sizing: BoxSizing::BorderBox,
+        size: TaffySize {
+            width: width.map_or(TaffyDimension::AUTO, |value| {
+                TaffyDimension::length(value as f32)
+            }),
+            height: height.map_or(TaffyDimension::AUTO, |value| {
+                TaffyDimension::length(value as f32)
+            }),
+        },
+        padding: TaffyRect {
+            left: length(style.padding.left),
+            right: length(style.padding.right),
+            top: length(style.padding.top),
+            bottom: length(style.padding.bottom),
+        },
+        border: TaffyRect {
+            left: length(style.border_width),
+            right: length(style.border_width),
+            top: length(style.border_width),
+            bottom: length(style.border_width),
+        },
+        gap: TaffySize {
+            width: length(style.spacing),
+            height: length(style.spacing),
+        },
+        flex_direction: match direction {
+            Direction::Row => FlexDirection::Row,
+            Direction::Column => FlexDirection::Column,
+        },
+        align_items: match style.align {
+            Align::Start => AlignItems::START,
+            Align::Center => AlignItems::CENTER,
+            Align::End => AlignItems::END,
+            Align::Stretch => AlignItems::STRETCH,
+        },
+        justify_content: match style.justify {
+            Justify::Start => JustifyContent::START,
+            Justify::Center => JustifyContent::CENTER,
+            Justify::End => JustifyContent::END,
+            Justify::SpaceBetween => JustifyContent::SPACE_BETWEEN,
+        },
+        flex_grow: style.stretch,
+        flex_shrink: 0.0,
+        ..TaffyStyle::default()
+    };
 
-    match direction {
-        Direction::Row => (
-            sum_main.saturating_add(inset_x(style)),
-            max_cross.saturating_add(inset_y(style)),
-        ),
-        Direction::Column => (
-            max_cross.saturating_add(inset_x(style)),
-            sum_main.saturating_add(inset_y(style)),
-        ),
+    if let Some(offset) = offset {
+        output.position = Position::Absolute;
+        output.inset = TaffyRect {
+            left: LengthPercentageAuto::length(offset.x as f32),
+            right: LengthPercentageAuto::AUTO,
+            top: LengthPercentageAuto::length(offset.y as f32),
+            bottom: LengthPercentageAuto::AUTO,
+        };
     }
+
+    output
 }
 
-fn arrange(
-    node: &LayoutNode,
-    measured: &Measured,
-    size: Size,
-    x: i32,
-    y: i32,
-    out: &mut LayoutBox,
-) {
-    out.x = x;
-    out.y = y;
-    out.width = size.width;
-    out.height = size.height;
+fn collect(tree: &TaffyTree<Size>, id: NodeId, node: &LayoutNode, x: i32, y: i32) -> LayoutBox {
+    let placed = tree.layout(id).expect("layout tree");
+    let mut output = LayoutBox {
+        x,
+        y,
+        width: extent(placed.size.width),
+        height: extent(placed.size.height),
+        children: Vec::new(),
+    };
 
     let LayoutNode::Container {
         style,
@@ -422,221 +443,54 @@ fn arrange(
         ..
     } = node
     else {
-        return;
+        return output;
     };
 
-    let content = content_size(style, size);
-    let flow = flow_indices(children);
-    let mut sizes: Vec<Size> = measured.children.iter().map(child_size).collect();
-    let occupied = flow
-        .iter()
-        .filter(|&&index| main_size(sizes[index], *direction) > 0)
-        .count();
-    let gap = gap_size(style, occupied);
-    let mut used_main = flow.iter().fold(0u32, |total, &index| {
-        total.saturating_add(main_size(sizes[index], *direction))
-    });
-    let content_main = main_size(content, *direction);
-    let extra = content_main.saturating_sub(used_main.saturating_add(gap));
+    let ids = tree.children(id).expect("layout tree");
+    let origin_x =
+        clamp_i32(i64::from(x) + i64::from(style.border_width) + i64::from(style.padding.left));
+    let origin_y =
+        clamp_i32(i64::from(y) + i64::from(style.border_width) + i64::from(style.padding.top));
+    let scroll = scroll_offset.pixels();
 
-    stretch_main(children, &flow, &mut sizes, *direction, extra);
-    align_cross(
-        children,
-        measured,
-        &flow,
-        &mut sizes,
-        *direction,
-        cross_size(content, *direction),
-        style.align,
-    );
-
-    used_main = flow.iter().fold(0u32, |total, &index| {
-        total.saturating_add(main_size(sizes[index], *direction))
-    });
-    let remaining = content_main.saturating_sub(used_main.saturating_add(gap));
-    let (start, between) = justify_offsets(style.justify, remaining, occupied);
-
-    let origin_x = clamp_i32(x as i64 + style.border_width as i64 + style.padding.left as i64);
-    let origin_y = clamp_i32(y as i64 + style.border_width as i64 + style.padding.top as i64);
-    let content_cross = cross_size(content, *direction);
-    let mut spots: Vec<Option<(i32, i32)>> = vec![None; children.len()];
-    let mut cursor = i64::from(start);
-
-    for &index in &flow {
-        let child_cross = cross_size(sizes[index], *direction);
-        let cross_offset = match style.align {
-            Align::Start | Align::Stretch => 0,
-            Align::Center => (i64::from(content_cross) - i64::from(child_cross)) / 2,
-            Align::End => i64::from(content_cross) - i64::from(child_cross),
-        };
-        let position = match direction {
-            Direction::Row => (
-                i64::from(origin_x) + cursor,
-                i64::from(origin_y) + cross_offset,
-            ),
-            Direction::Column => (
-                i64::from(origin_x) + cross_offset,
-                i64::from(origin_y) + cursor,
-            ),
-        };
-        spots[index] = Some((clamp_i32(position.0), clamp_i32(position.1)));
-        let main = main_size(sizes[index], *direction);
-        if main == 0 {
-            continue;
-        }
-        cursor += i64::from(main) + i64::from(style.spacing) + i64::from(between);
-    }
-
-    for (index, child) in children.iter().enumerate() {
-        if let Some(offset) = child.offset() {
-            spots[index] = Some((
+    output.children.reserve(children.len());
+    for (child, child_id) in children.iter().zip(ids) {
+        let child_placed = tree.layout(child_id).expect("layout tree");
+        let (child_x, child_y) = match child.offset() {
+            Some(offset) => (
                 clamp_i32(i64::from(origin_x) + i64::from(offset.x)),
                 clamp_i32(i64::from(origin_y) + i64::from(offset.y)),
-            ));
-        } else if scroll_offset.pixels() != 0 {
-            let shift = i64::from(scroll_offset.pixels());
-            let Some((x, y)) = spots[index] else {
-                continue;
-            };
-            spots[index] = Some(match direction {
-                Direction::Row => (clamp_i32(i64::from(x) - shift), y),
-                Direction::Column => (x, clamp_i32(i64::from(y) - shift)),
-            });
-        }
-    }
-
-    for (index, child) in children.iter().enumerate() {
-        let (child_x, child_y) = spots[index].expect("layout position");
-        let mut child_box = LayoutBox::default();
-        arrange(
-            child,
-            &measured.children[index],
-            sizes[index],
-            child_x,
-            child_y,
-            &mut child_box,
-        );
-        out.children.push(child_box);
-    }
-}
-
-fn stretch_main(
-    children: &[LayoutNode],
-    flow: &[usize],
-    sizes: &mut [Size],
-    direction: Direction,
-    extra: u32,
-) {
-    let total: f64 = flow
-        .iter()
-        .map(|&index| f64::from(children[index].style().stretch))
-        .filter(|weight| *weight > 0.0)
-        .sum();
-    if extra == 0 || total == 0.0 {
-        return;
-    }
-
-    let mut allocated = 0u32;
-    let mut accumulated = 0.0f64;
-    for &index in flow {
-        let weight = f64::from(children[index].style().stretch);
-        if weight <= 0.0 {
-            continue;
-        }
-        accumulated += weight;
-        let target = (f64::from(extra) * accumulated / total).round() as u32;
-        let addition = target.saturating_sub(allocated);
-        allocated = target;
-        let current = main_size(sizes[index], direction);
-        *main_size_mut(&mut sizes[index], direction) = current.saturating_add(addition);
-    }
-}
-
-fn align_cross(
-    children: &[LayoutNode],
-    measured: &Measured,
-    flow: &[usize],
-    sizes: &mut [Size],
-    direction: Direction,
-    content_cross: u32,
-    align: Align,
-) {
-    if align != Align::Stretch {
-        return;
-    }
-
-    for &index in flow {
-        let auto_cross = match direction {
-            Direction::Row => measured.children[index].auto_height,
-            Direction::Column => measured.children[index].auto_width,
+            ),
+            None => {
+                let mut child_x =
+                    clamp_i32(i64::from(x) + i64::from(signed(child_placed.location.x)));
+                let mut child_y =
+                    clamp_i32(i64::from(y) + i64::from(signed(child_placed.location.y)));
+                match direction {
+                    Direction::Row => {
+                        child_x = clamp_i32(i64::from(child_x) - i64::from(scroll));
+                    }
+                    Direction::Column => {
+                        child_y = clamp_i32(i64::from(child_y) - i64::from(scroll));
+                    }
+                }
+                (child_x, child_y)
+            }
         };
-        if auto_cross && children[index].offset().is_none() {
-            *cross_size_mut(&mut sizes[index], direction) = content_cross;
-        }
+        output
+            .children
+            .push(collect(tree, child_id, child, child_x, child_y));
     }
+
+    output
 }
 
-fn justify_offsets(justify: Justify, remaining: u32, count: usize) -> (u32, u32) {
-    match justify {
-        Justify::Start => (0, 0),
-        Justify::Center => (remaining / 2, 0),
-        Justify::End => (remaining, 0),
-        Justify::SpaceBetween if count > 1 => (0, remaining / (count as u32 - 1)),
-        Justify::SpaceBetween => (0, 0),
-    }
+fn extent(value: f32) -> u32 {
+    value.max(0.0).round() as u32
 }
 
-fn flow_indices(children: &[LayoutNode]) -> Vec<usize> {
-    children
-        .iter()
-        .enumerate()
-        .filter_map(|(index, child)| child.offset().is_none().then_some(index))
-        .collect()
-}
-
-fn gap_size(style: &LayoutStyle, count: usize) -> u32 {
-    style.spacing.saturating_mul(count.saturating_sub(1) as u32)
-}
-
-fn occupied_count(children: &[Measured], flow: &[usize], direction: Direction) -> usize {
-    flow.iter()
-        .filter(|&&index| main_size(child_size(&children[index]), direction) > 0)
-        .count()
-}
-
-fn child_size(measured: &Measured) -> Size {
-    Size {
-        width: measured.width,
-        height: measured.height,
-    }
-}
-
-fn main_size(size: Size, direction: Direction) -> u32 {
-    match direction {
-        Direction::Row => size.width,
-        Direction::Column => size.height,
-    }
-}
-
-fn cross_size(size: Size, direction: Direction) -> u32 {
-    match direction {
-        Direction::Row => size.height,
-        Direction::Column => size.width,
-    }
-}
-
-fn main_size_mut(size: &mut Size, direction: Direction) -> &mut u32 {
-    match direction {
-        Direction::Row => &mut size.width,
-        Direction::Column => &mut size.height,
-    }
-}
-
-fn cross_size_mut(size: &mut Size, direction: Direction) -> &mut u32 {
-    match direction {
-        Direction::Row => &mut size.height,
-        Direction::Column => &mut size.width,
-    }
+fn signed(value: f32) -> i32 {
+    value.round() as i32
 }
 
 pub(crate) fn inset_x(style: &LayoutStyle) -> u32 {
@@ -653,13 +507,6 @@ pub(crate) fn inset_y(style: &LayoutStyle) -> u32 {
         .saturating_mul(2)
         .saturating_add(style.padding.top)
         .saturating_add(style.padding.bottom)
-}
-
-fn content_size(style: &LayoutStyle, size: Size) -> Size {
-    Size {
-        width: size.width.saturating_sub(inset_x(style)),
-        height: size.height.saturating_sub(inset_y(style)),
-    }
 }
 
 pub(crate) fn resolve(dimension: Dimension, base: Option<u32>) -> Result<Option<u32>, LayoutError> {
@@ -685,7 +532,6 @@ fn validate_stretch(style: &LayoutStyle) -> Result<(), LayoutError> {
 fn clamp_i32(value: i64) -> i32 {
     value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
 }
-
 #[cfg(test)]
 mod tests {
     use super::LayoutError;

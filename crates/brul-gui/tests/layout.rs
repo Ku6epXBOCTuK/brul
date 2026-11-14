@@ -28,7 +28,7 @@ fn column_stacks_with_padding_and_spacing() {
 }
 
 #[test]
-fn an_empty_child_takes_no_spacing() {
+fn an_empty_child_takes_spacing() {
     let root = LayoutNode::column(vec![
         LayoutNode::leaf(50, 20),
         LayoutNode::column(Vec::new()),
@@ -51,7 +51,7 @@ fn an_empty_child_takes_no_spacing() {
     .expect("layout");
 
     assert_eq!(placed.children[0].y, 0);
-    assert_eq!(placed.children[2].y, 25);
+    assert_eq!(placed.children[2].y, 30);
 
     let leading = LayoutNode::column(vec![
         LayoutNode::column(Vec::new()),
@@ -73,7 +73,7 @@ fn an_empty_child_takes_no_spacing() {
     )
     .expect("layout");
 
-    assert_eq!(placed.children[1].y, 0);
+    assert_eq!(placed.children[1].y, 5);
 }
 
 #[test]
