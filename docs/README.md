@@ -11,7 +11,8 @@
 | [lang/](lang/README.md)     | канон трёх языков DSL              | включается в user через include |
 
 - [dev/architecture.md](dev/architecture.md) — устройство, крейты, пайплайн.
-- [dev/product.md](dev/product.md) — зачем проект и что считается MVP.
+- [dev/product.md](dev/product.md) — зачем проект, требования к фреймворку и
+  критерий зрелости.
 - [dev/plan.md](dev/plan.md) — временная очередь работ; будет удалён.
 - [dev/workflow.md](dev/workflow.md) — задача, бюджет, отчёт, трекер.
 - [dev/benchmarks.md](dev/benchmarks.md) — снимки замеров и как их сравнивать.
