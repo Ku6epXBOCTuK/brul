@@ -1237,6 +1237,33 @@ fn rejects_a_named_slot() {
 }
 
 #[test]
+fn emits_component_classes() {
+    let dir = scratch(
+        "component-classes",
+        &[
+            (
+                "badge.brul",
+                "<markup>\ncomponent Badge {\n    Text { \"badge\" }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<style>\n.primary { width: 10px; }\n.tone { width: 20px; }\n</style>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge (primary, class: \"tone\") { }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(
+        module.contains("styled(built.widget, &[\"primary\"], theme)?;"),
+        "{module}"
+    );
+    assert!(
+        module.contains("brul::BindingTarget::Class { table: class_table(theme), expression:"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn emits_names_in_first_appearance_order() {
     let source = r#"<script>
     let selected = 0;

@@ -21,6 +21,8 @@ struct Call<'a> {
     defaults: Props<'a>,
     events: Events<'a>,
     slot: Option<&'a str>,
+    classes: Vec<&'a str>,
+    class: Option<&'a Expr>,
 }
 
 pub(super) fn component(
@@ -34,6 +36,18 @@ pub(super) fn component(
     let definition = &emit.registry.definitions[index];
     let name = &definition.name;
     check_shape(element, definition)?;
+    let classes = element
+        .args
+        .iter()
+        .filter_map(|arg| match arg {
+            Arg::Class(class) => Some(class.as_str()),
+            Arg::Named { .. } | Arg::Handler { .. } => None,
+        })
+        .collect();
+    let class = element.args.iter().find_map(|arg| match arg {
+        Arg::Named { name, value } if name == "class" => Some(value),
+        _ => None,
+    });
     let (props, events) = collect(element, definition, name, emit)?;
     let defaults = defaults(element, definition, name, &props)?;
     let slot = if element.block.items.is_empty() {
@@ -49,11 +63,13 @@ pub(super) fn component(
             defaults,
             events,
             slot: slot.as_deref(),
+            classes,
+            class,
         },
         frame,
         counter,
-        emit.names,
-        &emit.bases[index],
+        emit,
+        index,
     );
     Ok(())
 }
@@ -71,12 +87,6 @@ fn declares_slot(definition: &Definition) -> bool {
 
 fn check_shape(element: &Element, definition: &Definition) -> Result<(), Error> {
     let name = &definition.name;
-    if element.args.iter().any(|arg| matches!(arg, Arg::Class(_))) {
-        return Err(error_at(
-            element.position,
-            format!("component '{name}' does not accept classes yet"),
-        ));
-    }
     if !element.block.items.is_empty() && !declares_slot(definition) {
         return Err(error_at(
             element.position,
@@ -127,6 +137,10 @@ fn collect<'a>(
             Arg::Handler { event, handler } => events.push(event_of(
                 element, definition, name, emit, &events, event, handler,
             )?),
+            Arg::Named {
+                name: property,
+                value,
+            } if property == "class" => {}
             Arg::Named {
                 name: property,
                 value,
@@ -244,15 +258,22 @@ fn write(
     call: Call<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
-    names: &Names<'_>,
-    base: &str,
+    emit: &mut Emit<'_>,
+    index: usize,
 ) {
+    let bases = emit.bases;
+    let names = emit.names;
+    let prefix = emit.resource_prefix;
+    let dynamic_classes = &mut *emit.dynamic_classes;
+    let base = bases[index].as_str();
     let Call {
         name,
         props,
         defaults,
         events,
         slot,
+        classes,
+        class,
     } = call;
     let widget = format!("widget{}", *counter);
     *counter += 1;
@@ -300,7 +321,27 @@ fn write(
     for field in ["bindings", "handlers", "props"] {
         let _ = writeln!(out, "{inner}{field}.extend(built.{field});");
     }
-    let _ = writeln!(out, "{inner}let {widget} = built.widget;");
+    if classes.is_empty() {
+        let _ = writeln!(out, "{inner}let {widget} = built.widget;");
+    } else {
+        let classes = classes
+            .iter()
+            .map(|class| format!("{class:?}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(
+            out,
+            "{inner}let {widget} = {prefix}styled(built.widget, &[{classes}], theme)?;"
+        );
+    }
+    if let Some(value) = class {
+        *dynamic_classes = true;
+        let _ = writeln!(
+            out,
+            "{inner}bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {} }}));",
+            expression::closure(value, names)
+        );
+    }
     let _ = writeln!(out, "{inner}{widget}");
     let _ = write!(out, "{pad}}}");
 }

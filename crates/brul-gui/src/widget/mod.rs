@@ -219,6 +219,21 @@ impl Widget {
         self
     }
 
+    pub fn with_class(mut self, class: &Class) -> Self {
+        self.layout.apply(&class.layout);
+        self.styles.apply_layers(&class.style, class.transitions);
+        match &mut self.data {
+            Content::Text {
+                styles: current, ..
+            }
+            | Content::Input {
+                styles: current, ..
+            } => current.apply_layers(&class.text),
+            Content::View { .. } | Content::Image(_) => {}
+        }
+        self
+    }
+
     pub fn with_offset(mut self, x: i32, y: i32) -> Self {
         self.offset = Some(Offset { x, y });
         self

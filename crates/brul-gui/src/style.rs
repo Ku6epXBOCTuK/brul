@@ -56,16 +56,15 @@ pub fn check_theme(stylesheet: &Stylesheet, theme: Option<&str>) -> Result<(), S
 }
 
 pub fn styled(
-    widget: crate::Widget,
+    mut widget: crate::Widget,
     stylesheet: &Stylesheet,
     classes: &[&str],
     theme: Option<&str>,
 ) -> Result<crate::Widget, StyleError> {
-    let resolved = resolve(stylesheet, classes, theme)?;
-    Ok(widget
-        .with_layout(resolved.layout)
-        .with_styles(resolved.styles)
-        .with_text_styles(resolved.text))
+    for name in classes {
+        widget = widget.with_class(&class(stylesheet, name, theme)?);
+    }
+    Ok(widget)
 }
 
 pub fn resolve(
