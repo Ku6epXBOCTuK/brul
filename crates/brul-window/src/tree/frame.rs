@@ -1,0 +1,123 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Instant;
+
+use brul_gui::{Frame, Size, WidgetTree};
+use tracing::{debug, info, trace};
+
+use crate::surface::Surface;
+use crate::window::{ColorScheme, WindowError};
+
+use super::{Step, TreeApp};
+
+impl TreeApp {
+    pub(super) fn change_theme(&mut self, surface: &dyn Surface, scheme: ColorScheme) -> Step {
+        let Some(build) = self.build.as_mut() else {
+            return Step::Continue;
+        };
+        info!(?scheme, "system theme changed");
+        self.tree = build(scheme);
+        self.resize_to_surface(surface)
+    }
+
+    pub(crate) fn replace_tree(&mut self, tree: Rc<RefCell<WidgetTree>>) -> Step {
+        debug!("replacing the widget tree");
+        self.tree = tree;
+        match self.window.clone() {
+            Some(window) => self.resize_to_surface(&window),
+            None => Step::Continue,
+        }
+    }
+
+    pub(super) fn resize_to_surface(&mut self, surface: &dyn Surface) -> Step {
+        let (width, height) = surface.size();
+        self.resize(surface, width, height)
+    }
+
+    pub(super) fn resize(&mut self, surface: &dyn Surface, width: u32, height: u32) -> Step {
+        if width == 0 || height == 0 {
+            return Step::Continue;
+        }
+        debug!(width, height, "window resized");
+        if let Some(renderer) = self.renderer.as_mut() {
+            renderer.resize(width, height);
+        }
+        let layout = match self.engine.as_mut() {
+            Some(engine) => self.tree.borrow_mut().layout(
+                engine,
+                Size { width, height },
+                surface.scale_factor() as f32,
+            ),
+            None => Ok(()),
+        };
+        if let Err(error) = layout {
+            return self.fail(WindowError::stage("widgets", error));
+        }
+        if let Some(frame) = self.frame.as_mut() {
+            frame.resize(width, height);
+        } else {
+            self.frame = Some(Frame::new(width, height));
+        }
+        surface.redraw();
+        Step::Continue
+    }
+
+    pub(super) fn render(&mut self, surface: &dyn Surface) -> Step {
+        brul_reactive::flush();
+        match self.render_frame(surface) {
+            Ok(()) => Step::Continue,
+            Err(error) => self.fail(WindowError::stage("widgets", error)),
+        }
+    }
+
+    pub(super) fn render_frame(
+        &mut self,
+        surface: &dyn Surface,
+    ) -> Result<(), brul_gui::WidgetError> {
+        trace!("rendering a frame");
+        let now = Instant::now();
+        let delta = now.saturating_duration_since(self.tick);
+        self.tick = now;
+        self.tree.borrow_mut().advance(delta);
+        if self.tree.borrow().layout_dirty()
+            && let Some(engine) = self.engine.as_mut()
+        {
+            if self.tree.borrow().has_layout() {
+                self.tree.borrow_mut().relayout(engine)?;
+            } else {
+                let (width, height) = surface.size();
+                self.tree.borrow_mut().layout(
+                    engine,
+                    Size { width, height },
+                    surface.scale_factor() as f32,
+                )?;
+            }
+        }
+        let (dirty, rebuild) = {
+            let mut tree = self.tree.borrow_mut();
+            (tree.take_dirty(), tree.snapshot_dirty())
+        };
+        let Some(renderer) = self.renderer.as_mut() else {
+            return Ok(());
+        };
+        let Some(frame) = self.frame.as_mut() else {
+            return Ok(());
+        };
+        let Some(engine) = self.engine.as_ref() else {
+            return Ok(());
+        };
+
+        if rebuild || !dirty.is_empty() {
+            let mut tree = self.tree.borrow_mut();
+            let snapshot = tree.snapshot()?;
+            frame.paint(snapshot, engine.atlas(), &dirty);
+        }
+
+        renderer.present(surface, frame);
+        if !self.revealed {
+            self.revealed = true;
+            surface.set_visible(self.config.visible);
+        }
+        Ok(())
+    }
+}

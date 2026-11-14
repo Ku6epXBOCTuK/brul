@@ -139,7 +139,7 @@
   виджет — правка трёх перечислений и двух конверсий.
 - [x] BRUL-310 — публичные ошибки: `String` вместо типа.
 - [x] BRUL-280 — `brul-gui/src/widget.rs`.
-- [ ] BRUL-282 — `brul-window/src/tree.rs`.
+- [x] BRUL-282 — `brul-window/src/tree.rs`.
 - [ ] BRUL-283 — `brul-script/src/eval.rs`; `layout.rs` ждёт BRUL-385.
 
 Отложенное в BRUL-108 (BRUL-109, BRUL-112, BRUL-113, BRUL-140, BRUL-144 и
