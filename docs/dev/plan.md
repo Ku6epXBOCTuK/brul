@@ -138,7 +138,7 @@
 - [x] BRUL-322 — `WidgetData`, `NodeData` и снапшот повторяют друг друга: новый
   виджет — правка трёх перечислений и двух конверсий.
 - [x] BRUL-310 — публичные ошибки: `String` вместо типа.
-- [ ] BRUL-280 — `brul-gui/src/widget.rs`.
+- [x] BRUL-280 — `brul-gui/src/widget.rs`.
 - [ ] BRUL-282 — `brul-window/src/tree.rs`.
 - [ ] BRUL-283 — `brul-script/src/eval.rs`; `layout.rs` ждёт BRUL-385.
 

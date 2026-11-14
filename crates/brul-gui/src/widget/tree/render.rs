@@ -1,0 +1,213 @@
+use super::*;
+use crate::layout::{self, LayoutBox, LayoutNode};
+use crate::text::TextEngine;
+use std::collections::{HashMap, HashSet};
+
+pub(super) struct Pass<'a> {
+    pub(super) tree: &'a [Node],
+    pub(super) engine: &'a mut TextEngine,
+    pub(super) texts: &'a mut HashMap<WidgetId, ShapedText>,
+    pub(super) scale: f32,
+    pub(super) cached: Option<&'a [LayoutBox]>,
+    pub(super) blocked: Vec<bool>,
+    pub(super) order: Vec<Slot>,
+    pub(super) frozen: Vec<(Slot, LayoutBox)>,
+}
+
+pub(super) fn dirty_subtrees(tree: &[Node], root: Slot, stale: &HashSet<Slot>) -> Vec<bool> {
+    fn walk(tree: &[Node], slot: Slot, stale: &HashSet<Slot>, blocked: &mut [bool]) -> bool {
+        let node = &tree[slot.index()];
+        let mut dirty = stale.contains(&slot);
+        for &child in &node.children {
+            dirty |= walk(tree, child, stale, blocked);
+        }
+        blocked[slot.index()] = dirty;
+        dirty
+    }
+    let mut blocked = vec![false; tree.len()];
+    walk(tree, root, stale, &mut blocked);
+    blocked
+}
+
+pub(super) fn move_children(tree: &[Node], slot: Slot, dx: i32, dy: i32, boxes: &mut [LayoutBox]) {
+    for &child in &tree[slot.index()].children {
+        let placed = &mut boxes[child.index()];
+        placed.x = placed.x.saturating_add(dx);
+        placed.y = placed.y.saturating_add(dy);
+        move_children(tree, child, dx, dy, boxes);
+    }
+}
+
+impl Pass<'_> {
+    pub(super) fn build(
+        &mut self,
+        slot: Slot,
+        available_width: Option<u32>,
+    ) -> Result<LayoutNode, WidgetError> {
+        let node = &self.tree[slot.index()];
+        let layout_style = node.layout_style();
+        self.order.push(slot);
+        if let (Some(cached), false) = (self.cached, self.blocked[slot.index()])
+            && let Some(previous) = cached.get(slot.index())
+        {
+            let size = Size {
+                width: previous
+                    .width
+                    .saturating_sub(layout::inset_x(&layout_style)),
+                height: previous
+                    .height
+                    .saturating_sub(layout::inset_y(&layout_style)),
+            };
+            self.frozen.push((slot, previous.clone()));
+            let layout_node = LayoutNode::leaf(size.width, size.height).with_style(layout_style);
+            return Ok(match node.offset {
+                Some(offset) => layout_node.with_offset(offset.x, offset.y),
+                None => layout_node,
+            });
+        }
+
+        let resolved = layout::resolve(layout_style.width, available_width)?;
+        let content_width = resolved
+            .or(available_width)
+            .map(|width| width.saturating_sub(layout::inset_x(&layout_style)));
+
+        let layout_node = match &node.data {
+            Content::View { direction } => {
+                let mut children = Vec::with_capacity(node.children.len());
+                for &child in &node.children {
+                    children.push(self.build(child, content_width)?);
+                }
+                match direction {
+                    Direction::Row => LayoutNode::row(children),
+                    Direction::Column => {
+                        LayoutNode::column(children).with_scroll(node.scroll_offset)
+                    }
+                }
+            }
+            Content::Text { content, styles } => {
+                self.build_text(node, content, styles, content_width, "")?
+            }
+            Content::Input {
+                value,
+                styles,
+                multiline,
+                preedit,
+                ..
+            } => {
+                let width = if *multiline { content_width } else { None };
+                self.build_text(node, value, styles, width, preedit)?
+            }
+            Content::Image(image) => LayoutNode::leaf(image.width(), image.height()),
+        };
+
+        let layout_node = layout_node.with_style(layout_style);
+        Ok(match node.offset {
+            Some(offset) => layout_node.with_offset(offset.x, offset.y),
+            None => layout_node,
+        })
+    }
+
+    fn build_text(
+        &mut self,
+        node: &Node,
+        content: &str,
+        styles: &TextStyleSet,
+        content_width: Option<u32>,
+        preedit: &str,
+    ) -> Result<LayoutNode, WidgetError> {
+        let mut styles = styles.clone();
+        if let Some(class) = &node.class {
+            styles.apply_layers(&class.text);
+        }
+        let max_width = content_width.map(|width| width as f32 / self.scale);
+        let cached = self.texts.get(&node.id).filter(|cached| {
+            cached.width == content_width
+                && cached.scale == self.scale
+                && cached.content == content
+                && cached.preedit_text == preedit
+        });
+        if cached.is_none() {
+            let mut variants = TextVariants::new(self.engine.layout(
+                content,
+                styles.base(),
+                max_width,
+                self.scale,
+            )?);
+            for state in StyleState::ALL {
+                let style = styles.resolve(state.flags());
+                if style == *styles.base() {
+                    continue;
+                }
+                variants = variants.with(
+                    state,
+                    self.engine.layout(content, &style, max_width, self.scale)?,
+                );
+            }
+            let preedit_text = preedit.to_owned();
+            let preedit = if preedit_text.is_empty() {
+                None
+            } else {
+                Some(
+                    self.engine
+                        .layout(&preedit_text, styles.base(), None, self.scale)?,
+                )
+            };
+            self.texts.insert(
+                node.id,
+                ShapedText {
+                    content: content.to_owned(),
+                    width: content_width,
+                    scale: self.scale,
+                    variants,
+                    preedit,
+                    preedit_text,
+                },
+            );
+        }
+        let size = self
+            .texts
+            .get(&node.id)
+            .expect("shaped text cached")
+            .variants
+            .base
+            .size;
+        Ok(LayoutNode::leaf(size.width, size.height))
+    }
+}
+
+pub(super) fn max_scroll_offset(nodes: &[Node], slot: Slot, boxes: &[LayoutBox]) -> Option<i32> {
+    let node = &nodes[slot.index()];
+    let viewport = &boxes[slot.index()];
+    let bottom = node
+        .children
+        .iter()
+        .map(|&child| {
+            let placed = &boxes[child.index()];
+            i64::from(placed.y) + i64::from(placed.height)
+        })
+        .max()?;
+    let overflow = bottom + i64::from(node.scroll_offset.pixels())
+        - i64::from(viewport.y)
+        - i64::from(viewport.height);
+    i32::try_from(overflow.max(0)).ok()
+}
+
+pub(super) fn flatten_boxes(
+    boxed: &LayoutBox,
+    order: &[Slot],
+    cursor: &mut usize,
+    boxes: &mut [LayoutBox],
+) {
+    let slot = order[*cursor];
+    *cursor += 1;
+    boxes[slot.index()] = LayoutBox {
+        x: boxed.x,
+        y: boxed.y,
+        width: boxed.width,
+        height: boxed.height,
+        children: Vec::new(),
+    };
+    for child in &boxed.children {
+        flatten_boxes(child, order, cursor, boxes);
+    }
+}
