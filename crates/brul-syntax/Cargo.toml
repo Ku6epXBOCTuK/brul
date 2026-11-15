@@ -10,3 +10,4 @@ workspace = true
 brul-style = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
+thiserror = { workspace = true }

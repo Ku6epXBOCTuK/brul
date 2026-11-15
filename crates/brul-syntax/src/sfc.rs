@@ -1,5 +1,3 @@
-use std::fmt;
-
 use pest::Parser;
 use pest::error::LineColLocation;
 use pest_derive::Parser;
@@ -22,38 +20,23 @@ pub struct Sfc<'a> {
     pub script: Option<Block<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("line {}, column {}: {}", .line, .column, .message)]
     Syntax {
         message: String,
         line: usize,
         column: usize,
     },
+    #[error("line {}, column {}: duplicate <{}> block", .line, .column, .name)]
     Duplicate {
         name: &'static str,
         line: usize,
         column: usize,
     },
+    #[error("missing <markup> block")]
     MissingMarkup,
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Syntax {
-                message,
-                line,
-                column,
-            } => write!(f, "line {line}, column {column}: {message}"),
-            Self::Duplicate { name, line, column } => {
-                write!(f, "line {line}, column {column}: duplicate <{name}> block")
-            }
-            Self::MissingMarkup => write!(f, "missing <markup> block"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 pub fn parse(source: &str) -> Result<Sfc<'_>, Error> {
     let pairs = SfcParser::parse(Rule::file, source).map_err(|error| {

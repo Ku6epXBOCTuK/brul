@@ -1,5 +1,3 @@
-use std::fmt;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: usize,
@@ -74,24 +72,13 @@ pub struct Token {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("line {}, column {}: {}", .line, .column, .message)]
 pub struct Error {
     pub message: String,
     pub line: usize,
     pub column: usize,
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "line {}, column {}: {}",
-            self.line, self.column, self.message
-        )
-    }
-}
-
-impl std::error::Error for Error {}
 
 #[derive(Clone, Copy)]
 enum Frame {

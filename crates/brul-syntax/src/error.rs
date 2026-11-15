@@ -1,8 +1,7 @@
-use std::fmt;
-
 use crate::lexer::{self, Span};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("line {}, column {}: {}", .line, .column, .message)]
 pub struct Error {
     pub message: String,
     pub line: usize,
@@ -23,18 +22,6 @@ impl Error {
         }
     }
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "line {}, column {}: {}",
-            self.line, self.column, self.message
-        )
-    }
-}
-
-impl std::error::Error for Error {}
 
 impl From<lexer::Error> for Error {
     fn from(error: lexer::Error) -> Self {

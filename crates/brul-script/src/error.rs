@@ -1,116 +1,68 @@
-use std::fmt;
-
 use brul_syntax::ast::Position;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    At(Position, Box<Error>),
+    #[error("line {}, column {}: {}", .0.line, .0.column, .1)]
+    At(Position, #[source] Box<Error>),
+    #[error("variable '{0}' is not defined")]
     Undefined(String),
+    #[error("variable '{0}' is already declared")]
     Redeclared(String),
+    #[error("function '{0}' is already declared")]
     FunctionRedeclared(String),
+    #[error("function '{}' expects {} arguments, got {}", .name, .expected, .found)]
     FunctionArity {
         name: String,
         expected: usize,
         found: usize,
     },
+    #[error("cannot assign to constant '{0}'")]
     Constant(String),
+    #[error("operator '{}' is not defined for {} and {}", .operation, .left, .right)]
     Mismatch {
         operation: &'static str,
         left: &'static str,
         right: &'static str,
     },
+    #[error("operator '{}' expects {}, got {}", .operation, .expected, .found)]
     Expected {
         operation: &'static str,
         expected: &'static str,
         found: &'static str,
     },
+    #[error("division by zero")]
     DivisionByZero,
+    #[error("index must be a non-negative integer")]
     IndexNotInteger,
-    OutOfBounds {
-        index: usize,
-        length: usize,
-    },
+    #[error("index {} is out of bounds for length {}", .index, .length)]
+    OutOfBounds { index: usize, length: usize },
+    #[error("object has no field '{0}'")]
     MissingField(String),
+    #[error("function '{0}' is not defined")]
     UnknownFunction(String),
+    #[error("window '{0}' is not declared")]
     UnknownWindow(String),
+    #[error("function '{}' expects {} argument", .name, .expected)]
     Arity {
         name: String,
         expected: &'static str,
     },
+    #[error("function '{}' expects {}, got {}", .name, .expected, .found)]
     Argument {
         name: &'static str,
         expected: &'static str,
         found: &'static str,
     },
+    #[error("event '{}' expects {}, got {}", .name, .expected, .found)]
     EventArgument {
         name: String,
         expected: &'static str,
         found: &'static str,
     },
+    #[error("string '{0}' cannot be converted to Number")]
     InvalidNumber(String),
+    #[error("{0} is not supported yet")]
     Unsupported(&'static str),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::At(position, error) => write!(
-                f,
-                "line {}, column {}: {error}",
-                position.line, position.column
-            ),
-            Error::Undefined(name) => write!(f, "variable '{name}' is not defined"),
-            Error::Redeclared(name) => write!(f, "variable '{name}' is already declared"),
-            Error::FunctionRedeclared(name) => write!(f, "function '{name}' is already declared"),
-            Error::FunctionArity {
-                name,
-                expected,
-                found,
-            } => write!(
-                f,
-                "function '{name}' expects {expected} arguments, got {found}"
-            ),
-            Error::Constant(name) => write!(f, "cannot assign to constant '{name}'"),
-            Error::Mismatch {
-                operation,
-                left,
-                right,
-            } => write!(
-                f,
-                "operator '{operation}' is not defined for {left} and {right}"
-            ),
-            Error::Expected {
-                operation,
-                expected,
-                found,
-            } => write!(f, "operator '{operation}' expects {expected}, got {found}"),
-            Error::DivisionByZero => write!(f, "division by zero"),
-            Error::IndexNotInteger => write!(f, "index must be a non-negative integer"),
-            Error::OutOfBounds { index, length } => {
-                write!(f, "index {index} is out of bounds for length {length}")
-            }
-            Error::MissingField(name) => write!(f, "object has no field '{name}'"),
-            Error::UnknownFunction(name) => write!(f, "function '{name}' is not defined"),
-            Error::UnknownWindow(name) => write!(f, "window '{name}' is not declared"),
-            Error::Arity { name, expected } => {
-                write!(f, "function '{name}' expects {expected} argument")
-            }
-            Error::Argument {
-                name,
-                expected,
-                found,
-            } => write!(f, "function '{name}' expects {expected}, got {found}"),
-            Error::EventArgument {
-                name,
-                expected,
-                found,
-            } => write!(f, "event '{name}' expects {expected}, got {found}"),
-            Error::InvalidNumber(text) => {
-                write!(f, "string '{text}' cannot be converted to Number")
-            }
-            Error::Unsupported(what) => write!(f, "{what} is not supported yet"),
-        }
-    }
 }
 
 impl Error {
@@ -135,5 +87,3 @@ impl Error {
         }
     }
 }
-
-impl std::error::Error for Error {}

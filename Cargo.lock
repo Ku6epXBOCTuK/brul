@@ -311,6 +311,7 @@ version = "0.1.0"
 dependencies = [
  "brul-reactive",
  "brul-syntax",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -327,6 +328,7 @@ dependencies = [
  "brul-style",
  "pest",
  "pest_derive",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
