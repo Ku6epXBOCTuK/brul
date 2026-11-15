@@ -278,6 +278,7 @@ dependencies = [
  "cosmic-text",
  "image",
  "resvg",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -285,6 +286,7 @@ name = "brul-layout"
 version = "0.1.0"
 dependencies = [
  "taffy",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -314,6 +316,9 @@ dependencies = [
 [[package]]
 name = "brul-style"
 version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "brul-syntax"

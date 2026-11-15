@@ -1,5 +1,3 @@
-use std::fmt;
-
 use crate::ast::{Animation, Gradient, GradientColor, Property, State, Stylesheet, Theme, Value};
 use crate::properties::Kind;
 
@@ -61,22 +59,13 @@ impl Snapshot {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SnapshotError {
+    #[error("unknown theme '{0}'")]
     UnknownTheme(String),
+    #[error("unknown theme key '{0}'")]
     UnknownThemeKey(String),
 }
-
-impl fmt::Display for SnapshotError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SnapshotError::UnknownTheme(name) => write!(f, "unknown theme '{name}'"),
-            SnapshotError::UnknownThemeKey(name) => write!(f, "unknown theme key '{name}'"),
-        }
-    }
-}
-
-impl std::error::Error for SnapshotError {}
 
 impl Stylesheet {
     pub fn snapshot(

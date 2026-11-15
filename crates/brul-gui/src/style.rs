@@ -1,4 +1,3 @@
-use std::fmt;
 use std::time::Duration;
 
 use brul_style::{
@@ -21,29 +20,12 @@ pub struct Resolved {
     pub text: TextStyleSet,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum StyleError {
-    Snapshot(SnapshotError),
+    #[error(transparent)]
+    Snapshot(#[from] SnapshotError),
+    #[error("expected {} for '{}'", .expected, .kind.name())]
     Value { kind: Kind, expected: &'static str },
-}
-
-impl fmt::Display for StyleError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StyleError::Snapshot(error) => error.fmt(f),
-            StyleError::Value { kind, expected } => {
-                write!(f, "expected {expected} for '{}'", kind.name())
-            }
-        }
-    }
-}
-
-impl std::error::Error for StyleError {}
-
-impl From<SnapshotError> for StyleError {
-    fn from(error: SnapshotError) -> Self {
-        Self::Snapshot(error)
-    }
 }
 
 pub fn check_theme(stylesheet: &Stylesheet, theme: Option<&str>) -> Result<(), StyleError> {

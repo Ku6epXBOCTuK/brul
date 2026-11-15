@@ -1,21 +1,12 @@
-use std::fmt;
-
 use crate::ast::{ClassRule, GradientColor, Theme, ThemeEntry, Value};
 use crate::properties::{Kind, StatePolicy, ThemeType};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{message}")]
 pub struct ValidationError {
     pub at: usize,
     pub message: String,
 }
-
-impl fmt::Display for ValidationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for ValidationError {}
 
 impl ValidationError {
     fn at(at: usize, message: String) -> Self {

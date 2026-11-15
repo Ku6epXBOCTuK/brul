@@ -1,11 +1,10 @@
-use std::fmt;
-
 pub trait Theme: Copy + PartialEq + 'static {
     fn name(self) -> &'static str;
     fn parse(name: &str) -> Option<Self>;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("unknown theme '{name}'")]
 pub struct UnknownTheme {
     name: String,
 }
@@ -19,11 +18,3 @@ impl UnknownTheme {
         &self.name
     }
 }
-
-impl fmt::Display for UnknownTheme {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown theme '{}'", self.name)
-    }
-}
-
-impl std::error::Error for UnknownTheme {}

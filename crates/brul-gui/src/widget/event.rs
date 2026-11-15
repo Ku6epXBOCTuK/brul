@@ -1,5 +1,3 @@
-use std::fmt;
-
 use super::WidgetId;
 use crate::layout::LayoutError;
 use crate::text::TextError;
@@ -61,35 +59,14 @@ impl Dirty {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum WidgetError {
+    #[error("widget tree is not laid out yet")]
     NoLayout,
+    #[error("invalid DPI scale")]
     InvalidScale,
-    Layout(LayoutError),
-    Text(TextError),
-}
-
-impl fmt::Display for WidgetError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoLayout => formatter.write_str("widget tree is not laid out yet"),
-            Self::InvalidScale => formatter.write_str("invalid DPI scale"),
-            Self::Layout(error) => write!(formatter, "layout: {error}"),
-            Self::Text(error) => write!(formatter, "text: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for WidgetError {}
-
-impl From<LayoutError> for WidgetError {
-    fn from(error: LayoutError) -> Self {
-        Self::Layout(error)
-    }
-}
-
-impl From<TextError> for WidgetError {
-    fn from(error: TextError) -> Self {
-        Self::Text(error)
-    }
+    #[error("layout: {0}")]
+    Layout(#[from] LayoutError),
+    #[error("text: {0}")]
+    Text(#[from] TextError),
 }

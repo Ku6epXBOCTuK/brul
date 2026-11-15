@@ -8,3 +8,4 @@ workspace = true
 
 [dependencies]
 taffy = { workspace = true }
+thiserror = { workspace = true }

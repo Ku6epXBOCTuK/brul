@@ -1,5 +1,3 @@
-use std::fmt;
-
 use cosmic_text::{Align, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight};
 
 use crate::atlas::{Atlas, AtlasSlot};
@@ -228,27 +226,17 @@ impl TextLayout {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum TextError {
+    #[error("invalid font metrics")]
     InvalidMetrics,
+    #[error("invalid DPI scale")]
     InvalidScale,
+    #[error("invalid max width")]
     InvalidWidth,
+    #[error("glyph atlas is full")]
     AtlasFull,
 }
-
-impl fmt::Display for TextError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let message = match self {
-            Self::InvalidMetrics => "invalid font metrics",
-            Self::InvalidScale => "invalid DPI scale",
-            Self::InvalidWidth => "invalid max width",
-            Self::AtlasFull => "glyph atlas is full",
-        };
-        formatter.write_str(message)
-    }
-}
-
-impl std::error::Error for TextError {}
 
 pub struct TextEngine {
     font_system: FontSystem,

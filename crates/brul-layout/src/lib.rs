@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::fmt;
 
 use taffy::style_helpers::TaffyAuto;
 use taffy::{
@@ -249,25 +248,13 @@ pub struct LayoutBox {
     pub children: Vec<LayoutBox>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum LayoutError {
+    #[error("invalid size: percent must be finite and non-negative")]
     InvalidDimension,
+    #[error("invalid flex: factors and basis percent must be finite and non-negative")]
     InvalidFlex,
 }
-
-impl fmt::Display for LayoutError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let message = match self {
-            Self::InvalidDimension => "invalid size: percent must be finite and non-negative",
-            Self::InvalidFlex => {
-                "invalid flex: factors and basis percent must be finite and non-negative"
-            }
-        };
-        formatter.write_str(message)
-    }
-}
-
-impl std::error::Error for LayoutError {}
 
 pub fn validate(style: &LayoutStyle) -> Result<(), LayoutError> {
     validate_dimension(style.width)?;

@@ -1,23 +1,12 @@
-use std::fmt;
-
 use crate::Color;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum TextureError {
+    #[error("failed to decode an image: {0}")]
     Decode(String),
+    #[error("invalid RGBA data")]
     InvalidRgba,
 }
-
-impl fmt::Display for TextureError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Decode(message) => write!(formatter, "failed to decode an image: {message}"),
-            Self::InvalidRgba => formatter.write_str("invalid RGBA data"),
-        }
-    }
-}
-
-impl std::error::Error for TextureError {}
 
 pub struct Texture {
     width: u32,
