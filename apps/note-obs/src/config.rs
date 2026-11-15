@@ -1,6 +1,5 @@
 //! Конфиг note-obs: подключение к OBS и текст AFK.
 
-use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -40,30 +39,15 @@ impl Default for Config {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ConfigError {
+    #[error("failed to read {}: {message}", .path.display())]
     Read { path: PathBuf, message: String },
+    #[error("failed to parse {}: {message}", .path.display())]
     Parse { path: PathBuf, message: String },
+    #[error("failed to write {}: {message}", .path.display())]
     Write { path: PathBuf, message: String },
 }
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Read { path, message } => {
-                write!(formatter, "failed to read {}: {message}", path.display())
-            }
-            Self::Parse { path, message } => {
-                write!(formatter, "failed to parse {}: {message}", path.display())
-            }
-            Self::Write { path, message } => {
-                write!(formatter, "failed to write {}: {message}", path.display())
-            }
-        }
-    }
-}
-
-impl std::error::Error for ConfigError {}
 
 impl Config {
     pub fn parse(source: &str, path: &Path) -> Result<Self, ConfigError> {

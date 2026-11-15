@@ -1,6 +1,5 @@
 //! Клиент OBS WebSocket: подключение, проверка сцены и запись текста.
 
-use std::fmt;
 use std::time::Duration;
 
 use obws::Client;
@@ -14,34 +13,21 @@ use crate::config::Config;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ObsError {
+    #[error("tokio runtime: {0}")]
     Runtime(String),
+    #[error("OBS did not answer in {} seconds", TIMEOUT.as_secs())]
     Timeout,
+    #[error("OBS rejected the password")]
     Password,
+    #[error("OBS is unreachable: {0}")]
     Unreachable(String),
+    #[error("no scene '{0}' in OBS")]
     Scene(String),
+    #[error("source: {0}")]
     Source(String),
 }
-
-impl fmt::Display for ObsError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Runtime(message) => write!(formatter, "tokio runtime: {message}"),
-            Self::Timeout => write!(
-                formatter,
-                "OBS did not answer in {} seconds",
-                TIMEOUT.as_secs()
-            ),
-            Self::Password => formatter.write_str("OBS rejected the password"),
-            Self::Unreachable(message) => write!(formatter, "OBS is unreachable: {message}"),
-            Self::Scene(name) => write!(formatter, "no scene '{name}' in OBS"),
-            Self::Source(message) => write!(formatter, "source: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for ObsError {}
 
 pub fn write_text(config: &Config, text: &str) -> Result<(), ObsError> {
     runtime()?.block_on(async {
