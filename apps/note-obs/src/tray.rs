@@ -20,14 +20,23 @@ thread_local! {
     static TRAY: RefCell<Option<Tray>> = const { RefCell::new(None) };
 }
 
-pub fn install(handle: Handle) -> Result<(), String> {
+#[derive(Debug, thiserror::Error)]
+pub enum TrayError {
+    #[error("tray menu: {0}")]
+    Menu(#[from] tray_icon::menu::Error),
+    #[error("tray icon: {0}")]
+    Icon(#[from] tray_icon::BadIcon),
+    #[error("tray icon: {0}")]
+    Build(#[from] tray_icon::Error),
+}
+
+pub fn install(handle: Handle) -> Result<(), TrayError> {
     let show = MenuItem::new("Показать", true, None);
     let clear = MenuItem::new("Очистить", true, None);
     let separator = PredefinedMenuItem::separator();
     let quit = MenuItem::new("Выход", true, None);
     let menu = Menu::new();
-    menu.append_items(&[&show, &clear, &separator, &quit])
-        .map_err(|error| error.to_string())?;
+    menu.append_items(&[&show, &clear, &separator, &quit])?;
 
     let show_id = show.id().clone();
     let clear_id = clear.id().clone();
@@ -56,14 +65,13 @@ pub fn install(handle: Handle) -> Result<(), String> {
         }
     }));
 
-    let icon = Icon::from_rgba(rgba(ACCENT), SIZE, SIZE).map_err(|error| error.to_string())?;
+    let icon = Icon::from_rgba(rgba(ACCENT), SIZE, SIZE)?;
     let tray = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .with_tooltip("nobs")
         .with_icon(icon)
-        .build()
-        .map_err(|error| error.to_string())?;
+        .build()?;
 
     info!("tray icon created");
     TRAY.with(|slot| {
@@ -100,9 +108,9 @@ fn rgba(color: [u8; 3]) -> Vec<u8> {
     pixels
 }
 
-pub fn warn_missing(result: Result<(), String>) {
-    if let Err(message) = result {
-        warn!(%message, "tray icon is unavailable");
+pub fn warn_missing(result: Result<(), TrayError>) {
+    if let Err(failure) = result {
+        warn!(%failure, "tray icon is unavailable");
     }
 }
 

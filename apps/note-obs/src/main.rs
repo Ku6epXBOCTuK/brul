@@ -53,8 +53,8 @@ fn set_afk(host: &mut AppHost, enabled: bool) -> Result<Value, brul::Error> {
 
 #[command]
 fn set_afk_text(host: &mut AppHost, text: String) -> Result<Value, brul::Error> {
-    if let Err(message) = host.worker.afk_text(text) {
-        error!(%message, "afk text not sent");
+    if let Err(failure) = host.worker.afk_text(text) {
+        error!(%failure, "afk text not sent");
     }
     Ok(Value::Null)
 }
@@ -64,8 +64,8 @@ fn afk_status(host: &mut AppHost) -> Result<Value, brul::Error> {
     Ok(Value::String(host.worker.afk_note().into()))
 }
 
-fn sent(result: Result<(), String>, done: &str) -> String {
-    result.map_or_else(|message| message, |()| String::from(done))
+fn sent(result: Result<(), impl std::fmt::Display>, done: &str) -> String {
+    result.map_or_else(|failure| failure.to_string(), |()| String::from(done))
 }
 
 fn presets(config: &Config) -> Value {

@@ -23,6 +23,10 @@ pub enum Command {
     AfkText(String),
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("OBS worker stopped")]
+pub struct WorkerStopped;
+
 #[derive(Clone)]
 pub struct Worker {
     commands: Sender<Command>,
@@ -65,19 +69,19 @@ fn guard(shared: &Mutex<afk::Snapshot>) -> MutexGuard<'_, afk::Snapshot> {
 }
 
 impl Worker {
-    pub fn show(&self, text: String) -> Result<(), String> {
+    pub fn show(&self, text: String) -> Result<(), WorkerStopped> {
         self.send(Command::Show(text))
     }
 
-    pub fn clear(&self) -> Result<(), String> {
+    pub fn clear(&self) -> Result<(), WorkerStopped> {
         self.send(Command::Clear)
     }
 
-    pub fn afk(&self, enabled: bool) -> Result<(), String> {
+    pub fn afk(&self, enabled: bool) -> Result<(), WorkerStopped> {
         self.send(Command::Afk(enabled))
     }
 
-    pub fn afk_text(&self, text: String) -> Result<(), String> {
+    pub fn afk_text(&self, text: String) -> Result<(), WorkerStopped> {
         self.send(Command::AfkText(text))
     }
 
@@ -85,10 +89,8 @@ impl Worker {
         afk::describe(*guard(&self.shared))
     }
 
-    fn send(&self, command: Command) -> Result<(), String> {
-        self.commands
-            .send(command)
-            .map_err(|_| String::from("OBS worker stopped"))
+    fn send(&self, command: Command) -> Result<(), WorkerStopped> {
+        self.commands.send(command).map_err(|_| WorkerStopped)
     }
 }
 
