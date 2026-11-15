@@ -20,7 +20,7 @@ pub(super) fn stylesheet(out: &mut String, prefix: &str, sheet: &Stylesheet) {
         .join("\n");
     let _ = write!(
         out,
-        "\nfn {prefix}styles() -> &'static brul::style::Stylesheet {{
+        "\n#[allow(dead_code)]\nfn {prefix}styles() -> &'static brul::style::Stylesheet {{
     use brul::style as s;
 
     static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {{

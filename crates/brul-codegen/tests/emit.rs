@@ -12,9 +12,9 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn demo_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+pub fn demo_view(theme: Option<ThemeId>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let theme = theme.map(brul::Theme::name);
     component.borrow_mut().set_names(names());
-    brul::gui::style::check_theme(styles(), theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
@@ -71,6 +71,7 @@ fn classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
     &CLASSES_NONE
 }
 
+#[allow(dead_code)]
 fn styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
@@ -108,7 +109,7 @@ pub fn demo_window() -> brul::WindowConfig {
     }
 }
 
-pub fn windows() -> Vec<brul::WindowDef> {
+pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
     vec![
         brul::WindowDef { name: "Demo", config: demo_window(), view: demo_view },
     ]
@@ -150,9 +151,9 @@ window Styled (title: "styled") {
 </markup>
 "#;
     let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn styled_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+pub fn styled_view(theme: Option<ThemeId>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let theme = theme.map(brul::Theme::name);
     component.borrow_mut().set_names(names());
-    brul::gui::style::check_theme(styles(), theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
@@ -235,6 +236,7 @@ fn classes(theme: Option<&str>) -> &'static [brul::gui::Class] {
     }
 }
 
+#[allow(dead_code)]
 fn styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
@@ -297,7 +299,7 @@ pub fn styled_window() -> brul::WindowConfig {
     }
 }
 
-pub fn windows() -> Vec<brul::WindowDef> {
+pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
     vec![
         brul::WindowDef { name: "Styled", config: styled_window(), view: styled_view },
     ]
@@ -626,7 +628,7 @@ window Demo (title: "demo") {
         "fn demo_if1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme)?;"
+        "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let mut bindings"
     ));
     assert!(module.contains("brul::Value::Bool(true) => vec!["));
     assert!(module.contains("brul::Value::Bool(false) => vec!["));
@@ -653,7 +655,7 @@ window Demo (title: "demo") {
         "fn demo_each1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn demo_each1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    brul::gui::style::check_theme(styles(), theme)?;"
+        "fn demo_each1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let mut bindings"
     ));
     assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
     assert!(module.contains(
@@ -820,7 +822,7 @@ window Settings (title: "settings", width: 760, height: 560, frameless: false) {
 "#;
     let module = emit::module(source).expect("module");
 
-    assert!(module.contains("pub fn settings_view(theme: Option<&str>"));
+    assert!(module.contains("pub fn settings_view(theme: Option<ThemeId>"));
     assert!(module.contains(
         "pub fn settings_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"settings\".to_owned(),\n        width: 760,\n        height: 560,\n        frameless: false,\n        transparent: false,\n        visible: true,\n        centered: false,\n        scroll: true,\n        position: None,"
     ));

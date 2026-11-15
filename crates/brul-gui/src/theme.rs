@@ -1,6 +1,6 @@
 use std::fmt;
 
-pub trait Theme: Copy + 'static {
+pub trait Theme: Copy + PartialEq + 'static {
     fn name(self) -> &'static str;
     fn parse(name: &str) -> Option<Self>;
 }

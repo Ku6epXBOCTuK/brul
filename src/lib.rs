@@ -29,3 +29,28 @@ pub use brul_window::{WindowConfig, WindowPosition};
 pub use handle::{Handle, Signal};
 pub use run::{WindowDef, run_generated, run_generated_with};
 pub use ui::Ui;
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum TestTheme {
+    Light,
+    Dark,
+}
+
+#[cfg(test)]
+impl Theme for TestTheme {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
+
+    fn parse(name: &str) -> Option<Self> {
+        match name {
+            "light" => Some(Self::Light),
+            "dark" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+}

@@ -120,6 +120,7 @@ fn module_at(
                 classes: &mut class_names,
                 slots: false,
             },
+            true,
         )?;
         for function in &functions {
             head_functions.push('\n');
@@ -170,6 +171,7 @@ fn module_at(
                 classes: &mut class_names,
                 slots: true,
             },
+            false,
         )?;
         if dynamic_classes {
             classes::tables(&mut body, &prefix, &definition.stylesheet);
@@ -374,7 +376,7 @@ fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfi
 }
 
 fn window_table(out: &mut String, windows: &[Window], bases: &[String]) {
-    out.push_str("pub fn windows() -> Vec<brul::WindowDef> {\n    vec![\n");
+    out.push_str("pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {\n    vec![\n");
     for (index, window) in windows.iter().enumerate() {
         let base = &bases[index];
         let _ = writeln!(

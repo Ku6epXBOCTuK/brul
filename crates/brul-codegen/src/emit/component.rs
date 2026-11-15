@@ -214,11 +214,6 @@ fn filler(block: &Block, emit: &mut Emit<'_>) -> Result<String, Error> {
         out,
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\nfn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
     );
-    let _ = writeln!(
-        out,
-        "    brul::gui::style::check_theme({}styles(), theme)?;",
-        emit.resource_prefix
-    );
     out.push_str("    let mut bindings = Vec::new();\n");
     out.push_str("    let mut handlers = Vec::new();\n");
     out.push_str("    let mut props = Vec::new();\n");

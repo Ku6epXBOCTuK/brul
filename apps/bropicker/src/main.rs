@@ -17,7 +17,7 @@ use brul::{command, host};
 struct Session {
     url: String,
     config: Rc<RefCell<Config>>,
-    theme: Option<&'static str>,
+    theme: Option<generated::ThemeId>,
 }
 
 impl Session {
@@ -63,8 +63,8 @@ fn session(url: Option<String>, mut config: Config) -> Session {
         config.browsers = demo_browsers();
     }
     let theme = match config.theme {
-        Theme::Light => Some("light"),
-        Theme::Dark => Some("dark"),
+        Theme::Light => Some(generated::ThemeId::Light),
+        Theme::Dark => Some(generated::ThemeId::Dark),
         Theme::System => None,
     };
     Session {
@@ -583,8 +583,8 @@ mod tests {
     #[test]
     fn session_maps_the_theme() {
         let themes = [
-            (Theme::Light, Some("light")),
-            (Theme::Dark, Some("dark")),
+            (Theme::Light, Some(generated::ThemeId::Light)),
+            (Theme::Dark, Some(generated::ThemeId::Dark)),
             (Theme::System, None),
         ];
         for (theme, expected) in themes {

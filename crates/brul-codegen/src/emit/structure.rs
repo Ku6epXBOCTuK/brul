@@ -111,7 +111,7 @@ fn rebuild_arm(
     frame: Frame<'_>,
 ) -> Result<String, Error> {
     let arm = arm_frame(emit.default_theme(), frame);
-    let mut out = arm_header(name, emit);
+    let mut out = arm_header(name);
     let _ = writeln!(
         out,
         "    let condition = {name}_value(&mut component.borrow_mut())\n        .map_err(brul::ViewError::from)?;\n    let children = match condition {{"
@@ -160,7 +160,7 @@ fn each_arm(
     frame: Frame<'_>,
 ) -> Result<String, Error> {
     let arm = arm_frame(emit.default_theme(), frame);
-    let mut out = arm_header(name, emit);
+    let mut out = arm_header(name);
     out.push_str("    let mut children = Vec::new();\n");
     let _ = writeln!(
         out,
@@ -223,17 +223,15 @@ fn variable(name: &str, names: &Names<'_>) -> u32 {
         .index()
 }
 
-fn arm_header(name: &str, emit: &Emit<'_>) -> String {
+fn arm_header(name: &str) -> String {
     format!(
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
-    brul::gui::style::check_theme({}styles(), theme)?;
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let mut rows = Vec::new();
-",
-        emit.resource_prefix
+"
     )
 }
 

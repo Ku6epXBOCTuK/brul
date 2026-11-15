@@ -15,17 +15,20 @@ pub(super) fn view(
     root: &Element,
     handlers: &[(HandlerEvent, String)],
     emit: &mut Emit<'_>,
+    typed: bool,
 ) -> Result<(), Error> {
+    let theme = match typed {
+        true => "Option<ThemeId>",
+        false => "Option<&str>",
+    };
     let _ = writeln!(
         out,
-        "pub fn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
+        "pub fn {name}(theme: {theme}, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
     );
+    if typed {
+        out.push_str("    let theme = theme.map(brul::Theme::name);\n");
+    }
     out.push_str("    component.borrow_mut().set_names(names());\n");
-    let _ = writeln!(
-        out,
-        "    brul::gui::style::check_theme({}styles(), theme)?;",
-        emit.resource_prefix
-    );
     out.push_str("    let mut bindings = Vec::new();\n");
     out.push_str("    let mut handlers = Vec::new();\n");
     out.push_str("    let mut props = Vec::new();\n");

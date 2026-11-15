@@ -298,10 +298,9 @@ fn assert_nested_values(structures: &[brul::Structure]) {
 
 #[test]
 fn unknown_theme_is_rejected() {
-    let error = match generated::picker_view(Some("sepia"), &seeded()) {
-        Ok(_) => panic!("unknown theme was accepted"),
-        Err(error) => error,
-    };
+    let error = "sepia"
+        .parse::<generated::ThemeId>()
+        .expect_err("unknown theme was accepted");
     assert!(
         error.to_string().contains("unknown theme 'sepia'"),
         "{error}"

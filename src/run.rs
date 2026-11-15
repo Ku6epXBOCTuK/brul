@@ -9,22 +9,22 @@ use brul_window::{ColorScheme, Waker, WindowCommand, WindowKey, WindowSpec, run_
 use crate::handle::{Handle, Message, take};
 use crate::ui::CommandHost;
 use crate::{
-    Built, Component, ComponentHandle, Host, Ui, Value, ViewError, WindowConfig, execute_program,
-    script,
+    Built, Component, ComponentHandle, Host, Theme, Ui, Value, ViewError, WindowConfig,
+    execute_program, script,
 };
 
-pub struct WindowDef {
+pub struct WindowDef<T: Theme> {
     pub name: &'static str,
     pub config: WindowConfig,
-    pub view: fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>,
+    pub view: fn(Option<T>, &ComponentHandle) -> Result<Built, ViewError>,
 }
 
 /// Запускает окна по модулю, сгенерированному из `.brul`.
-pub fn run_generated(
-    windows: Vec<WindowDef>,
+pub fn run_generated<T: Theme>(
+    windows: Vec<WindowDef<T>>,
     script: Option<&script::Program>,
     names: &'static [&'static str],
-    theme: Option<&str>,
+    theme: Option<T>,
     seeds: &[(&str, Value)],
     host: Option<Box<dyn Host>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -33,11 +33,11 @@ pub fn run_generated(
 
 /// Как [`run_generated`], но отдаёт [`Handle`] до старта цикла событий:
 /// фоновый поток пишет им в DSL, цикл просыпается и перерисовывает окна.
-pub fn run_generated_with(
-    windows: Vec<WindowDef>,
+pub fn run_generated_with<T: Theme>(
+    windows: Vec<WindowDef<T>>,
     script: Option<&script::Program>,
     names: &'static [&'static str],
-    theme: Option<&str>,
+    theme: Option<T>,
     seeds: &[(&str, Value)],
     host: Option<Box<dyn Host>>,
     ready: impl FnOnce(Handle) + 'static,
@@ -48,7 +48,7 @@ pub fn run_generated_with(
     }
     tracing::info!(
         windows = windows.len(),
-        theme = theme.unwrap_or("system"),
+        theme = theme.map(Theme::name).unwrap_or("system"),
         "starting"
     );
 
@@ -59,7 +59,7 @@ pub fn run_generated_with(
         .map(|(index, window)| (window.name.to_owned(), WindowKey(index as u64)))
         .collect();
     let commands = Rc::new(RefCell::new(Vec::new()));
-    let shown = Rc::new(RefCell::new(theme.map(str::to_owned)));
+    let shown = Rc::new(RefCell::new(theme.map(Theme::name).map(str::to_owned)));
     component.borrow_mut().set_host(CommandHost {
         commands: Rc::clone(&commands),
         app: host,
@@ -114,10 +114,10 @@ pub(crate) fn generated_component(
 }
 
 #[cfg(test)]
-pub(crate) fn generated_built(
-    view: fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>,
+pub(crate) fn generated_built<T: Theme>(
+    view: fn(Option<T>, &ComponentHandle) -> Result<Built, ViewError>,
     names: &'static [&'static str],
-    theme: Option<&str>,
+    theme: Option<T>,
     seeds: &[(&str, Value)],
     script: Option<&script::Program>,
 ) -> Result<(ComponentHandle, Built), Box<dyn std::error::Error>> {
@@ -126,24 +126,24 @@ pub(crate) fn generated_built(
     Ok((component, built))
 }
 
-struct Runtime {
-    defs: Vec<WindowDef>,
+struct Runtime<T: Theme> {
+    defs: Vec<WindowDef<T>>,
     component: ComponentHandle,
-    uis: HashMap<WindowKey, Ui>,
+    uis: HashMap<WindowKey, Ui<T>>,
     commands: Rc<RefCell<Vec<WindowCommand>>>,
-    fixed_theme: Option<String>,
-    theme: Option<String>,
+    fixed_theme: Option<T>,
+    theme: Option<T>,
     shown: Rc<RefCell<Option<String>>>,
     pending: Vec<WindowCommand>,
     waker: Option<Waker>,
 }
 
-impl Runtime {
+impl<T: Theme> Runtime<T> {
     fn new(
-        defs: Vec<WindowDef>,
+        defs: Vec<WindowDef<T>>,
         component: ComponentHandle,
         commands: Rc<RefCell<Vec<WindowCommand>>>,
-        fixed_theme: Option<&str>,
+        fixed_theme: Option<T>,
         shown: Rc<RefCell<Option<String>>>,
         pending: Vec<WindowCommand>,
     ) -> Self {
@@ -152,7 +152,7 @@ impl Runtime {
             component,
             uis: HashMap::new(),
             commands,
-            fixed_theme: fixed_theme.map(str::to_owned),
+            fixed_theme,
             theme: None,
             shown,
             pending,
@@ -174,14 +174,17 @@ impl Runtime {
         rest
     }
 
-    fn apply_theme(&mut self, theme: &str) {
-        tracing::info!(theme, "applying theme");
-        self.theme = Some(theme.to_owned());
-        *self.shown.borrow_mut() = Some(theme.to_owned());
+    fn apply_theme(&mut self, name: &str) {
+        let Some(theme) = T::parse(name) else {
+            let error = crate::UnknownTheme::new(name);
+            tracing::error!(%error, "theme change failed");
+            return;
+        };
+        tracing::info!(theme = name, "applying theme");
+        self.theme = Some(theme);
+        *self.shown.borrow_mut() = Some(name.to_owned());
         for ui in self.uis.values_mut() {
-            if let Err(error) = ui.set_theme(theme)
-                && !error.is_unknown_theme()
-            {
+            if let Err(error) = ui.set_theme(theme) {
                 tracing::error!(%error, "theme change failed");
             }
         }
@@ -192,11 +195,10 @@ impl Runtime {
         }
     }
 
-    fn theme_for(&self, scheme: ColorScheme) -> String {
-        match &self.theme {
-            Some(theme) => theme.clone(),
-            None => scheme_theme(self.fixed_theme.as_deref(), scheme).to_owned(),
-        }
+    fn theme_for(&self, scheme: ColorScheme) -> Option<T> {
+        self.theme
+            .or(self.fixed_theme)
+            .or_else(|| T::parse(scheme_theme(None, scheme)))
     }
 
     fn create(&mut self, key: WindowKey, scheme: ColorScheme) -> Result<WindowSpec, String> {
@@ -209,13 +211,11 @@ impl Runtime {
             (def.config.clone(), def.view)
         };
         let theme = self.theme_for(scheme);
-        *self.shown.borrow_mut() = Some(theme.clone());
+        *self.shown.borrow_mut() = theme.map(Theme::name).map(str::to_owned);
         if let Some(ui) = self.uis.get_mut(&key) {
-            tracing::debug!(%key, %theme, "reusing window");
-            if let Err(error) = ui.set_theme(&theme)
-                && !error.is_unknown_theme()
-            {
-                tracing::error!(%error, "theme change failed");
+            tracing::debug!(%key, "reusing window");
+            if let Some(theme) = theme {
+                ui.set_theme(theme).map_err(|error| error.to_string())?;
             }
             self.component.borrow_mut().touch();
             brul_reactive::flush();
@@ -227,22 +227,23 @@ impl Runtime {
             });
         }
 
-        tracing::info!(%key, %theme, "creating window");
+        tracing::info!(
+            %key,
+            theme = theme.map(Theme::name).unwrap_or("default"),
+            "creating window"
+        );
         let _ = crate::take_structures();
-        let built = view(self.fixed_theme.as_deref(), &self.component)
-            .map_err(|error| error.to_string())?;
+        let built = view(self.fixed_theme, &self.component).map_err(|error| error.to_string())?;
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
             built,
             view,
-            self.fixed_theme.clone(),
+            self.fixed_theme,
             Rc::clone(&self.commands),
             config.scroll,
         );
-        if let Err(error) = ui.set_theme(&theme)
-            && !error.is_unknown_theme()
-        {
-            tracing::error!(%error, "theme change failed");
+        if let Some(theme) = theme {
+            ui.set_theme(theme).map_err(|error| error.to_string())?;
         }
         let mut commands = std::mem::take(&mut self.pending);
         commands.extend(ui.dispatch(&[]));
@@ -322,6 +323,7 @@ pub(crate) fn scheme_theme(fixed: Option<&str>, scheme: ColorScheme) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::TestTheme;
 
     use std::collections::HashMap;
 
@@ -334,23 +336,14 @@ mod tests {
 
     const NAMES: &[&str] = &["name"];
 
-    fn unknown_theme() -> ViewError {
-        ViewError::from(crate::gui::style::StyleError::from(
-            crate::style::SnapshotError::UnknownTheme("sepia".to_owned()),
-        ))
-    }
-
     fn name(component: &mut crate::Component) -> Result<Value, crate::Error> {
         component.read("name")
     }
 
     fn generated_view(
-        theme: Option<&str>,
+        _theme: Option<TestTheme>,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
-        if theme == Some("sepia") {
-            return Err(unknown_theme());
-        }
         let widget = Widget::text("");
         let id = widget.id();
         Ok(Built {
@@ -361,7 +354,7 @@ mod tests {
         })
     }
 
-    fn defs() -> Vec<WindowDef> {
+    fn defs() -> Vec<WindowDef<TestTheme>> {
         ["First", "Second"]
             .into_iter()
             .map(|name| WindowDef {
@@ -372,23 +365,25 @@ mod tests {
             .collect()
     }
 
-    fn runtime(theme: Option<&str>) -> Runtime {
+    fn runtime(theme: Option<TestTheme>) -> Runtime<TestTheme> {
         let component = generated_component(NAMES, None, &[]).expect("component");
         Runtime::new(
             defs(),
             component,
             Rc::new(RefCell::new(Vec::new())),
             theme,
-            Rc::new(RefCell::new(theme.map(str::to_owned))),
+            Rc::new(RefCell::new(
+                theme.map(crate::Theme::name).map(str::to_owned),
+            )),
             Vec::new(),
         )
     }
 
     fn assembled(
-        theme: Option<&str>,
+        theme: Option<TestTheme>,
         seeds: &[(&str, Value)],
         script: Option<&script::Program>,
-    ) -> (WidgetId, Ui) {
+    ) -> (WidgetId, Ui<TestTheme>) {
         let (component, built) =
             generated_built(generated_view, NAMES, theme, seeds, script).expect("launch succeeds");
         let id = built.widget.id();
@@ -464,7 +459,7 @@ mod tests {
 
         assert!(runtime.dispatch(WindowKey(0), &[]).is_empty());
         for ui in runtime.uis.values() {
-            assert_eq!(ui.theme.as_deref(), Some("light"));
+            assert_eq!(ui.theme, Some(TestTheme::Light));
         }
     }
 
@@ -482,7 +477,10 @@ mod tests {
         Ok(theme)
     }
 
-    fn theme_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
+    fn theme_view(
+        _theme: Option<TestTheme>,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         let widget = Widget::text("");
         let id = widget.id();
         Ok(Built {
@@ -534,7 +532,10 @@ mod tests {
         static LAST_ID: RefCell<Option<WidgetId>> = const { RefCell::new(None) };
     }
 
-    fn seeded_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
+    fn seeded_view(
+        _theme: Option<TestTheme>,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         let widget = Widget::text("");
         let id = widget.id();
         LAST_ID.with(|slot| *slot.borrow_mut() = Some(id));
@@ -650,12 +651,15 @@ mod tests {
         })
     }
 
-    fn picker_view(_theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
+    fn picker_view(
+        _theme: Option<TestTheme>,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         key_view(component, "handleKey")
     }
 
     fn settings_view(
-        _theme: Option<&str>,
+        _theme: Option<TestTheme>,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         key_view(component, "handleSettingsKey")
@@ -742,9 +746,9 @@ mod tests {
     }
 
     #[test]
-    fn explicit_theme_ignores_the_color_scheme() {
-        assert_eq!(scheme_theme(Some("dark"), ColorScheme::Light), "dark");
-        assert_eq!(scheme_theme(Some("light"), ColorScheme::Dark), "light");
+    fn a_theme_parses_from_its_name() {
+        assert_eq!(TestTheme::parse("dark"), Some(TestTheme::Dark));
+        assert_eq!(TestTheme::parse("sepia"), None);
     }
 
     #[test]
