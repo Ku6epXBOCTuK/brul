@@ -118,7 +118,7 @@ fn children_are_placed_inside_padding_and_gap() {
 }
 
 #[test]
-fn percent_width_inside_an_auto_container_fills_the_available_width() {
+fn percent_width_spans_a_generated_structure_wrapper() {
     let item = Widget::column(Vec::new()).with_layout(LayoutStyle {
         width: Dimension::Percent(100.0),
         height: Dimension::Px(24),
@@ -126,6 +126,7 @@ fn percent_width_inside_an_auto_container_fills_the_available_width() {
     });
     let item_id = item.id();
     let rows = Widget::view(Direction::Column, vec![item]).with_layout(LayoutStyle {
+        width: Dimension::Percent(100.0),
         gap: 8,
         ..LayoutStyle::default()
     });

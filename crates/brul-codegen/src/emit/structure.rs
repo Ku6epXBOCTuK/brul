@@ -240,9 +240,14 @@ fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> bru
 fn widget(out: &mut String, frame: Frame<'_>) {
     let direction = frame.direction();
     let gap = frame.gap();
+    // NOTE: a control-flow group is not a box of its own, so it spans the cross axis of its parent instead of shrinking to content
+    let width = match direction {
+        "Column" => "width: brul::gui::Dimension::Percent(100.0), ",
+        _ => "",
+    };
     let _ = writeln!(
         out,
-        "    let widget = brul::gui::Widget::view(brul::gui::Direction::{direction}, children)\n        .with_layout(brul::gui::LayoutStyle {{ gap: {gap}, ..Default::default() }});"
+        "    let widget = brul::gui::Widget::view(brul::gui::Direction::{direction}, children)\n        .with_layout(brul::gui::LayoutStyle {{ {width}gap: {gap}, ..Default::default() }});"
     );
     out.push_str("    Ok((brul::Built { widget, bindings, handlers, props }, rows))\n}\n");
 }

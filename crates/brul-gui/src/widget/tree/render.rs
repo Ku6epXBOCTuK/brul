@@ -1,5 +1,5 @@
 use super::*;
-use crate::layout::{self, Available, Layouter, NodeShape};
+use crate::layout::{self, Layouter, NodeShape};
 use crate::text::TextEngine;
 use std::collections::{HashMap, HashSet};
 
@@ -10,10 +10,10 @@ pub(super) struct Pass<'a> {
 }
 
 impl Pass<'_> {
-    pub(super) fn build(&mut self, slot: Slot, available: Available) -> Result<u32, WidgetError> {
+    pub(super) fn build(&mut self, slot: Slot) -> Result<u32, WidgetError> {
         let node = &self.tree[slot.index()];
         let layout_style = node.layout_style();
-        let prepared = layout::prepare(&layout_style, available)?;
+        layout::validate(&layout_style)?;
         let key = slot.index() as u32;
 
         let mut keys = Vec::new();
@@ -21,7 +21,7 @@ impl Pass<'_> {
             Content::View { direction } => {
                 keys.reserve(node.children.len());
                 for &child in &node.children {
-                    keys.push(self.build(child, prepared.available)?);
+                    keys.push(self.build(child)?);
                 }
                 let scroll = match direction {
                     Direction::Column => node.scroll_offset,
@@ -42,7 +42,6 @@ impl Pass<'_> {
                 offset: node.offset,
                 scroll,
                 content: slot,
-                prepared,
                 children: &keys,
             },
         );

@@ -2,7 +2,7 @@ use super::frame::{build_snapshot, reveal_carets};
 use super::render::{Pass, measure_text};
 use super::style::Transition;
 use super::*;
-use crate::layout::{Available, LayoutBox, Size};
+use crate::layout::{LayoutBox, Size};
 use crate::text::TextEngine;
 use std::time::Duration;
 
@@ -42,13 +42,7 @@ impl WidgetTree {
                 layouter: &mut self.layouter,
                 stale: &self.stale,
             };
-            pass.build(
-                self.root,
-                Available {
-                    width: Some(viewport.width),
-                    height: None,
-                },
-            )?
+            pass.build(self.root)?
         };
         self.texts.retain(|id, _| self.index.contains_key(id));
 

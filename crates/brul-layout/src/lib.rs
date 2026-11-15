@@ -291,35 +291,10 @@ impl fmt::Display for LayoutError {
 
 impl std::error::Error for LayoutError {}
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Available {
-    pub width: Option<u32>,
-    pub height: Option<u32>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Prepared {
-    pub available: Available,
-    width: Option<u32>,
-    height: Option<u32>,
-}
-
-pub fn prepare(style: &LayoutStyle, available: Available) -> Result<Prepared, LayoutError> {
-    validate_flex(style)?;
-    let width = resolve(style.width, available.width)?;
-    let height = resolve(style.height, available.height)?;
-    Ok(Prepared {
-        available: Available {
-            width: width
-                .or(available.width)
-                .map(|value| value.saturating_sub(inset_x(style))),
-            height: height
-                .or(available.height)
-                .map(|value| value.saturating_sub(inset_y(style))),
-        },
-        width,
-        height,
-    })
+pub fn validate(style: &LayoutStyle) -> Result<(), LayoutError> {
+    validate_dimension(style.width)?;
+    validate_dimension(style.height)?;
+    validate_flex(style)
 }
 
 pub struct NodeShape<'a, C> {
@@ -328,7 +303,6 @@ pub struct NodeShape<'a, C> {
     pub offset: Option<Offset>,
     pub scroll: ScrollOffset,
     pub content: C,
-    pub prepared: Prepared,
     pub children: &'a [u32],
 }
 
@@ -376,13 +350,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
     }
 
     pub fn node(&mut self, key: u32, shape: NodeShape<C>) {
-        let taffy = taffy_style(
-            shape.style,
-            shape.direction,
-            shape.prepared.width,
-            shape.prepared.height,
-            shape.offset,
-        );
+        let taffy = taffy_style(shape.style, shape.direction, shape.offset);
         let context = shape.content.clone();
         let nodes = shape
             .children
@@ -543,33 +511,19 @@ impl<C: PartialEq + Clone> Default for Layouter<C> {
 }
 
 pub fn layout(root: &LayoutNode, viewport: Size) -> Result<LayoutBox, LayoutError> {
-    let available = Available {
-        width: Some(viewport.width),
-        height: Some(viewport.height),
-    };
     let mut tree = TaffyTree::<Size>::new();
-    let root_id = build(&mut tree, root, available)?;
+    let root_id = build(&mut tree, root)?;
     compute(&mut tree, root_id, viewport);
     Ok(collect(&tree, root_id, root, 0, 0))
 }
 
-fn build(
-    tree: &mut TaffyTree<Size>,
-    node: &LayoutNode,
-    available: Available,
-) -> Result<NodeId, LayoutError> {
+fn build(tree: &mut TaffyTree<Size>, node: &LayoutNode) -> Result<NodeId, LayoutError> {
     let style = node.style();
-    let prepared = prepare(style, available)?;
+    validate(style)?;
 
     let id = match node {
         LayoutNode::Leaf { size, offset, .. } => {
-            let taffy = taffy_style(
-                style,
-                Direction::Row,
-                prepared.width,
-                prepared.height,
-                *offset,
-            );
+            let taffy = taffy_style(style, Direction::Row, *offset);
             tree.new_leaf_with_context(taffy, *size)
                 .expect("layout tree")
         }
@@ -581,9 +535,9 @@ fn build(
         } => {
             let ids = children
                 .iter()
-                .map(|child| build(tree, child, prepared.available))
+                .map(|child| build(tree, child))
                 .collect::<Result<Vec<_>, LayoutError>>()?;
-            let taffy = taffy_style(style, *direction, prepared.width, prepared.height, *offset);
+            let taffy = taffy_style(style, *direction, *offset);
             tree.new_with_children(taffy, &ids).expect("layout tree")
         }
     };
@@ -617,23 +571,13 @@ fn compute(tree: &mut TaffyTree<Size>, root: NodeId, viewport: Size) {
     .expect("layout tree");
 }
 
-fn taffy_style(
-    style: &LayoutStyle,
-    direction: Direction,
-    width: Option<u32>,
-    height: Option<u32>,
-    offset: Option<Offset>,
-) -> TaffyStyle {
+fn taffy_style(style: &LayoutStyle, direction: Direction, offset: Option<Offset>) -> TaffyStyle {
     let length = |value: u32| LengthPercentage::length(value as f32);
     let mut output = TaffyStyle {
         box_sizing: BoxSizing::BorderBox,
         size: TaffySize {
-            width: width.map_or(TaffyDimension::AUTO, |value| {
-                TaffyDimension::length(value as f32)
-            }),
-            height: height.map_or(TaffyDimension::AUTO, |value| {
-                TaffyDimension::length(value as f32)
-            }),
+            width: dimension(style.width),
+            height: dimension(style.height),
         },
         padding: TaffyRect {
             left: length(style.padding.left),
@@ -669,11 +613,7 @@ fn taffy_style(
         },
         flex_grow: style.flex_grow,
         flex_shrink: style.flex_shrink,
-        flex_basis: match style.flex_basis {
-            Dimension::Auto => TaffyDimension::AUTO,
-            Dimension::Px(value) => TaffyDimension::length(value as f32),
-            Dimension::Percent(percent) => TaffyDimension::percent(percent / 100.0),
-        },
+        flex_basis: dimension(style.flex_basis),
         ..TaffyStyle::default()
     };
 
@@ -776,16 +716,20 @@ pub fn inset_y(style: &LayoutStyle) -> u32 {
         .saturating_add(style.padding.bottom)
 }
 
-fn resolve(dimension: Dimension, base: Option<u32>) -> Result<Option<u32>, LayoutError> {
-    match dimension {
-        Dimension::Auto => Ok(None),
-        Dimension::Px(value) => Ok(Some(value)),
-        Dimension::Percent(percent) => {
-            if !percent.is_finite() || percent < 0.0 {
-                return Err(LayoutError::InvalidDimension);
-            }
-            Ok(base.map(|base| (f64::from(base) * f64::from(percent) / 100.0).round() as u32))
-        }
+fn validate_dimension(dimension: Dimension) -> Result<(), LayoutError> {
+    if let Dimension::Percent(percent) = dimension
+        && (!percent.is_finite() || percent < 0.0)
+    {
+        return Err(LayoutError::InvalidDimension);
+    }
+    Ok(())
+}
+
+fn dimension(value: Dimension) -> TaffyDimension {
+    match value {
+        Dimension::Auto => TaffyDimension::AUTO,
+        Dimension::Px(value) => TaffyDimension::length(value as f32),
+        Dimension::Percent(percent) => TaffyDimension::percent(percent / 100.0),
     }
 }
 
@@ -838,10 +782,6 @@ mod tests {
     #[test]
     fn a_clean_tree_is_not_measured_again() {
         let calls = Rc::new(Cell::new(0));
-        let available = Available {
-            width: Some(100),
-            height: Some(50),
-        };
         let root_style = LayoutStyle {
             width: Dimension::Px(100),
             height: Dimension::Px(50),
@@ -871,7 +811,6 @@ mod tests {
                         id: 1,
                         calls: Rc::clone(&calls),
                     },
-                    prepared: prepare(&child_style, available).expect("child style"),
                     children: &[],
                 },
             );
@@ -886,7 +825,6 @@ mod tests {
                         id: 0,
                         calls: Rc::clone(&calls),
                     },
-                    prepared: prepare(&root_style, available).expect("root style"),
                     children: &[1],
                 },
             );
@@ -958,5 +896,40 @@ mod tests {
 
         assert_eq!(placed.children[0].width, 86);
         assert_eq!(placed.children[1].width, 106);
+    }
+
+    #[test]
+    fn percent_child_of_a_flex_column_takes_the_column_width() {
+        let column = || {
+            let child = LayoutNode::leaf(0, 30).with_style(LayoutStyle {
+                width: Dimension::Percent(100.0),
+                height: Dimension::Px(30),
+                ..LayoutStyle::default()
+            });
+            LayoutNode::column(vec![child]).with_style(LayoutStyle {
+                flex_grow: 1.0,
+                flex_basis: Dimension::Px(0),
+                ..LayoutStyle::default()
+            })
+        };
+        let root = LayoutNode::row(vec![column(), column()]).with_style(LayoutStyle {
+            width: Dimension::Px(480),
+            gap: 10,
+            ..LayoutStyle::default()
+        });
+
+        let placed = layout(
+            &root,
+            Size {
+                width: 480,
+                height: 200,
+            },
+        )
+        .expect("layout");
+
+        assert_eq!(placed.children[0].width, 235);
+        assert_eq!(placed.children[1].x, 245);
+        assert_eq!(placed.children[0].children[0].width, 235);
+        assert_eq!(placed.children[1].children[0].width, 235);
     }
 }

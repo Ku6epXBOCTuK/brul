@@ -103,8 +103,8 @@ fn percent_width_uses_parent_content_width() {
 }
 
 #[test]
-fn percent_width_inside_auto_container_uses_available_width() {
-    let child = LayoutNode::leaf(0, 20).with_style(LayoutStyle {
+fn percent_width_inside_an_auto_container_follows_its_content() {
+    let child = LayoutNode::leaf(40, 20).with_style(LayoutStyle {
         width: Dimension::Percent(100.0),
         ..LayoutStyle::default()
     });
@@ -124,18 +124,23 @@ fn percent_width_inside_auto_container_uses_available_width() {
     )
     .expect("layout");
 
-    assert_eq!(placed.children[0].width, 280);
-    assert_eq!(placed.children[0].children[0].width, 280);
+    assert_eq!(placed.children[0].width, 40);
+    assert_eq!(placed.children[0].children[0].width, 40);
 }
 
 #[test]
-fn percent_height_inside_auto_container_uses_available_height() {
+fn percent_height_inside_a_flex_sized_parent_takes_its_half() {
     let child = LayoutNode::leaf(40, 0).with_style(LayoutStyle {
         height: Dimension::Percent(50.0),
         ..LayoutStyle::default()
     });
-    let wrapper = LayoutNode::column(vec![child]);
-    let root = LayoutNode::column(vec![wrapper]).with_style(LayoutStyle {
+    let column = LayoutNode::column(vec![child]).with_style(LayoutStyle {
+        height: Dimension::Percent(100.0),
+        flex_grow: 1.0,
+        flex_basis: Dimension::Px(0),
+        ..LayoutStyle::default()
+    });
+    let root = LayoutNode::row(vec![column]).with_style(LayoutStyle {
         width: Dimension::Px(100),
         height: Dimension::Px(200),
         ..LayoutStyle::default()
@@ -150,7 +155,8 @@ fn percent_height_inside_auto_container_uses_available_height() {
     )
     .expect("layout");
 
-    assert_eq!(placed.children[0].height, 100);
+    assert_eq!(placed.children[0].height, 200);
+    assert_eq!(placed.children[0].children[0].height, 100);
 }
 
 #[test]
