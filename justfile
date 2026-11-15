@@ -30,6 +30,15 @@ autostart-nobs:
 unautostart-nobs:
     Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name nobs -ErrorAction SilentlyContinue; Write-Output "autostart removed"
 
+build-panel:
+    cargo build --release -p service-panel
+
+install-panel: build-panel
+    New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
+    Get-Process panel -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 400
+    Copy-Item -Force "{{target_dir}}\release\panel.exe" "$HOME\bin\panel.exe"
+    Write-Output "installed: $HOME\bin\panel.exe"
+
 check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings

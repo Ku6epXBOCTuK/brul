@@ -1,0 +1,25 @@
+<markup>
+    window Panel (
+        title: "Службы",
+        width: 760,
+        height: 520,
+        centered: true
+    ) {
+        Column (root) {
+            Text (title) { "Службы" }
+            Text (hint) { "Список служб появится в следующей задаче." }
+        }
+    }
+</markup>
+
+<style>
+    .root {
+        width: 100%;
+        height: 100%;
+        padding: 18px;
+        gap: 10px;
+        background: #12141c;
+    }
+    .title { color: #ffffff; font-size: 22px; }
+    .hint { color: #8c94a8; font-size: 14px; }
+</style>
