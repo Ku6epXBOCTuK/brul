@@ -206,7 +206,7 @@ BRUL-386 (распил `layout.rs`) не берётся: файл уехал ц�
 
 ## 6.3 BRUL-281 после слотов
 
-- [ ] BRUL-281 — `brul-codegen/src/runtime.rs`; слоты правят `Structure`,
+- [x] BRUL-281 — `brul-codegen/src/runtime.rs`; слоты правят `Structure`,
   `Built` и регистр структур, поэтому распил идёт после BRUL-382. BRUL-402
   `runtime.rs` не трогает: имена слотов заложены в BRUL-382.
 

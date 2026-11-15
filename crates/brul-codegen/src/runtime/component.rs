@@ -1,0 +1,180 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use brul_script::{Component, Value, VariableId, execute_program};
+use brul_syntax::markup::PropType;
+use brul_syntax::script::Program;
+use brul_syntax::style::Stylesheet;
+
+use crate::{Import, Registry};
+
+use super::binding::{Expression, PropBinding};
+use super::error::ViewError;
+use super::event::{ComponentEvent, EventHost};
+use super::slot::{SlotArgument, Slots, current_slots, with_slots};
+use super::structure::{Built, View};
+
+pub type ComponentHandle = Rc<RefCell<Component>>;
+
+#[derive(Clone)]
+pub struct Context {
+    pub registry: Rc<Registry>,
+    pub imports: Vec<Import>,
+    pub stylesheet: Rc<Stylesheet>,
+}
+
+pub struct PropArgument {
+    pub name: VariableId,
+    pub ty: PropType,
+    pub expression: Expression,
+}
+
+pub struct Instance<'a> {
+    pub theme: Option<&'a str>,
+    pub view: View,
+    pub script: Option<&'a Program>,
+    pub name: &'static str,
+    pub names: &'static [&'static str],
+    pub props: &'a [PropArgument],
+    pub defaults: &'a [PropArgument],
+    pub events: &'a [ComponentEvent],
+    pub slots: &'a [SlotArgument],
+}
+
+pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Built, ViewError> {
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    component.borrow_mut().set_names(instance.names);
+    start(&component, &instance)?;
+    let given = declare_props(&component, parent, instance.props, instance.name)?;
+    declare_defaults(&component, instance.defaults, &given, instance.name)?;
+    let slots = (!instance.slots.is_empty()).then(|| {
+        Rc::new(Slots {
+            component: Rc::clone(parent),
+            scopes: parent.borrow().build_scopes(),
+            parent: current_slots(),
+            entries: instance.slots.to_vec(),
+        })
+    });
+    let mut built = with_slots(slots, || (instance.view)(instance.theme, &component))?;
+    bind(&mut built, parent, &component, instance.props);
+    Ok(built)
+}
+
+fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), ViewError> {
+    if !instance.events.is_empty() {
+        component.borrow_mut().set_host(EventHost {
+            events: instance
+                .events
+                .iter()
+                .map(|event| ComponentEvent {
+                    name: event.name,
+                    function: event.function,
+                    params: event.params,
+                    component: Rc::clone(&event.component),
+                })
+                .collect(),
+        });
+    }
+    match instance.script {
+        Some(program) => {
+            execute_program(&mut component.borrow_mut(), program).map_err(ViewError::from)
+        }
+        None => Ok(()),
+    }
+}
+
+fn declare_props(
+    component: &ComponentHandle,
+    parent: &ComponentHandle,
+    props: &[PropArgument],
+    name: &str,
+) -> Result<Vec<VariableId>, ViewError> {
+    let mut given = Vec::new();
+    for argument in props {
+        let value = evaluate_argument(parent, argument)?;
+        assign(component, argument, value, name)?;
+        given.push(argument.name);
+    }
+    Ok(given)
+}
+
+fn declare_defaults(
+    component: &ComponentHandle,
+    defaults: &[PropArgument],
+    given: &[VariableId],
+    name: &str,
+) -> Result<(), ViewError> {
+    for argument in defaults {
+        if given.contains(&argument.name) {
+            continue;
+        }
+        let value = evaluate_argument(component, argument)?;
+        assign(component, argument, value, name)?;
+    }
+    Ok(())
+}
+
+fn bind(
+    built: &mut Built,
+    parent: &ComponentHandle,
+    component: &ComponentHandle,
+    props: &[PropArgument],
+) {
+    let widget = built.widget.id();
+    for argument in props {
+        built.props.push(PropBinding {
+            widget,
+            target: Rc::clone(component),
+            name: argument.name,
+            ty: argument.ty,
+            expression: argument.expression,
+            scopes: parent.borrow().build_scopes(),
+            component: Rc::clone(parent),
+        });
+    }
+}
+
+fn evaluate_argument(
+    component: &ComponentHandle,
+    argument: &PropArgument,
+) -> Result<Value, ViewError> {
+    (argument.expression)(&mut component.borrow_mut()).map_err(ViewError::from)
+}
+
+fn assign(
+    component: &ComponentHandle,
+    argument: &PropArgument,
+    value: Value,
+    name: &str,
+) -> Result<(), ViewError> {
+    if !accepts_prop(&value, argument.ty) {
+        let property = component.borrow().name(argument.name);
+        return Err(ViewError::expected(
+            format!("property '{property}' of component '{name}'"),
+            prop_name(argument.ty),
+            value.type_name(),
+        ));
+    }
+    component
+        .borrow_mut()
+        .declare_property(argument.name, value)
+        .map_err(ViewError::from)
+}
+
+pub fn accepts_prop(value: &Value, ty: PropType) -> bool {
+    match ty {
+        PropType::Bool => matches!(value, Value::Bool(_)),
+        PropType::Number => matches!(value, Value::Number(_)),
+        PropType::String => matches!(value, Value::String(_)),
+        PropType::Image => matches!(value, Value::Null | Value::Image(_)),
+    }
+}
+
+pub fn prop_name(ty: PropType) -> &'static str {
+    match ty {
+        PropType::Bool => "Bool",
+        PropType::Number => "Number",
+        PropType::String => "String",
+        PropType::Image => "Image",
+    }
+}
