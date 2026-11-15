@@ -26,6 +26,21 @@
             services = result.services;
         }
     }
+
+    function poll() {
+        let result = refresh(selected);
+        if (result.ok) {
+            services = result.services;
+        }
+        log = result.log;
+    }
+
+    function selectService(name) {
+        selected = name;
+        poll();
+    }
+
+    every(2000, poll);
 </script>
 
 <use>
@@ -46,9 +61,17 @@
                 @each (services as item) {
                     ServiceRow (name: item.name, display: item.display, state: item.state,
                                 start: item.start, port: item.port,
+                                selected: item.name == selected,
+                                on selectRequested: selectService,
                                 on startRequested: startService,
                                 on stopRequested: stopService,
                                 on restartRequested: restartService) { }
+                }
+            }
+            Column (log-box) {
+                Text (log-title) { "Log" }
+                Column (log-body) {
+                    Text (log-text) { log }
                 }
             }
         }
@@ -90,8 +113,27 @@
     .status { color: theme.muted; font-size: 13px; }
     .list {
         width: 100%;
+        flex-grow: 1;
         gap: 8px;
+        scroll: true;
     }
+    .log-box {
+        width: 100%;
+        height: 170px;
+        padding: 10px;
+        gap: 6px;
+        background: theme.surface;
+        border: 1px theme.border;
+        border-radius: 10px;
+    }
+    .log-title { color: theme.muted; font-size: 12px; }
+    .log-body {
+        width: 100%;
+        flex-grow: 1;
+        clip: true;
+        justify-content: end;
+    }
+    .log-text { color: theme.text; font-size: 12px; }
     .action {
         height: 32px;
         padding-left: 14px;

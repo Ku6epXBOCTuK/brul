@@ -3,6 +3,10 @@
         startRequested(name);
     }
 
+    function selectService() {
+        selectRequested(name);
+    }
+
     function stopService() {
         stopRequested(name);
     }
@@ -19,11 +23,13 @@
         prop state: String = "";
         prop start: String = "";
         prop port: String = "";
+        prop selected: Bool = false;
+        event selectRequested(service: String);
         event startRequested(service: String);
         event stopRequested(service: String);
         event restartRequested(service: String);
 
-        Row (row) {
+        Row (row, class: selected ? "selected" : "", on click: selectService) {
             Column (row-titles) {
                 Text (row-name) { name }
                 Text (row-display) { display }
@@ -85,4 +91,5 @@
     }
     .row-action:hover { background: theme.border; }
     .row-action-label { color: theme.text; font-size: 12px; }
+    .selected { border-color: theme.accent; }
 </style>

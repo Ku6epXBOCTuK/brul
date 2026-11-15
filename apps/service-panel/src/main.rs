@@ -8,8 +8,10 @@ use brul::logging::{error, info};
 use brul::{command, host};
 
 use service_panel::{
-    Config, Service, ServiceError, ServiceSpec, Started, default_path, generated, service,
+    Config, Service, ServiceError, ServiceSpec, Started, default_path, generated, log, service,
 };
+
+const LOG_LINES: usize = 40;
 
 struct AppHost {
     specs: Vec<ServiceSpec>,
@@ -33,6 +35,36 @@ fn start_all_manual(host: &mut AppHost) -> Result<Value, brul::Error> {
         Err(failure) => failure.to_string(),
     };
     Ok(outcome(&host.specs, status))
+}
+
+#[command]
+fn refresh(host: &mut AppHost, name: String) -> Result<Value, brul::Error> {
+    let (ok, services) = match service::query_all(&host.specs) {
+        Ok(services) => (true, rows(&services)),
+        Err(_) => (false, Value::Null),
+    };
+    Ok(Value::Object(Rc::new(vec![
+        (String::from("ok"), Value::Bool(ok)),
+        (String::from("services"), services),
+        (String::from("log"), text(log_text(&host.specs, &name))),
+    ])))
+}
+
+fn log_text(specs: &[ServiceSpec], name: &str) -> String {
+    if name.is_empty() {
+        return String::from("select a service to see its log");
+    }
+    let Some(spec) = specs.iter().find(|spec| spec.name == name) else {
+        return format!("no service '{name}' in the config");
+    };
+    let Some(path) = spec.log.as_deref() else {
+        return format!("no log configured for '{name}'");
+    };
+    match log::tail(path, LOG_LINES) {
+        Ok(text) if text.trim().is_empty() => format!("{} is empty", path.display()),
+        Ok(text) => text,
+        Err(failure) => failure.to_string(),
+    }
 }
 
 fn acted(result: Result<(), ServiceError>, action: &str, name: &str) -> String {
@@ -98,7 +130,7 @@ fn text(value: String) -> Value {
     Value::String(value.into())
 }
 
-host! { AppHost: act, start_all_manual }
+host! { AppHost: act, start_all_manual, refresh }
 
 fn main() -> ExitCode {
     brul::logging::init_with(&[env!("CARGO_PKG_NAME")]);
@@ -133,6 +165,8 @@ fn main() -> ExitCode {
     let seeds = [
         ("services", rows(&services)),
         ("status", text(String::new())),
+        ("selected", text(String::new())),
+        ("log", text(log_text(&config.services, ""))),
     ];
     let host = AppHost {
         specs: config.services,
@@ -161,7 +195,11 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{Service, Value, describe, row};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::{Service, ServiceSpec, Value, describe, log_text, row};
     use service_panel::{ServiceError, ServiceState, StartType, Started};
 
     fn sample() -> Service {
@@ -231,5 +269,67 @@ mod tests {
     #[test]
     fn a_start_report_without_work_says_so() {
         assert_eq!(describe(&Started::default()), "no manual services to start");
+    }
+
+    fn spec(name: &str, log: Option<PathBuf>) -> ServiceSpec {
+        ServiceSpec {
+            name: String::from(name),
+            port: None,
+            log,
+        }
+    }
+
+    fn written_log(name: &str, text: &str) -> PathBuf {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time after the epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("panel-window-{name}-{stamp}.log"));
+        fs::write(&path, text).expect("log file");
+        path
+    }
+
+    #[test]
+    fn a_log_without_a_selection_asks_for_one() {
+        assert_eq!(log_text(&[], ""), "select a service to see its log");
+    }
+
+    #[test]
+    fn a_selection_without_a_log_names_the_service() {
+        assert_eq!(
+            log_text(&[spec("sample-service", None)], "sample-service"),
+            "no log configured for 'sample-service'"
+        );
+    }
+
+    #[test]
+    fn a_selection_unknown_to_the_config_is_reported() {
+        assert_eq!(
+            log_text(&[spec("sample-service", None)], "other-service"),
+            "no service 'other-service' in the config"
+        );
+    }
+
+    #[test]
+    fn a_logged_selection_returns_the_tail_of_its_file() {
+        let path = written_log("tail", "one\ntwo\nthree\n");
+        let text = log_text(
+            &[spec("sample-service", Some(path.clone()))],
+            "sample-service",
+        );
+        assert!(text.ends_with("two\nthree"), "{text}");
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn an_empty_log_names_the_path() {
+        let path = written_log("empty", "");
+        let text = log_text(
+            &[spec("sample-service", Some(path.clone()))],
+            "sample-service",
+        );
+        assert!(text.contains("panel-window-empty"), "{text}");
+        assert!(text.ends_with("is empty"), "{text}");
+        let _ = fs::remove_file(&path);
     }
 }
