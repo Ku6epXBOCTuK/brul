@@ -1,6 +1,6 @@
 Stylesheet  = { ThemeBlock | OverrideBlock | ClassRule } ;
 ThemeBlock  = "theme" Ident "{" { ThemeProp } "}" ;
-ThemeProp   = Ident ":" Value ";" ;
+ThemeProp   = Ident ":" ThemeValue ";" ;
 OverrideBlock = "override" Ident "{" { ClassRule } "}" ;
 ClassRule   = "." Ident [ ":" State ] "{" { Prop | Animation } "}" ;
 State       = "hover" | "pressed" | "checked" | "selected" | "disabled" ;
@@ -16,6 +16,7 @@ ThemeRef    = "theme" "." Ident ;
 ColorValue  = Color | ThemeRef | ColorExpr ;
 ColorExpr   = ( "alpha" | "lighten" | "darken" ) "(" ColorValue "," Percent ")"
             | "mix" "(" ColorValue "," ColorValue "," Percent ")" ;
+ThemeValue  = Color | ColorExpr | Number "px" ;
 Percent     = Number "%" ;
 
 Ident       = letter { letter | digit | "-" | "_" } ;

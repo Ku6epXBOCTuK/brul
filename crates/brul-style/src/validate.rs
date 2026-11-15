@@ -50,6 +50,8 @@ pub fn themes(themes: &[Theme], positions: &[ThemeAt]) -> Result<(), ValidationE
                 format!("duplicate theme key '{}'", key.key),
             ));
         }
+        theme_refs(theme, position)?;
+        theme_cycles(theme, position)?;
     }
     let Some((first, _)) = themes.first().zip(positions.first()) else {
         return Ok(());
@@ -238,6 +240,86 @@ fn check(
         )),
         Some(_) => Ok(()),
     }
+}
+
+fn theme_refs(theme: &Theme, position: &ThemeAt) -> Result<(), ValidationError> {
+    for (entry, key_at) in theme.properties.iter().zip(&position.properties) {
+        for key in keys(&entry.value) {
+            match find_key(theme, key) {
+                None => {
+                    return Err(ValidationError::at(
+                        key_at.at,
+                        format!("theme '{}' has unknown key '{key}'", theme.name),
+                    ));
+                }
+                Some(found) => match key_type(&found.value) {
+                    Some(ThemeType::Color) => {}
+                    Some(actual) => {
+                        return Err(ValidationError::at(
+                            key_at.at,
+                            format!(
+                                "theme key '{key}' is {}, but '{}' needs a color",
+                                actual.name(),
+                                entry.key
+                            ),
+                        ));
+                    }
+                    None => {
+                        return Err(ValidationError::at(
+                            key_at.at,
+                            format!("theme key '{key}' is not a color"),
+                        ));
+                    }
+                },
+            }
+        }
+    }
+    Ok(())
+}
+
+fn theme_cycles(theme: &Theme, position: &ThemeAt) -> Result<(), ValidationError> {
+    for entry in &theme.properties {
+        walk_key(theme, position, &entry.key, &mut Vec::new())?;
+    }
+    Ok(())
+}
+
+fn walk_key(
+    theme: &Theme,
+    position: &ThemeAt,
+    key: &str,
+    path: &mut Vec<String>,
+) -> Result<(), ValidationError> {
+    if let Some(start) = path.iter().position(|item| item == key) {
+        let mut cycle = path[start..].to_vec();
+        cycle.push(key.to_owned());
+        let at = position
+            .properties
+            .iter()
+            .find(|item| item.key == key)
+            .map_or(position.name_at, |item| item.at);
+        return Err(ValidationError::at(
+            at,
+            format!("theme '{}' has a cycle: {}", theme.name, cycle.join(" -> ")),
+        ));
+    }
+    let Some(entry) = find_key(theme, key) else {
+        return Ok(());
+    };
+    path.push(key.to_owned());
+    for next in keys(&entry.value) {
+        walk_key(theme, position, next, path)?;
+    }
+    path.pop();
+    Ok(())
+}
+
+fn keys(value: &Value) -> Vec<&str> {
+    let mut keys = Vec::new();
+    if let Value::ColorExpr(expr) = value {
+        expr.keys(&mut keys);
+    }
+    keys
 }
 
 fn duplicate_key(position: &ThemeAt) -> Option<&ThemeKeyAt> {

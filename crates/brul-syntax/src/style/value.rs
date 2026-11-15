@@ -348,30 +348,41 @@ fn list(values: &[f64]) -> String {
 fn theme_key(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
     cursor.skip_trivia();
     let at = cursor.pos();
-    let message = || format!("expected color or px for theme key '{name}'");
-    match cursor.peek() {
-        Some('#') => hex_color(cursor).map(Value::Color),
-        Some(ch) if ch.is_ascii_alphabetic() => {
-            if cursor.eat_keyword("transparent") {
-                return Ok(Value::Color(Color::TRANSPARENT));
-            }
-            if cursor.eat_keyword("white") {
-                return Ok(Value::Color(Color::WHITE));
-            }
-            Err(Error::at(cursor.source(), at, message()))
-        }
-        Some(ch) if ch.is_ascii_digit() => {
-            let value = cursor
-                .number_literal()
-                .expect("parser accepts only numbers");
-            if cursor.eat_unit("px") {
-                Ok(Value::Px(value))
-            } else {
-                Err(Error::at(cursor.source(), at, message()))
-            }
-        }
-        _ => Err(Error::at(cursor.source(), at, message())),
+    if starts_color(cursor) {
+        return color(cursor, true, name);
     }
+    if cursor.eat_keyword("theme") {
+        return Err(Error::at(
+            cursor.source(),
+            at,
+            format!("theme key '{name}' cannot alias another key; use it in an expression"),
+        ));
+    }
+    if cursor.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+        let value = cursor
+            .number_literal()
+            .expect("parser accepts only numbers");
+        if cursor.eat_unit("px") {
+            return Ok(Value::Px(value));
+        }
+    }
+    Err(Error::at(
+        cursor.source(),
+        at,
+        format!("expected color or px for theme key '{name}'"),
+    ))
+}
+
+fn starts_color(cursor: &mut Cursor) -> bool {
+    if cursor.peek() == Some('#') {
+        return true;
+    }
+    let start = cursor.pos();
+    let found = ["alpha", "mix", "lighten", "darken", "transparent", "white"]
+        .iter()
+        .any(|word| cursor.eat_keyword(word));
+    cursor.set_pos(start);
+    found
 }
 
 fn hex(ch: char) -> u8 {

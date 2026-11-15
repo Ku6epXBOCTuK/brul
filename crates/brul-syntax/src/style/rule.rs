@@ -17,6 +17,7 @@ rule! {
         ThemeRef,
         ColorValue,
         ColorExpr,
+        ThemeValue,
         Percent,
         Ident,
         Number,

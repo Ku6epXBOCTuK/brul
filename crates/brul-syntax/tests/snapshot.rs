@@ -74,6 +74,22 @@ fn theme_refs_resolve_to_the_selected_theme() {
 }
 
 #[test]
+fn derived_theme_keys_resolve_on_build() {
+    let sheet = parse_file(
+        "theme dark { accent: #3b82f6; ring: alpha(theme.accent, 40%); }\n.a { border-color: theme.ring; }",
+    )
+    .expect("sheet");
+    let snapshot = sheet
+        .snapshot(&["a"], None, Some("dark"))
+        .expect("snapshot");
+
+    assert_eq!(
+        snapshot.get(Kind::BorderColor),
+        Some(&Value::Color(Color::rgba(0x3b, 0x82, 0xf6, 102)))
+    );
+}
+
+#[test]
 fn default_theme_is_the_first_one() {
     let sheet = parse_file(
         "theme dark { accent: #222222; }\ntheme light { accent: #111111; }\n.a { color: theme.accent; }",

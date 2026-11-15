@@ -252,6 +252,69 @@ fn theme_keys_take_keyword_colors() {
 }
 
 #[test]
+fn theme_keys_take_color_expressions() {
+    let source = "theme light { accent: #3b82f6; ring: alpha(theme.accent, 40%); shade: darken(white, 6%); }";
+    assert_eq!(
+        parse_file(source).unwrap().themes[0].properties,
+        vec![
+            entry("accent", Value::Color(Color::rgb(0x3b, 0x82, 0xf6))),
+            entry(
+                "ring",
+                Value::ColorExpr(ColorExpr::Alpha {
+                    color: ColorValue::Theme("accent".to_string()),
+                    amount: 40.0,
+                })
+            ),
+            entry(
+                "shade",
+                Value::ColorExpr(ColorExpr::Darken {
+                    color: ColorValue::Color(Color::WHITE),
+                    amount: 6.0,
+                })
+            ),
+        ]
+    );
+}
+
+#[test]
+fn theme_key_errors_name_the_problem() {
+    let sources = [
+        (
+            "theme light { accent: #3b82f6; ring: alpha(theme.muted, 40%); }",
+            "theme 'light' has unknown key 'muted'",
+        ),
+        (
+            "theme light { accent: #3b82f6; ring: alpha(theme.ring, 40%); }",
+            "theme 'light' has a cycle: ring -> ring",
+        ),
+        (
+            "theme light {
+    accent: #3b82f6;
+    a: alpha(theme.b, 10%);
+    b: alpha(theme.a, 10%);
+}",
+            "theme 'light' has a cycle: a -> b -> a",
+        ),
+        (
+            "theme light { radius: 4px; shade: alpha(theme.radius, 10%); }",
+            "theme key 'radius' is a px length, but 'shade' needs a color",
+        ),
+        (
+            "theme light { accent: #fff; copy: theme.accent; }",
+            "theme key 'copy' cannot alias another key",
+        ),
+    ];
+    for (source, message) in sources {
+        let error = parse_file(source).unwrap_err();
+        assert!(
+            error.message.contains(message),
+            "{source}: expected message containing {message}, got {}",
+            error.message
+        );
+    }
+}
+
+#[test]
 fn the_first_theme_is_the_default() {
     let source =
         "theme dark { accent: #000; }\ntheme light { accent: #fff; }\n.a { color: theme.accent; }";
