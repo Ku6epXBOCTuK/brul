@@ -82,6 +82,8 @@ impl Afk {
 
     pub fn free(&mut self) {
         self.live = false;
+        self.active = false;
+        self.written = None;
     }
 
     pub fn snapshot(&self, idle: Option<u64>) -> Snapshot {
@@ -232,6 +234,28 @@ mod tests {
         assert_eq!(afk.poll(Some(600), Instant::now()), None);
         afk.free();
         assert_eq!(afk.poll(Some(600), Instant::now()), Some(Action::Away));
+    }
+
+    #[test]
+    fn clearing_the_note_ends_the_away_latch() {
+        let mut afk = afk();
+        let now = Instant::now();
+        assert_eq!(afk.poll(Some(5), now), Some(Action::Away));
+        afk.free();
+        assert_eq!(afk.poll(Some(0), now + Duration::from_secs(20)), None);
+    }
+
+    #[test]
+    fn a_new_pause_after_clearing_goes_away_again() {
+        let mut afk = afk();
+        let now = Instant::now();
+        assert_eq!(afk.poll(Some(5), now), Some(Action::Away));
+        afk.free();
+        assert_eq!(afk.poll(Some(0), now), None);
+        assert_eq!(
+            afk.poll(Some(5), now + Duration::from_secs(1)),
+            Some(Action::Away)
+        );
     }
 
     #[test]
