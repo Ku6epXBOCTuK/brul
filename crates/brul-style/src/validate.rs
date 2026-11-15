@@ -23,10 +23,12 @@ impl ValidationError {
     }
 }
 
+#[derive(Debug)]
 pub struct PropertyAt {
     pub at: usize,
 }
 
+#[derive(Debug)]
 pub struct RuleAt {
     pub class_at: usize,
     pub properties: Vec<PropertyAt>,
@@ -126,14 +128,37 @@ pub fn refs(
 }
 
 pub fn states(rules: &[ClassRule], positions: &[RuleAt]) -> Result<(), ValidationError> {
+    states_with(&[], rules, positions)
+}
+
+pub fn overrides(
+    component: &str,
+    target: &[ClassRule],
+    rules: &[ClassRule],
+    positions: &[RuleAt],
+) -> Result<(), ValidationError> {
+    for (rule, position) in rules.iter().zip(positions) {
+        if !target.iter().any(|other| other.class == rule.class) {
+            return Err(ValidationError::at(
+                position.class_at,
+                format!("component '{component}' has no class '.{}'", rule.class),
+            ));
+        }
+    }
+    states_with(target, rules, positions)
+}
+
+pub fn states_with(
+    base: &[ClassRule],
+    rules: &[ClassRule],
+    positions: &[RuleAt],
+) -> Result<(), ValidationError> {
     for (rule, position) in rules.iter().zip(positions) {
         let Some(state) = rule.state else {
             continue;
         };
-        let base = rules
-            .iter()
-            .any(|other| other.state.is_none() && other.class == rule.class);
-        if !base {
+        let base_rule = |other: &ClassRule| other.state.is_none() && other.class == rule.class;
+        if !base.iter().chain(rules).any(base_rule) {
             return Err(ValidationError::at(
                 position.class_at,
                 format!(
@@ -163,11 +188,14 @@ pub fn states(rules: &[ClassRule], positions: &[RuleAt]) -> Result<(), Validatio
                 }
                 StatePolicy::Visual => {}
                 StatePolicy::TextWeight => {
-                    let fixed = rules.iter().any(|base| {
-                        base.state.is_none()
-                            && base.class == rule.class
-                            && base.properties.iter().any(|item| item.kind == Kind::Width)
-                            && base.properties.iter().any(|item| item.kind == Kind::Height)
+                    let fixed = base.iter().chain(rules).any(|other| {
+                        other.state.is_none()
+                            && other.class == rule.class
+                            && other.properties.iter().any(|item| item.kind == Kind::Width)
+                            && other
+                                .properties
+                                .iter()
+                                .any(|item| item.kind == Kind::Height)
                     });
                     if !fixed {
                         return Err(ValidationError::at(

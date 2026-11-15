@@ -1,6 +1,7 @@
-Stylesheet  = { ThemeBlock | ClassRule } ;
+Stylesheet  = { ThemeBlock | OverrideBlock | ClassRule } ;
 ThemeBlock  = "theme" Ident "{" { ThemeProp } "}" ;
 ThemeProp   = Ident ":" Value ";" ;
+OverrideBlock = "override" Ident "{" { ClassRule } "}" ;
 ClassRule   = "." Ident [ ":" State ] "{" { Prop | Animation } "}" ;
 State       = "hover" | "pressed" | "checked" | "selected" | "disabled" ;
 Prop        = Ident ":" Value { Value } ";" ;

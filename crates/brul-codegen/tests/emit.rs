@@ -1472,6 +1472,81 @@ fn an_imported_component_cannot_declare_a_theme() {
 }
 
 #[test]
+fn an_override_follows_the_component_rules() {
+    let dir = scratch(
+        "override",
+        &[
+            (
+                "chip.brul",
+                "<markup>\ncomponent Chip {\n    View (chip) { }\n}\n</markup>\n\n<style>\n.chip { background: #101010; }\n</style>\n",
+            ),
+            (
+                "window.brul",
+                "<style>\noverride Chip {\n    .chip { background: #ffffff; }\n    .chip:hover { background: #efefef; }\n}\n</style>\n\n<use>\n    import Chip from \"./chip.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Chip { }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    let own = module
+        .find("s::Color::rgba(16, 16, 16, 255)")
+        .unwrap_or_else(|| panic!("no component rule: {module}"));
+    let over = module
+        .find("s::Color::rgba(255, 255, 255, 255)")
+        .unwrap_or_else(|| panic!("no override rule: {module}"));
+    assert!(own < over, "{module}");
+    assert!(module.contains("state: Some(s::State::Hover)"), "{module}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn an_override_of_a_component_that_is_not_imported_is_an_error() {
+    let dir = scratch(
+        "override-missing-component",
+        &[(
+            "window.brul",
+            "<style>\noverride Chip {\n    .chip { background: #ffffff; }\n}\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View { }\n}\n</markup>\n",
+        )],
+    );
+    let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("override names 'Chip', which is not imported"),
+        "{}",
+        error.message
+    );
+    assert_eq!(error.line, 2);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn an_override_of_an_unknown_class_is_an_error() {
+    let dir = scratch(
+        "override-missing-class",
+        &[
+            (
+                "chip.brul",
+                "<markup>\ncomponent Chip {\n    View (chip) { }\n}\n</markup>\n\n<style>\n.chip { background: #101010; }\n</style>\n",
+            ),
+            (
+                "window.brul",
+                "<style>\noverride Chip {\n    .chip-label { background: #ffffff; }\n}\n</style>\n\n<use>\n    import Chip from \"./chip.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Chip { }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("component 'Chip' has no class '.chip-label'"),
+        "{}",
+        error.message
+    );
+    assert_eq!(error.line, 3);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn lists_imported_files_outside_the_entry_directory() {
     let dir = std::env::temp_dir().join(format!("brul-emit-sources-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

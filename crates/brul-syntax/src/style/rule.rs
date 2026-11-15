@@ -4,6 +4,7 @@ rule! {
         Stylesheet,
         ThemeBlock,
         ThemeProp,
+        OverrideBlock,
         ClassRule,
         State,
         Prop,

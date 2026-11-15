@@ -8,7 +8,7 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{self, Component as Declaration, Declaration as Item};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
-use brul_syntax::style::{self, Stylesheet, Theme};
+use brul_syntax::style::{self, Override, Stylesheet, Theme};
 use brul_syntax::uses::{self, Block, Use};
 
 use crate::source::Script;
@@ -56,6 +56,37 @@ pub fn resolve(uses: &Block, base: Option<&Path>, palette: &[Theme]) -> Result<R
         imports,
         resources,
     })
+}
+
+pub fn apply_overrides(
+    registry: &mut Registry,
+    overrides: &[Override],
+    source: &str,
+) -> Result<(), Error> {
+    for over in overrides {
+        let definition = registry
+            .imports
+            .iter()
+            .find(|item| item.name == over.component)
+            .map(|item| item.definition)
+            .ok_or_else(|| {
+                Error::at(
+                    source,
+                    over.component_at,
+                    format!("override names '{}', which is not imported", over.component),
+                )
+            })?;
+        let stylesheet = Rc::make_mut(&mut registry.definitions[definition].stylesheet);
+        style::overrides(
+            &over.component,
+            &stylesheet.rules,
+            &over.rules,
+            &over.positions,
+        )
+        .map_err(|error| Error::at(source, error.at, error.message))?;
+        stylesheet.rules.extend(over.rules.iter().cloned());
+    }
+    Ok(())
 }
 
 struct Loader<'a> {

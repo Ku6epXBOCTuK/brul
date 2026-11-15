@@ -3,7 +3,7 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{self, Declaration, Window};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
-use brul_syntax::style::{self, Stylesheet};
+use brul_syntax::style::{self, Override, Stylesheet};
 use brul_syntax::uses::{self, Block};
 
 use crate::{error_at, padded, sfc_error};
@@ -11,6 +11,7 @@ use crate::{error_at, padded, sfc_error};
 pub struct Source {
     pub windows: Vec<Window>,
     pub stylesheet: Stylesheet,
+    pub overrides: Vec<Override>,
     pub uses: Block,
     pub program: Option<Program>,
     pub script: Option<Script>,
@@ -51,11 +52,14 @@ pub fn parse(source: &str) -> Result<Source, Error> {
             "missing window declaration",
         ));
     }
-    let stylesheet = match sfc.style {
-        Some(block) => style::parse_file(&padded(source, block))?,
-        None => Stylesheet {
-            themes: Vec::new(),
-            rules: Vec::new(),
+    let style = match sfc.style {
+        Some(block) => style::parse_root(&padded(source, block))?,
+        None => style::Style {
+            stylesheet: Stylesheet {
+                themes: Vec::new(),
+                rules: Vec::new(),
+            },
+            overrides: Vec::new(),
         },
     };
     let uses = match sfc.uses {
@@ -71,7 +75,8 @@ pub fn parse(source: &str) -> Result<Source, Error> {
     };
     Ok(Source {
         windows,
-        stylesheet,
+        stylesheet: style.stylesheet,
+        overrides: style.overrides,
         uses,
         program,
         script,

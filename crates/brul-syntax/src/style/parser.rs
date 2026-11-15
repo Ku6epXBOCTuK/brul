@@ -8,27 +8,66 @@ use crate::error::Error;
 use crate::style::shorthand;
 use crate::style::value;
 
+#[derive(Debug)]
+pub struct Style {
+    pub stylesheet: Stylesheet,
+    pub overrides: Vec<Override>,
+}
+
+#[derive(Debug)]
+pub struct Override {
+    pub component: String,
+    pub component_at: usize,
+    pub rules: Vec<ClassRule>,
+    pub positions: Vec<RuleAt>,
+}
+
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
-    parse(source, None)
+    Ok(parse(source, Scope::Standalone)?.stylesheet)
 }
 
 pub fn parse_file_in(source: &str, palette: &[Theme]) -> Result<Stylesheet, Error> {
-    parse(source, Some(palette))
+    Ok(parse(source, Scope::Imported(palette))?.stylesheet)
 }
 
-fn parse(source: &str, palette: Option<&[Theme]>) -> Result<Stylesheet, Error> {
+pub fn parse_root(source: &str) -> Result<Style, Error> {
+    parse(source, Scope::Root)
+}
+
+#[derive(Clone, Copy)]
+enum Scope<'a> {
+    Root,
+    Standalone,
+    Imported(&'a [Theme]),
+}
+
+impl<'a> Scope<'a> {
+    fn palette(self) -> Option<&'a [Theme]> {
+        match self {
+            Self::Imported(palette) => Some(palette),
+            Self::Root | Self::Standalone => None,
+        }
+    }
+
+    fn allows_overrides(self) -> bool {
+        matches!(self, Self::Root)
+    }
+}
+
+fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
     let mut parser = Parser::new(source);
     let mut themes = Vec::new();
     let mut theme_positions = Vec::new();
     let mut rules = Vec::new();
     let mut positions = Vec::new();
+    let mut overrides = Vec::new();
     loop {
         parser.cursor.skip_trivia();
         if parser.cursor.peek().is_none() {
             break;
         }
         if parser.cursor.eat_keyword("theme") {
-            if palette.is_some() {
+            if scope.palette().is_some() {
                 return Err(parser
                     .cursor
                     .error("a theme can only be declared in the root <style>"));
@@ -36,6 +75,13 @@ fn parse(source: &str, palette: Option<&[Theme]>) -> Result<Stylesheet, Error> {
             let (theme, position) = parser.theme()?;
             themes.push(theme);
             theme_positions.push(position);
+        } else if parser.cursor.eat_keyword("override") {
+            if !scope.allows_overrides() {
+                return Err(parser
+                    .cursor
+                    .error("an override can only be declared in the root <style>"));
+            }
+            overrides.push(parser.override_block()?);
         } else {
             let (rule, position) = parser.class_rule()?;
             rules.push(rule);
@@ -43,7 +89,7 @@ fn parse(source: &str, palette: Option<&[Theme]>) -> Result<Stylesheet, Error> {
         }
     }
     let report = |error: brul_style::ValidationError| Error::at(source, error.at, error.message);
-    let declared = match palette {
+    let declared = match scope.palette() {
         Some(palette) => palette,
         None => {
             validate::themes(&themes, &theme_positions).map_err(report)?;
@@ -51,10 +97,16 @@ fn parse(source: &str, palette: Option<&[Theme]>) -> Result<Stylesheet, Error> {
         }
     };
     validate::refs(declared, &rules, &positions).map_err(report)?;
+    for over in &overrides {
+        validate::refs(declared, &over.rules, &over.positions).map_err(report)?;
+    }
     validate::states(&rules, &positions).map_err(report)?;
-    Ok(Stylesheet {
-        themes: declared.to_vec(),
-        rules,
+    Ok(Style {
+        stylesheet: Stylesheet {
+            themes: declared.to_vec(),
+            rules,
+        },
+        overrides,
     })
 }
 
@@ -110,6 +162,34 @@ impl<'a> Parser<'a> {
                         properties.push(property);
                         positions.push(at);
                     }
+                }
+            }
+        }
+    }
+
+    fn override_block(&mut self) -> Result<Override, Error> {
+        let component_at = self.cursor.value_start();
+        let component = self.cursor.ident()?;
+        self.cursor.expect('{')?;
+        let mut rules = Vec::new();
+        let mut positions = Vec::new();
+        loop {
+            self.cursor.skip_trivia();
+            match self.cursor.peek() {
+                Some('}') => {
+                    self.cursor.bump();
+                    return Ok(Override {
+                        component,
+                        component_at,
+                        rules,
+                        positions,
+                    });
+                }
+                None => return Err(self.cursor.error("expected '}'")),
+                _ => {
+                    let (rule, position) = self.class_rule()?;
+                    rules.push(rule);
+                    positions.push(position);
                 }
             }
         }

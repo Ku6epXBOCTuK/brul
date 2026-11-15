@@ -1,6 +1,6 @@
 use brul_syntax::style::{
     Animation, ClassRule, Color, Gradient, GradientColor, Kind, Property, State, Stylesheet, Theme,
-    ThemeEntry, Value, parse_file, parse_file_in,
+    ThemeEntry, Value, parse_file, parse_file_in, parse_root,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -725,6 +725,61 @@ fn errors_point_at_the_source() {
             "{source}: unexpected position"
         );
     }
+}
+
+#[test]
+fn an_override_parses_into_rules_for_a_component() {
+    let source = "\
+theme dark { surface: #1e293b; }
+.card { background: #000000; }
+override Card {
+    .card { background: theme.surface; }
+    .card:hover { }
+}
+";
+    let parsed = parse_root(source).unwrap();
+    assert_eq!(parsed.stylesheet.rules.len(), 1);
+    assert_eq!(parsed.overrides.len(), 1);
+    let over = &parsed.overrides[0];
+    assert_eq!(over.component, "Card");
+    assert_eq!(
+        over.rules,
+        vec![
+            rule(
+                "card",
+                vec![property(
+                    "background",
+                    Value::ThemeRef("surface".to_owned())
+                )]
+            ),
+            state_rule("card", State::Hover),
+        ]
+    );
+}
+
+#[test]
+fn an_override_is_rejected_outside_the_root_stylesheet() {
+    for error in [
+        parse_file("override Card { .card { } }").unwrap_err(),
+        parse_file_in("override Card { .card { } }", &[]).unwrap_err(),
+    ] {
+        assert_eq!(
+            error.message,
+            "an override can only be declared in the root <style>"
+        );
+        assert_eq!((error.line, error.column), (1, 9));
+    }
+}
+
+#[test]
+fn an_override_checks_its_theme_refs() {
+    let source = "\
+theme dark { surface: #1e293b; }
+override Card { .card { background: theme.muted; } }
+";
+    let error = parse_root(source).unwrap_err();
+    assert_eq!(error.message, "unknown theme key 'muted'");
+    assert_eq!(error.line, 2);
 }
 
 #[test]
