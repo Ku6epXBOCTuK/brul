@@ -191,7 +191,7 @@ BRUL-386 (распил `layout.rs`) не берётся: файл уехал ц�
   `runtime.rs`.
 - [x] BRUL-383 — компоненту нельзя передать класс: кит не перекрасить снаружи.
 - [x] BRUL-402 — один слот: `@slot(name)` для `Card` и `Tooltip`.
-- [ ] BRUL-384 — кит `Button`, `Card`, `Tooltip`, `Checkbox` на компонентах.
+- [x] BRUL-384 — кит `Button`, `Card`, `Tooltip`, `Checkbox` на компонентах.
 
 ## 6.3 BRUL-281 после слотов
 

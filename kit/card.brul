@@ -1,0 +1,34 @@
+<markup>
+    component Card {
+        View (card) {
+            @slot(header)
+            View (card-body) {
+                @slot
+            }
+            @slot(footer)
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        surface: #1c2028;
+        border: #334155;
+    }
+    theme light {
+        surface: #ffffff;
+        border: #e2e8f0;
+    }
+    .card {
+        width: 100%;
+        background: theme.surface;
+        border: 1px theme.border;
+        border-radius: 14px;
+        clip: true;
+    }
+    .card-body {
+        width: 100%;
+        padding: 16px;
+        gap: 8px;
+    }
+</style>

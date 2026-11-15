@@ -1322,6 +1322,78 @@ fn emits_component_classes() {
 }
 
 #[test]
+fn emits_the_kit_components() {
+    let kit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kit");
+    let dir = scratch("kit", &[]);
+    std::fs::create_dir_all(dir.join("kit")).unwrap();
+    for name in ["button", "card", "tooltip", "checkbox"] {
+        std::fs::copy(
+            kit.join(format!("{name}.brul")),
+            dir.join("kit").join(format!("{name}.brul")),
+        )
+        .unwrap();
+    }
+    std::fs::write(
+        dir.join("window.brul"),
+        r#"<use>
+    import Button from "./kit/button.brul";
+    import Card from "./kit/card.brul";
+    import Tooltip from "./kit/tooltip.brul";
+    import Checkbox from "./kit/checkbox.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        Button (label: "Open", variant: "primary") { }
+        Card {
+            @slot(header) { Text { "header" } }
+            Text { "body" }
+            @slot(footer) { Text { "footer" } }
+        }
+        Tooltip (text: "tip") { Text { "trigger" } }
+        Checkbox (label: "Remember") { }
+    }
+}
+</markup>
+"#,
+    )
+    .unwrap();
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    for name in ["button", "card", "tooltip", "checkbox"] {
+        assert!(
+            module.contains(&format!("pub fn {name}_view(")),
+            "{name}: {module}"
+        );
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn lists_imported_files_outside_the_entry_directory() {
+    let dir = std::env::temp_dir().join(format!("brul-emit-sources-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("app")).unwrap();
+    std::fs::create_dir_all(dir.join("shared")).unwrap();
+    std::fs::write(
+        dir.join("shared/badge.brul"),
+        "<markup>\ncomponent Badge {\n    Text { \"badge\" }\n}\n</markup>\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("app/window.brul"),
+        "<use>\n    import Badge from \"../shared/badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Badge { }\n}\n</markup>\n",
+    )
+    .unwrap();
+    let module = emit::split_module_file(&dir.join("app/window.brul")).unwrap();
+    let badge = std::fs::canonicalize(dir.join("shared/badge.brul")).unwrap();
+    let entry = std::fs::canonicalize(dir.join("app/window.brul")).unwrap();
+    assert!(module.sources.contains(&badge), "{:?}", module.sources);
+    assert!(module.sources.contains(&entry), "{:?}", module.sources);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn emits_names_in_first_appearance_order() {
     let source = r#"<script>
     let selected = 0;

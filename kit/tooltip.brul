@@ -1,0 +1,51 @@
+<script>
+    let shown = false;
+
+    function show() {
+        shown = true;
+    }
+
+    function hide() {
+        shown = false;
+    }
+</script>
+
+<markup>
+    component Tooltip {
+        prop text: String = "";
+
+        Column (tooltip, on enter: show, on leave: hide) {
+            @slot
+            View (bubble, visible: shown) {
+                Text (bubble-text) { text }
+            }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        surface: #0f172a;
+        border: #334155;
+        muted: #cbd5e1;
+    }
+    theme light {
+        surface: #ffffff;
+        border: #e2e8f0;
+        muted: #475569;
+    }
+    .tooltip {
+        width: 100%;
+        gap: 6px;
+    }
+    .bubble {
+        padding: 8px 12px;
+        background: theme.surface;
+        border: 1px theme.border;
+        border-radius: 8px;
+    }
+    .bubble-text {
+        color: theme.muted;
+        font-size: 12px;
+    }
+</style>

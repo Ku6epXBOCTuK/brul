@@ -1,0 +1,64 @@
+<script>
+    function press() {
+        clicked();
+    }
+</script>
+
+<markup>
+    component Button {
+        prop label: String = "";
+        prop variant: String = "secondary";
+        prop disabled: Bool = false;
+        event clicked();
+
+        View (button, class: variant, disabled: disabled, on click: press) {
+            @slot(icon)
+            Text (button-label) { label }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        surface: #1e293b;
+        surface-hover: #273549;
+        accent: #3b82f6;
+        accent-hover: #2563eb;
+        text: #f8fafc;
+        border: #334155;
+    }
+    theme light {
+        surface: #f1f5f9;
+        surface-hover: #e2e8f0;
+        accent: #2563eb;
+        accent-hover: #1d4ed8;
+        text: #0f172a;
+        border: #cbd5e1;
+    }
+    .button {
+        height: 32px;
+        padding-left: 16px;
+        padding-right: 16px;
+        gap: 6px;
+        align-items: center;
+        justify-content: center;
+        border: 1px transparent;
+        border-radius: 10px;
+        background: theme.surface;
+        animate background: 200ms;
+    }
+    .button:hover { background: theme.surface-hover; }
+    .button:disabled { opacity: 0.45; }
+    .secondary { background: theme.surface; border-color: theme.border; }
+    .secondary:hover { background: theme.surface-hover; }
+    .primary { background: theme.accent; border-color: theme.accent; }
+    .primary:hover { background: theme.accent-hover; }
+    .ghost { background: transparent; border-color: transparent; }
+    .ghost:hover { background: theme.surface; }
+    .button-label {
+        color: theme.text;
+        font-size: 13px;
+        font-weight: 600;
+        vertical-align: center;
+    }
+</style>

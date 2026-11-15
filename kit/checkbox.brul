@@ -1,0 +1,70 @@
+<script>
+    function toggle() {
+        if (!disabled) {
+            checked = !checked;
+            toggled();
+        }
+    }
+</script>
+
+<markup>
+    component Checkbox {
+        prop label: String = "";
+        prop checked: Bool = false;
+        prop disabled: Bool = false;
+        event toggled();
+
+        Row (checkbox, disabled: disabled, on click: toggle) {
+            View (box, checked: checked) {
+                View (mark, visible: checked) { }
+            }
+            @if (label != "") {
+                Text (checkbox-label) { label }
+            }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        accent: #3b82f6;
+        border: #334155;
+        text: #f8fafc;
+    }
+    theme light {
+        accent: #2563eb;
+        border: #cbd5e1;
+        text: #0f172a;
+    }
+    .checkbox {
+        width: 100%;
+        height: 28px;
+        gap: 10px;
+        align-items: center;
+    }
+    .checkbox:disabled { opacity: 0.45; }
+    .box {
+        width: 18px;
+        height: 18px;
+        border: 2px theme.border;
+        border-radius: 5px;
+        background: transparent;
+        align-items: center;
+        justify-content: center;
+    }
+    .box:checked {
+        background: theme.accent;
+        border-color: theme.accent;
+    }
+    .mark {
+        width: 6px;
+        height: 6px;
+        background: #ffffff;
+        border-radius: 3px;
+    }
+    .checkbox-label {
+        color: theme.text;
+        font-size: 13px;
+        vertical-align: center;
+    }
+</style>

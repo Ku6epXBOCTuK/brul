@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::fmt::Write;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
@@ -26,6 +26,7 @@ pub struct Module {
     pub root: String,
     pub files: Vec<GeneratedFile>,
     pub scripts: Vec<GeneratedFile>,
+    pub sources: Vec<PathBuf>,
     flat: String,
 }
 
@@ -36,7 +37,7 @@ impl Module {
 }
 
 pub fn module(source: &str) -> Result<String, Error> {
-    let module = module_at(source, None, false)?;
+    let module = module_at(source, None, false, None)?;
     Ok(module.flat)
 }
 
@@ -53,10 +54,15 @@ pub fn split_module_file(path: &Path) -> Result<Module, Error> {
             format!("cannot read '{}': {error}", path.display()),
         )
     })?;
-    module_at(&source, path.parent(), true)
+    module_at(&source, path.parent(), true, Some(path))
 }
 
-fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, Error> {
+fn module_at(
+    source: &str,
+    base: Option<&Path>,
+    split: bool,
+    entry: Option<&Path>,
+) -> Result<Module, Error> {
     let parsed = crate::parse_source(source)?;
     let registry = crate::resolve(&parsed.uses, base)?;
     let names = names::table(&parsed, &registry.definitions);
@@ -229,8 +235,21 @@ fn module_at(source: &str, base: Option<&Path>, split: bool) -> Result<Module, E
         root,
         files,
         scripts,
+        sources: module_sources(&registry, entry),
         flat,
     })
+}
+
+fn module_sources(registry: &crate::Registry, entry: Option<&Path>) -> Vec<PathBuf> {
+    let mut sources: Vec<PathBuf> = registry
+        .definitions
+        .iter()
+        .map(|definition| definition.path.clone())
+        .collect();
+    if let Some(entry) = entry {
+        sources.push(fs::canonicalize(entry).unwrap_or_else(|_| entry.to_path_buf()));
+    }
+    sources
 }
 
 fn module_table(root: &mut String, files: &[GeneratedFile]) {

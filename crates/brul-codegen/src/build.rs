@@ -69,6 +69,9 @@ pub fn app(entry: impl AsRef<Path>) -> Result<(), Error> {
     for file in sources(entry.parent().unwrap_or(&root))? {
         println!("cargo:rerun-if-changed={}", file.display());
     }
+    for file in &module.sources {
+        println!("cargo:rerun-if-changed={}", file.display());
+    }
     Ok(())
 }
 
