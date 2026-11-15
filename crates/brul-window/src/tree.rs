@@ -148,10 +148,7 @@ impl TreeApp {
                     build(scheme)
                 }
                 None => {
-                    return self.fail(WindowError::Stage {
-                        stage: "window",
-                        message: String::from("window has no content"),
-                    });
+                    return self.fail(WindowError::NoContent);
                 }
             },
         };
@@ -166,7 +163,7 @@ impl TreeApp {
                 .borrow_mut()
                 .layout(&mut engine, viewport, window.scale_factor() as f32);
         if let Err(error) = layout {
-            return self.fail(WindowError::stage("widgets", error));
+            return self.fail(error.into());
         }
 
         self.window = Some(Arc::clone(&window));

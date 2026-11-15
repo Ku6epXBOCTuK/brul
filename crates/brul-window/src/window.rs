@@ -139,6 +139,7 @@ pub struct WindowSpec {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum WindowError {
     #[error("window size must be greater than zero")]
     EmptySize,
@@ -148,33 +149,43 @@ pub enum WindowError {
     InvalidPosition,
     #[error("no suitable surface configuration")]
     NoSurfaceConfig,
-    #[error("{}: {}", .stage, .message)]
-    Stage {
-        stage: &'static str,
-        message: String,
-    },
+    #[error("window has no content")]
+    NoContent,
     #[error("{0} is not declared")]
     Undeclared(WindowKey),
+    #[error("event loop: {0}")]
+    EventLoop(#[source] Box<dyn std::error::Error>),
+    #[error("window creation: {0}")]
+    Window(#[source] Box<dyn std::error::Error>),
+    #[error("gpu: {0}")]
+    Gpu(#[source] Box<dyn std::error::Error>),
+    #[error("widgets: {0}")]
+    Widgets(#[from] brul_gui::WidgetError),
     #[error("{0}")]
     App(#[source] Box<dyn std::error::Error>),
 }
 
 impl WindowError {
-    pub(crate) fn stage(stage: &'static str, error: impl std::fmt::Display) -> Self {
-        Self::Stage {
-            stage,
-            message: error.to_string(),
-        }
-    }
-
     pub fn app(error: impl std::error::Error + 'static) -> Self {
         Self::App(Box::new(error))
+    }
+
+    pub(crate) fn event_loop(error: impl std::error::Error + 'static) -> Self {
+        Self::EventLoop(Box::new(error))
+    }
+
+    pub(crate) fn window(error: impl std::error::Error + 'static) -> Self {
+        Self::Window(Box::new(error))
+    }
+
+    pub(crate) fn gpu(error: impl std::error::Error + 'static) -> Self {
+        Self::Gpu(Box::new(error))
     }
 }
 
 pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     config.validate()?;
-    let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
+    let event_loop = EventLoop::new().map_err(WindowError::event_loop)?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let error = Rc::new(Cell::new(None));
@@ -190,7 +201,7 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     if let Some(error) = error.take() {
         return Err(error);
     }
-    result.map_err(|error| WindowError::stage("event loop", error))
+    result.map_err(WindowError::event_loop)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -226,7 +237,7 @@ pub fn run_tree_themed(
     handler: impl FnMut(&[WidgetEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
     config.validate()?;
-    let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
+    let event_loop = EventLoop::new().map_err(WindowError::event_loop)?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let error = Rc::new(Cell::new(None));
@@ -244,7 +255,7 @@ pub fn run_tree_themed(
     if let Some(error) = error.take() {
         return Err(error);
     }
-    result.map_err(|error| WindowError::stage("event loop", error))
+    result.map_err(WindowError::event_loop)
 }
 
 pub fn run_windows(
@@ -270,7 +281,7 @@ pub(crate) fn create_window(
     event_loop
         .create_window(attributes)
         .map(Arc::from)
-        .map_err(|error| WindowError::stage("window creation", error))
+        .map_err(WindowError::window)
 }
 
 fn placement(event_loop: &dyn ActiveEventLoop, config: &WindowConfig) -> Option<Position> {
@@ -510,23 +521,28 @@ mod tests {
             WindowError::HeaderTooTall.to_string(),
             WindowError::InvalidPosition.to_string(),
             WindowError::NoSurfaceConfig.to_string(),
+            WindowError::NoContent.to_string(),
+            WindowError::event_loop(std::io::Error::other("boom")).to_string(),
+            WindowError::window(std::io::Error::other("boom")).to_string(),
+            WindowError::gpu(std::io::Error::other("boom")).to_string(),
+            WindowError::app(std::io::Error::other("boom")).to_string(),
         ];
         let mut unique = messages.to_vec();
         unique.sort();
         unique.dedup();
 
         assert_eq!(unique.len(), messages.len());
-        assert_eq!(
-            WindowError::stage("surface", "boom").to_string(),
-            "surface: boom"
-        );
+        assert_eq!(messages[5], "event loop: boom");
+        assert_eq!(messages[6], "window creation: boom");
+        assert_eq!(messages[7], "gpu: boom");
+        assert_eq!(messages[8], "boom");
     }
 
     #[test]
-    fn an_app_failure_keeps_its_cause() {
-        let error = WindowError::app(std::io::Error::other("boom"));
+    fn a_failed_stage_keeps_its_cause() {
+        let error = WindowError::gpu(std::io::Error::other("boom"));
 
-        assert_eq!(error.to_string(), "boom");
+        assert_eq!(error.to_string(), "gpu: boom");
         assert!(std::error::Error::source(&error).is_some());
     }
 

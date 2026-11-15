@@ -70,16 +70,16 @@ impl Gpu {
         let instance = wgpu::Instance::new(descriptor);
         let surface = instance
             .create_surface(Arc::clone(window))
-            .map_err(|error| WindowError::stage("surface", error))?;
+            .map_err(WindowError::gpu)?;
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::None,
             force_fallback_adapter: false,
             compatible_surface: Some(&surface),
             apply_limit_buckets: false,
         }))
-        .map_err(|error| WindowError::stage("adapter", error))?;
+        .map_err(WindowError::gpu)?;
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .map_err(|error| WindowError::stage("device", error))?;
+            .map_err(WindowError::gpu)?;
 
         let size = window.surface_size();
         let capabilities = surface.get_capabilities(&adapter);

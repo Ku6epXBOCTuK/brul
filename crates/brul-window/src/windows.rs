@@ -29,7 +29,7 @@ where
     R: FnOnce(Waker) + 'static,
     W: FnMut() + 'static,
 {
-    let event_loop = EventLoop::new().map_err(|error| WindowError::stage("event loop", error))?;
+    let event_loop = EventLoop::new().map_err(WindowError::event_loop)?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let waker = Waker::new(event_loop.create_proxy());
@@ -49,7 +49,7 @@ where
     if let Some(error) = error.take() {
         return Err(error);
     }
-    result.map_err(|error| WindowError::stage("event loop", error))
+    result.map_err(WindowError::event_loop)
 }
 
 struct Windows<C, H, F, W> {

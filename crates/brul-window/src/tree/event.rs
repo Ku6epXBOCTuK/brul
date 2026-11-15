@@ -11,7 +11,6 @@ use winit::window::{
 
 use crate::input::{ImeEvent, Input, event_input, point, window_input};
 use crate::surface::Surface;
-use crate::window::WindowError;
 
 use super::{Step, TreeApp};
 
@@ -202,7 +201,7 @@ impl TreeApp {
     ) -> Step {
         match events {
             Ok(events) => self.dispatch_events(surface, events),
-            Err(error) => self.fail(WindowError::stage("widgets", error)),
+            Err(error) => self.fail(error.into()),
         }
     }
 

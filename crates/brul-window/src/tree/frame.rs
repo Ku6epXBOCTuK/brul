@@ -6,7 +6,7 @@ use brul_gui::{Frame, Size, WidgetTree};
 use tracing::{debug, info, trace};
 
 use crate::surface::Surface;
-use crate::window::{ColorScheme, WindowError};
+use crate::window::ColorScheme;
 
 use super::{Step, TreeApp};
 
@@ -51,7 +51,7 @@ impl TreeApp {
             None => Ok(()),
         };
         if let Err(error) = layout {
-            return self.fail(WindowError::stage("widgets", error));
+            return self.fail(error.into());
         }
         if let Some(frame) = self.frame.as_mut() {
             frame.resize(width, height);
@@ -66,7 +66,7 @@ impl TreeApp {
         brul_reactive::flush();
         match self.render_frame(surface) {
             Ok(()) => Step::Continue,
-            Err(error) => self.fail(WindowError::stage("widgets", error)),
+            Err(error) => self.fail(error.into()),
         }
     }
 
