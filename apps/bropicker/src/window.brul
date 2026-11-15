@@ -167,20 +167,21 @@
         background: #14171d;
         surface: #1c2028;
         surface-main: #0f172a;
-        surface-elevated: #1e293b80;
+        surface-hover: lighten(theme.surface-main, 8%);
+        surface-elevated: alpha(theme.surface-hover, 50%);
+        surface-item: alpha(theme.surface-hover, 30%);
         border: #334155;
         text: #ffffff;
         muted: #94a3b8;
         control: #cbd5e1;
         hint: #475569;
         accent: #3b82f6;
-        accent-ring: #3b82f680;
-        accent-soft: #3b82f620;
-        badge-text: #60a5fa;
+        accent-to: #06b6d4;
+        accent-ring: alpha(theme.accent, 50%);
+        accent-soft: alpha(theme.accent, 12.5%);
+        badge-text: lighten(theme.accent, 11%);
         danger: #f87171;
         icon-backplate: #334155;
-        surface-item: #1e293b4d;
-        surface-hover: #1e293b;
         plate-warm-from: #fb923c;
         plate-warm-to: #ef4444;
         plate-rose-from: #f472b6;
@@ -194,20 +195,21 @@
         background: #f4f6f9;
         surface: #ffffff;
         surface-main: #ffffff;
-        surface-elevated: #f8fafc;
+        surface-hover: lighten(theme.surface-main, 8%);
+        surface-elevated: darken(theme.surface-main, 2%);
+        surface-item: darken(theme.surface-main, 2%);
         border: #e2e8f0;
         text: #0f172a;
         muted: #64748b;
         control: #475569;
         hint: #475569;
         accent: #3b82f6;
-        accent-ring: #3b82f680;
-        accent-soft: #3b82f620;
-        badge-text: #60a5fa;
+        accent-to: #06b6d4;
+        accent-ring: alpha(theme.accent, 50%);
+        accent-soft: alpha(theme.accent, 12.5%);
+        badge-text: lighten(theme.accent, 11%);
         danger: #dc2626;
         icon-backplate: #e2e8f0;
-        surface-item: #f8fafc;
-        surface-hover: #ffffff;
         plate-warm-from: #fb923c;
         plate-warm-to: #ef4444;
         plate-rose-from: #f472b6;
@@ -250,7 +252,7 @@
         border-radius: 12px;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(135deg, #3b82f6, #06b6d4);
+        background: linear-gradient(135deg, theme.accent, theme.accent-to);
     }
     .app-icon-image {
         width: 24px;
@@ -340,12 +342,12 @@
         padding-right: 20px;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(135deg, #3b82f6, #06b6d4);
+        background: linear-gradient(135deg, theme.accent, theme.accent-to);
         border-radius: 12px;
         box-shadow: 0px 10px 15px transparent;
         animate box-shadow-color: 300ms;
     }
-    .open-button:hover { box-shadow-color: #3b82f640; }
+    .open-button:hover { box-shadow-color: alpha(theme.accent, 25%); }
     .open-label {
         color: #ffffff;
         font-size: 14px;
