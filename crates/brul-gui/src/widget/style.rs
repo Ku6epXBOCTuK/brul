@@ -121,7 +121,7 @@ pub struct Layers<P> {
 }
 
 impl<P: Copy> Layers<P> {
-    pub fn new(base: P) -> Self {
+    pub const fn new(base: P) -> Self {
         Self {
             base,
             hovered: None,
@@ -132,7 +132,7 @@ impl<P: Copy> Layers<P> {
         }
     }
 
-    pub fn with(mut self, state: StyleState, patch: P) -> Self {
+    pub const fn with(mut self, state: StyleState, patch: P) -> Self {
         *self.slot_mut(state) = Some(patch);
         self
     }
@@ -145,7 +145,7 @@ impl<P: Copy> Layers<P> {
         *self.slot(state)
     }
 
-    fn slot(&self, state: StyleState) -> &Option<P> {
+    const fn slot(&self, state: StyleState) -> &Option<P> {
         match state {
             StyleState::Hovered => &self.hovered,
             StyleState::Pressed => &self.pressed,
@@ -155,7 +155,7 @@ impl<P: Copy> Layers<P> {
         }
     }
 
-    fn slot_mut(&mut self, state: StyleState) -> &mut Option<P> {
+    const fn slot_mut(&mut self, state: StyleState) -> &mut Option<P> {
         match state {
             StyleState::Hovered => &mut self.hovered,
             StyleState::Pressed => &mut self.pressed,
@@ -458,5 +458,73 @@ fn tween_tint(from: Option<Color>, to: Option<Color>, progress: f32) -> Option<C
     match (from, to) {
         (Some(from), Some(to)) => Some(from.tween(to, progress)),
         _ => to,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LAYOUT: LayoutPatch = LayoutPatch {
+        width: None,
+        height: None,
+        padding: None,
+        border_width: None,
+        gap: None,
+        flex_grow: None,
+        flex_shrink: None,
+        flex_basis: None,
+        justify: None,
+        align: None,
+    };
+
+    const STYLE: WidgetStylePatch = WidgetStylePatch {
+        background: None,
+        border: None,
+        text: None,
+        tint: None,
+        opacity: None,
+        vertical_align: None,
+        clip: None,
+        shadow: None,
+    };
+
+    const TEXT: TextStylePatch = TextStylePatch {
+        weight: None,
+        align: None,
+    };
+
+    static LIGHT: [Class; 1] = [Class {
+        layout: LAYOUT,
+        style: Layers::new(STYLE).with(
+            StyleState::Hovered,
+            WidgetStylePatch {
+                opacity: Some(0.5),
+                ..STYLE
+            },
+        ),
+        text: Layers::new(TEXT),
+        transitions: Transitions {
+            background: None,
+            border: None,
+            text: None,
+            tint: None,
+            opacity: None,
+            shadow: None,
+        },
+    }];
+
+    #[test]
+    fn a_class_table_is_built_in_a_static() {
+        assert_eq!(
+            LIGHT[0].style.patch(StyleState::Hovered),
+            Some(WidgetStylePatch {
+                opacity: Some(0.5),
+                ..STYLE
+            })
+        );
+        assert_eq!(LIGHT[0].style.base(), STYLE);
+        assert!(LIGHT[0].style.patch(StyleState::Pressed).is_none());
+        assert!(LIGHT[0].text.is_empty());
     }
 }
