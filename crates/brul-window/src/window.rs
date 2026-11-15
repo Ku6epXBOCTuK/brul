@@ -138,12 +138,17 @@ pub struct WindowSpec {
     pub commands: Vec<WindowCommand>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum WindowError {
+    #[error("window size must be greater than zero")]
     EmptySize,
+    #[error("header is taller than the window")]
     HeaderTooTall,
+    #[error("window position must be finite")]
     InvalidPosition,
+    #[error("no suitable surface configuration")]
     NoSurfaceConfig,
+    #[error("{}: {}", .stage, .message)]
     Stage {
         stage: &'static str,
         message: String,
@@ -158,20 +163,6 @@ impl WindowError {
         }
     }
 }
-
-impl std::fmt::Display for WindowError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EmptySize => formatter.write_str("window size must be greater than zero"),
-            Self::HeaderTooTall => formatter.write_str("header is taller than the window"),
-            Self::InvalidPosition => formatter.write_str("window position must be finite"),
-            Self::NoSurfaceConfig => formatter.write_str("no suitable surface configuration"),
-            Self::Stage { stage, message } => write!(formatter, "{stage}: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for WindowError {}
 
 pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     config.validate()?;

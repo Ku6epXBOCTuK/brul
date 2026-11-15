@@ -1,11 +1,12 @@
-use std::fmt;
-
 use brul_script::Error as ScriptError;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ViewError {
-    Script(ScriptError),
-    Style(brul_gui::style::StyleError),
+    #[error(transparent)]
+    Script(#[from] ScriptError),
+    #[error(transparent)]
+    Style(#[from] brul_gui::style::StyleError),
+    #[error("{} expects {}, got {}", .target, .expected, .found)]
     Expected {
         target: String,
         expected: &'static str,
@@ -33,41 +34,5 @@ impl ViewError {
                 brul_syntax::style::SnapshotError::UnknownTheme(_)
             ))
         )
-    }
-}
-
-impl fmt::Display for ViewError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Script(error) => error.fmt(formatter),
-            Self::Style(error) => error.fmt(formatter),
-            Self::Expected {
-                target,
-                expected,
-                found,
-            } => write!(formatter, "{target} expects {expected}, got {found}"),
-        }
-    }
-}
-
-impl std::error::Error for ViewError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Script(error) => Some(error),
-            Self::Style(error) => Some(error),
-            Self::Expected { .. } => None,
-        }
-    }
-}
-
-impl From<ScriptError> for ViewError {
-    fn from(error: ScriptError) -> Self {
-        Self::Script(error)
-    }
-}
-
-impl From<brul_gui::style::StyleError> for ViewError {
-    fn from(error: brul_gui::style::StyleError) -> Self {
-        Self::Style(error)
     }
 }

@@ -11,46 +11,20 @@ use crate::emit::split_module_file;
 
 const VIEW: &str = "view.rs";
 
+#[derive(thiserror::Error)]
 pub enum Error {
-    Io(std::io::Error),
-    Env(env::VarError),
-    Codegen(error::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Env(#[from] env::VarError),
+    #[error(transparent)]
+    Codegen(#[from] error::Error),
 }
 
 // NOTE: main() with Result prints the error with Debug, so it delegates to Display
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(error) => write!(f, "{error}"),
-            Self::Env(error) => write!(f, "{error}"),
-            Self::Codegen(error) => write!(f, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Self::Io(error)
-    }
-}
-
-impl From<env::VarError> for Error {
-    fn from(error: env::VarError) -> Self {
-        Self::Env(error)
-    }
-}
-
-impl From<error::Error> for Error {
-    fn from(error: error::Error) -> Self {
-        Self::Codegen(error)
     }
 }
 
