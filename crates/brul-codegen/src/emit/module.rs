@@ -13,7 +13,7 @@ use crate::error_at;
 use super::Emit;
 use super::StructureNames;
 use super::classes::ClassNames;
-use super::{classes, events, names, resources, script, style, view};
+use super::{classes, events, names, resources, script, style, theme, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
 const ROOT_SCRIPT: &str = "view.script";
@@ -127,6 +127,7 @@ fn module_at(
         }
         configs.push(config);
     }
+    theme::id(&mut head, &parsed.stylesheet)?;
     classes::statics(&mut head, "", &parsed.stylesheet, &class_names)?;
     if dynamic_classes {
         classes::tables(&mut head, "", &parsed.stylesheet);

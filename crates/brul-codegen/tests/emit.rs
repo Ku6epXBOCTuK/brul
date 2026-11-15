@@ -33,6 +33,37 @@ pub fn demo_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Resu
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeId {
+}
+
+impl ThemeId {
+    pub const ALL: &'static [ThemeId] = &[
+    ];
+}
+
+impl brul::Theme for ThemeId {
+    fn name(self) -> &'static str {
+        match self {}
+    }
+
+    fn parse(name: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|theme| brul::Theme::name(*theme) == name)
+    }
+}
+
+impl std::str::FromStr for ThemeId {
+    type Err = brul::UnknownTheme;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        <Self as brul::Theme>::parse(name).ok_or_else(|| brul::UnknownTheme::new(name))
+    }
+}
+
+#[allow(dead_code)]
 static CLASSES_NONE: [brul::gui::Class; 0] = [
 ];
 
@@ -134,6 +165,44 @@ pub fn styled_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Re
         handlers,
         props,
     })
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeId {
+    Dark,
+    Light,
+}
+
+impl ThemeId {
+    pub const ALL: &'static [ThemeId] = &[
+        ThemeId::Dark,
+        ThemeId::Light,
+    ];
+}
+
+impl brul::Theme for ThemeId {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Dark => "dark",
+            Self::Light => "light",
+        }
+    }
+
+    fn parse(name: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|theme| brul::Theme::name(*theme) == name)
+    }
+}
+
+impl std::str::FromStr for ThemeId {
+    type Err = brul::UnknownTheme;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        <Self as brul::Theme>::parse(name).ok_or_else(|| brul::UnknownTheme::new(name))
+    }
 }
 
 #[allow(dead_code)]
@@ -1862,6 +1931,45 @@ fn resource_without_a_file_path_is_rejected() {
         error
             .message
             .contains("cannot resolve resource './check.png': source has no file path"),
+        "{}",
+        error.message
+    );
+}
+
+#[test]
+fn emits_a_theme_id_for_the_root_palette() {
+    let source = "<style>\ntheme dark { accent: #6c8cff; }\ntheme high-contrast { accent: #ffffff; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View { }\n}\n</markup>\n";
+    let module = emit::module(source).expect("module");
+    assert!(
+        module.contains("pub enum ThemeId {\n    Dark,\n    HighContrast,\n}"),
+        "{module}"
+    );
+    assert!(
+        module.contains("            Self::HighContrast => \"high-contrast\","),
+        "{module}"
+    );
+    assert!(
+        module.contains(
+            "    pub const ALL: &'static [ThemeId] = &[\n        ThemeId::Dark,\n        ThemeId::HighContrast,\n    ];"
+        ),
+        "{module}"
+    );
+}
+
+#[test]
+fn a_palette_without_themes_emits_an_empty_theme_id() {
+    let source = "<markup>\nwindow Demo (title: \"demo\") {\n    View { }\n}\n</markup>\n";
+    let module = emit::module(source).expect("module");
+    assert!(module.contains("pub enum ThemeId {\n}"), "{module}");
+    assert!(module.contains("        match self {}\n"), "{module}");
+}
+
+#[test]
+fn themes_that_share_a_variant_are_an_error() {
+    let source = "<style>\ntheme dark { accent: #6c8cff; }\ntheme Dark { accent: #ffffff; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View { }\n}\n</markup>\n";
+    let error = emit::module(source).unwrap_err();
+    assert!(
+        error.message.contains("share the variant ThemeId::Dark"),
         "{}",
         error.message
     );

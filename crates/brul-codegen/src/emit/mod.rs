@@ -18,6 +18,7 @@ mod resources;
 mod script;
 mod structure;
 mod style;
+mod theme;
 mod view;
 
 pub use expression::{expression, operation};

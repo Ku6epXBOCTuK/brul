@@ -17,6 +17,7 @@ pub use brul_codegen::runtime::{
     Slots, Structure, View, ViewError, instance, register_structure, slot, take_structures,
 };
 pub use brul_gui as gui;
+pub use brul_gui::{Theme, UnknownTheme};
 pub use brul_macros::{command, host};
 pub use brul_script::eval;
 pub use brul_script::{Component, Error, Host, Value, Variable, VariableId, execute_program};

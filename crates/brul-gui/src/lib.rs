@@ -118,6 +118,7 @@ mod rect;
 pub mod style;
 mod text;
 mod texture;
+mod theme;
 mod widget;
 
 use brul_layout as layout;
@@ -138,6 +139,7 @@ pub use text::{
     TextLayout, TextSize, TextStyle, VerticalAlign,
 };
 pub use texture::{Texture, TextureError};
+pub use theme::{Theme, UnknownTheme};
 pub use widget::{
     CaretArea, Class, Dirty, KeyModifiers, Layers, StyleSet, StyleState, TextStylePatch,
     TextStyleSet, Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind,
