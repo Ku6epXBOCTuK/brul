@@ -173,6 +173,22 @@
         muted: #94a3b8;
         control: #cbd5e1;
         hint: #475569;
+        accent: #3b82f6;
+        accent-ring: #3b82f680;
+        accent-soft: #3b82f620;
+        badge-text: #60a5fa;
+        danger: #f87171;
+        icon-backplate: #334155;
+        surface-item: #1e293b4d;
+        surface-hover: #1e293b;
+        plate-warm-from: #fb923c;
+        plate-warm-to: #ef4444;
+        plate-rose-from: #f472b6;
+        plate-rose-to: #e11d48;
+        plate-cyan-from: #22d3ee;
+        plate-cyan-to: #10b981;
+        plate-violet-from: #a78bfa;
+        plate-violet-to: #7c3aed;
     }
     theme light {
         background: #f4f6f9;
@@ -184,6 +200,22 @@
         muted: #64748b;
         control: #475569;
         hint: #475569;
+        accent: #3b82f6;
+        accent-ring: #3b82f680;
+        accent-soft: #3b82f620;
+        badge-text: #60a5fa;
+        danger: #dc2626;
+        icon-backplate: #e2e8f0;
+        surface-item: #f8fafc;
+        surface-hover: #ffffff;
+        plate-warm-from: #fb923c;
+        plate-warm-to: #ef4444;
+        plate-rose-from: #f472b6;
+        plate-rose-to: #e11d48;
+        plate-cyan-from: #22d3ee;
+        plate-cyan-to: #10b981;
+        plate-violet-from: #a78bfa;
+        plate-violet-to: #7c3aed;
     }
     .root {
         width: 100%;

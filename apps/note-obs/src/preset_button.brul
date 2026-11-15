@@ -17,16 +17,6 @@
 </markup>
 
 <style>
-    theme dark {
-        surface: #1c2028;
-        border: #334155;
-        text: #ffffff;
-    }
-    theme light {
-        surface: #ffffff;
-        border: #e2e8f0;
-        text: #0f172a;
-    }
     .preset {
         width: 100%;
         height: 30px;

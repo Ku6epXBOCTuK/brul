@@ -11,14 +11,6 @@
 </markup>
 
 <style>
-    theme dark {
-        surface: #1c2028;
-        border: #334155;
-    }
-    theme light {
-        surface: #ffffff;
-        border: #e2e8f0;
-    }
     .card {
         width: 100%;
         background: theme.surface;

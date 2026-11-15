@@ -1,6 +1,6 @@
 use brul_syntax::style::{
     Animation, ClassRule, Color, Gradient, GradientColor, Kind, Property, State, Stylesheet, Theme,
-    ThemeEntry, Value, parse_file,
+    ThemeEntry, Value, parse_file, parse_file_in,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -258,6 +258,35 @@ fn the_first_theme_is_the_default() {
     let sheet = parse_file(source).unwrap();
     assert_eq!(sheet.themes[0].name, "dark");
     assert_eq!(sheet.themes[1].name, "light");
+}
+
+#[test]
+fn an_imported_stylesheet_takes_the_palette_it_is_given() {
+    let palette = parse_file("theme dark { accent: #fff; }\ntheme light { accent: #000; }")
+        .unwrap()
+        .themes;
+    let sheet = parse_file_in(".a { color: theme.accent; }", &palette).expect("sheet");
+    assert_eq!(sheet.themes, palette);
+    assert_eq!(sheet.rules.len(), 1);
+}
+
+#[test]
+fn an_imported_stylesheet_cannot_declare_a_theme() {
+    let palette = parse_file("theme dark { accent: #fff; }").unwrap().themes;
+    let error = parse_file_in("theme dark { accent: #000; }", &palette).unwrap_err();
+    assert_eq!(
+        error.message,
+        "a theme can only be declared in the root <style>"
+    );
+    assert_eq!((error.line, error.column), (1, 6));
+}
+
+#[test]
+fn an_imported_stylesheet_checks_refs_against_the_palette() {
+    let palette = parse_file("theme dark { accent: #fff; }").unwrap().themes;
+    let error = parse_file_in(".a { color: theme.muted; }", &palette).unwrap_err();
+    assert_eq!(error.message, "unknown theme key 'muted'");
+    assert_eq!(error.line, 1);
 }
 
 #[test]

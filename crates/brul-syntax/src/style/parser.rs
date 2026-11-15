@@ -9,6 +9,14 @@ use crate::style::shorthand;
 use crate::style::value;
 
 pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
+    parse(source, None)
+}
+
+pub fn parse_file_in(source: &str, palette: &[Theme]) -> Result<Stylesheet, Error> {
+    parse(source, Some(palette))
+}
+
+fn parse(source: &str, palette: Option<&[Theme]>) -> Result<Stylesheet, Error> {
     let mut parser = Parser::new(source);
     let mut themes = Vec::new();
     let mut theme_positions = Vec::new();
@@ -20,6 +28,11 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
             break;
         }
         if parser.cursor.eat_keyword("theme") {
+            if palette.is_some() {
+                return Err(parser
+                    .cursor
+                    .error("a theme can only be declared in the root <style>"));
+            }
             let (theme, position) = parser.theme()?;
             themes.push(theme);
             theme_positions.push(position);
@@ -30,10 +43,19 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
         }
     }
     let report = |error: brul_style::ValidationError| Error::at(source, error.at, error.message);
-    validate::themes(&themes, &theme_positions).map_err(report)?;
-    validate::refs(&themes, &rules, &positions).map_err(report)?;
+    let declared = match palette {
+        Some(palette) => palette,
+        None => {
+            validate::themes(&themes, &theme_positions).map_err(report)?;
+            &themes
+        }
+    };
+    validate::refs(declared, &rules, &positions).map_err(report)?;
     validate::states(&rules, &positions).map_err(report)?;
-    Ok(Stylesheet { themes, rules })
+    Ok(Stylesheet {
+        themes: declared.to_vec(),
+        rules,
+    })
 }
 
 struct Parser<'a> {

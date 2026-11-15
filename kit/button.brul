@@ -19,22 +19,6 @@
 </markup>
 
 <style>
-    theme dark {
-        surface: #1e293b;
-        surface-hover: #273549;
-        accent: #3b82f6;
-        accent-hover: #2563eb;
-        text: #f8fafc;
-        border: #334155;
-    }
-    theme light {
-        surface: #f1f5f9;
-        surface-hover: #e2e8f0;
-        accent: #2563eb;
-        accent-hover: #1d4ed8;
-        text: #0f172a;
-        border: #cbd5e1;
-    }
     .button {
         height: 32px;
         padding-left: 16px;

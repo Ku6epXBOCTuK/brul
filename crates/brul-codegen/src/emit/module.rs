@@ -64,7 +64,7 @@ fn module_at(
     entry: Option<&Path>,
 ) -> Result<Module, Error> {
     let parsed = crate::parse_source(source)?;
-    let registry = crate::resolve(&parsed.uses, base)?;
+    let registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     let names = names::table(&parsed, &registry.definitions);
     let mut used = HashSet::new();
     let window_bases: Vec<String> = parsed

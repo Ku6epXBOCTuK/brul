@@ -24,16 +24,6 @@
 </markup>
 
 <style>
-    theme dark {
-        surface: #0f172a;
-        border: #334155;
-        muted: #cbd5e1;
-    }
-    theme light {
-        surface: #ffffff;
-        border: #e2e8f0;
-        muted: #475569;
-    }
     .tooltip {
         width: 100%;
         gap: 6px;

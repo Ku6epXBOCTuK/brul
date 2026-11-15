@@ -8,7 +8,7 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{self, Component as Declaration, Declaration as Item};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
-use brul_syntax::style::{self, Stylesheet};
+use brul_syntax::style::{self, Stylesheet, Theme};
 use brul_syntax::uses::{self, Block, Use};
 
 use crate::source::Script;
@@ -42,11 +42,12 @@ pub struct Registry {
     pub resources: Vec<Resource>,
 }
 
-pub fn resolve(uses: &Block, base: Option<&Path>) -> Result<Registry, Error> {
+pub fn resolve(uses: &Block, base: Option<&Path>, palette: &[Theme]) -> Result<Registry, Error> {
     let mut loader = Loader {
         definitions: Vec::new(),
         index: HashMap::new(),
         stack: Vec::new(),
+        palette,
     };
     let imports = loader.imports(&uses.uses, base, None)?;
     let resources = loader.resources(&uses.resources, base, None)?;
@@ -57,13 +58,14 @@ pub fn resolve(uses: &Block, base: Option<&Path>) -> Result<Registry, Error> {
     })
 }
 
-struct Loader {
+struct Loader<'a> {
     definitions: Vec<Definition>,
     index: HashMap<PathBuf, usize>,
     stack: Vec<PathBuf>,
+    palette: &'a [Theme],
 }
 
-impl Loader {
+impl Loader<'_> {
     fn imports(
         &mut self,
         uses: &[Use],
@@ -147,7 +149,7 @@ impl Loader {
         let source = fs::read_to_string(&path)
             .map_err(|error| at(origin, format!("cannot read '{}': {error}", path.display())))?;
         self.stack.push(path.clone());
-        let parsed = parse(&source, &path)?;
+        let parsed = parse(&source, &path, self.palette)?;
         let imports = self.imports(&parsed.uses.uses, path.parent(), Some(&path))?;
         let resources = self.resources(&parsed.uses.resources, path.parent(), Some(&path))?;
         self.stack.pop();
@@ -184,7 +186,7 @@ struct Parsed {
     script: Option<Script>,
 }
 
-fn parse(source: &str, path: &Path) -> Result<Parsed, Error> {
+fn parse(source: &str, path: &Path, palette: &[Theme]) -> Result<Parsed, Error> {
     let sfc = sfc::parse(source).map_err(|error| named(path, sfc_error(error)))?;
     let markup =
         markup::parse_file(&padded(source, sfc.markup)).map_err(|error| named(path, error))?;
@@ -209,11 +211,10 @@ fn parse(source: &str, path: &Path) -> Result<Parsed, Error> {
         None => Block::default(),
     };
     let stylesheet = match sfc.style {
-        Some(block) => {
-            style::parse_file(&padded(source, block)).map_err(|error| named(path, error))?
-        }
+        Some(block) => style::parse_file_in(&padded(source, block), palette)
+            .map_err(|error| named(path, error))?,
         None => Stylesheet {
-            themes: Vec::new(),
+            themes: palette.to_vec(),
             rules: Vec::new(),
         },
     };
@@ -314,7 +315,7 @@ window Picker (title: "x") {
 }
 </markup>
 "#;
-        let error = parse(source, Path::new("window.brul"))
+        let error = parse(source, Path::new("window.brul"), &[])
             .err()
             .expect("a file without a component must not parse");
         assert!(
@@ -338,7 +339,7 @@ component Screen {
 }
 </markup>
 "#;
-        let parsed = parse(source, Path::new("screen.brul")).unwrap();
+        let parsed = parse(source, Path::new("screen.brul"), &[]).unwrap();
         assert_eq!(parsed.uses.uses.len(), 1);
         assert_eq!(parsed.uses.uses[0].name, "Card");
     }

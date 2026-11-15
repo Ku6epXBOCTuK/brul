@@ -1335,7 +1335,28 @@ fn emits_the_kit_components() {
     }
     std::fs::write(
         dir.join("window.brul"),
-        r#"<use>
+        r#"<style>
+    theme dark {
+        surface: #1e293b;
+        surface-hover: #273549;
+        accent: #3b82f6;
+        accent-hover: #2563eb;
+        text: #f8fafc;
+        border: #334155;
+        muted: #cbd5e1;
+    }
+    theme light {
+        surface: #f1f5f9;
+        surface-hover: #e2e8f0;
+        accent: #2563eb;
+        accent-hover: #1d4ed8;
+        text: #0f172a;
+        border: #cbd5e1;
+        muted: #475569;
+    }
+</style>
+
+<use>
     import Button from "./kit/button.brul";
     import Card from "./kit/card.brul";
     import Tooltip from "./kit/tooltip.brul";
@@ -1366,6 +1387,87 @@ window Demo (title: "demo") {
             "{name}: {module}"
         );
     }
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn imported_components_inherit_the_root_palette() {
+    let dir = scratch(
+        "palette",
+        &[
+            (
+                "chip.brul",
+                "<markup>\ncomponent Chip {\n    View (chip) { }\n}\n</markup>\n\n<style>\n.chip { background: theme.surface; }\n</style>\n",
+            ),
+            (
+                "window.brul",
+                "<style>\ntheme dark {\n    surface: #101010;\n}\ntheme light {\n    surface: #ffffff;\n}\n</style>\n\n<use>\n    import Chip from \"./chip.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Chip { }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert_eq!(
+        module.matches("s::Theme { name: \"dark\".into()").count(),
+        2,
+        "{module}"
+    );
+    assert!(
+        module.contains("s::Value::ThemeRef(\"surface\".into())"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn an_unknown_theme_key_in_an_imported_component_names_the_file() {
+    let dir = scratch(
+        "palette-unknown",
+        &[
+            (
+                "chip.brul",
+                "<markup>\ncomponent Chip {\n    View (chip) { }\n}\n</markup>\n\n<style>\n.chip { background: theme.danger; }\n</style>\n",
+            ),
+            (
+                "window.brul",
+                "<style>\ntheme dark {\n    surface: #101010;\n}\n</style>\n\n<use>\n    import Chip from \"./chip.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Chip { }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+    assert!(error.message.contains("chip.brul"), "{}", error.message);
+    assert!(
+        error.message.contains("unknown theme key 'danger'"),
+        "{}",
+        error.message
+    );
+    assert_eq!(error.line, 8);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn an_imported_component_cannot_declare_a_theme() {
+    let dir = scratch(
+        "palette-local",
+        &[
+            (
+                "chip.brul",
+                "<markup>\ncomponent Chip {\n    View (chip) { }\n}\n</markup>\n\n<style>\ntheme dark {\n    surface: #ffffff;\n}\n</style>\n",
+            ),
+            (
+                "window.brul",
+                "<style>\ntheme dark {\n    surface: #101010;\n}\n</style>\n\n<use>\n    import Chip from \"./chip.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Chip { }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+    assert!(error.message.contains("chip.brul"), "{}", error.message);
+    assert!(
+        error
+            .message
+            .contains("a theme can only be declared in the root <style>"),
+        "{}",
+        error.message
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
