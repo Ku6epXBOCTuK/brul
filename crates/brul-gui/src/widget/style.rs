@@ -40,7 +40,7 @@ impl Default for WidgetStyle {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WidgetStylePatch {
     pub background: Option<Paint>,
     pub border: Option<Color>,
@@ -52,7 +52,23 @@ pub struct WidgetStylePatch {
     pub shadow: Option<Color>,
 }
 
+impl Default for WidgetStylePatch {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 impl WidgetStylePatch {
+    pub const DEFAULT: Self = Self {
+        background: None,
+        border: None,
+        text: None,
+        tint: None,
+        opacity: None,
+        vertical_align: None,
+        clip: None,
+        shadow: None,
+    };
     pub(crate) fn merge(&mut self, other: &Self) {
         if other.background.is_some() {
             self.background = other.background;
@@ -236,7 +252,7 @@ impl StyleState {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Transitions {
     pub background: Option<Duration>,
     pub border: Option<Duration>,
@@ -246,7 +262,21 @@ pub struct Transitions {
     pub shadow: Option<Duration>,
 }
 
+impl Default for Transitions {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 impl Transitions {
+    pub const DEFAULT: Self = Self {
+        background: None,
+        border: None,
+        text: None,
+        tint: None,
+        opacity: None,
+        shadow: None,
+    };
     pub fn is_empty(&self) -> bool {
         self.background.is_none()
             && self.border.is_none()

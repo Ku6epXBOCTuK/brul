@@ -6,6 +6,7 @@ use crate::{Import, Registry, Resource};
 
 pub(super) use structure::StructureNames;
 
+mod class;
 mod classes;
 mod component;
 mod element;
@@ -43,6 +44,7 @@ pub(super) struct Emit<'a> {
     bases: &'a [String],
     structures: &'a mut StructureNames,
     dynamic_classes: &'a mut bool,
+    classes: &'a mut classes::ClassNames,
     slots: bool,
 }
 

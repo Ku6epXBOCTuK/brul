@@ -32,6 +32,14 @@ pub fn demo_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Resu
     })
 }
 
+#[allow(dead_code)]
+static CLASSES_NONE: [brul::gui::Class; 0] = [
+];
+
+fn classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
+    &CLASSES_NONE
+}
+
 fn styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
@@ -43,11 +51,15 @@ fn styles() -> &'static brul::style::Stylesheet {
 }
 
 fn styled(
-    widget: brul::gui::Widget,
-    classes: &[&str],
+    mut widget: brul::gui::Widget,
+    indices: &[usize],
     theme: Option<&str>,
-) -> Result<brul::gui::Widget, brul::ViewError> {
-    Ok(brul::gui::style::styled(widget, styles(), classes, theme)?)
+) -> brul::gui::Widget {
+    let table = classes(theme);
+    for index in indices {
+        widget = widget.with_class(&table[*index]);
+    }
+    widget
 }
 
 pub fn demo_window() -> brul::WindowConfig {
@@ -114,7 +126,7 @@ pub fn styled_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Re
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        styled(brul::gui::Widget::column(vec![]), &["box"], theme)?
+        styled(brul::gui::Widget::column(vec![]), &[0], theme)
     };
     Ok(brul::Built {
         widget,
@@ -122,6 +134,36 @@ pub fn styled_view(theme: Option<&str>, component: &brul::ComponentHandle) -> Re
         handlers,
         props,
     })
+}
+
+#[allow(dead_code)]
+static CLASSES_DARK: [brul::gui::Class; 1] = [
+    brul::gui::Class {
+        layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(10)), ..brul::gui::LayoutPatch::DEFAULT },
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 108, g: 140, b: 255, a: 255 })), ..brul::gui::WidgetStylePatch::DEFAULT })
+            .with(brul::gui::StyleState::Checked, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 255, g: 0, b: 0, a: 255 })), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+        transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+    },
+];
+
+#[allow(dead_code)]
+static CLASSES_LIGHT: [brul::gui::Class; 1] = [
+    brul::gui::Class {
+        layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(10)), ..brul::gui::LayoutPatch::DEFAULT },
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 17, g: 34, b: 51, a: 255 })), ..brul::gui::WidgetStylePatch::DEFAULT })
+            .with(brul::gui::StyleState::Checked, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 255, g: 0, b: 0, a: 255 })), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+        transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+    },
+];
+
+fn classes(theme: Option<&str>) -> &'static [brul::gui::Class] {
+    match theme {
+        None | Some("dark") => &CLASSES_DARK,
+        Some("light") => &CLASSES_LIGHT,
+        Some(_) => &CLASSES_DARK,
+    }
 }
 
 fn styles() -> &'static brul::style::Stylesheet {
@@ -160,11 +202,15 @@ fn styles() -> &'static brul::style::Stylesheet {
 }
 
 fn styled(
-    widget: brul::gui::Widget,
-    classes: &[&str],
+    mut widget: brul::gui::Widget,
+    indices: &[usize],
     theme: Option<&str>,
-) -> Result<brul::gui::Widget, brul::ViewError> {
-    Ok(brul::gui::style::styled(widget, styles(), classes, theme)?)
+) -> brul::gui::Widget {
+    let table = classes(theme);
+    for index in indices {
+        widget = widget.with_class(&table[*index]);
+    }
+    widget
 }
 
 pub fn styled_window() -> brul::WindowConfig {
@@ -295,7 +341,7 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(
-        module.contains("styled(brul::gui::Widget::text(\"hi\"), &[\"a\"], theme)?"),
+        module.contains("styled(brul::gui::Widget::text(\"hi\"), &[0], theme)"),
         "{module}"
     );
     assert!(
@@ -1311,7 +1357,7 @@ fn emits_component_classes() {
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(
-        module.contains("styled(built.widget, &[\"primary\"], theme)?;"),
+        module.contains("styled(built.widget, &[0], theme);"),
         "{module}"
     );
     assert!(

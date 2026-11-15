@@ -31,11 +31,15 @@ pub(super) fn stylesheet(out: &mut String, prefix: &str, sheet: &Stylesheet) {
 }}
 
 fn {prefix}styled(
-    widget: brul::gui::Widget,
-    classes: &[&str],
+    mut widget: brul::gui::Widget,
+    indices: &[usize],
     theme: Option<&str>,
-) -> Result<brul::gui::Widget, brul::ViewError> {{
-    Ok(brul::gui::style::styled(widget, {prefix}styles(), classes, theme)?)
+) -> brul::gui::Widget {{
+    let table = {prefix}classes(theme);
+    for index in indices {{
+        widget = widget.with_class(&table[*index]);
+    }}
+    widget
 }}
 ",
         list(&themes, "        "),

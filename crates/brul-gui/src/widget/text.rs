@@ -1,13 +1,23 @@
 use super::{Layers, StyleState, WidgetState};
 use crate::text::{TextAlign, TextStyle};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextStylePatch {
     pub weight: Option<u16>,
     pub align: Option<TextAlign>,
 }
 
+impl Default for TextStylePatch {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 impl TextStylePatch {
+    pub const DEFAULT: Self = Self {
+        weight: None,
+        align: None,
+    };
     fn merge(&mut self, other: &Self) {
         if other.weight.is_some() {
             self.weight = other.weight;

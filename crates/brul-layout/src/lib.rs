@@ -79,7 +79,7 @@ pub struct LayoutStyle {
     pub align: Align,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LayoutPatch {
     pub width: Option<Dimension>,
     pub height: Option<Dimension>,
@@ -93,7 +93,25 @@ pub struct LayoutPatch {
     pub align: Option<Align>,
 }
 
+impl Default for LayoutPatch {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 impl LayoutPatch {
+    pub const DEFAULT: Self = Self {
+        width: None,
+        height: None,
+        padding: None,
+        border_width: None,
+        gap: None,
+        flex_grow: None,
+        flex_shrink: None,
+        flex_basis: None,
+        justify: None,
+        align: None,
+    };
     pub fn is_empty(&self) -> bool {
         self.width.is_none()
             && self.height.is_none()

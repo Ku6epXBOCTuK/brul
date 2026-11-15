@@ -440,12 +440,12 @@ fn write(
     } else {
         let classes = classes
             .iter()
-            .map(|class| format!("{class:?}"))
+            .map(|class| super::classes::index(emit.classes, class).to_string())
             .collect::<Vec<_>>()
             .join(", ");
         let _ = writeln!(
             out,
-            "{inner}let {widget} = {prefix}styled(built.widget, &[{classes}], theme)?;"
+            "{inner}let {widget} = {prefix}styled(built.widget, &[{classes}], theme);"
         );
     }
     if let Some(value) = class {

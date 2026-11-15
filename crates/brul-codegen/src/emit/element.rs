@@ -28,7 +28,10 @@ pub(super) fn widget(
     {
         return component::component(out, element, index, emit, frame, counter);
     }
-    let classes = classes(element);
+    let classes = classes(element)
+        .iter()
+        .map(|class| classes::index(emit.classes, class))
+        .collect::<Vec<_>>();
     let events = events::widget(element, emit.program)?;
     let pad = "    ".repeat(frame.depth());
     let inner = "    ".repeat(frame.depth() + 1);
@@ -68,7 +71,7 @@ pub(super) fn widget(
 fn element_expression(
     out: &mut String,
     element: &Element,
-    classes: &[&str],
+    classes: &[usize],
     events: &events::Events,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
@@ -82,10 +85,10 @@ fn element_expression(
     if styled {
         let list = classes
             .iter()
-            .map(|class| format!("{class:?}"))
+            .map(|index| index.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        let _ = write!(out, ", &[{list}], theme)?");
+        let _ = write!(out, ", &[{list}], theme)");
     }
     if events.drag {
         out.push_str(".draggable(true)");

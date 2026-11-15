@@ -12,6 +12,7 @@ use crate::error_at;
 
 use super::Emit;
 use super::StructureNames;
+use super::classes::ClassNames;
 use super::{classes, events, names, resources, script, style, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
@@ -88,6 +89,7 @@ fn module_at(
 
     head.push_str(HEADER);
     let mut dynamic_classes = false;
+    let mut class_names = ClassNames::default();
     for (index, window) in parsed.windows.iter().enumerate() {
         let (config, window_handlers) = crate::arguments(window)?;
         let window_handlers = events::window(&window_handlers, parsed.program.as_ref())?;
@@ -115,6 +117,7 @@ fn module_at(
                 bases: &component_bases,
                 structures: &mut structures,
                 dynamic_classes: &mut dynamic_classes,
+                classes: &mut class_names,
                 slots: false,
             },
         )?;
@@ -124,6 +127,7 @@ fn module_at(
         }
         configs.push(config);
     }
+    classes::statics(&mut head, "", &parsed.stylesheet, &class_names)?;
     if dynamic_classes {
         classes::tables(&mut head, "", &parsed.stylesheet);
     }
@@ -142,6 +146,7 @@ fn module_at(
         let mut body = String::new();
         let mut functions = Vec::new();
         let mut dynamic_classes = false;
+        let mut class_names = ClassNames::default();
         body.push_str(HEADER);
         view::view(
             &mut body,
@@ -161,12 +166,14 @@ fn module_at(
                 bases: &component_bases,
                 structures: &mut structures,
                 dynamic_classes: &mut dynamic_classes,
+                classes: &mut class_names,
                 slots: true,
             },
         )?;
         if dynamic_classes {
             classes::tables(&mut body, &prefix, &definition.stylesheet);
         }
+        classes::statics(&mut body, &prefix, &definition.stylesheet, &class_names)?;
         style::stylesheet(&mut body, &prefix, &definition.stylesheet);
         let script_file = format!("{name}.script");
         body.push_str(&script::program(
