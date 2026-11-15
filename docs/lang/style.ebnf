@@ -8,11 +8,15 @@ Prop        = Ident ":" Value { Value } ";" ;
 Animation   = "animate" Ident ":" Duration ";" ;
 Duration    = Number "ms" ;
 Value       = Number | Number "px" | Number "%" | Color | String
-            | ThemeRef | Gradient | Bool | Keyword ;
+            | ThemeRef | ColorExpr | Gradient | Bool | Keyword ;
 Keyword     = Ident ;
 Bool        = "true" | "false" ;
-Gradient    = "linear-gradient" "(" Number [ "deg" ] "," Color "," Color ")" ;
+Gradient    = "linear-gradient" "(" Number [ "deg" ] "," ColorValue "," ColorValue ")" ;
 ThemeRef    = "theme" "." Ident ;
+ColorValue  = Color | ThemeRef | ColorExpr ;
+ColorExpr   = ( "alpha" | "lighten" | "darken" ) "(" ColorValue "," Percent ")"
+            | "mix" "(" ColorValue "," ColorValue "," Percent ")" ;
+Percent     = Number "%" ;
 
 Ident       = letter { letter | digit | "-" | "_" } ;
 Number      = digit { digit } [ "." digit { digit } ] ;

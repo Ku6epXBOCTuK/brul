@@ -1,4 +1,4 @@
-use crate::ast::{ClassRule, GradientColor, Theme, ThemeEntry, Value};
+use crate::ast::{ClassRule, Theme, ThemeEntry, Value};
 use crate::properties::{Kind, StatePolicy, ThemeType};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -104,9 +104,18 @@ pub fn refs(
                     };
                     check(declared, key, expected, property.kind, at.at)?;
                 }
+                Value::ColorExpr(expr) => {
+                    let mut keys = Vec::new();
+                    expr.keys(&mut keys);
+                    for key in keys {
+                        check(declared, key, ThemeType::Color, property.kind, at.at)?;
+                    }
+                }
                 Value::Gradient(gradient) => {
                     for stop in [&gradient.from, &gradient.to] {
-                        if let GradientColor::Theme(key) = stop {
+                        let mut keys = Vec::new();
+                        stop.keys(&mut keys);
+                        for key in keys {
                             check(declared, key, ThemeType::Color, property.kind, at.at)?;
                         }
                     }
@@ -246,7 +255,7 @@ fn duplicate_key(position: &ThemeAt) -> Option<&ThemeKeyAt> {
 
 fn key_type(value: &Value) -> Option<ThemeType> {
     match value {
-        Value::Color(_) => Some(ThemeType::Color),
+        Value::Color(_) | Value::ColorExpr(_) => Some(ThemeType::Color),
         Value::Px(_) => Some(ThemeType::Px),
         _ => None,
     }

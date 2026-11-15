@@ -74,6 +74,7 @@ pub enum Value {
     Keyword(String),
     Color(Color),
     ThemeRef(String),
+    ColorExpr(ColorExpr),
     Gradient(Gradient),
     Bool(bool),
 }
@@ -81,14 +82,60 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gradient {
     pub angle: f64,
-    pub from: GradientColor,
-    pub to: GradientColor,
+    pub from: ColorValue,
+    pub to: ColorValue,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum GradientColor {
+pub enum ColorValue {
     Color(Color),
     Theme(String),
+    Expr(Box<ColorExpr>),
+}
+
+impl ColorValue {
+    pub fn keys<'a>(&'a self, out: &mut Vec<&'a str>) {
+        match self {
+            Self::Color(_) => {}
+            Self::Theme(key) => out.push(key),
+            Self::Expr(expr) => expr.keys(out),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ColorExpr {
+    Alpha {
+        color: ColorValue,
+        amount: f64,
+    },
+    Mix {
+        from: ColorValue,
+        to: ColorValue,
+        amount: f64,
+    },
+    Lighten {
+        color: ColorValue,
+        amount: f64,
+    },
+    Darken {
+        color: ColorValue,
+        amount: f64,
+    },
+}
+
+impl ColorExpr {
+    pub fn keys<'a>(&'a self, out: &mut Vec<&'a str>) {
+        match self {
+            Self::Alpha { color, .. }
+            | Self::Lighten { color, .. }
+            | Self::Darken { color, .. } => color.keys(out),
+            Self::Mix { from, to, .. } => {
+                from.keys(out);
+                to.keys(out);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

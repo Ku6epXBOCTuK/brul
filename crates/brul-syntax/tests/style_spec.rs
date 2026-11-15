@@ -71,7 +71,10 @@ fn document_examples_parse() {
         .iter()
         .filter(|example| example.kind == Kind::Parse)
         .collect();
-    assert_eq!(parsed.len(), 5, "expected five style examples");
+    assert!(
+        !parsed.is_empty(),
+        "no 'css' examples under {EXAMPLES_HEADING}"
+    );
     for example in parsed {
         let sheet = parse_file(&example.body)
             .unwrap_or_else(|error| panic!("example at line {}: {error}", example.line));

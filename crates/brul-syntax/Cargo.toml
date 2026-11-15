@@ -11,3 +11,6 @@ brul-style = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+material-colors = { workspace = true }

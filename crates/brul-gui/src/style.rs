@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use brul_style::{
-    GradientColor, Kind, LayoutField, Property, Side, Snapshot, SnapshotError, State, StyleField,
+    ColorValue, Kind, LayoutField, Property, Side, Snapshot, SnapshotError, State, StyleField,
     Stylesheet, Target, TextField, Type, Value,
 };
 
@@ -429,10 +429,10 @@ fn expected(kind: Kind, expected: &'static str) -> StyleError {
     StyleError::Value { kind, expected }
 }
 
-fn gradient_color(value: &GradientColor) -> Color {
+fn gradient_color(value: &ColorValue) -> Color {
     match value {
-        GradientColor::Color(stop) => color(*stop),
-        GradientColor::Theme(_) => {
+        ColorValue::Color(stop) => color(*stop),
+        ColorValue::Theme(_) | ColorValue::Expr(_) => {
             unreachable!("a snapshot resolves gradient stops")
         }
     }

@@ -1721,7 +1721,25 @@ fn emits_a_linear_gradient_background() {
     let module = emit::module(source).unwrap();
     assert!(
         module.contains(
-            "s::Value::Gradient(s::Gradient { angle: 90.0, from: s::GradientColor::Color(s::Color::rgba(255, 0, 0, 255)), to: s::GradientColor::Color(s::Color::rgba(0, 0, 255, 255)) })"
+            "s::Value::Gradient(s::Gradient { angle: 90.0, from: s::ColorValue::Color(s::Color::rgba(255, 0, 0, 255)), to: s::ColorValue::Color(s::Color::rgba(0, 0, 255, 255)) })"
+        ),
+        "{module}"
+    );
+}
+
+#[test]
+fn emits_color_expressions() {
+    let source = "<style>\ntheme light { accent: #3b82f6; }\n.a { background: alpha(theme.accent, 50%); border-color: mix(#3b82f6, white, 20%); }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (a) { }\n}\n</markup>\n";
+    let module = emit::module(source).unwrap();
+    assert!(
+        module.contains(
+            "s::Value::ColorExpr(s::ColorExpr::Alpha { color: s::ColorValue::Theme(\"accent\".into()), amount: 50.0 })"
+        ),
+        "{module}"
+    );
+    assert!(
+        module.contains(
+            "s::Value::ColorExpr(s::ColorExpr::Mix { from: s::ColorValue::Color(s::Color::rgba(59, 130, 246, 255)), to: s::ColorValue::Color(s::Color::rgba(255, 255, 255, 255)), amount: 20.0 })"
         ),
         "{module}"
     );

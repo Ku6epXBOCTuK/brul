@@ -1,5 +1,5 @@
 use brul_syntax::style::{
-    Animation, ClassRule, Color, Gradient, GradientColor, Kind, Property, SnapshotError, State,
+    Animation, ClassRule, Color, ColorValue, Gradient, Kind, Property, SnapshotError, State,
     Stylesheet, Theme, ThemeEntry, Value, parse_file,
 };
 
@@ -129,8 +129,8 @@ fn gradient_stops_resolve_to_the_selected_theme() {
     let expected = |from: u8, to: u8| {
         Value::Gradient(Gradient {
             angle: 135.0,
-            from: GradientColor::Color(Color::rgb(from, from, from)),
-            to: GradientColor::Color(Color::rgb(to, to, to)),
+            from: ColorValue::Color(Color::rgb(from, from, from)),
+            to: ColorValue::Color(Color::rgb(to, to, to)),
         })
     };
 
@@ -229,4 +229,99 @@ fn animations_merge_with_the_rightmost_class_winning() {
             },
         ]
     );
+}
+
+#[test]
+fn alpha_sets_only_the_alpha_channel() {
+    let sheet = parse_file(
+        "theme light { accent: #3b82f6; }\n.a { background: alpha(theme.accent, 50%); }",
+    )
+    .expect("sheet");
+    let snapshot = sheet
+        .snapshot(&["a"], None, Some("light"))
+        .expect("snapshot");
+    assert_eq!(
+        snapshot.get(Kind::Background),
+        Some(&Value::Color(Color::rgba(0x3b, 0x82, 0xf6, 128)))
+    );
+}
+
+#[test]
+fn mix_with_transparent_matches_alpha() {
+    let sheet = parse_file(
+        ".a { background: mix(#3b82f6, transparent, 50%); border-color: alpha(#3b82f6, 50%); }",
+    )
+    .expect("sheet");
+    let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
+    assert_eq!(
+        snapshot.get(Kind::Background),
+        snapshot.get(Kind::BorderColor)
+    );
+}
+
+#[test]
+fn mix_ends_on_its_operands() {
+    let sheet = parse_file(
+        "theme light { accent: #3b82f6; surface: #0f172a; }\n\
+         .a { color: mix(theme.accent, theme.surface, 0%); border-color: mix(theme.accent, theme.surface, 100%); }",
+    )
+    .expect("sheet");
+    let snapshot = sheet
+        .snapshot(&["a"], None, Some("light"))
+        .expect("snapshot");
+    assert_eq!(
+        snapshot.get(Kind::Color),
+        Some(&Value::Color(Color::rgb(0x3b, 0x82, 0xf6)))
+    );
+    assert_eq!(
+        snapshot.get(Kind::BorderColor),
+        Some(&Value::Color(Color::rgb(0x0f, 0x17, 0x2a)))
+    );
+}
+
+#[test]
+fn lighten_and_darken_move_tone_by_absolute_points() {
+    use material_colors::{color::Rgb, hct::Hct};
+
+    let sheet = parse_file(
+        "theme light { accent: #3b82f6; }\n\
+         .a { background: lighten(theme.accent, 20%); border-color: darken(theme.accent, 10%); }",
+    )
+    .expect("sheet");
+    let snapshot = sheet
+        .snapshot(&["a"], None, Some("light"))
+        .expect("snapshot");
+    let tone = |kind: Kind| {
+        let Some(Value::Color(color)) = snapshot.get(kind) else {
+            panic!("expected a resolved color for {kind:?}");
+        };
+        Hct::new(Rgb::new(color.r, color.g, color.b)).get_tone()
+    };
+    let base = Hct::new(Rgb::new(0x3b, 0x82, 0xf6)).get_tone();
+    assert!((tone(Kind::Background) - (base + 20.0)).abs() < 0.5);
+    assert!((tone(Kind::BorderColor) - (base - 10.0)).abs() < 0.5);
+}
+
+#[test]
+fn gradient_stops_take_color_expressions() {
+    let sheet = parse_file(
+        "theme light { accent: #3b82f6; }\n\
+         .a { background: linear-gradient(90, alpha(theme.accent, 50%), lighten(theme.accent, 20%)); }",
+    )
+    .expect("sheet");
+    let snapshot = sheet
+        .snapshot(&["a"], None, Some("light"))
+        .expect("snapshot");
+    let Some(Value::Gradient(gradient)) = snapshot.get(Kind::Background) else {
+        panic!("expected a gradient");
+    };
+    assert_eq!(
+        gradient.from,
+        ColorValue::Color(Color::rgba(0x3b, 0x82, 0xf6, 128))
+    );
+    let ColorValue::Color(to) = &gradient.to else {
+        panic!("expected a resolved stop");
+    };
+    assert_ne!(*to, Color::rgb(0x3b, 0x82, 0xf6));
+    assert_eq!(to.a, 255);
 }

@@ -1,8 +1,8 @@
 use std::fmt::Write;
 
 use brul_syntax::style::{
-    Animation, ClassRule, Color, GradientColor, Kind, Property, Stylesheet, Theme, ThemeEntry,
-    Value,
+    Animation, ClassRule, Color, ColorExpr, ColorValue, Kind, Property, Stylesheet, Theme,
+    ThemeEntry, Value,
 };
 
 pub(super) fn stylesheet(out: &mut String, prefix: &str, sheet: &Stylesheet) {
@@ -136,26 +136,50 @@ fn value(value: &Value) -> String {
         Value::Percent(percent) => format!("s::Value::Percent({percent:?})"),
         Value::String(text) => format!("s::Value::String({text:?}.into())"),
         Value::Keyword(keyword) => format!("s::Value::Keyword({keyword:?}.into())"),
-        Value::Color(color) => format!("s::Value::Color({})", color_expr(*color)),
+        Value::Color(color) => format!("s::Value::Color({})", literal(*color)),
         Value::ThemeRef(key) => format!("s::Value::ThemeRef({key:?}.into())"),
+        Value::ColorExpr(expr) => format!("s::Value::ColorExpr({})", color_expr(expr)),
         Value::Gradient(gradient) => format!(
             "s::Value::Gradient(s::Gradient {{ angle: {:?}, from: {}, to: {} }})",
             gradient.angle,
-            gradient_color(&gradient.from),
-            gradient_color(&gradient.to)
+            operand(&gradient.from),
+            operand(&gradient.to)
         ),
         Value::Bool(flag) => format!("s::Value::Bool({flag})"),
     }
 }
 
-fn gradient_color(value: &GradientColor) -> String {
+fn operand(value: &ColorValue) -> String {
     match value {
-        GradientColor::Color(color) => format!("s::GradientColor::Color({})", color_expr(*color)),
-        GradientColor::Theme(key) => format!("s::GradientColor::Theme({key:?}.into())"),
+        ColorValue::Color(color) => format!("s::ColorValue::Color({})", literal(*color)),
+        ColorValue::Theme(key) => format!("s::ColorValue::Theme({key:?}.into())"),
+        ColorValue::Expr(expr) => format!("s::ColorValue::Expr(Box::new({}))", color_expr(expr)),
     }
 }
 
-fn color_expr(value: Color) -> String {
+fn color_expr(expr: &ColorExpr) -> String {
+    match expr {
+        ColorExpr::Alpha { color, amount } => format!(
+            "s::ColorExpr::Alpha {{ color: {}, amount: {amount:?} }}",
+            operand(color)
+        ),
+        ColorExpr::Mix { from, to, amount } => format!(
+            "s::ColorExpr::Mix {{ from: {}, to: {}, amount: {amount:?} }}",
+            operand(from),
+            operand(to)
+        ),
+        ColorExpr::Lighten { color, amount } => format!(
+            "s::ColorExpr::Lighten {{ color: {}, amount: {amount:?} }}",
+            operand(color)
+        ),
+        ColorExpr::Darken { color, amount } => format!(
+            "s::ColorExpr::Darken {{ color: {}, amount: {amount:?} }}",
+            operand(color)
+        ),
+    }
+}
+
+fn literal(value: Color) -> String {
     format!(
         "s::Color::rgba({}, {}, {}, {})",
         value.r, value.g, value.b, value.a

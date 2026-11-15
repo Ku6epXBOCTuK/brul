@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    Animation, ClassRule, Color, Gradient, GradientColor, Kind, Property, State, Stylesheet, Theme,
-    ThemeEntry, Value, parse_file, parse_file_in, parse_root,
+    Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Kind, Property, State,
+    Stylesheet, Theme, ThemeEntry, Value, parse_file, parse_file_in, parse_root,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -314,8 +314,8 @@ fn gradients_parse() {
                     "background",
                     Value::Gradient(Gradient {
                         angle: 135.0,
-                        from: GradientColor::Color(Color::rgb(0x3b, 0x82, 0xf6)),
-                        to: GradientColor::Color(Color::rgb(0x06, 0xb6, 0xd4)),
+                        from: ColorValue::Color(Color::rgb(0x3b, 0x82, 0xf6)),
+                        to: ColorValue::Color(Color::rgb(0x06, 0xb6, 0xd4)),
                     }),
                 )],
             ),
@@ -325,8 +325,8 @@ fn gradients_parse() {
                     "background",
                     Value::Gradient(Gradient {
                         angle: 90.0,
-                        from: GradientColor::Color(Color::WHITE),
-                        to: GradientColor::Color(Color::TRANSPARENT),
+                        from: ColorValue::Color(Color::WHITE),
+                        to: ColorValue::Color(Color::TRANSPARENT),
                     }),
                 )],
             ),
@@ -825,6 +825,99 @@ fn wrong_animations_are_rejected() {
     ];
     for (source, message) in sources {
         let error = parse_file(source).unwrap_err();
+        assert!(
+            error.message.contains(message),
+            "{source}: expected message containing {message}, got {}",
+            error.message
+        );
+    }
+}
+
+#[test]
+fn color_expressions_parse() {
+    let source = r#".a {
+    background: mix(theme.accent, white, 20%);
+    border-color: alpha(#3b82f6, 40%);
+    box-shadow-color: lighten(#0f172a, 12%);
+}
+.b { background: darken(lighten(theme.surface-main, 20%), 5%); }"#;
+    let sheet = parse_file(source).expect("sheet");
+    let value = |rule: usize, kind: Kind| {
+        sheet.rules[rule]
+            .properties
+            .iter()
+            .find(|property| property.kind == kind)
+            .map(|property| &property.value)
+            .expect("property")
+    };
+
+    assert_eq!(
+        value(0, Kind::Background),
+        &Value::ColorExpr(ColorExpr::Mix {
+            from: ColorValue::Theme("accent".to_string()),
+            to: ColorValue::Color(Color::WHITE),
+            amount: 20.0,
+        })
+    );
+    assert_eq!(
+        value(0, Kind::BorderColor),
+        &Value::ColorExpr(ColorExpr::Alpha {
+            color: ColorValue::Color(Color::rgb(0x3b, 0x82, 0xf6)),
+            amount: 40.0,
+        })
+    );
+    assert_eq!(
+        value(0, Kind::ShadowColor),
+        &Value::ColorExpr(ColorExpr::Lighten {
+            color: ColorValue::Color(Color::rgb(0x0f, 0x17, 0x2a)),
+            amount: 12.0,
+        })
+    );
+    let nested = value(1, Kind::Background);
+    let Value::ColorExpr(ColorExpr::Darken { color, amount }) = nested else {
+        panic!("expected darken, got {nested:?}");
+    };
+    assert_eq!(*amount, 5.0);
+    assert!(matches!(
+        color,
+        ColorValue::Expr(inner) if matches!(**inner, ColorExpr::Lighten { .. })
+    ));
+}
+
+#[test]
+fn color_expression_errors_name_the_problem() {
+    let deep = format!(
+        ".a {{ background: {}#3b82f6{}; }}",
+        "alpha(".repeat(9),
+        ", 10%)".repeat(9)
+    );
+    let sources = [
+        (
+            ".a { background: alpha(#3b82f6, 50); }".to_string(),
+            "expected percent from 0 to 100 for 'background'",
+        ),
+        (
+            ".a { background: lighten(#3b82f6, 101%); }".to_string(),
+            "expected percent from 0 to 100 for 'background'",
+        ),
+        (
+            ".a { background: mix(#3b82f6 20%); }".to_string(),
+            "expected ','",
+        ),
+        (deep, "color expression is nested deeper than 8"),
+        (
+            "theme light { radius: 4px; }\n.a { background: alpha(theme.radius, 50%); }"
+                .to_string(),
+            "theme key 'radius' is a px length, but 'background' expects a color",
+        ),
+        (
+            "theme light { accent: #111111; }\n.a { background: darken(theme.muted, 5%); }"
+                .to_string(),
+            "unknown theme key 'muted'",
+        ),
+    ];
+    for (source, message) in sources {
+        let error = parse_file(&source).unwrap_err();
         assert!(
             error.message.contains(message),
             "{source}: expected message containing {message}, got {}",

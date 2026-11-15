@@ -1,7 +1,9 @@
-use brul_style::{Color, Gradient, GradientColor, Type, Value};
+use brul_style::{Color, ColorExpr, ColorValue, Gradient, Type, Value};
 
 use crate::cursor::Cursor;
 use crate::error::Error;
+
+const NESTING: usize = 8;
 
 pub fn value(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<Value, Error> {
     if theme && cursor.eat_keyword("theme") {
@@ -44,7 +46,7 @@ fn number_value(ty: Type, cursor: &mut Cursor, name: &str) -> Result<Value, Erro
 
 fn paint_value(ty: Type, cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
     match ty {
-        Type::Color => color(cursor, name).map(Value::Color),
+        Type::Color => color(cursor, theme, name),
         Type::Paint => paint(cursor, theme, name),
         _ => unreachable!("parse sends only paint types here"),
     }
@@ -139,11 +141,94 @@ fn paint(cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
     if cursor.eat_keyword("linear-gradient") {
         return gradient(cursor, theme, name).map(Value::Gradient);
     }
-    Ok(Value::Color(color(cursor, name)?))
+    color(cursor, theme, name)
 }
 
-fn color(cursor: &mut Cursor, name: &str) -> Result<Color, Error> {
+fn color(cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {
+    Ok(match color_value(cursor, theme, name, 0)? {
+        ColorValue::Color(color) => Value::Color(color),
+        ColorValue::Theme(key) => Value::ThemeRef(key),
+        ColorValue::Expr(expr) => Value::ColorExpr(*expr),
+    })
+}
+
+fn color_value(
+    cursor: &mut Cursor,
+    theme: bool,
+    name: &str,
+    depth: usize,
+) -> Result<ColorValue, Error> {
     let at = cursor.value_start();
+    if depth > NESTING {
+        return Err(Error::at(
+            cursor.source(),
+            at,
+            format!("color expression is nested deeper than {NESTING}"),
+        ));
+    }
+    if cursor.eat_keyword("alpha") {
+        let color = first_argument(cursor, theme, name, depth)?;
+        let amount = percent(cursor, name)?;
+        cursor.expect(')')?;
+        return Ok(expr(ColorExpr::Alpha { color, amount }));
+    }
+    if cursor.eat_keyword("lighten") {
+        let color = first_argument(cursor, theme, name, depth)?;
+        let amount = percent(cursor, name)?;
+        cursor.expect(')')?;
+        return Ok(expr(ColorExpr::Lighten { color, amount }));
+    }
+    if cursor.eat_keyword("darken") {
+        let color = first_argument(cursor, theme, name, depth)?;
+        let amount = percent(cursor, name)?;
+        cursor.expect(')')?;
+        return Ok(expr(ColorExpr::Darken { color, amount }));
+    }
+    if cursor.eat_keyword("mix") {
+        let from = first_argument(cursor, theme, name, depth)?;
+        let to = color_value(cursor, theme, name, depth + 1)?;
+        cursor.expect(',')?;
+        let amount = percent(cursor, name)?;
+        cursor.expect(')')?;
+        return Ok(expr(ColorExpr::Mix { from, to, amount }));
+    }
+    if theme && cursor.eat_keyword("theme") {
+        cursor.expect('.')?;
+        return Ok(ColorValue::Theme(cursor.ident()?));
+    }
+    literal(cursor, name, at).map(ColorValue::Color)
+}
+
+fn first_argument(
+    cursor: &mut Cursor,
+    theme: bool,
+    name: &str,
+    depth: usize,
+) -> Result<ColorValue, Error> {
+    cursor.expect('(')?;
+    let color = color_value(cursor, theme, name, depth + 1)?;
+    cursor.expect(',')?;
+    Ok(color)
+}
+
+fn expr(expr: ColorExpr) -> ColorValue {
+    ColorValue::Expr(Box::new(expr))
+}
+
+fn percent(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
+    let at = cursor.value_start();
+    let message = format!("expected percent from 0 to 100 for '{name}'");
+    let value = cursor
+        .number_literal()
+        .map_err(|_| Error::at(cursor.source(), at, message.clone()))?;
+    if cursor.eat_unit("%") && (0.0..=100.0).contains(&value) {
+        Ok(value)
+    } else {
+        Err(Error::at(cursor.source(), at, message))
+    }
+}
+
+fn literal(cursor: &mut Cursor, name: &str, at: usize) -> Result<Color, Error> {
     let message = expected(name, "color");
     match cursor.peek() {
         Some('#') => hex_color(cursor),
@@ -204,20 +289,11 @@ fn gradient(cursor: &mut Cursor, theme: bool, name: &str) -> Result<Gradient, Er
     let angle = cursor.number_literal()?;
     cursor.eat_keyword("deg");
     cursor.expect(',')?;
-    let from = gradient_color(cursor, theme, name)?;
+    let from = color_value(cursor, theme, name, 0)?;
     cursor.expect(',')?;
-    let to = gradient_color(cursor, theme, name)?;
+    let to = color_value(cursor, theme, name, 0)?;
     cursor.expect(')')?;
     Ok(Gradient { angle, from, to })
-}
-
-fn gradient_color(cursor: &mut Cursor, theme: bool, name: &str) -> Result<GradientColor, Error> {
-    cursor.skip_trivia();
-    if theme && cursor.eat_keyword("theme") {
-        cursor.expect('.')?;
-        return Ok(GradientColor::Theme(cursor.ident()?));
-    }
-    color(cursor, name).map(GradientColor::Color)
 }
 
 fn string(cursor: &mut Cursor, name: &str) -> Result<String, Error> {

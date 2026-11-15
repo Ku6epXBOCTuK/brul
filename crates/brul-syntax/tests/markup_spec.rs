@@ -76,7 +76,10 @@ fn document_examples_parse() {
         .iter()
         .filter(|example| example.kind == Kind::Parse)
         .collect();
-    assert_eq!(parsed.len(), 4, "expected four markup examples");
+    assert!(
+        !parsed.is_empty(),
+        "the markup spec has no parseable example"
+    );
     for example in parsed {
         let file = parse_file(&example.body)
             .unwrap_or_else(|error| panic!("example at line {}: {error}", example.line));

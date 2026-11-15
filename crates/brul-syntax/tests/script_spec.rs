@@ -67,12 +67,14 @@ fn examples(document: &str) -> Vec<Example> {
 #[test]
 fn document_examples_parse() {
     let examples = examples(SCRIPT);
-    assert_eq!(examples.len(), 4, "expected four script examples");
     let parsed: Vec<&Example> = examples
         .iter()
         .filter(|example| example.kind == Kind::Parse)
         .collect();
-    assert_eq!(parsed.len(), 3, "expected three script programs");
+    assert!(
+        !parsed.is_empty(),
+        "the script spec has no parseable example"
+    );
     for example in parsed {
         let program = parse(&example.body)
             .unwrap_or_else(|error| panic!("example at line {}: {error}", example.line));

@@ -7,4 +7,5 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+material-colors = { workspace = true }
 thiserror = { workspace = true }

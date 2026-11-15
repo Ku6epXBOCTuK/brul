@@ -1,4 +1,5 @@
-use crate::ast::{Animation, Gradient, GradientColor, Property, State, Stylesheet, Theme, Value};
+use crate::ast::{Animation, ColorValue, Gradient, Property, State, Stylesheet, Theme, Value};
+use crate::color;
 use crate::properties::Kind;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -65,6 +66,10 @@ pub enum SnapshotError {
     UnknownTheme(String),
     #[error("unknown theme key '{0}'")]
     UnknownThemeKey(String),
+    #[error("theme key '{0}' is not a color")]
+    NotAColor(String),
+    #[error("theme key cycle: {0}")]
+    ThemeCycle(String),
 }
 
 impl Stylesheet {
@@ -134,34 +139,17 @@ impl Stylesheet {
     }
 }
 
-fn theme_value<'a>(theme: Option<&'a Theme>, key: &str) -> Result<&'a Value, SnapshotError> {
-    theme
-        .and_then(|theme| theme.properties.iter().find(|entry| entry.key == key))
-        .map(|entry| &entry.value)
-        .ok_or_else(|| SnapshotError::UnknownThemeKey(key.to_string()))
-}
-
 fn resolve(value: &Value, theme: Option<&Theme>) -> Result<Value, SnapshotError> {
     match value {
-        Value::ThemeRef(key) => Ok(theme_value(theme, key)?.clone()),
+        Value::ThemeRef(key) => {
+            color::resolve(&ColorValue::Theme(key.clone()), theme).map(Value::Color)
+        }
+        Value::ColorExpr(expr) => color::resolve_expr(expr, theme).map(Value::Color),
         Value::Gradient(gradient) => Ok(Value::Gradient(Gradient {
             angle: gradient.angle,
-            from: gradient_color(&gradient.from, theme)?,
-            to: gradient_color(&gradient.to, theme)?,
+            from: ColorValue::Color(color::resolve(&gradient.from, theme)?),
+            to: ColorValue::Color(color::resolve(&gradient.to, theme)?),
         })),
         value => Ok(value.clone()),
-    }
-}
-
-fn gradient_color(
-    value: &GradientColor,
-    theme: Option<&Theme>,
-) -> Result<GradientColor, SnapshotError> {
-    let GradientColor::Theme(key) = value else {
-        return Ok(value.clone());
-    };
-    match theme_value(theme, key)? {
-        Value::Color(color) => Ok(GradientColor::Color(*color)),
-        _ => Err(SnapshotError::UnknownThemeKey(key.clone())),
     }
 }
