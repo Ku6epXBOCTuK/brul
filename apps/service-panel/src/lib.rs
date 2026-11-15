@@ -1,9 +1,8 @@
-//! service-panel: панель служб Windows на DSL.
-
-// NOTE: UI copy is Russian, so literals in the generated view cannot stay ASCII.
-#![allow(clippy::non_ascii_literal)]
+//! service-panel: a Windows services panel on the DSL.
 
 pub mod config;
 pub mod generated;
+pub mod service;
 
 pub use config::{Config, ConfigError, ServiceSpec, default_path};
+pub use service::{Service, ServiceError, ServiceState, StartType};

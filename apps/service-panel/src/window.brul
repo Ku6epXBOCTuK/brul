@@ -1,13 +1,13 @@
 <markup>
     window Panel (
-        title: "Службы",
+        title: "Services",
         width: 760,
         height: 520,
         centered: true
     ) {
         Column (root) {
-            Text (title) { "Службы" }
-            Text (hint) { "Список служб появится в следующей задаче." }
+            Text (title) { "Services" }
+            Text (hint) { "The service list arrives in the next task." }
         }
     }
 </markup>

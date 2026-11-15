@@ -21,3 +21,6 @@ toml = { workspace = true }
 [build-dependencies]
 brul = { workspace = true }
 embed-manifest = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }

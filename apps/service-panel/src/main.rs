@@ -4,7 +4,7 @@ use std::process::ExitCode;
 
 use brul::logging::{error, info};
 
-use service_panel::{Config, default_path, generated};
+use service_panel::{Config, default_path, generated, service};
 
 fn main() -> ExitCode {
     brul::logging::init_with(&[env!("CARGO_PKG_NAME")]);
@@ -24,6 +24,24 @@ fn main() -> ExitCode {
         services = config.services.len(),
         "starting panel"
     );
+
+    let services = match service::query_all(&config.services) {
+        Ok(services) => services,
+        Err(failure) => {
+            error!(%failure, "services are unreadable");
+            eprintln!("panel: {failure}");
+            return ExitCode::FAILURE;
+        }
+    };
+    for service in &services {
+        info!(
+            name = %service.name,
+            display = %service.display,
+            state = %service.state,
+            start = %service.start_type,
+            "service"
+        );
+    }
 
     match brul::run_generated(
         generated::windows(),

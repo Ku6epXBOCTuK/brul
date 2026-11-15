@@ -1,4 +1,4 @@
-//! РљРѕРЅС„РёРі РїР°РЅРµР»Рё СЃР»СѓР¶Р±: РєР°РєРёРµ СЃР»СѓР¶Р±С‹ РїРѕРєР°Р·С‹РІР°С‚СЊ, РёС… РїРѕСЂС‚С‹ Рё С„Р°Р№Р»С‹ Р»РѕРіРѕРІ.
+//! Panel config: which services to show, their ports and log files.
 
 use std::io;
 use std::path::{Path, PathBuf};

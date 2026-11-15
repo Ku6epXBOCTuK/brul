@@ -250,7 +250,7 @@ TCP-таблицы у службы NSSM принадлежит дочернем�
 - [x] BRUL-193 — каркас `apps/service-panel`: `build.rs`, `main.rs`,
   окно-заглушка, конфиг служб, elevated-манифест через `embed-manifest`
   (манифест только в release: тестовые бинарники наследуют линк-аргументы).
-- [ ] BRUL-447 — список служб: `QueryServiceConfig` и `QueryServiceStatusEx` по
+- [x] BRUL-447 — список служб: `QueryServiceConfig` и `QueryServiceStatusEx` по
   именам из конфига, ошибки типом.
 - [ ] BRUL-448 — старт/стоп/рестарт и «запустить все Manual», ожидание смены
   состояния с таймаутом.
