@@ -6,6 +6,30 @@ use crate::text::TextStyle;
 
 static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
 
+macro_rules! patch {
+    ($vis:vis $name:ident { $($field:ident),+ $(,)? }) => {
+        impl $name {
+            pub const DEFAULT: Self = Self {
+                $($field: None,)+
+            };
+
+            $vis fn merge(&mut self, other: &Self) {
+                $(
+                    if other.$field.is_some() {
+                        self.$field = other.$field;
+                    }
+                )+
+            }
+        }
+    };
+}
+
+fn set_if_some<T>(dst: &mut T, value: Option<T>) {
+    if let Some(value) = value {
+        *dst = value;
+    }
+}
+
 mod event;
 mod snapshot;
 mod style;

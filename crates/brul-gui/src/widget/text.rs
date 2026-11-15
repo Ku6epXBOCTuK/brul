@@ -1,32 +1,13 @@
-use super::{Layers, StyleState, WidgetState};
+use super::{Layers, StyleState, WidgetState, set_if_some};
 use crate::text::{TextAlign, TextStyle};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TextStylePatch {
     pub weight: Option<u16>,
     pub align: Option<TextAlign>,
 }
 
-impl Default for TextStylePatch {
-    fn default() -> Self {
-        Self::DEFAULT
-    }
-}
-
-impl TextStylePatch {
-    pub const DEFAULT: Self = Self {
-        weight: None,
-        align: None,
-    };
-    fn merge(&mut self, other: &Self) {
-        if other.weight.is_some() {
-            self.weight = other.weight;
-        }
-        if other.align.is_some() {
-            self.align = other.align;
-        }
-    }
-}
+patch!(TextStylePatch { weight, align });
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextStyleSet {
@@ -72,12 +53,9 @@ impl TextStyleSet {
     }
 
     pub fn merge(&mut self, patch: &TextStylePatch) {
-        if let Some(weight) = patch.weight {
-            self.base.weight = weight;
-        }
-        if let Some(align) = patch.align {
-            self.base.align = align;
-        }
+        let TextStylePatch { weight, align } = *patch;
+        set_if_some(&mut self.base.weight, weight);
+        set_if_some(&mut self.base.align, align);
     }
 
     pub(crate) fn apply_layers(&mut self, layers: &Layers<TextStylePatch>) {
@@ -112,12 +90,9 @@ impl TextStyleSet {
             let Some(patch) = patch.filter(|_| active) else {
                 continue;
             };
-            if let Some(weight) = patch.weight {
-                style.weight = weight;
-            }
-            if let Some(align) = patch.align {
-                style.align = align;
-            }
+            let TextStylePatch { weight, align } = patch;
+            set_if_some(&mut style.weight, weight);
+            set_if_some(&mut style.align, align);
         }
         style
     }

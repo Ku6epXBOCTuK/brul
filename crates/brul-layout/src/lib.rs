@@ -65,100 +65,60 @@ pub enum Direction {
     Column,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct LayoutStyle {
-    pub width: Dimension,
-    pub height: Dimension,
-    pub padding: Padding,
-    pub border_width: u32,
-    pub gap: u32,
-    pub flex_grow: f32,
-    pub flex_shrink: f32,
-    pub flex_basis: Dimension,
-    pub justify: Justify,
-    pub align: Align,
-}
+macro_rules! layout_patch {
+    ($($field:ident: $ty:ty),+ $(,)?) => {
+        #[derive(Clone, Copy, Debug, Default, PartialEq)]
+        pub struct LayoutStyle {
+            $(pub $field: $ty,)+
+        }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct LayoutPatch {
-    pub width: Option<Dimension>,
-    pub height: Option<Dimension>,
-    pub padding: Option<Padding>,
-    pub border_width: Option<u32>,
-    pub gap: Option<u32>,
-    pub flex_grow: Option<f32>,
-    pub flex_shrink: Option<f32>,
-    pub flex_basis: Option<Dimension>,
-    pub justify: Option<Justify>,
-    pub align: Option<Align>,
-}
+        #[derive(Clone, Copy, Debug, Default, PartialEq)]
+        pub struct LayoutPatch {
+            $(pub $field: Option<$ty>,)+
+        }
 
-impl Default for LayoutPatch {
-    fn default() -> Self {
-        Self::DEFAULT
-    }
-}
+        impl LayoutPatch {
+            pub const DEFAULT: Self = Self {
+                $($field: None,)+
+            };
 
-impl LayoutPatch {
-    pub const DEFAULT: Self = Self {
-        width: None,
-        height: None,
-        padding: None,
-        border_width: None,
-        gap: None,
-        flex_grow: None,
-        flex_shrink: None,
-        flex_basis: None,
-        justify: None,
-        align: None,
+            pub fn is_empty(&self) -> bool {
+                *self == Self::DEFAULT
+            }
+        }
+
+        impl From<&LayoutStyle> for LayoutPatch {
+            fn from(style: &LayoutStyle) -> Self {
+                let default = LayoutStyle::default();
+                Self {
+                    $($field: (style.$field != default.$field).then_some(style.$field),)+
+                }
+            }
+        }
+
+        impl LayoutStyle {
+            pub fn apply(&mut self, patch: &LayoutPatch) {
+                $(
+                    if let Some(value) = patch.$field {
+                        self.$field = value;
+                    }
+                )+
+            }
+        }
     };
-    pub fn is_empty(&self) -> bool {
-        self.width.is_none()
-            && self.height.is_none()
-            && self.padding.is_none()
-            && self.border_width.is_none()
-            && self.gap.is_none()
-            && self.flex_grow.is_none()
-            && self.flex_shrink.is_none()
-            && self.flex_basis.is_none()
-            && self.justify.is_none()
-            && self.align.is_none()
-    }
 }
 
-impl LayoutStyle {
-    pub fn apply(&mut self, patch: &LayoutPatch) {
-        if let Some(width) = patch.width {
-            self.width = width;
-        }
-        if let Some(height) = patch.height {
-            self.height = height;
-        }
-        if let Some(padding) = patch.padding {
-            self.padding = padding;
-        }
-        if let Some(border_width) = patch.border_width {
-            self.border_width = border_width;
-        }
-        if let Some(gap) = patch.gap {
-            self.gap = gap;
-        }
-        if let Some(flex_grow) = patch.flex_grow {
-            self.flex_grow = flex_grow;
-        }
-        if let Some(flex_shrink) = patch.flex_shrink {
-            self.flex_shrink = flex_shrink;
-        }
-        if let Some(flex_basis) = patch.flex_basis {
-            self.flex_basis = flex_basis;
-        }
-        if let Some(justify) = patch.justify {
-            self.justify = justify;
-        }
-        if let Some(align) = patch.align {
-            self.align = align;
-        }
-    }
+layout_patch! {
+    width: Dimension,
+    height: Dimension,
+    padding: Padding,
+    border_width: u32,
+    gap: u32,
+    flex_grow: f32,
+    flex_shrink: f32,
+    flex_basis: Dimension,
+    justify: Justify,
+    align: Align,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

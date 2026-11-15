@@ -1,9 +1,34 @@
 use std::fmt::Write;
 
 use brul_gui::{
-    Align, Class, Color, Dimension, Gradient, Justify, Layers, LayoutPatch, Padding, Paint,
-    StyleState, TextStylePatch, Transitions, VerticalAlign, WidgetStylePatch,
+    Class, Layers, LayoutPatch, StyleState, TextStylePatch, Transitions, WidgetStylePatch,
 };
+
+macro_rules! fields {
+    ($out:expr, $patch:expr, $type:ident, { $($field:ident $(=> $convert:path)?),+ $(,)? }) => {{
+        let brul_gui::$type { $($field),+ } = *$patch;
+        let _ = write!($out, concat!("brul::gui::", stringify!($type), " {{"));
+        $(
+            if let Some(value) = $field {
+                let _ = write!(
+                    $out,
+                    concat!(" ", stringify!($field), ": Some({}),"),
+                    fields!(@value value $($convert)?)
+                );
+            }
+        )+
+        let _ = write!(
+            $out,
+            concat!(" ..brul::gui::", stringify!($type), "::DEFAULT }}")
+        );
+    }};
+    (@value $value:ident) => {
+        $value
+    };
+    (@value $value:ident $convert:path) => {
+        $convert($value)
+    };
+}
 
 pub(super) fn literal(class: &Class) -> String {
     format!(
@@ -21,65 +46,20 @@ pub(super) fn literal(class: &Class) -> String {
 }
 
 fn layout(patch: &LayoutPatch) -> String {
-    let mut out = String::from("brul::gui::LayoutPatch {");
-    let field = |out: &mut String, name: &str, value: String| {
-        let _ = write!(out, " {name}: Some({value}),");
-    };
-    if let Some(value) = patch.width {
-        field(&mut out, "width", dimension(value));
-    }
-    if let Some(value) = patch.height {
-        field(&mut out, "height", dimension(value));
-    }
-    if let Some(value) = patch.padding {
-        field(&mut out, "padding", padding(value));
-    }
-    if let Some(value) = patch.border_width {
-        field(&mut out, "border_width", value.to_string());
-    }
-    if let Some(value) = patch.gap {
-        field(&mut out, "gap", value.to_string());
-    }
-    if let Some(value) = patch.flex_grow {
-        field(&mut out, "flex_grow", format!("{value:?}"));
-    }
-    if let Some(value) = patch.flex_shrink {
-        field(&mut out, "flex_shrink", format!("{value:?}"));
-    }
-    if let Some(value) = patch.flex_basis {
-        field(&mut out, "flex_basis", dimension(value));
-    }
-    if let Some(value) = patch.justify {
-        field(&mut out, "justify", justify(value));
-    }
-    if let Some(value) = patch.align {
-        field(&mut out, "align", align(value));
-    }
-    out.push_str(" ..brul::gui::LayoutPatch::DEFAULT }");
+    let mut out = String::new();
+    fields!(out, patch, LayoutPatch, {
+        width => convert::dimension,
+        height => convert::dimension,
+        padding => convert::padding,
+        border_width => convert::decimal,
+        gap => convert::decimal,
+        flex_grow => convert::debug,
+        flex_shrink => convert::debug,
+        flex_basis => convert::dimension,
+        justify => convert::justify,
+        align => convert::align,
+    });
     out
-}
-
-fn padding(padding: Padding) -> String {
-    format!(
-        "brul::gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }}",
-        padding.left, padding.top, padding.right, padding.bottom
-    )
-}
-
-fn dimension(value: Dimension) -> String {
-    match value {
-        Dimension::Auto => "brul::gui::Dimension::Auto".to_owned(),
-        Dimension::Px(px) => format!("brul::gui::Dimension::Px({px})"),
-        Dimension::Percent(percent) => format!("brul::gui::Dimension::Percent({percent:?})"),
-    }
-}
-
-fn justify(value: Justify) -> String {
-    format!("brul::gui::Justify::{value:?}")
-}
-
-fn align(value: Align) -> String {
-    format!("brul::gui::Align::{value:?}")
 }
 
 fn style(layers: &Layers<WidgetStylePatch>) -> String {
@@ -111,88 +91,107 @@ fn text(layers: &Layers<TextStylePatch>) -> String {
 }
 
 fn widget_patch(patch: &WidgetStylePatch) -> String {
-    let mut out = String::from("brul::gui::WidgetStylePatch {");
-    if let Some(value) = &patch.background {
-        let _ = write!(out, " background: Some({}),", paint(value));
-    }
-    if let Some(value) = patch.border {
-        let _ = write!(out, " border: Some({}),", color(value));
-    }
-    if let Some(value) = patch.text {
-        let _ = write!(out, " text: Some({}),", color(value));
-    }
-    if let Some(value) = patch.tint {
-        let _ = write!(out, " tint: Some({}),", color(value));
-    }
-    if let Some(value) = patch.opacity {
-        let _ = write!(out, " opacity: Some({value:?}),");
-    }
-    if let Some(value) = patch.vertical_align {
-        let _ = write!(out, " vertical_align: Some({}),", vertical_align(value));
-    }
-    if let Some(value) = patch.clip {
-        let _ = write!(out, " clip: Some({value}),");
-    }
-    if let Some(value) = patch.shadow {
-        let _ = write!(out, " shadow: Some({}),", color(value));
-    }
-    out.push_str(" ..brul::gui::WidgetStylePatch::DEFAULT }");
+    let mut out = String::new();
+    fields!(out, patch, WidgetStylePatch, {
+        background => convert::paint,
+        border => convert::color,
+        text => convert::color,
+        tint => convert::color,
+        opacity => convert::debug,
+        vertical_align => convert::vertical_align,
+        clip,
+        shadow => convert::color,
+    });
     out
 }
 
 fn text_patch(patch: &TextStylePatch) -> String {
-    let mut out = String::from("brul::gui::TextStylePatch {");
-    if let Some(value) = patch.weight {
-        let _ = write!(out, " weight: Some({value}),");
-    }
-    if let Some(value) = patch.align {
-        let _ = write!(out, " align: Some(brul::gui::TextAlign::{value:?}),");
-    }
-    out.push_str(" ..brul::gui::TextStylePatch::DEFAULT }");
+    let mut out = String::new();
+    fields!(out, patch, TextStylePatch, {
+        weight,
+        align => convert::text_align,
+    });
     out
 }
 
 fn transitions(transitions: &Transitions) -> String {
-    let mut out = String::from("brul::gui::Transitions {");
-    let fields = [
-        ("background", transitions.background),
-        ("border", transitions.border),
-        ("text", transitions.text),
-        ("tint", transitions.tint),
-        ("opacity", transitions.opacity),
-        ("shadow", transitions.shadow),
-    ];
-    for (name, duration) in fields {
-        if let Some(duration) = duration {
-            let _ = write!(
-                out,
-                " {name}: Some(std::time::Duration::from_millis({})),",
-                duration.as_millis()
-            );
-        }
-    }
-    out.push_str(" ..brul::gui::Transitions::DEFAULT }");
+    let mut out = String::new();
+    fields!(out, transitions, Transitions, {
+        background => convert::millis,
+        border => convert::millis,
+        text => convert::millis,
+        tint => convert::millis,
+        opacity => convert::millis,
+        shadow => convert::millis,
+    });
     out
 }
 
-fn paint(value: &Paint) -> String {
-    match value {
-        Paint::Color(value) => format!("brul::gui::Paint::Color({})", color(*value)),
-        Paint::Gradient(Gradient::Linear { angle, from, to }) => format!(
-            "brul::gui::Paint::Gradient(brul::gui::Gradient::Linear {{ angle: {angle:?}, from: {}, to: {} }})",
-            color(*from),
-            color(*to)
-        ),
+mod convert {
+    use std::time::Duration;
+
+    use brul_gui::{
+        Align, Color, Dimension, Gradient, Justify, Padding, Paint, TextAlign, VerticalAlign,
+    };
+
+    pub(super) fn padding(padding: Padding) -> String {
+        format!(
+            "brul::gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }}",
+            padding.left, padding.top, padding.right, padding.bottom
+        )
     }
-}
 
-fn color(value: Color) -> String {
-    format!(
-        "brul::gui::Color {{ r: {}, g: {}, b: {}, a: {} }}",
-        value.r, value.g, value.b, value.a
-    )
-}
+    pub(super) fn dimension(value: Dimension) -> String {
+        match value {
+            Dimension::Auto => "brul::gui::Dimension::Auto".to_owned(),
+            Dimension::Px(px) => format!("brul::gui::Dimension::Px({px})"),
+            Dimension::Percent(percent) => format!("brul::gui::Dimension::Percent({percent:?})"),
+        }
+    }
 
-fn vertical_align(value: VerticalAlign) -> String {
-    format!("brul::gui::VerticalAlign::{value:?}")
+    pub(super) fn justify(value: Justify) -> String {
+        format!("brul::gui::Justify::{value:?}")
+    }
+
+    pub(super) fn align(value: Align) -> String {
+        format!("brul::gui::Align::{value:?}")
+    }
+
+    pub(super) fn vertical_align(value: VerticalAlign) -> String {
+        format!("brul::gui::VerticalAlign::{value:?}")
+    }
+
+    pub(super) fn text_align(value: TextAlign) -> String {
+        format!("brul::gui::TextAlign::{value:?}")
+    }
+
+    pub(super) fn paint(value: Paint) -> String {
+        match value {
+            Paint::Color(value) => format!("brul::gui::Paint::Color({})", color(value)),
+            Paint::Gradient(Gradient::Linear { angle, from, to }) => format!(
+                "brul::gui::Paint::Gradient(brul::gui::Gradient::Linear {{ angle: {angle:?}, from: {}, to: {} }})",
+                color(from),
+                color(to)
+            ),
+        }
+    }
+
+    pub(super) fn color(value: Color) -> String {
+        format!(
+            "brul::gui::Color {{ r: {}, g: {}, b: {}, a: {} }}",
+            value.r, value.g, value.b, value.a
+        )
+    }
+
+    pub(super) fn decimal(value: u32) -> String {
+        value.to_string()
+    }
+
+    pub(super) fn debug<T: std::fmt::Debug>(value: T) -> String {
+        format!("{value:?}")
+    }
+
+    pub(super) fn millis(value: Duration) -> String {
+        format!("std::time::Duration::from_millis({})", value.as_millis())
+    }
 }

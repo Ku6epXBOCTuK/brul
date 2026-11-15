@@ -114,27 +114,11 @@ pub fn class(
         }
     }
     Ok(Class {
-        layout: layout_patch(&layout),
+        layout: LayoutPatch::from(&layout),
         style,
         text,
         transitions: transitions(&base)?,
     })
-}
-
-fn layout_patch(layout: &LayoutStyle) -> LayoutPatch {
-    let default = LayoutStyle::default();
-    LayoutPatch {
-        width: (layout.width != default.width).then_some(layout.width),
-        height: (layout.height != default.height).then_some(layout.height),
-        padding: (layout.padding != default.padding).then_some(layout.padding),
-        border_width: (layout.border_width != default.border_width).then_some(layout.border_width),
-        gap: (layout.gap != default.gap).then_some(layout.gap),
-        flex_grow: (layout.flex_grow != default.flex_grow).then_some(layout.flex_grow),
-        flex_shrink: (layout.flex_shrink != default.flex_shrink).then_some(layout.flex_shrink),
-        flex_basis: (layout.flex_basis != default.flex_basis).then_some(layout.flex_basis),
-        justify: (layout.justify != default.justify).then_some(layout.justify),
-        align: (layout.align != default.align).then_some(layout.align),
-    }
 }
 
 fn snapshot(

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use super::WidgetState;
 use super::text::TextStylePatch;
+use super::{WidgetState, set_if_some};
 use crate::Color;
 use crate::animation::{Track, Tween};
 use crate::gradient::Paint;
@@ -40,7 +40,7 @@ impl Default for WidgetStyle {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WidgetStylePatch {
     pub background: Option<Paint>,
     pub border: Option<Color>,
@@ -52,77 +52,37 @@ pub struct WidgetStylePatch {
     pub shadow: Option<Color>,
 }
 
-impl Default for WidgetStylePatch {
-    fn default() -> Self {
-        Self::DEFAULT
-    }
-}
-
-impl WidgetStylePatch {
-    pub const DEFAULT: Self = Self {
-        background: None,
-        border: None,
-        text: None,
-        tint: None,
-        opacity: None,
-        vertical_align: None,
-        clip: None,
-        shadow: None,
-    };
-    pub(crate) fn merge(&mut self, other: &Self) {
-        if other.background.is_some() {
-            self.background = other.background;
-        }
-        if other.border.is_some() {
-            self.border = other.border;
-        }
-        if other.text.is_some() {
-            self.text = other.text;
-        }
-        if other.tint.is_some() {
-            self.tint = other.tint;
-        }
-        if other.opacity.is_some() {
-            self.opacity = other.opacity;
-        }
-        if other.vertical_align.is_some() {
-            self.vertical_align = other.vertical_align;
-        }
-        if other.clip.is_some() {
-            self.clip = other.clip;
-        }
-        if other.shadow.is_some() {
-            self.shadow = other.shadow;
-        }
-    }
-}
+patch!(pub(crate) WidgetStylePatch {
+    background,
+    border,
+    text,
+    tint,
+    opacity,
+    vertical_align,
+    clip,
+    shadow,
+});
 
 impl WidgetStyle {
     fn apply(&mut self, patch: &WidgetStylePatch) {
-        if let Some(background) = patch.background {
-            self.background = background;
-        }
-        if let Some(border) = patch.border {
-            self.border = border;
-        }
-        if let Some(text) = patch.text {
-            self.text = text;
-        }
-        if let Some(tint) = patch.tint {
-            self.tint = Some(tint);
-        }
-        if let Some(opacity) = patch.opacity {
-            self.opacity = opacity;
-        }
-        if let Some(align) = patch.vertical_align {
-            self.vertical_align = align;
-        }
-        if let Some(clip) = patch.clip {
-            self.clip = clip;
-        }
-        if let Some(color) = patch.shadow {
-            self.shadow.color = color;
-        }
+        let WidgetStylePatch {
+            background,
+            border,
+            text,
+            tint,
+            opacity,
+            vertical_align,
+            clip,
+            shadow,
+        } = *patch;
+        set_if_some(&mut self.background, background);
+        set_if_some(&mut self.border, border);
+        set_if_some(&mut self.text, text);
+        self.tint = tint.or(self.tint);
+        set_if_some(&mut self.opacity, opacity);
+        set_if_some(&mut self.vertical_align, vertical_align);
+        set_if_some(&mut self.clip, clip);
+        set_if_some(&mut self.shadow.color, shadow);
     }
 }
 
@@ -252,7 +212,7 @@ impl StyleState {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Transitions {
     pub background: Option<Duration>,
     pub border: Option<Duration>,
@@ -262,49 +222,18 @@ pub struct Transitions {
     pub shadow: Option<Duration>,
 }
 
-impl Default for Transitions {
-    fn default() -> Self {
-        Self::DEFAULT
-    }
-}
+patch!(pub(crate) Transitions {
+    background,
+    border,
+    text,
+    tint,
+    opacity,
+    shadow,
+});
 
 impl Transitions {
-    pub const DEFAULT: Self = Self {
-        background: None,
-        border: None,
-        text: None,
-        tint: None,
-        opacity: None,
-        shadow: None,
-    };
     pub fn is_empty(&self) -> bool {
-        self.background.is_none()
-            && self.border.is_none()
-            && self.text.is_none()
-            && self.tint.is_none()
-            && self.opacity.is_none()
-            && self.shadow.is_none()
-    }
-
-    fn merge(&mut self, other: Self) {
-        if other.background.is_some() {
-            self.background = other.background;
-        }
-        if other.border.is_some() {
-            self.border = other.border;
-        }
-        if other.text.is_some() {
-            self.text = other.text;
-        }
-        if other.tint.is_some() {
-            self.tint = other.tint;
-        }
-        if other.opacity.is_some() {
-            self.opacity = other.opacity;
-        }
-        if other.shadow.is_some() {
-            self.shadow = other.shadow;
-        }
+        *self == Self::DEFAULT
     }
 }
 
@@ -376,7 +305,7 @@ impl StyleSet {
                 self.state_mut(state).get_or_insert_default().merge(&patch);
             }
         }
-        self.transitions.merge(transitions);
+        self.transitions.merge(&transitions);
     }
 
     fn state_mut(&mut self, state: StyleState) -> &mut Option<WidgetStylePatch> {
@@ -495,53 +424,17 @@ fn tween_tint(from: Option<Color>, to: Option<Color>, progress: f32) -> Option<C
 mod tests {
     use super::*;
 
-    const LAYOUT: LayoutPatch = LayoutPatch {
-        width: None,
-        height: None,
-        padding: None,
-        border_width: None,
-        gap: None,
-        flex_grow: None,
-        flex_shrink: None,
-        flex_basis: None,
-        justify: None,
-        align: None,
-    };
-
-    const STYLE: WidgetStylePatch = WidgetStylePatch {
-        background: None,
-        border: None,
-        text: None,
-        tint: None,
-        opacity: None,
-        vertical_align: None,
-        clip: None,
-        shadow: None,
-    };
-
-    const TEXT: TextStylePatch = TextStylePatch {
-        weight: None,
-        align: None,
-    };
-
     static LIGHT: [Class; 1] = [Class {
-        layout: LAYOUT,
-        style: Layers::new(STYLE).with(
+        layout: LayoutPatch::DEFAULT,
+        style: Layers::new(WidgetStylePatch::DEFAULT).with(
             StyleState::Hovered,
             WidgetStylePatch {
                 opacity: Some(0.5),
-                ..STYLE
+                ..WidgetStylePatch::DEFAULT
             },
         ),
-        text: Layers::new(TEXT),
-        transitions: Transitions {
-            background: None,
-            border: None,
-            text: None,
-            tint: None,
-            opacity: None,
-            shadow: None,
-        },
+        text: Layers::new(TextStylePatch::DEFAULT),
+        transitions: Transitions::DEFAULT,
     }];
 
     #[test]
@@ -550,10 +443,10 @@ mod tests {
             LIGHT[0].style.patch(StyleState::Hovered),
             Some(WidgetStylePatch {
                 opacity: Some(0.5),
-                ..STYLE
+                ..WidgetStylePatch::DEFAULT
             })
         );
-        assert_eq!(LIGHT[0].style.base(), STYLE);
+        assert_eq!(LIGHT[0].style.base(), WidgetStylePatch::DEFAULT);
         assert!(LIGHT[0].style.patch(StyleState::Pressed).is_none());
         assert!(LIGHT[0].text.is_empty());
     }
