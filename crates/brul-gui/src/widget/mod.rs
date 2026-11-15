@@ -26,6 +26,7 @@ pub struct WidgetId(u32);
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WidgetKind {
     View,
+    Structure,
     Text,
     Image,
     Input,
@@ -70,6 +71,7 @@ enum Content {
     View {
         direction: Direction,
     },
+    Structure,
     Text {
         content: String,
         styles: Box<TextStyleSet>,
@@ -90,10 +92,15 @@ impl Content {
     fn kind(&self) -> WidgetKind {
         match self {
             Self::View { .. } => WidgetKind::View,
+            Self::Structure => WidgetKind::Structure,
             Self::Text { .. } => WidgetKind::Text,
             Self::Input { .. } => WidgetKind::Input,
             Self::Image(_) => WidgetKind::Image,
         }
+    }
+
+    fn is_group(&self) -> bool {
+        matches!(self, Self::View { .. } | Self::Structure)
     }
 }
 
@@ -104,14 +111,20 @@ impl Widget {
         widget
     }
 
+    pub fn structure(children: Vec<Self>) -> Self {
+        let mut widget = Self::new(Content::Structure);
+        widget.children = children;
+        widget
+    }
+
     pub fn set_children(&mut self, children: Vec<Self>) {
-        if matches!(&self.data, Content::View { .. }) {
+        if self.data.is_group() {
             self.children = children;
         }
     }
 
     pub fn into_children(self) -> Vec<Self> {
-        if matches!(&self.data, Content::View { .. }) {
+        if self.data.is_group() {
             self.children
         } else {
             vec![self]
@@ -214,7 +227,7 @@ impl Widget {
             | Content::Input {
                 styles: current, ..
             } => **current = styles,
-            Content::View { .. } | Content::Image(_) => {}
+            Content::View { .. } | Content::Structure | Content::Image(_) => {}
         }
         self
     }
@@ -229,7 +242,7 @@ impl Widget {
             | Content::Input {
                 styles: current, ..
             } => current.apply_layers(&class.text),
-            Content::View { .. } | Content::Image(_) => {}
+            Content::View { .. } | Content::Structure | Content::Image(_) => {}
         }
         self
     }

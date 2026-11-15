@@ -111,7 +111,7 @@ impl Frame {
                     self.paint_caret(node, caret, opacity, clip);
                 }
             }
-            crate::WidgetKind::View => {}
+            crate::WidgetKind::View | crate::WidgetKind::Structure => {}
         }
     }
 

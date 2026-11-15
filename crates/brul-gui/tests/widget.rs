@@ -125,11 +125,7 @@ fn percent_width_spans_a_generated_structure_wrapper() {
         ..LayoutStyle::default()
     });
     let item_id = item.id();
-    let rows = Widget::view(Direction::Column, vec![item]).with_layout(LayoutStyle {
-        width: Dimension::Percent(100.0),
-        gap: 8,
-        ..LayoutStyle::default()
-    });
+    let rows = Widget::structure(vec![item]);
     let root = Widget::column(vec![rows]).with_layout(LayoutStyle {
         width: Dimension::Px(488),
         height: Dimension::Px(400),
@@ -153,6 +149,51 @@ fn percent_width_spans_a_generated_structure_wrapper() {
 
     assert_eq!(item.width, 464);
     assert_eq!(item.x, 12);
+}
+
+#[test]
+fn a_structure_group_is_not_a_box() {
+    let first = Widget::view(Direction::Row, Vec::new()).with_layout(LayoutStyle {
+        height: Dimension::Px(20),
+        ..LayoutStyle::default()
+    });
+    let first_id = first.id();
+    let empty = Widget::structure(Vec::new());
+    let second = Widget::view(Direction::Row, Vec::new()).with_layout(LayoutStyle {
+        width: Dimension::Percent(100.0),
+        height: Dimension::Px(20),
+        ..LayoutStyle::default()
+    });
+    let second_id = second.id();
+    let group = Widget::structure(vec![second]);
+    let root = Widget::column(vec![first, empty, group]).with_layout(LayoutStyle {
+        width: Dimension::Px(200),
+        gap: 10,
+        ..LayoutStyle::default()
+    });
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 200,
+            height: 200,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let first = snapshot.node(first_id).expect("first");
+    let second = snapshot.node(second_id).expect("second");
+
+    assert_eq!((first.x, first.y), (0, 0));
+    assert_eq!(
+        (second.x, second.y),
+        (0, 30),
+        "an empty group takes a gap slot and pushes its sibling down"
+    );
+    assert_eq!(second.width, 200, "a group does not bound a percent child");
 }
 
 #[test]

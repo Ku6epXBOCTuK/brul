@@ -83,6 +83,12 @@ pub(super) fn snapshot_widget(
     if !node.state.visible {
         return;
     }
+    if matches!(node.data, Content::Structure) {
+        for &child in &node.children {
+            snapshot_widget(tree, child, boxes, texts, clips, focused, nodes);
+        }
+        return;
+    }
 
     let layout_box = &boxes[slot.index()];
     let layout_style = node.layout_style();

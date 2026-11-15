@@ -105,7 +105,6 @@ fn the_note_fits_the_window_without_scrolling() {
 }
 
 #[test]
-#[ignore = "BRUL-395: if and each take a layout box, so an empty branch shifts the next one"]
 fn the_preset_columns_line_up() {
     let mut tree = note_view(&["готово", "позже", "думаю", "вопрос"]);
     let snapshot = laid_out(&mut tree);

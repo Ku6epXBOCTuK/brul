@@ -297,7 +297,7 @@ impl WidgetTree {
         let Some(slot) = self.index.get(&parent).copied() else {
             return false;
         };
-        if !matches!(self.nodes[slot.index()].data, Content::View { .. }) {
+        if !self.nodes[slot.index()].data.is_group() {
             return false;
         }
         let current = self.nodes[slot.index()].children.len();
@@ -328,7 +328,7 @@ impl WidgetTree {
         let Some(slot) = self.index.get(&parent).copied() else {
             return false;
         };
-        if !matches!(self.nodes[slot.index()].data, Content::View { .. }) {
+        if !self.nodes[slot.index()].data.is_group() {
             return false;
         }
         let count = self.nodes[slot.index()].children.len();
@@ -337,7 +337,7 @@ impl WidgetTree {
 
     pub fn take_children(&mut self, parent: WidgetId) -> Option<Vec<Widget>> {
         let slot = *self.index.get(&parent)?;
-        if !matches!(self.nodes[slot.index()].data, Content::View { .. }) {
+        if !self.nodes[slot.index()].data.is_group() {
             return None;
         }
         self.clear_interaction();

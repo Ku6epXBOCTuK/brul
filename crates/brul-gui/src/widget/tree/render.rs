@@ -17,7 +17,7 @@ impl Pass<'_> {
         let key = slot.index() as u32;
 
         let mut keys = Vec::new();
-        let (direction, scroll) = match &node.data {
+        let (direction, scroll, transparent) = match &node.data {
             Content::View { direction } => {
                 keys.reserve(node.children.len());
                 for &child in &node.children {
@@ -27,10 +27,17 @@ impl Pass<'_> {
                     Direction::Column => node.scroll_offset,
                     Direction::Row => ScrollOffset::ZERO,
                 };
-                (*direction, scroll)
+                (*direction, scroll, false)
+            }
+            Content::Structure => {
+                keys.reserve(node.children.len());
+                for &child in &node.children {
+                    keys.push(self.build(child)?);
+                }
+                (Direction::Row, ScrollOffset::ZERO, true)
             }
             Content::Text { .. } | Content::Input { .. } | Content::Image(_) => {
-                (Direction::Row, ScrollOffset::ZERO)
+                (Direction::Row, ScrollOffset::ZERO, false)
             }
         };
 
@@ -43,6 +50,7 @@ impl Pass<'_> {
                 scroll,
                 content: slot,
                 children: &keys,
+                transparent,
             },
         );
         if self.stale.contains(&slot) {

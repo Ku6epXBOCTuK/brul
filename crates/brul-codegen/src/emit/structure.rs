@@ -127,7 +127,7 @@ fn rebuild_arm(
     out.push_str(
         "        other => return Err(brul::ViewError::expected(\"if condition\", \"Bool\", other.type_name())),\n    };\n",
     );
-    widget(&mut out, arm);
+    widget(&mut out);
     Ok(out)
 }
 
@@ -208,7 +208,7 @@ fn each_arm(
     out.push_str("        component.borrow_mut().pop_build_scope();\n");
     out.push_str("        rows.push(brul::RowInfo { key, item, start, count });\n");
     out.push_str("    }\n");
-    widget(&mut out, arm);
+    widget(&mut out);
     Ok(out)
 }
 
@@ -237,17 +237,7 @@ fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> bru
     )
 }
 
-fn widget(out: &mut String, frame: Frame<'_>) {
-    let direction = frame.direction();
-    let gap = frame.gap();
-    // NOTE: a control-flow group is not a box of its own, so it spans the cross axis of its parent instead of shrinking to content
-    let width = match direction {
-        "Column" => "width: brul::gui::Dimension::Percent(100.0), ",
-        _ => "",
-    };
-    let _ = writeln!(
-        out,
-        "    let widget = brul::gui::Widget::view(brul::gui::Direction::{direction}, children)\n        .with_layout(brul::gui::LayoutStyle {{ {width}gap: {gap}, ..Default::default() }});"
-    );
+fn widget(out: &mut String) {
+    out.push_str("    let widget = brul::gui::Widget::structure(children);\n");
     out.push_str("    Ok((brul::Built { widget, bindings, handlers, props }, rows))\n}\n");
 }

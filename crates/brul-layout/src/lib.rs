@@ -304,10 +304,12 @@ pub struct NodeShape<'a, C> {
     pub scroll: ScrollOffset,
     pub content: C,
     pub children: &'a [u32],
+    pub transparent: bool,
 }
 
 struct Entry<C> {
-    node: NodeId,
+    node: Option<NodeId>,
+    nodes: Vec<NodeId>,
     style: TaffyStyle,
     layout: LayoutStyle,
     direction: Direction,
@@ -345,73 +347,109 @@ impl<C: PartialEq + Clone> Layouter<C> {
             .collect::<Vec<_>>();
         for key in gone {
             let entry = self.entries.remove(&key).expect("layout entry");
-            self.tree.remove(entry.node).expect("layout tree");
+            if let Some(node) = entry.node {
+                self.tree.remove(node).expect("layout tree");
+            }
         }
     }
 
     pub fn node(&mut self, key: u32, shape: NodeShape<C>) {
+        self.live.insert(key);
         let taffy = taffy_style(shape.style, shape.direction, shape.offset);
         let context = shape.content.clone();
-        let nodes = shape
-            .children
-            .iter()
-            .map(|child| self.entries.get(child).expect("layout child").node)
-            .collect::<Vec<_>>();
-        self.live.insert(key);
+        let nodes = self.child_nodes(shape.children);
+        let placed = !shape.transparent;
 
-        match self.entries.get_mut(&key) {
-            Some(entry) => {
-                entry.layout = *shape.style;
-                entry.direction = shape.direction;
-                entry.offset = shape.offset;
-                entry.scroll = shape.scroll;
-                if entry.style != taffy {
-                    entry.style = taffy.clone();
-                    self.tree.set_style(entry.node, taffy).expect("layout tree");
-                }
-                if entry.content != context {
-                    entry.content = context.clone();
-                    self.tree
-                        .set_node_context(entry.node, Some(context))
-                        .expect("layout tree");
-                }
-                if entry.children.as_slice() != shape.children {
-                    entry.children = shape.children.to_vec();
-                    self.tree
-                        .set_children(entry.node, &nodes)
-                        .expect("layout tree");
-                }
-            }
-            None => {
-                let node = self
-                    .tree
-                    .new_leaf_with_context(taffy.clone(), context.clone())
-                    .expect("layout tree");
-                if !nodes.is_empty() {
-                    self.tree.set_children(node, &nodes).expect("layout tree");
-                }
-                self.entries.insert(
-                    key,
-                    Entry {
-                        node,
-                        style: taffy,
-                        layout: *shape.style,
-                        direction: shape.direction,
-                        offset: shape.offset,
-                        scroll: shape.scroll,
-                        content: shape.content,
-                        children: shape.children.to_vec(),
-                    },
-                );
+        if self
+            .entries
+            .get(&key)
+            .is_some_and(|entry| entry.node.is_some() != placed)
+        {
+            let entry = self.entries.remove(&key).expect("layout entry");
+            if let Some(node) = entry.node {
+                self.tree.remove(node).expect("layout tree");
             }
         }
+
+        if let Some(entry) = self.entries.get_mut(&key) {
+            entry.layout = *shape.style;
+            entry.direction = shape.direction;
+            entry.offset = shape.offset;
+            entry.scroll = shape.scroll;
+            entry.children = shape.children.to_vec();
+            let Some(node) = entry.node else {
+                entry.nodes = nodes;
+                return;
+            };
+            if entry.style != taffy {
+                entry.style = taffy.clone();
+                self.tree.set_style(node, taffy).expect("layout tree");
+            }
+            if entry.content != context {
+                entry.content = context.clone();
+                self.tree
+                    .set_node_context(node, Some(context))
+                    .expect("layout tree");
+            }
+            if entry.nodes != nodes {
+                entry.nodes = nodes;
+                self.tree
+                    .set_children(node, &entry.nodes)
+                    .expect("layout tree");
+            }
+            return;
+        }
+
+        self.entries.insert(
+            key,
+            Entry {
+                node: placed.then(|| {
+                    let node = self
+                        .tree
+                        .new_leaf_with_context(taffy.clone(), context.clone())
+                        .expect("layout tree");
+                    if !nodes.is_empty() {
+                        self.tree.set_children(node, &nodes).expect("layout tree");
+                    }
+                    node
+                }),
+                nodes,
+                style: taffy,
+                layout: *shape.style,
+                direction: shape.direction,
+                offset: shape.offset,
+                scroll: shape.scroll,
+                content: shape.content,
+                children: shape.children.to_vec(),
+            },
+        );
+    }
+
+    fn child_nodes(&self, children: &[u32]) -> Vec<NodeId> {
+        let mut nodes = Vec::new();
+        for key in children {
+            let entry = self.entries.get(key).expect("layout child");
+            match entry.node {
+                Some(node) => nodes.push(node),
+                None => nodes.extend(self.child_nodes(&entry.children)),
+            }
+        }
+        nodes
     }
 }
 
 impl<C> Layouter<C> {
     pub fn touch(&mut self, key: u32) {
-        if let Some(entry) = self.entries.get(&key) {
-            self.tree.mark_dirty(entry.node).expect("layout tree");
+        let Some(entry) = self.entries.get(&key) else {
+            return;
+        };
+        match entry.node {
+            Some(node) => self.tree.mark_dirty(node).expect("layout tree"),
+            None => {
+                for child in entry.children.clone() {
+                    self.touch(child);
+                }
+            }
         }
     }
 
@@ -421,7 +459,12 @@ impl<C> Layouter<C> {
         viewport: Size,
         mut measure: impl FnMut(&mut C, Option<u32>) -> Size,
     ) {
-        let node = self.entries.get(&root).expect("layout root").node;
+        let node = self
+            .entries
+            .get(&root)
+            .expect("layout root")
+            .node
+            .expect("layout root");
 
         // NOTE: taffy only rejects ids it did not create, and every id here comes from this tree
         self.tree
@@ -456,52 +499,109 @@ impl<C> Layouter<C> {
     }
 
     pub fn collect_into(&self, root: u32, boxes: &mut [LayoutBox]) {
-        self.collect_entry(root, 0, 0, boxes);
+        let origin = Placement {
+            frame: (0, 0),
+            origin: (0, 0),
+            direction: Direction::Row,
+            scroll: 0,
+        };
+        self.collect_entry(root, 0, 0, origin, boxes);
     }
 
-    fn collect_entry(&self, key: u32, x: i32, y: i32, boxes: &mut [LayoutBox]) {
+    fn collect_entry(
+        &self,
+        key: u32,
+        x: i32,
+        y: i32,
+        placement: Placement,
+        boxes: &mut [LayoutBox],
+    ) {
         let entry = self.entries.get(&key).expect("layout entry");
-        let placed = self.tree.layout(entry.node).expect("layout tree");
-        boxes[key as usize] = LayoutBox {
-            x,
-            y,
-            width: placed.size.width.max(0.0) as u32,
-            height: placed.size.height.max(0.0) as u32,
-            children: Vec::new(),
+        let own = match entry.node {
+            Some(node) => {
+                let placed = self.tree.layout(node).expect("layout tree");
+                boxes[key as usize] = LayoutBox {
+                    x,
+                    y,
+                    width: placed.size.width.max(0.0) as u32,
+                    height: placed.size.height.max(0.0) as u32,
+                    children: Vec::new(),
+                };
+                Placement {
+                    frame: (x, y),
+                    origin: (
+                        clamp_i32(
+                            i64::from(x)
+                                + i64::from(entry.layout.border_width)
+                                + i64::from(entry.layout.padding.left),
+                        ),
+                        clamp_i32(
+                            i64::from(y)
+                                + i64::from(entry.layout.border_width)
+                                + i64::from(entry.layout.padding.top),
+                        ),
+                    ),
+                    direction: entry.direction,
+                    scroll: entry.scroll.pixels(),
+                }
+            }
+            None => placement,
         };
 
-        let ids = self.tree.children(entry.node).expect("layout tree");
-        let origin = (
-            clamp_i32(
-                i64::from(x)
-                    + i64::from(entry.layout.border_width)
-                    + i64::from(entry.layout.padding.left),
-            ),
-            clamp_i32(
-                i64::from(y)
-                    + i64::from(entry.layout.border_width)
-                    + i64::from(entry.layout.padding.top),
-            ),
-        );
-        let scroll = entry.scroll.pixels();
-        for (child_key, child_id) in entry.children.iter().zip(ids) {
+        let mut bounds: Option<(i32, i32, i32, i32)> = None;
+        for child_key in &entry.children {
             let child = self.entries.get(child_key).expect("layout child");
-            let child_placed = self.tree.layout(child_id).expect("layout tree");
-            let location = (
-                child_placed.location.x as i32,
-                child_placed.location.y as i32,
-            );
-            let (child_x, child_y) = child_position(
-                entry.direction,
-                scroll,
-                (x, y),
-                origin,
-                child.offset,
-                location,
-            );
-            self.collect_entry(*child_key, child_x, child_y, boxes);
+            let (child_x, child_y) = match child.node {
+                Some(node) => {
+                    let placed = self.tree.layout(node).expect("layout tree");
+                    let location = (placed.location.x as i32, placed.location.y as i32);
+                    child_position(
+                        own.direction,
+                        own.scroll,
+                        own.frame,
+                        own.origin,
+                        child.offset,
+                        location,
+                    )
+                }
+                None => (own.frame.0, own.frame.1),
+            };
+            self.collect_entry(*child_key, child_x, child_y, own, boxes);
+            if entry.node.is_none() {
+                let placed = &boxes[*child_key as usize];
+                let right = placed.x + placed.width as i32;
+                let bottom = placed.y + placed.height as i32;
+                bounds = Some(match bounds {
+                    Some((left, top, right_old, bottom_old)) => (
+                        left.min(placed.x),
+                        top.min(placed.y),
+                        right_old.max(right),
+                        bottom_old.max(bottom),
+                    ),
+                    None => (placed.x, placed.y, right, bottom),
+                });
+            }
+        }
+
+        if entry.node.is_none() {
+            let (left, top, right, bottom) = bounds.unwrap_or((x, y, x, y));
+            boxes[key as usize] = LayoutBox {
+                x: left,
+                y: top,
+                width: (right - left).max(0) as u32,
+                height: (bottom - top).max(0) as u32,
+                children: Vec::new(),
+            };
         }
     }
+}
+
+#[derive(Clone, Copy)]
+struct Placement {
+    frame: (i32, i32),
+    origin: (i32, i32),
+    direction: Direction,
+    scroll: i32,
 }
 
 impl<C: PartialEq + Clone> Default for Layouter<C> {
@@ -812,6 +912,7 @@ mod tests {
                         calls: Rc::clone(&calls),
                     },
                     children: &[],
+                    transparent: false,
                 },
             );
             layouter.node(
@@ -826,6 +927,7 @@ mod tests {
                         calls: Rc::clone(&calls),
                     },
                     children: &[1],
+                    transparent: false,
                 },
             );
             layouter.finish();
