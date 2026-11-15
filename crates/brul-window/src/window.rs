@@ -153,6 +153,10 @@ pub enum WindowError {
         stage: &'static str,
         message: String,
     },
+    #[error("{0} is not declared")]
+    Undeclared(WindowKey),
+    #[error("{0}")]
+    App(#[source] Box<dyn std::error::Error>),
 }
 
 impl WindowError {
@@ -161,6 +165,10 @@ impl WindowError {
             stage,
             message: error.to_string(),
         }
+    }
+
+    pub fn app(error: impl std::error::Error + 'static) -> Self {
+        Self::App(Box::new(error))
     }
 }
 
@@ -241,7 +249,7 @@ pub fn run_tree_themed(
 
 pub fn run_windows(
     initial: WindowKey,
-    create: impl FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
+    create: impl FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, WindowError> + 'static,
     handler: impl FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
     closed: impl FnMut(WindowKey) + 'static,
     ready: impl FnOnce(Waker) + 'static,
@@ -442,7 +450,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::{WindowConfig, WindowError, WindowPosition};
+    use super::{WindowConfig, WindowError, WindowKey, WindowPosition};
 
     #[test]
     fn default_config_is_valid() {
@@ -511,6 +519,22 @@ mod tests {
         assert_eq!(
             WindowError::stage("surface", "boom").to_string(),
             "surface: boom"
+        );
+    }
+
+    #[test]
+    fn an_app_failure_keeps_its_cause() {
+        let error = WindowError::app(std::io::Error::other("boom"));
+
+        assert_eq!(error.to_string(), "boom");
+        assert!(std::error::Error::source(&error).is_some());
+    }
+
+    #[test]
+    fn an_undeclared_key_names_the_window() {
+        assert_eq!(
+            WindowError::Undeclared(WindowKey(7)).to_string(),
+            "window 7 is not declared"
         );
     }
 

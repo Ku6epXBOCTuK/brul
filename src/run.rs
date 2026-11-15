@@ -4,7 +4,9 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use brul_gui::WidgetEvent;
-use brul_window::{ColorScheme, Waker, WindowCommand, WindowKey, WindowSpec, run_windows};
+use brul_window::{
+    ColorScheme, Waker, WindowCommand, WindowError, WindowKey, WindowSpec, run_windows,
+};
 
 use crate::handle::{Handle, Message, take};
 use crate::ui::CommandHost;
@@ -201,11 +203,11 @@ impl<T: Theme> Runtime<T> {
             .or_else(|| T::parse(scheme_theme(None, scheme)))
     }
 
-    fn create(&mut self, key: WindowKey, scheme: ColorScheme) -> Result<WindowSpec, String> {
+    fn create(&mut self, key: WindowKey, scheme: ColorScheme) -> Result<WindowSpec, WindowError> {
         let index = usize::try_from(key.0)
             .ok()
             .filter(|index| *index < self.defs.len())
-            .ok_or_else(|| format!("{key} is not declared"))?;
+            .ok_or(WindowError::Undeclared(key))?;
         let (config, view) = {
             let def = &self.defs[index];
             (def.config.clone(), def.view)
@@ -215,7 +217,7 @@ impl<T: Theme> Runtime<T> {
         if let Some(ui) = self.uis.get_mut(&key) {
             tracing::debug!(%key, "reusing window");
             if let Some(theme) = theme {
-                ui.set_theme(theme).map_err(|error| error.to_string())?;
+                ui.set_theme(theme).map_err(WindowError::app)?;
             }
             self.component.borrow_mut().touch();
             brul_reactive::flush();
@@ -233,7 +235,7 @@ impl<T: Theme> Runtime<T> {
             "creating window"
         );
         let _ = crate::take_structures();
-        let built = view(self.fixed_theme, &self.component).map_err(|error| error.to_string())?;
+        let built = view(self.fixed_theme, &self.component).map_err(WindowError::app)?;
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
             built,
@@ -243,7 +245,7 @@ impl<T: Theme> Runtime<T> {
             config.scroll,
         );
         if let Some(theme) = theme {
-            ui.set_theme(theme).map_err(|error| error.to_string())?;
+            ui.set_theme(theme).map_err(WindowError::app)?;
         }
         let mut commands = std::mem::take(&mut self.pending);
         commands.extend(ui.dispatch(&[]));
@@ -440,7 +442,10 @@ mod tests {
             Ok(_) => panic!("unknown window was created"),
             Err(error) => error,
         };
-        assert_eq!(error, "window 7 is not declared");
+        assert!(
+            matches!(error, WindowError::Undeclared(WindowKey(7))),
+            "{error}"
+        );
     }
 
     #[test]

@@ -23,7 +23,7 @@ pub(crate) fn run<C, H, F, R, W>(
     wake: W,
 ) -> Result<(), WindowError>
 where
-    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
+    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, WindowError> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
     R: FnOnce(Waker) + 'static,
@@ -66,7 +66,7 @@ struct Windows<C, H, F, W> {
 
 impl<C, H, F, W> Windows<C, H, F, W>
 where
-    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
+    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, WindowError> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
     W: FnMut() + 'static,
@@ -96,12 +96,9 @@ where
     fn create(&mut self, key: WindowKey, scheme: ColorScheme) -> Option<WindowSpec> {
         match (self.create.borrow_mut())(key, scheme) {
             Ok(spec) => Some(spec),
-            Err(message) => {
-                error!(%message, "window creation failed");
-                self.error.set(Some(WindowError::Stage {
-                    stage: "window",
-                    message,
-                }));
+            Err(error) => {
+                error!(%error, "window creation failed");
+                self.error.set(Some(error));
                 None
             }
         }
@@ -238,7 +235,7 @@ where
 
 impl<C, H, F, W> ApplicationHandler for Windows<C, H, F, W>
 where
-    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, String> + 'static,
+    C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, WindowError> + 'static,
     H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
     W: FnMut() + 'static,
