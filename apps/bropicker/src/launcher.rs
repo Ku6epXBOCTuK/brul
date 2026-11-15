@@ -4,7 +4,6 @@
 //! выполняет его. Системный runner запускает процесс напрямую; тестовый runner
 //! записывает команду и ничего не запускает.
 
-use std::fmt;
 use std::process::Command;
 
 use crate::config::BrowserEntry;
@@ -15,24 +14,15 @@ pub struct CommandSpec {
     pub args: Vec<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum LaunchError {
+    #[error("browser path is empty")]
     EmptyPath,
+    #[error("empty URL")]
     EmptyUrl,
+    #[error("failed to launch browser: {0}")]
     Spawn(String),
 }
-
-impl fmt::Display for LaunchError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::EmptyPath => formatter.write_str("browser path is empty"),
-            Self::EmptyUrl => formatter.write_str("empty URL"),
-            Self::Spawn(message) => write!(formatter, "failed to launch browser: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for LaunchError {}
 
 pub trait Runner {
     fn run(&self, command: &CommandSpec) -> Result<(), LaunchError>;

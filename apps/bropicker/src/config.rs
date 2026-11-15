@@ -31,7 +31,6 @@
 //! assert!(resolved.auto_launch);
 //! ```
 use std::collections::{HashMap, HashSet};
-use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -203,43 +202,21 @@ pub struct Config {
     pub settings: Settings,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ConfigError {
-    Read {
-        path: PathBuf,
-        message: String,
-    },
+    #[error("failed to read config {}: {message}", .path.display())]
+    Read { path: PathBuf, message: String },
+    #[error(
+        "failed to parse config{}: {message}",
+        .path.as_ref().map_or(String::new(), |path| format!(" {}", path.display()))
+    )]
     Parse {
         path: Option<PathBuf>,
         message: String,
     },
+    #[error("invalid config: {0}")]
     Invalid(String),
 }
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Read { path, message } => {
-                write!(
-                    formatter,
-                    "failed to read config {}: {message}",
-                    path.display()
-                )
-            }
-            Self::Parse { path, message } => match path {
-                Some(path) => write!(
-                    formatter,
-                    "failed to parse config {}: {message}",
-                    path.display()
-                ),
-                None => write!(formatter, "failed to parse config: {message}"),
-            },
-            Self::Invalid(message) => write!(formatter, "invalid config: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for ConfigError {}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResolveSource {
