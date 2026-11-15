@@ -35,9 +35,12 @@ build-panel:
 
 install-panel: build-panel
     New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
-    Get-Process panel -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 400
-    Copy-Item -Force "{{target_dir}}\release\panel.exe" "$HOME\bin\panel.exe"
-    Write-Output "installed: $HOME\bin\panel.exe"
+    Get-Process -Name 'service-panel' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 400
+    Copy-Item -Force "{{target_dir}}\release\service-panel.exe" "$HOME\bin\service-panel.exe"
+    Write-Output "installed: $HOME\bin\service-panel.exe"
+
+run-panel: install-panel
+    Start-Process -FilePath "$HOME\bin\service-panel.exe"
 
 check:
     cargo fmt --all --check

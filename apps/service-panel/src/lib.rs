@@ -5,4 +5,6 @@ pub mod generated;
 pub mod service;
 
 pub use config::{Config, ConfigError, ServiceSpec, default_path};
-pub use service::{Service, ServiceError, ServiceState, StartType};
+pub use service::{
+    Service, ServiceError, ServiceState, StartType, Started, restart, start, start_manual, stop,
+};

@@ -10,6 +10,8 @@ fn main() -> ExitCode {
     brul::logging::init_with(&[env!("CARGO_PKG_NAME")]);
     std::panic::set_hook(Box::new(|info| error!(panic = %info, "panic")));
 
+    info!(version = env!("CARGO_PKG_VERSION"), "panel starting");
+
     let path = default_path();
     let config = match Config::load_or_create(&path) {
         Ok(config) => config,
@@ -51,7 +53,10 @@ fn main() -> ExitCode {
         &[],
         None,
     ) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(()) => {
+            info!("panel closed");
+            ExitCode::SUCCESS
+        }
         Err(failure) => {
             error!(%failure, "panel failed");
             eprintln!("panel: {failure}");
