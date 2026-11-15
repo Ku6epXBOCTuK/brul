@@ -48,10 +48,10 @@
 </use>
 
 <markup>
-    window Services (title: "Services", width: 900, height: 560, centered: true) {
+    window Services (title: "xboct-panel", width: 900, height: 560, centered: true) {
         Column (root) {
             Row (header) {
-                Text (title) { "Services" }
+                Text (title) { "xboct-panel" }
                 View (action, primary, on click: startManual) {
                     Text (primary-label) { "Start all manual" }
                 }

@@ -1,5 +1,5 @@
 [package]
-name = "service-panel"
+name = "xboct-panel"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -9,7 +9,7 @@ repository = "https://github.com/Ku6epXBOCTuK/brul"
 workspace = true
 
 [[bin]]
-name = "service-panel"
+name = "xboct-panel"
 path = "src/main.rs"
 
 [dependencies]

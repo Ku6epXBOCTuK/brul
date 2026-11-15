@@ -7,7 +7,7 @@ use brul::Value;
 use brul::logging::{error, info};
 use brul::{command, host};
 
-use service_panel::{
+use xboct_panel::{
     Config, Service, ServiceError, ServiceSpec, Started, default_path, generated, log, service,
 };
 
@@ -200,7 +200,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{Service, ServiceSpec, Value, describe, log_text, row};
-    use service_panel::{ServiceError, ServiceState, StartType, Started};
+    use xboct_panel::{ServiceError, ServiceState, StartType, Started};
 
     fn sample() -> Service {
         Service {

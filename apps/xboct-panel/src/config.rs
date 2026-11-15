@@ -107,16 +107,18 @@ impl Config {
     }
 }
 
+const CONFIG_FILE: &str = "xboct-panel.toml";
+
 pub fn default_path() -> PathBuf {
-    if let Ok(path) = std::env::var("PANEL_CONFIG")
+    if let Ok(path) = std::env::var("XBOCT_PANEL_CONFIG")
         && !path.is_empty()
     {
         return PathBuf::from(path);
     }
     std::env::current_exe()
         .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("panel_config.toml")))
-        .unwrap_or_else(|| PathBuf::from("panel_config.toml"))
+        .and_then(|exe| exe.parent().map(|dir| dir.join(CONFIG_FILE)))
+        .unwrap_or_else(|| PathBuf::from(CONFIG_FILE))
 }
 
 #[cfg(test)]
@@ -124,10 +126,10 @@ mod tests {
     use super::*;
 
     fn temp_file(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("panel-config-{name}"));
+        let dir = std::env::temp_dir().join(format!("xboct-panel-config-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("temp dir");
-        dir.join("panel_config.toml")
+        dir.join(CONFIG_FILE)
     }
 
     #[test]
@@ -138,7 +140,7 @@ mod tests {
             port = 8080
             log = 'C:\Logs\sample-service.log'
         "#;
-        let config = Config::parse(source, Path::new("panel_config.toml")).expect("config");
+        let config = Config::parse(source, Path::new(CONFIG_FILE)).expect("config");
         let service = &config.services[0];
         assert_eq!(service.name, "sample-service");
         assert_eq!(service.port, Some(8080));
@@ -160,16 +162,16 @@ mod tests {
     #[test]
     fn an_unknown_key_is_a_parse_error_with_the_line() {
         let source = "[[services]]\nname = \"Spooler\"\nprot = 631\n";
-        let failure = Config::parse(source, Path::new("panel_config.toml")).expect_err("error");
+        let failure = Config::parse(source, Path::new(CONFIG_FILE)).expect_err("error");
         let message = failure.to_string();
-        assert!(message.contains("panel_config.toml"), "{message}");
+        assert!(message.contains(CONFIG_FILE), "{message}");
         assert!(message.contains("line 3"), "{message}");
     }
 
     #[test]
     fn a_service_without_a_name_is_rejected() {
         let source = "[[services]]\nport = 631\n";
-        let failure = Config::parse(source, Path::new("panel_config.toml")).expect_err("error");
+        let failure = Config::parse(source, Path::new(CONFIG_FILE)).expect_err("error");
         let message = failure.to_string();
         assert!(message.contains("services[0] has no name"), "{message}");
     }

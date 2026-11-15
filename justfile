@@ -31,16 +31,16 @@ unautostart-nobs:
     Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name nobs -ErrorAction SilentlyContinue; Write-Output "autostart removed"
 
 build-panel:
-    cargo build --release -p service-panel
+    cargo build --release -p xboct-panel
 
 install-panel: build-panel
     New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
-    Get-Process -Name 'service-panel' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 400
-    Copy-Item -Force "{{target_dir}}\release\service-panel.exe" "$HOME\bin\service-panel.exe"
-    Write-Output "installed: $HOME\bin\service-panel.exe"
+    Get-Process -Name 'xboct-panel' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 400
+    Copy-Item -Force "{{target_dir}}\release\xboct-panel.exe" "$HOME\bin\xboct-panel.exe"
+    Write-Output "installed: $HOME\bin\xboct-panel.exe"
 
 run-panel: install-panel
-    Start-Process -FilePath "$HOME\bin\service-panel.exe"
+    Start-Process -FilePath "$HOME\bin\xboct-panel.exe"
 
 check:
     cargo fmt --all --check

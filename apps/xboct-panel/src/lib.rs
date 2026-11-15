@@ -1,4 +1,4 @@
-//! service-panel: a Windows services panel on the DSL.
+//! xboct-panel: a Windows services and programs panel on the DSL.
 
 pub mod config;
 pub mod generated;
