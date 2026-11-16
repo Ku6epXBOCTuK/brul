@@ -20,7 +20,7 @@ pub(super) fn view(
         true => "Option<ThemeId>",
         false => "Option<&str>",
     };
-    let frame = Frame::root(emit.default_theme(), 2);
+    let frame = Frame::root(emit.default_theme());
     let mut out = Out::new(out);
     out.line(format_args!(
         "pub fn {name}(theme: {theme}, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"

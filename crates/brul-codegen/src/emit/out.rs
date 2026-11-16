@@ -46,7 +46,7 @@ impl<'a> Out<'a> {
         result
     }
 
-    pub(super) fn raw(&mut self) -> &mut String {
-        self.text
+    pub(super) fn depth(&self) -> usize {
+        self.depth
     }
 }

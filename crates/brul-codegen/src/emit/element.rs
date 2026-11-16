@@ -41,15 +41,7 @@ pub(super) fn widget(
             .any(|arg| matches!(arg, Arg::Named { .. }));
     if !needs {
         out.indent();
-        element_expression(
-            out,
-            element,
-            &classes,
-            &events,
-            emit,
-            frame.shallower(1),
-            counter,
-        )?;
+        element_expression(out, element, &classes, &events, emit, frame, counter)?;
         return Ok(());
     }
     let name = format!("widget{}", *counter);
@@ -217,14 +209,13 @@ fn container(
         .map_err(|error| error_at(element.position, error.to_string()))?
         .layout
         .gap;
-    let children = frame.deeper(2).inside(direction, gap);
-    let mut out = Out::at(out.raw(), frame.depth());
+    let children = frame.inside(direction, gap);
     if contains_slot(&element.block) {
         out.push(format_args!("brul::gui::Widget::{call}({{"));
         out.end();
         out.indented(|out| -> Result<(), Error> {
             out.line(format_args!("let mut children = Vec::new();"));
-            items_spliced(out, &element.block, emit, children.shallower(1), counter)?;
+            items_spliced(out, &element.block, emit, children, counter)?;
             out.line(format_args!("children"));
             Ok(())
         })?;
@@ -233,11 +224,8 @@ fn container(
     }
     out.push(format_args!("brul::gui::Widget::{call}(vec!["));
     out.end();
-    out.indented(|out| -> Result<(), Error> {
-        out.indented(|out| items(out, &element.block, emit, children, counter))?;
-        out.start(format_args!("])"));
-        Ok(())
-    })?;
+    out.indented(|out| items(out, &element.block, emit, children, counter))?;
+    out.start(format_args!("])"));
     Ok(())
 }
 
@@ -335,13 +323,8 @@ pub(crate) fn items_spliced(
             }
             BlockItem::If(structure) => {
                 let mut arm = String::new();
-                structure::structure_if(&mut Out::new(&mut arm), structure, emit, frame, counter)?;
-                push_text(out, &arm);
-            }
-            BlockItem::Each(structure) => {
-                let mut arm = String::new();
-                structure::structure_each(
-                    &mut Out::new(&mut arm),
+                structure::structure_if(
+                    &mut Out::at(&mut arm, out.depth()),
                     structure,
                     emit,
                     frame,
@@ -349,7 +332,18 @@ pub(crate) fn items_spliced(
                 )?;
                 push_text(out, &arm);
             }
-            BlockItem::Slot(slot) => slot_item(out, slot, emit, frame)?,
+            BlockItem::Each(structure) => {
+                let mut arm = String::new();
+                structure::structure_each(
+                    &mut Out::at(&mut arm, out.depth()),
+                    structure,
+                    emit,
+                    frame,
+                    counter,
+                )?;
+                push_text(out, &arm);
+            }
+            BlockItem::Slot(slot) => slot_item(out, slot, emit)?,
             BlockItem::Expr(expression) => {
                 return Err(error_at(
                     expression.position,
@@ -370,7 +364,7 @@ fn push(
 ) -> Result<(), Error> {
     let mut item = String::new();
     widget(
-        &mut Out::at(&mut item, frame.depth()),
+        &mut Out::at(&mut item, out.depth()),
         child,
         emit,
         frame,
@@ -384,12 +378,7 @@ fn push_text(out: &mut Out<'_>, item: &str) {
     out.line(format_args!("children.push({});", item.trim_start()));
 }
 
-fn slot_item(
-    out: &mut Out<'_>,
-    slot: &Slot,
-    emit: &Emit<'_>,
-    frame: Frame<'_>,
-) -> Result<(), Error> {
+fn slot_item(out: &mut Out<'_>, slot: &Slot, emit: &Emit<'_>) -> Result<(), Error> {
     if !emit.slots {
         return Err(error_at(
             slot.position,
@@ -406,7 +395,6 @@ fn slot_item(
         Some(name) => format!("{name:?}"),
         None => "brul::DEFAULT_SLOT".to_owned(),
     };
-    let mut out = Out::at(out.raw(), frame.depth());
     out.line(format_args!("{{"));
     out.indented(|out| {
         out.line(format_args!("let built = brul::slot(theme, {target})?;"));

@@ -56,30 +56,14 @@ pub(super) struct Frame<'a> {
     theme: Option<&'a str>,
     direction: &'a str,
     gap: u32,
-    depth: usize,
 }
 
 impl<'a> Frame<'a> {
-    pub(super) fn root(theme: Option<&'a str>, depth: usize) -> Self {
+    pub(super) fn root(theme: Option<&'a str>) -> Self {
         Self {
             theme,
             direction: "Column",
             gap: 0,
-            depth,
-        }
-    }
-
-    pub(super) fn deeper(self, levels: usize) -> Self {
-        Self {
-            depth: self.depth + levels,
-            ..self
-        }
-    }
-
-    pub(super) fn shallower(self, levels: usize) -> Self {
-        Self {
-            depth: self.depth.saturating_sub(levels),
-            ..self
         }
     }
 
@@ -101,10 +85,6 @@ impl<'a> Frame<'a> {
 
     pub(super) fn gap(&self) -> u32 {
         self.gap
-    }
-
-    pub(super) fn depth(&self) -> usize {
-        self.depth
     }
 }
 

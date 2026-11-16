@@ -40,7 +40,7 @@ pub(super) fn structure_if(
     }
     let arm = rebuild_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
-    inline(out, &name, &format!("{name}_value0"), false, frame, counter);
+    inline(out, &name, &format!("{name}_value0"), false, counter);
     Ok(())
 }
 
@@ -63,7 +63,7 @@ pub(super) fn structure_each(
     }
     let arm = each_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
-    inline(out, &name, &format!("{name}_value"), true, frame, counter);
+    inline(out, &name, &format!("{name}_value"), true, counter);
     Ok(())
 }
 
@@ -81,15 +81,7 @@ fn value_function(name: &str, value: &brul_syntax::ast::Expr, names: &Names<'_>)
     text
 }
 
-fn inline(
-    out: &mut Out<'_>,
-    name: &str,
-    value: &str,
-    each: bool,
-    frame: Frame<'_>,
-    counter: &mut usize,
-) {
-    let mut out = Out::at(out.raw(), frame.depth());
+fn inline(out: &mut Out<'_>, name: &str, value: &str, each: bool, counter: &mut usize) {
     let widget = format!("widget{}", *counter);
     *counter += 1;
     out.line(format_args!("{{"));
@@ -139,7 +131,6 @@ fn branch_chain(
     counter: &mut usize,
     index: usize,
 ) -> Result<(), Error> {
-    let body = frame.deeper(index + 1);
     out.line(format_args!(
         "let condition = {name}_value{index}(&mut component.borrow_mut())"
     ));
@@ -153,13 +144,13 @@ fn branch_chain(
     });
     out.line(format_args!("}};"));
     out.line(format_args!("if condition {{"));
-    arm_body(out, &block.branches[index].block, emit, body, counter)?;
+    out.indented(|out| arm_body(out, &block.branches[index].block, emit, frame, counter))?;
     out.line(format_args!("}} else {{"));
     out.indented(|out| -> Result<(), Error> {
         if index + 1 < block.branches.len() {
             branch_chain(out, name, block, emit, frame, counter, index + 1)?;
         } else if let Some(else_block) = &block.else_block {
-            arm_body(out, else_block, emit, body, counter)?;
+            arm_body(out, else_block, emit, frame, counter)?;
         } else {
             out.line(format_args!("vec![]"));
         }
@@ -176,7 +167,6 @@ fn arm_body(
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let mut out = Out::at(out.raw(), frame.depth().saturating_sub(1));
     if contains_slot(block) {
         out.line(format_args!("{{"));
         out.indented(|out| -> Result<(), Error> {
@@ -296,7 +286,7 @@ fn each_body(
 }
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
-    Frame::root(theme, 3).inside(frame.direction(), frame.gap())
+    Frame::root(theme).inside(frame.direction(), frame.gap())
 }
 
 fn variable(name: &str, names: &Names<'_>) -> u32 {

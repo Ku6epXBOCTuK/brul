@@ -225,7 +225,7 @@ fn filler(block: &Block, emit: &mut Emit<'_>) -> Result<String, Error> {
         out.line(format_args!("let mut props = Vec::new();"));
         out.line(format_args!("let mut children = Vec::new();"));
         let mut counter = 0;
-        items_spliced(out, block, emit, Frame::root(theme, 1), &mut counter)?;
+        items_spliced(out, block, emit, Frame::root(theme), &mut counter)?;
         out.line(format_args!(
             "let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);"
         ));
