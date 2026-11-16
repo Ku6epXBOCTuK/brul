@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use brul_syntax::error::Error;
 use brul_syntax::markup::Element;
 
@@ -7,6 +5,7 @@ use crate::runtime::HandlerEvent;
 
 use super::Emit;
 use super::Frame;
+use super::Out;
 use super::element::widget;
 
 pub(super) fn view(
@@ -21,38 +20,39 @@ pub(super) fn view(
         true => "Option<ThemeId>",
         false => "Option<&str>",
     };
-    let _ = writeln!(
-        out,
+    let frame = Frame::root(emit.default_theme(), 2);
+    let mut out = Out::new(out);
+    out.line(format_args!(
         "pub fn {name}(theme: {theme}, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
-    );
-    if typed {
-        out.push_str("    let theme = theme.map(brul::Theme::name);\n");
-    }
-    out.push_str("    component.borrow_mut().set_names(names());\n");
-    out.push_str("    let mut bindings = Vec::new();\n");
-    out.push_str("    let mut handlers = Vec::new();\n");
-    out.push_str("    let mut props = Vec::new();\n");
-    out.push_str("    let widget = {\n");
-    let mut counter = 0;
-    widget(
-        out,
-        root,
-        emit,
-        Frame::root(emit.default_theme(), 2),
-        &mut counter,
-    )?;
-    out.push_str("\n    };\n");
-    for (event, handler) in handlers {
-        let _ = writeln!(
-            out,
-            "    handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::{event:?}, {handler:?}));"
-        );
-    }
-    out.push_str("    Ok(brul::Built {\n");
-    out.push_str("        widget,\n");
-    out.push_str("        bindings,\n");
-    out.push_str("        handlers,\n");
-    out.push_str("        props,\n");
-    out.push_str("    })\n}\n");
+    ));
+    out.indented(|out| -> Result<(), Error> {
+        if typed {
+            out.line(format_args!("let theme = theme.map(brul::Theme::name);"));
+        }
+        out.line(format_args!("component.borrow_mut().set_names(names());"));
+        out.line(format_args!("let mut bindings = Vec::new();"));
+        out.line(format_args!("let mut handlers = Vec::new();"));
+        out.line(format_args!("let mut props = Vec::new();"));
+        out.line(format_args!("let widget = {{"));
+        let mut counter = 0;
+        out.indented(|out| widget(out.raw(), root, emit, frame, &mut counter))?;
+        out.end();
+        out.line(format_args!("}};"));
+        for (event, handler) in handlers {
+            out.line(format_args!(
+                "handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::{event:?}, {handler:?}));"
+            ));
+        }
+        out.line(format_args!("Ok(brul::Built {{"));
+        out.indented(|out| {
+            out.line(format_args!("widget,"));
+            out.line(format_args!("bindings,"));
+            out.line(format_args!("handlers,"));
+            out.line(format_args!("props,"));
+        });
+        out.line(format_args!("}})"));
+        Ok(())
+    })?;
+    out.line(format_args!("}}"));
     Ok(())
 }

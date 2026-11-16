@@ -14,6 +14,7 @@ mod events;
 mod expression;
 mod module;
 mod names;
+mod out;
 mod resources;
 mod script;
 mod structure;
@@ -23,6 +24,7 @@ mod view;
 
 pub use expression::{expression, operation};
 pub use module::{GeneratedFile, Module, module, module_file, split_module_file};
+pub(super) use out::Out;
 
 pub fn identifiers(expression: &brul_syntax::ast::Expr) -> Names<'_> {
     let mut names = Names::new();
