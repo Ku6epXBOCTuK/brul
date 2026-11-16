@@ -9,9 +9,10 @@ use brul_syntax::style::Stylesheet;
 use crate::{Import, Registry};
 
 use super::binding::{Expression, PropBinding};
+use super::build::Build;
 use super::error::ViewError;
 use super::event::{ComponentEvent, EventHost};
-use super::slot::{SlotArgument, Slots, current_slots, with_slots};
+use super::slot::{SlotArgument, Slots};
 use super::structure::{Built, View};
 
 pub type ComponentHandle = Rc<RefCell<Component>>;
@@ -41,7 +42,11 @@ pub struct Instance<'a> {
     pub slots: &'a [SlotArgument],
 }
 
-pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Built, ViewError> {
+pub fn instance(
+    build: &mut Build,
+    parent: &ComponentHandle,
+    instance: Instance<'_>,
+) -> Result<Built, ViewError> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
     component.borrow_mut().set_names(instance.names);
     start(&component, &instance)?;
@@ -51,11 +56,14 @@ pub fn instance(parent: &ComponentHandle, instance: Instance<'_>) -> Result<Buil
         Rc::new(Slots {
             component: Rc::clone(parent),
             scopes: parent.borrow().build_scopes(),
-            parent: current_slots(),
+            parent: build.slots(),
             entries: instance.slots.to_vec(),
         })
     });
-    let mut built = with_slots(slots, || (instance.view)(instance.theme, &component))?;
+    let previous = build.replace_slots(slots);
+    let rendered = (instance.view)(instance.theme, build, &component);
+    build.replace_slots(previous);
+    let mut built = rendered?;
     bind(&mut built, parent, &component, instance.props);
     Ok(built)
 }

@@ -11,8 +11,8 @@ use brul_window::{WindowCommand, WindowKey};
 use crate::each::reconcile_each;
 use crate::event::{arguments, call, handler_target};
 use crate::{
-    Binding, Built, ComponentHandle, Error, Handler, HandlerEvent, Host, PropBinding, RowInfo,
-    Structure, Theme, Value, ViewError,
+    Binding, Build, Built, ComponentHandle, Error, Handler, HandlerEvent, Host, PropBinding,
+    RowInfo, Structure, Theme, Value, ViewError,
 };
 
 const EVENT_DEPTH: usize = 64;
@@ -29,7 +29,7 @@ pub struct Ui<T: Theme> {
     structures: Vec<OwnedStructure>,
     rows: Vec<(WidgetId, Vec<RowInfo>)>,
     requests: Rc<RefCell<Vec<WidgetId>>>,
-    view: fn(Option<T>, &ComponentHandle) -> Result<Built, ViewError>,
+    view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
     pub(crate) theme: Option<T>,
     textures: runtime::Textures,
     scope: EffectScope,
@@ -169,12 +169,21 @@ impl<T: Theme> Ui<T> {
     pub(crate) fn assemble(
         component: ComponentHandle,
         built: Built,
-        view: fn(Option<T>, &ComponentHandle) -> Result<Built, ViewError>,
+        view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
         theme: Option<T>,
+        structures: Vec<Structure>,
         host: Option<Box<dyn Host>>,
     ) -> Self {
         let commands = Rc::new(RefCell::new(Vec::new()));
-        let ui = Self::assemble_with(component, built, view, theme, Rc::clone(&commands), true);
+        let ui = Self::assemble_with(
+            component,
+            built,
+            view,
+            theme,
+            structures,
+            Rc::clone(&commands),
+            true,
+        );
         ui.component.borrow_mut().set_host(CommandHost {
             commands,
             app: host,
@@ -187,8 +196,9 @@ impl<T: Theme> Ui<T> {
     pub(crate) fn assemble_with(
         component: ComponentHandle,
         built: Built,
-        view: fn(Option<T>, &ComponentHandle) -> Result<Built, ViewError>,
+        view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
         theme: Option<T>,
+        structures: Vec<Structure>,
         commands: Rc<RefCell<Vec<WindowCommand>>>,
         scroll: bool,
     ) -> Self {
@@ -234,7 +244,7 @@ impl<T: Theme> Ui<T> {
         };
         ui.bind(bindings);
         ui.bind_props(props);
-        ui.bind_structures(runtime::take_structures());
+        ui.bind_structures(structures);
         ui.index_handlers();
         ui
     }
@@ -326,9 +336,9 @@ impl<T: Theme> Ui<T> {
     }
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
-        let _ = runtime::take_structures();
-        let built = (self.view)(self.theme, &self.component);
-        let structures = runtime::take_structures();
+        let mut build = Build::new();
+        let built = (self.view)(self.theme, &mut build, &self.component);
+        let structures = build.take_structures();
         let built = built?;
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
@@ -448,10 +458,14 @@ impl<T: Theme> Ui<T> {
             component
                 .borrow_mut()
                 .push_binding_scopes(&structure.scopes);
-            let _ = runtime::take_structures();
-            let rebuilt =
-                runtime::rebuild_structure(&structure, self.theme.map(Theme::name), &old_rows);
-            let added = runtime::take_structures();
+            let mut build = Build::with_slots(structure.slots.clone());
+            let rebuilt = (structure.rebuild)(
+                self.theme.map(Theme::name),
+                &mut build,
+                &structure.component,
+                &old_rows,
+            );
+            let added = build.take_structures();
             component.borrow_mut().pop_binding_scopes(count);
             let (built, rebuilt_rows) = match rebuilt {
                 Ok(result) => result,
@@ -583,6 +597,7 @@ mod tests {
 
     fn rebuild_shown(
         theme: Option<&str>,
+        _build: &mut Build,
         component: &ComponentHandle,
         _old_rows: &[RowInfo],
     ) -> Result<(Built, Vec<RowInfo>), ViewError> {
@@ -609,13 +624,14 @@ mod tests {
 
     fn structured_view(
         theme: Option<TestTheme>,
+        build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         if theme.is_some() {
             return Err(unknown_theme());
         }
         let widget = Widget::view(Direction::Column, Vec::new());
-        runtime::register_structure(component, widget.id(), false, shown, rebuild_shown);
+        runtime::register_structure(build, component, widget.id(), false, shown, rebuild_shown);
         Ok(Built {
             widget,
             bindings: Vec::new(),
@@ -645,10 +661,11 @@ mod tests {
                 value: Some(Expr::new(ExprKind::Bool(false), Position::default())),
             }],
         };
-        let (component, built) = generated_built(structured_view, NAMES, None, &[], Some(&program))
-            .expect("launch succeeds");
+        let (component, built, structures) =
+            generated_built(structured_view, NAMES, None, &[], Some(&program))
+                .expect("launch succeeds");
         let parent = built.widget.id();
-        let mut ui = Ui::assemble(component, built, structured_view, None, None);
+        let mut ui = Ui::assemble(component, built, structured_view, None, structures, None);
         brul_reactive::flush();
         assert_eq!(child_count(&ui, parent), 0);
 
@@ -663,10 +680,11 @@ mod tests {
 
     fn slot_child_view(
         _theme: Option<&str>,
+        build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         let holder = Widget::view(Direction::Column, Vec::new());
-        runtime::register_structure(component, holder.id(), false, shown, rebuild_slot);
+        runtime::register_structure(build, component, holder.id(), false, shown, rebuild_slot);
         Ok(Built {
             widget: holder,
             bindings: Vec::new(),
@@ -677,10 +695,11 @@ mod tests {
 
     fn rebuild_slot(
         _theme: Option<&str>,
+        build: &mut Build,
         _component: &ComponentHandle,
         _old_rows: &[RowInfo],
     ) -> Result<(Built, Vec<RowInfo>), ViewError> {
-        let built = runtime::slot(None, runtime::DEFAULT_SLOT)?;
+        let built = runtime::slot(None, build, runtime::DEFAULT_SLOT)?;
         Ok((
             Built {
                 widget: Widget::view(Direction::Column, built.widget.into_children()),
@@ -692,7 +711,11 @@ mod tests {
         ))
     }
 
-    fn slot_fill(_theme: Option<&str>, _component: &ComponentHandle) -> Result<Built, ViewError> {
+    fn slot_fill(
+        _theme: Option<&str>,
+        _build: &mut Build,
+        _component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         Ok(Built {
             widget: Widget::view(Direction::Column, vec![Widget::text("filled")]),
             bindings: Vec::new(),
@@ -703,6 +726,7 @@ mod tests {
 
     fn slot_view(
         theme: Option<TestTheme>,
+        build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         let slots = [runtime::SlotArgument {
@@ -710,6 +734,7 @@ mod tests {
             view: slot_fill,
         }];
         runtime::instance(
+            build,
             component,
             runtime::Instance {
                 theme: theme.map(Theme::name),
@@ -727,23 +752,25 @@ mod tests {
 
     #[test]
     fn a_slot_survives_a_structure_rebuild() {
-        let (_component, _built) =
+        let (_component, _built, structures) =
             generated_built(slot_view, NAMES, None, &[], None).expect("launch");
-        let structures = runtime::take_structures();
         assert_eq!(structures.len(), 1);
-        let rebuilt = runtime::rebuild_structure(&structures[0], None, &[]).expect("rebuild");
+        let mut build = Build::with_slots(structures[0].slots.clone());
+        let rebuilt = (structures[0].rebuild)(None, &mut build, &structures[0].component, &[])
+            .expect("rebuild");
         assert_eq!(rebuilt.0.widget.into_children().len(), 1);
     }
 
     fn bound_view(
         theme: Option<TestTheme>,
+        build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         if theme.is_some() {
             return Err(unknown_theme());
         }
         let holder = Widget::view(Direction::Column, Vec::new());
-        runtime::register_structure(component, holder.id(), false, shown, rebuild_bound);
+        runtime::register_structure(build, component, holder.id(), false, shown, rebuild_bound);
         Ok(Built {
             widget: holder,
             bindings: Vec::new(),
@@ -754,6 +781,7 @@ mod tests {
 
     fn rebuild_bound(
         theme: Option<&str>,
+        _build: &mut Build,
         component: &ComponentHandle,
         _old_rows: &[RowInfo],
     ) -> Result<(Built, Vec<RowInfo>), ViewError> {
@@ -806,9 +834,9 @@ mod tests {
                 ),
             ],
         };
-        let (component, built) =
+        let (component, built, structures) =
             generated_built(bound_view, NAMES, None, &[], Some(&program)).expect("launch succeeds");
-        let mut ui = Ui::assemble(component, built, bound_view, None, None);
+        let mut ui = Ui::assemble(component, built, bound_view, None, structures, None);
         brul_reactive::flush();
         let assembled = brul_reactive::live_nodes();
 
@@ -1102,6 +1130,7 @@ mod tests {
 
     fn themed_view(
         theme: Option<TestTheme>,
+        _build: &mut Build,
         _component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         Ok(Built {
@@ -1114,32 +1143,34 @@ mod tests {
 
     fn rejecting_view(
         theme: Option<TestTheme>,
+        _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         if theme.is_some() {
             return Err(unknown_theme());
         }
-        themed_view(None, component)
+        themed_view(None, &mut Build::new(), component)
     }
 
     #[test]
     fn a_theme_change_rebuilds_the_view() {
-        let (component, built) =
+        let (component, built, structures) =
             generated_built(themed_view, NAMES, None, &[], None).expect("launch");
-        let mut ui = Ui::assemble(component, built, themed_view, None, None);
+        let mut ui = Ui::assemble(component, built, themed_view, None, structures, None);
         ui.set_theme(TestTheme::Dark).expect("theme changes");
         assert_eq!(ui.theme, Some(TestTheme::Dark));
     }
 
     #[test]
     fn a_failed_theme_change_keeps_the_previous_theme() {
-        let (component, built) =
+        let (component, built, structures) =
             generated_built(rejecting_view, NAMES, None, &[], None).expect("launch");
         let mut ui = Ui::assemble(
             component,
             built,
             rejecting_view,
             Some(TestTheme::Light),
+            structures,
             None,
         );
         ui.set_theme(TestTheme::Light)
@@ -1158,6 +1189,7 @@ mod tests {
 
     fn image_view(
         theme: Option<TestTheme>,
+        _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         if theme.is_some() {
@@ -1179,7 +1211,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/crates/brul-gui/tests/fixtures/tint.png"
         );
-        let (component, built) = generated_built(
+        let (component, built, structures) = generated_built(
             image_view,
             NAMES,
             None,
@@ -1187,7 +1219,7 @@ mod tests {
             None,
         )
         .expect("launch");
-        let ui = Ui::assemble(component, built, image_view, None, None);
+        let ui = Ui::assemble(component, built, image_view, None, structures, None);
         let mut engine = TextEngine::new();
         let mut tree = ui.tree.borrow_mut();
 
@@ -1314,7 +1346,14 @@ mod tests {
         };
         (
             id,
-            Ui::assemble(Rc::clone(component), built, themed_view, None, None),
+            Ui::assemble(
+                Rc::clone(component),
+                built,
+                themed_view,
+                None,
+                Vec::new(),
+                None,
+            ),
         )
     }
 
@@ -1456,9 +1495,9 @@ mod tests {
 
     #[test]
     fn dispatch_returns_the_theme_command() {
-        let (component, built) =
+        let (component, built, structures) =
             generated_built(themed_view, NAMES, None, &[], None).expect("launch");
-        let mut ui = Ui::assemble(component, built, themed_view, None, None);
+        let mut ui = Ui::assemble(component, built, themed_view, None, structures, None);
         ui.commands
             .borrow_mut()
             .push(WindowCommand::SetTheme("dark".to_owned()));
@@ -1499,7 +1538,11 @@ mod tests {
         ))
     }
 
-    fn child_view(theme: Option<&str>, component: &ComponentHandle) -> Result<Built, ViewError> {
+    fn child_view(
+        theme: Option<&str>,
+        _build: &mut Build,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
         if theme.is_some() {
             return Err(unknown_theme());
         }
@@ -1520,6 +1563,7 @@ mod tests {
 
     fn raising_view(
         theme: Option<TestTheme>,
+        _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         if theme.is_some() {
@@ -1540,6 +1584,7 @@ mod tests {
             component: Rc::clone(component),
         }];
         let child = runtime::instance(
+            &mut Build::new(),
             component,
             runtime::Instance {
                 theme: theme.map(Theme::name),
@@ -1569,7 +1614,7 @@ mod tests {
 
     #[test]
     fn a_handler_event_runs_after_the_handler_returns() {
-        let (component, built) =
+        let (component, built, structures) =
             generated_built(raising_view, NAMES, None, &[], None).expect("launch");
         component
             .borrow_mut()
@@ -1586,7 +1631,7 @@ mod tests {
             statements: Vec::new(),
         };
         crate::execute_program(&mut component.borrow_mut(), &program).expect("program");
-        let mut ui = Ui::assemble(component, built, raising_view, None, None);
+        let mut ui = Ui::assemble(component, built, raising_view, None, structures, None);
 
         ui.dispatch(&[WidgetEvent::Click(click)]);
 

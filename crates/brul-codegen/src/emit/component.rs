@@ -217,7 +217,7 @@ fn filler(block: &Block, emit: &mut Emit<'_>) -> Result<String, Error> {
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]"
     ));
     out.line(format_args!(
-        "fn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
+        "fn {name}(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
     ));
     out.indented(|out| -> Result<(), Error> {
         out.line(format_args!("let mut bindings = Vec::new();"));
@@ -394,7 +394,9 @@ fn write(
     *counter += 1;
     out.line(format_args!("{{"));
     out.indented(|out| {
-        out.line(format_args!("let built = brul::instance(component, brul::Instance {{"));
+        out.line(format_args!(
+            "let built = brul::instance(build, component, brul::Instance {{"
+        ));
         out.indented(|out| {
             out.line(format_args!("theme,"));
             out.line(format_args!("view: {base}_view,"));

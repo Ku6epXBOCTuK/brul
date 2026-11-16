@@ -11,14 +11,14 @@ use brul_window::{
 use crate::handle::{Handle, Message, take};
 use crate::ui::CommandHost;
 use crate::{
-    Built, Component, ComponentHandle, Host, Theme, Ui, Value, ViewError, WindowConfig,
+    Build, Built, Component, ComponentHandle, Host, Theme, Ui, Value, ViewError, WindowConfig,
     execute_program, script,
 };
 
 pub struct WindowDef<T: Theme> {
     pub name: &'static str,
     pub config: WindowConfig,
-    pub view: fn(Option<T>, &ComponentHandle) -> Result<Built, ViewError>,
+    pub view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
 }
 
 /// Запускает окна по модулю, сгенерированному из `.brul`.
@@ -117,15 +117,16 @@ pub(crate) fn generated_component(
 
 #[cfg(test)]
 pub(crate) fn generated_built<T: Theme>(
-    view: fn(Option<T>, &ComponentHandle) -> Result<Built, ViewError>,
+    view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
     names: &'static [&'static str],
     theme: Option<T>,
     seeds: &[(&str, Value)],
     script: Option<&script::Program>,
-) -> Result<(ComponentHandle, Built), Box<dyn std::error::Error>> {
+) -> Result<(ComponentHandle, Built, Vec<crate::Structure>), Box<dyn std::error::Error>> {
     let component = generated_component(names, script, seeds)?;
-    let built = view(theme, &component).map_err(std::io::Error::other)?;
-    Ok((component, built))
+    let mut build = Build::new();
+    let built = view(theme, &mut build, &component).map_err(std::io::Error::other)?;
+    Ok((component, built, build.take_structures()))
 }
 
 struct Runtime<T: Theme> {
@@ -234,13 +235,16 @@ impl<T: Theme> Runtime<T> {
             theme = theme.map(Theme::name).unwrap_or("default"),
             "creating window"
         );
-        let _ = crate::take_structures();
-        let built = view(self.fixed_theme, &self.component).map_err(WindowError::app)?;
+        let mut build = Build::new();
+        let built =
+            view(self.fixed_theme, &mut build, &self.component).map_err(WindowError::app)?;
+        let structures = build.take_structures();
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
             built,
             view,
             self.fixed_theme,
+            structures,
             Rc::clone(&self.commands),
             config.scroll,
         );
@@ -344,6 +348,7 @@ mod tests {
 
     fn generated_view(
         _theme: Option<TestTheme>,
+        _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         let widget = Widget::text("");
@@ -386,12 +391,12 @@ mod tests {
         seeds: &[(&str, Value)],
         script: Option<&script::Program>,
     ) -> (WidgetId, Ui<TestTheme>) {
-        let (component, built) =
+        let (component, built, structures) =
             generated_built(generated_view, NAMES, theme, seeds, script).expect("launch succeeds");
         let id = built.widget.id();
         (
             id,
-            Ui::assemble(component, built, generated_view, None, None),
+            Ui::assemble(component, built, generated_view, None, structures, None),
         )
     }
 
@@ -484,6 +489,7 @@ mod tests {
 
     fn theme_view(
         _theme: Option<TestTheme>,
+        _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         let widget = Widget::text("");
@@ -539,6 +545,7 @@ mod tests {
 
     fn seeded_view(
         _theme: Option<TestTheme>,
+        _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         let widget = Widget::text("");
@@ -658,6 +665,7 @@ mod tests {
 
     fn picker_view(
         _theme: Option<TestTheme>,
+        _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         key_view(component, "handleKey")
@@ -665,6 +673,7 @@ mod tests {
 
     fn settings_view(
         _theme: Option<TestTheme>,
+        _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
         key_view(component, "handleSettingsKey")

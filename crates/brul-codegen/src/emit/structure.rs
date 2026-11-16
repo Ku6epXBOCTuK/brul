@@ -87,14 +87,14 @@ fn inline(out: &mut Out<'_>, name: &str, value: &str, each: bool, counter: &mut 
     out.line(format_args!("{{"));
     out.indented(|out| {
         out.line(format_args!(
-            "let (built, _rows) = {name}_rebuild(theme, component, &[])?;"
+            "let (built, _rows) = {name}_rebuild(theme, build, component, &[])?;"
         ));
         out.line(format_args!("bindings.extend(built.bindings);"));
         out.line(format_args!("handlers.extend(built.handlers);"));
         out.line(format_args!("props.extend(built.props);"));
         out.line(format_args!("let {widget} = built.widget;"));
         out.line(format_args!(
-            "brul::register_structure(component, {widget}.id(), {each}, {value}, {name}_rebuild);"
+            "brul::register_structure(build, component, {widget}.id(), {each}, {value}, {name}_rebuild);"
         ));
         out.line(format_args!("{widget}"));
     });
@@ -314,7 +314,7 @@ fn arm_header(out: &mut Out<'_>, name: &str) {
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]"
     ));
     out.line(format_args!(
-        "fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {{"
+        "fn {name}_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {{"
     ));
     out.indented(|out| {
         for field in ["bindings", "handlers", "props", "rows"] {

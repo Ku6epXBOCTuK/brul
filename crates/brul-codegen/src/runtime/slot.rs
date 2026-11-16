@@ -1,10 +1,10 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_gui::{Direction, Widget};
 use brul_script::Variable;
 
 use super::ComponentHandle;
+use super::build::Build;
 use super::error::ViewError;
 use super::structure::{Built, View};
 
@@ -24,23 +24,8 @@ pub struct Slots {
     pub(crate) entries: Vec<SlotArgument>,
 }
 
-thread_local! {
-    static SLOTS: RefCell<Option<Rc<Slots>>> = const { RefCell::new(None) };
-}
-
-pub(crate) fn current_slots() -> Option<Rc<Slots>> {
-    SLOTS.with(|slots| slots.borrow().clone())
-}
-
-pub(crate) fn with_slots<T>(slots: Option<Rc<Slots>>, body: impl FnOnce() -> T) -> T {
-    let previous = SLOTS.with(|current| current.replace(slots));
-    let result = body();
-    SLOTS.with(|current| *current.borrow_mut() = previous);
-    result
-}
-
-pub fn slot(theme: Option<&str>, name: &str) -> Result<Built, ViewError> {
-    let Some(slots) = current_slots() else {
+pub fn slot(theme: Option<&str>, build: &mut Build, name: &str) -> Result<Built, ViewError> {
+    let Some(slots) = build.slots() else {
         return Ok(empty_built());
     };
     let Some(argument) = slots.entries.iter().find(|argument| argument.name == name) else {
@@ -49,7 +34,9 @@ pub fn slot(theme: Option<&str>, name: &str) -> Result<Built, ViewError> {
     let component = Rc::clone(&slots.component);
     let count = slots.scopes.len();
     component.borrow_mut().push_binding_scopes(&slots.scopes);
-    let rendered = with_slots(slots.parent.clone(), || (argument.view)(theme, &component));
+    let previous = build.replace_slots(slots.parent.clone());
+    let rendered = (argument.view)(theme, build, &component);
+    build.replace_slots(previous);
     component.borrow_mut().pop_binding_scopes(count);
     rendered
 }

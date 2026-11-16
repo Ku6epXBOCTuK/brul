@@ -40,9 +40,9 @@ fn seeded(presets: &[&str]) -> ComponentHandle {
 }
 
 fn note_view(presets: &[&str]) -> WidgetTree {
-    let built = generated::note_view(Some(generated::ThemeId::Dark), &seeded(presets))
+    let mut build = brul::Build::new();
+    let built = generated::note_view(Some(generated::ThemeId::Dark), &mut build, &seeded(presets))
         .expect("generated view");
-    let _ = brul::take_structures();
     WidgetTree::new(built.widget)
 }
 

@@ -397,7 +397,9 @@ fn slot_item(out: &mut Out<'_>, slot: &Slot, emit: &Emit<'_>) -> Result<(), Erro
     };
     out.line(format_args!("{{"));
     out.indented(|out| {
-        out.line(format_args!("let built = brul::slot(theme, {target})?;"));
+        out.line(format_args!(
+            "let built = brul::slot(theme, build, {target})?;"
+        ));
         for field in ["bindings", "handlers", "props"] {
             out.line(format_args!("{field}.extend(built.{field});"));
         }

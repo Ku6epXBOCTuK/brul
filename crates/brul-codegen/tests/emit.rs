@@ -11,7 +11,7 @@ window Demo (title: "demo") {
 }
 </markup>
 "#;
-    let expected = r#"pub fn demo_view(theme: Option<ThemeId>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let expected = r#"pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
     let theme = theme.map(brul::Theme::name);
     component.borrow_mut().set_names(names());
     let mut bindings = Vec::new();
@@ -180,7 +180,7 @@ window Styled (title: "styled") {
 }
 </markup>
 "#;
-    let expected = r#"pub fn styled_view(theme: Option<ThemeId>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let expected = r#"pub fn styled_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
     let theme = theme.map(brul::Theme::name);
     component.borrow_mut().set_names(names());
     let mut bindings = Vec::new();
@@ -659,13 +659,13 @@ window Demo (title: "demo") {
         "fn demo_if1_value0(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
+        "fn demo_if1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
     ));
     assert!(module.contains("    let children = {\n"), "{module}");
     assert!(module.contains("brul::Value::Bool(condition) => condition,"));
     assert!(module.contains("        vec![\n"));
     assert!(module.contains(
-        "brul::register_structure(component, widget0.id(), false, demo_if1_value0, demo_if1_rebuild);"
+        "brul::register_structure(build, component, widget0.id(), false, demo_if1_value0, demo_if1_rebuild);"
     ));
     assert!(
         module.contains(r#"brul::ViewError::expected("if condition", "Bool", other.type_name())"#)
@@ -725,7 +725,7 @@ window Demo (title: "demo") {
         "fn demo_each1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn demo_each1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
+        "fn demo_each1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
     ));
     assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
     assert!(module.contains(
@@ -739,7 +739,7 @@ window Demo (title: "demo") {
     assert!(module.contains("if let Some(other) = matcher.take(key.as_ref(), &item, position) {"));
     assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count, reuse: None });"));
     assert!(module.contains(
-        "brul::register_structure(component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);"
+        "brul::register_structure(build, component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);"
     ));
 }
 
@@ -1168,7 +1168,7 @@ fn emits_imported_component() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("pub fn badge_view(theme: Option<&str>"));
     assert!(module.contains("pub fn badge_script() -> Option<&'static brul::script::Program>"));
-    assert!(module.contains("let built = brul::instance(component, brul::Instance {"));
+    assert!(module.contains("let built = brul::instance(build, component, brul::Instance {"));
     assert!(module.contains("bindings.extend(built.bindings);"));
     assert!(module.contains("props.extend(built.props);"));
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1387,7 +1387,7 @@ fn emits_component_slot() {
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(
-        module.contains("brul::slot(theme, brul::DEFAULT_SLOT)?;"),
+        module.contains("brul::slot(theme, build, brul::DEFAULT_SLOT)?;"),
         "{module}"
     );
     assert!(
@@ -1484,11 +1484,11 @@ fn emits_named_slots() {
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(
-        module.contains("brul::slot(theme, \"header\")?;"),
+        module.contains("brul::slot(theme, build, \"header\")?;"),
         "{module}"
     );
     assert!(
-        module.contains("brul::slot(theme, brul::DEFAULT_SLOT)?;"),
+        module.contains("brul::slot(theme, build, brul::DEFAULT_SLOT)?;"),
         "{module}"
     );
     assert!(

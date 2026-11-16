@@ -112,8 +112,7 @@ fn the_window_table_lists_every_declared_window() {
 #[test]
 fn the_settings_window_has_two_lists_and_its_own_key_handler() {
     let component = seeded();
-    let built = (generated::windows()[1].view)(None, &component).expect("settings view");
-    let structures = brul::take_structures();
+    let (built, structures) = view_build(generated::windows()[1].view, None, &component);
 
     let key = built
         .handlers
@@ -131,10 +130,8 @@ fn the_settings_window_has_two_lists_and_its_own_key_handler() {
 fn both_windows_read_the_same_browsers_signal() {
     let component = seeded();
     let windows = generated::windows();
-    let _ = (windows[0].view)(None, &component).expect("picker view");
-    let picker = brul::take_structures();
-    let _ = (windows[1].view)(None, &component).expect("settings view");
-    let settings = brul::take_structures();
+    let (_, picker) = view_build(windows[0].view, None, &component);
+    let (_, settings) = view_build(windows[1].view, None, &component);
     let each = |structures: &[brul::Structure]| {
         structures
             .iter()
@@ -214,8 +211,7 @@ fn markup_script_block_is_emitted() {
 #[test]
 fn the_picker_view_builds_with_its_handlers_and_bindings() {
     let component = seeded();
-    let built = generated::picker_view(None, &component).expect("generated view");
-    let structures = brul::take_structures();
+    let (built, structures) = view_build(generated::picker_view, None, &component);
     let Built {
         widget,
         bindings,
@@ -242,8 +238,7 @@ fn the_picker_view_builds_with_its_handlers_and_bindings() {
 #[test]
 fn structure_values_read_the_declared_seeds() {
     let component = seeded();
-    let _ = generated::picker_view(None, &component).expect("generated view");
-    let structures = brul::take_structures();
+    let (_, structures) = view_build(generated::picker_view, None, &component);
 
     let each = structures
         .iter()
@@ -260,15 +255,15 @@ fn structure_values_read_the_declared_seeds() {
 #[test]
 fn structure_rebuild_rebuilds_rows() {
     let component = seeded();
-    let _ = generated::picker_view(None, &component).expect("generated view");
-    let structures = brul::take_structures();
+    let (_, structures) = view_build(generated::picker_view, None, &component);
 
     let each = structures
         .iter()
         .find(|structure| structure.each)
         .expect("each structure");
-    let (rebuilt, rows) = (each.rebuild)(None, &component, &[]).expect("rebuild");
-    let rebuilt_structures = brul::take_structures();
+    let mut build = brul::Build::new();
+    let (rebuilt, rows) = (each.rebuild)(None, &mut build, &component, &[]).expect("rebuild");
+    let rebuilt_structures = build.take_structures();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].key, Some(Value::String("first".into())));
     assert_eq!(rows[0].count, 1);
@@ -279,16 +274,16 @@ fn structure_rebuild_rebuilds_rows() {
 #[test]
 fn structure_rebuild_reuses_matched_rows() {
     let component = seeded();
-    let _ = generated::picker_view(None, &component).expect("generated view");
-    let structures = brul::take_structures();
+    let (_, structures) = view_build(generated::picker_view, None, &component);
 
     let each = structures
         .iter()
         .find(|structure| structure.each)
         .expect("each structure");
-    let (_, rows) = (each.rebuild)(None, &component, &[]).expect("first rebuild");
+    let mut build = brul::Build::new();
+    let (_, rows) = (each.rebuild)(None, &mut build, &component, &[]).expect("first rebuild");
     assert!(rows.iter().all(|row| row.reuse.is_none()));
-    let (_, again) = (each.rebuild)(None, &component, &rows).expect("second rebuild");
+    let (_, again) = (each.rebuild)(None, &mut build, &component, &rows).expect("second rebuild");
     assert_eq!(
         again.iter().map(|row| row.reuse).collect::<Vec<_>>(),
         [Some(0), Some(1)]
@@ -298,8 +293,22 @@ fn structure_rebuild_reuses_matched_rows() {
 #[test]
 fn component_structure_values_read_their_own_component() {
     let component = seeded();
-    let _ = generated::picker_view(None, &component).expect("generated view");
-    assert_nested_values(&brul::take_structures());
+    let (_, structures) = view_build(generated::picker_view, None, &component);
+    assert_nested_values(&structures);
+}
+
+fn view_build<T>(
+    view: fn(
+        Option<T>,
+        &mut brul::Build,
+        &brul::ComponentHandle,
+    ) -> Result<brul::Built, brul::ViewError>,
+    theme: Option<T>,
+    component: &brul::ComponentHandle,
+) -> (brul::Built, Vec<brul::Structure>) {
+    let mut build = brul::Build::new();
+    let built = view(theme, &mut build, component).expect("view");
+    (built, build.take_structures())
 }
 
 fn assert_nested_values(structures: &[brul::Structure]) {

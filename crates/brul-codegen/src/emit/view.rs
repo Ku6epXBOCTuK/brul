@@ -23,7 +23,7 @@ pub(super) fn view(
     let frame = Frame::root(emit.default_theme());
     let mut out = Out::new(out);
     out.line(format_args!(
-        "pub fn {name}(theme: {theme}, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
+        "pub fn {name}(theme: {theme}, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
     ));
     out.indented(|out| -> Result<(), Error> {
         if typed {
