@@ -64,17 +64,25 @@ pub(crate) fn exe_path(pid: u32) -> Option<String> {
 }
 
 pub(crate) fn find_by_exe(exe: &str) -> Option<u32> {
+    pids_by_exe(exe).into_iter().next()
+}
+
+fn pids_by_exe(exe: &str) -> Vec<u32> {
     let file = Path::new(exe)
         .file_name()
-        .map(|name| name.to_string_lossy().to_lowercase())?;
+        .map(|name| name.to_string_lossy().to_lowercase());
+    let Some(file) = file else {
+        return Vec::new();
+    };
     snapshot()
         .into_iter()
-        .find(|seen| {
+        .filter(|seen| {
             seen.pid != 0
                 && seen.name.to_lowercase() == file
                 && exe_path(seen.pid).is_some_and(|path| same_path(&path, exe))
         })
         .map(|seen| seen.pid)
+        .collect()
 }
 
 pub(crate) fn child_of(parent: u32) -> Option<u32> {
@@ -134,13 +142,9 @@ mod tests {
     #[test]
     fn the_current_process_is_found_by_its_exe() {
         let exe = std::env::current_exe().expect("current exe");
-        assert_eq!(
-            find_by_exe(&exe.to_string_lossy()),
-            Some(std::process::id())
-        );
-        assert_eq!(
-            exe_path(std::process::id()).as_deref(),
-            Some(exe.to_string_lossy().as_ref())
-        );
+        let text = exe.to_string_lossy();
+
+        assert!(pids_by_exe(&text).contains(&std::process::id()));
+        assert_eq!(exe_path(std::process::id()).as_deref(), Some(&*text));
     }
 }
