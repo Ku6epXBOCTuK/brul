@@ -14,6 +14,10 @@
     function restartService() {
         restartRequested(name);
     }
+
+    function toggleConsole() {
+        consoleRequested(name);
+    }
 </script>
 
 <markup>
@@ -24,10 +28,12 @@
         prop start: String = "";
         prop port: String = "";
         prop selected: Bool = false;
+        prop console: Bool = false;
         event selectRequested(service: String);
         event startRequested(service: String);
         event stopRequested(service: String);
         event restartRequested(service: String);
+        event consoleRequested(service: String);
 
         Row (row, class: selected ? "selected" : "", on click: selectService) {
             Column (row-titles) {
@@ -47,6 +53,11 @@
             }
             View (row-action, on click: restartService) {
                 Text (row-action-label) { "Restart" }
+            }
+            @if (console) {
+                View (row-action, on click: toggleConsole) {
+                    Text (row-action-label) { "Console" }
+                }
             }
         }
     }

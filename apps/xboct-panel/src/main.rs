@@ -8,37 +8,61 @@ use brul::logging::{error, info};
 use brul::{command, host};
 
 use xboct_panel::{
-    Config, Entry, EntryKind, Program, Service, Started, default_path, generated, log, program,
-    service,
+    Config, Console, Consoles, Entry, EntryKind, Program, Service, Started, default_path,
+    generated, log, program, service,
 };
 
 const LOG_LINES: usize = 40;
 
 struct AppHost {
     specs: Vec<Entry>,
+    consoles: Consoles,
 }
 
 #[command]
 fn act(host: &mut AppHost, action: String, name: String) -> Result<Value, brul::Error> {
-    let status = match host.specs.iter().find(|spec| spec.name == name) {
-        None => format!("no entry '{name}' in the config"),
-        Some(entry) => match entry.kind {
-            EntryKind::Service => match action.as_str() {
-                "start" => acted(service::start(&name), &action, &name),
-                "stop" => acted(service::stop(&name), &action, &name),
-                "restart" => acted(service::restart(&name), &action, &name),
-                other => unknown(other),
-            },
-            EntryKind::Program => match action.as_str() {
-                "start" => acted(program::start(entry).map(|_| ()), &action, &name),
-                "stop" => acted(program::stop(entry), &action, &name),
-                "restart" => acted(program::restart(entry).map(|_| ()), &action, &name),
-                other => unknown(other),
-            },
-            EntryKind::Console => format!("console '{name}' is not supported yet"),
+    let Some(entry) = host.specs.iter().find(|spec| spec.name == name).cloned() else {
+        let status = format!("no entry '{name}' in the config");
+        return Ok(outcome(&host.specs, &mut host.consoles, status));
+    };
+    let status = match entry.kind {
+        EntryKind::Service => match action.as_str() {
+            "start" => acted(service::start(&name), &action, &name),
+            "stop" => acted(service::stop(&name), &action, &name),
+            "restart" => acted(service::restart(&name), &action, &name),
+            other => unknown(other),
+        },
+        EntryKind::Program => match action.as_str() {
+            "start" => acted(program::start(&entry).map(|_| ()), &action, &name),
+            "stop" => acted(program::stop(&entry), &action, &name),
+            "restart" => acted(program::restart(&entry).map(|_| ()), &action, &name),
+            other => unknown(other),
+        },
+        EntryKind::Console => match action.as_str() {
+            "start" => acted(host.consoles.start(&entry), &action, &name),
+            "stop" => acted(host.consoles.stop(&entry), &action, &name),
+            "restart" => acted(host.consoles.restart(&entry), &action, &name),
+            other => unknown(other),
         },
     };
-    Ok(outcome(&host.specs, status))
+    Ok(outcome(&host.specs, &mut host.consoles, status))
+}
+
+#[command]
+fn toggle_console(host: &mut AppHost, name: String) -> Result<Value, brul::Error> {
+    let status = match host
+        .specs
+        .iter()
+        .find(|spec| spec.name == name && spec.kind == EntryKind::Console)
+    {
+        None => format!("no console '{name}' in the config"),
+        Some(entry) => match host.consoles.toggle(entry) {
+            Ok(true) => format!("console shown: {name}"),
+            Ok(false) => format!("console hidden: {name}"),
+            Err(failure) => failure.to_string(),
+        },
+    };
+    Ok(outcome(&host.specs, &mut host.consoles, status))
 }
 
 fn unknown(action: &str) -> String {
@@ -51,12 +75,12 @@ fn start_all_manual(host: &mut AppHost) -> Result<Value, brul::Error> {
         Ok(report) => describe(&report),
         Err(failure) => failure.to_string(),
     };
-    Ok(outcome(&host.specs, status))
+    Ok(outcome(&host.specs, &mut host.consoles, status))
 }
 
 #[command]
 fn refresh(host: &mut AppHost, name: String) -> Result<Value, brul::Error> {
-    let (ok, services) = match collect(&host.specs) {
+    let (ok, services) = match collect(&host.specs, &mut host.consoles) {
         Ok(rows) => (true, Value::Array(Rc::new(rows))),
         Err(_) => (false, Value::Null),
     };
@@ -106,8 +130,8 @@ fn describe(report: &Started) -> String {
     parts.join("; ")
 }
 
-fn outcome(specs: &[Entry], status: String) -> Value {
-    let (ok, services, status) = match collect(specs) {
+fn outcome(specs: &[Entry], consoles: &mut Consoles, status: String) -> Value {
+    let (ok, services, status) = match collect(specs, consoles) {
         Ok(rows) => (true, Value::Array(Rc::new(rows)), status),
         Err(failure) => (
             false,
@@ -122,9 +146,10 @@ fn outcome(specs: &[Entry], status: String) -> Value {
     ]))
 }
 
-fn collect(specs: &[Entry]) -> Result<Vec<Value>, String> {
+fn collect(specs: &[Entry], consoles: &mut Consoles) -> Result<Vec<Value>, String> {
     let services = service::query_all(specs).map_err(|failure| failure.to_string())?;
     let programs = program::query_all(specs);
+    let console_rows = consoles.query(specs);
     Ok(specs
         .iter()
         .filter_map(|spec| match spec.kind {
@@ -136,9 +161,29 @@ fn collect(specs: &[Entry]) -> Result<Vec<Value>, String> {
                 .iter()
                 .find(|program| program.name == spec.name)
                 .map(program_row),
-            EntryKind::Console => None,
+            EntryKind::Console => console_rows
+                .iter()
+                .find(|console| console.name == spec.name)
+                .map(console_row),
         })
         .collect())
+}
+
+fn console_row(console: &Console) -> Value {
+    Value::Object(Rc::new(vec![
+        (String::from("name"), text(console.name.clone())),
+        (String::from("display"), text(console.display.clone())),
+        (String::from("state"), text(console.state.to_string())),
+        (String::from("start"), text(String::from("console"))),
+        (
+            String::from("port"),
+            text(
+                console
+                    .port
+                    .map_or_else(String::new, |port| port.to_string()),
+            ),
+        ),
+    ]))
 }
 
 fn program_row(program: &Program) -> Value {
@@ -179,7 +224,7 @@ fn text(value: String) -> Value {
     Value::String(value.into())
 }
 
-host! { AppHost: act, start_all_manual, refresh }
+host! { AppHost: act, start_all_manual, refresh, toggle_console }
 
 fn main() -> ExitCode {
     brul::logging::init_with(&[env!("CARGO_PKG_NAME")]);
@@ -202,7 +247,8 @@ fn main() -> ExitCode {
         "starting panel"
     );
 
-    let services = match collect(&config.entries) {
+    let mut consoles = Consoles::new();
+    let services = match collect(&config.entries, &mut consoles) {
         Ok(rows) => Value::Array(Rc::new(rows)),
         Err(failure) => {
             error!(%failure, "entries are unreadable");
@@ -219,6 +265,7 @@ fn main() -> ExitCode {
     ];
     let host = AppHost {
         specs: config.entries,
+        consoles,
     };
 
     match brul::run_generated_with(
@@ -248,7 +295,9 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{Entry, Program, Service, Value, describe, log_text, program_row, row};
+    use super::{
+        Console, Entry, Program, Service, Value, console_row, describe, log_text, program_row, row,
+    };
     use xboct_panel::{ProgramState, ServiceError, ServiceState, StartType, Started};
 
     fn sample() -> Service {
@@ -336,6 +385,25 @@ mod tests {
         assert_eq!(field(&row, "name").as_text(), Some("caps-lang"));
         assert_eq!(field(&row, "state").as_text(), Some("running"));
         assert_eq!(field(&row, "start").as_text(), Some("program"));
+        assert_eq!(field(&row, "port").as_text(), Some(""));
+    }
+
+    #[test]
+    fn a_console_row_says_it_is_a_console() {
+        let console = Console {
+            name: String::from("deskflow-server"),
+            display: String::from("deskflow-server"),
+            state: ProgramState::Stopped,
+            port: None,
+            log: None,
+            pid: None,
+        };
+
+        let row = console_row(&console);
+
+        assert_eq!(field(&row, "name").as_text(), Some("deskflow-server"));
+        assert_eq!(field(&row, "state").as_text(), Some("stopped"));
+        assert_eq!(field(&row, "start").as_text(), Some("console"));
         assert_eq!(field(&row, "port").as_text(), Some(""));
     }
 

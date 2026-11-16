@@ -222,7 +222,7 @@ fn alive(pid: u32) -> bool {
     !exited
 }
 
-fn exe_path(pid: u32) -> Option<String> {
+pub(crate) fn exe_path(pid: u32) -> Option<String> {
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
     if handle.is_null() {
         return None;
@@ -236,7 +236,7 @@ fn exe_path(pid: u32) -> Option<String> {
     (ok != 0).then(|| String::from_utf16_lossy(&buffer[..size as usize]))
 }
 
-fn find_by_exe(exe: &str) -> Option<u32> {
+pub(crate) fn find_by_exe(exe: &str) -> Option<u32> {
     let file = Path::new(exe)
         .file_name()
         .map(|name| name.to_string_lossy().to_lowercase())?;
@@ -336,7 +336,7 @@ fn spawn(entry: &Entry) -> Result<u32, ProgramError> {
     Ok(process.dwProcessId)
 }
 
-fn command_line(exe: &str, args: &[String]) -> String {
+pub(crate) fn command_line(exe: &str, args: &[String]) -> String {
     let mut line = quote(exe);
     for arg in args {
         line.push(' ');
@@ -345,7 +345,7 @@ fn command_line(exe: &str, args: &[String]) -> String {
     line
 }
 
-fn quote(arg: &str) -> String {
+pub(crate) fn quote(arg: &str) -> String {
     if !arg.is_empty() && !arg.contains([' ', '\t', '"']) {
         return arg.to_string();
     }
@@ -372,7 +372,7 @@ fn quote(arg: &str) -> String {
     out
 }
 
-fn environment(overrides: &BTreeMap<String, String>) -> Option<Vec<u16>> {
+pub(crate) fn environment(overrides: &BTreeMap<String, String>) -> Option<Vec<u16>> {
     if overrides.is_empty() {
         return None;
     }
@@ -428,7 +428,7 @@ unsafe extern "system" fn collect_windows(window: HWND, lparam: isize) -> i32 {
     1
 }
 
-fn wide(value: &str) -> Vec<u16> {
+pub(crate) fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 

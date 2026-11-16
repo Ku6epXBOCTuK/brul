@@ -40,6 +40,11 @@
         poll();
     }
 
+    function showConsole(name) {
+        let result = toggleConsole(name);
+        status = result.status;
+    }
+
     every(2000, poll);
 </script>
 
@@ -65,10 +70,12 @@
                     ServiceRow (name: item.name, display: item.display, state: item.state,
                                 start: item.start, port: item.port,
                                 selected: item.name == selected,
+                                console: item.start == "console",
                                 on selectRequested: selectService,
                                 on startRequested: startService,
                                 on stopRequested: stopService,
-                                on restartRequested: restartService) { }
+                                on restartRequested: restartService,
+                                on consoleRequested: showConsole) { }
                 }
             }
             Column (log-box) {
