@@ -9,7 +9,7 @@ use brul_syntax::markup::PropType;
 use super::ComponentHandle;
 use super::component::{accepts_prop, prop_name};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HandlerEvent {
     Click,
     Press,

@@ -22,6 +22,7 @@ pub struct Ui<T: Theme> {
     pub tree: Rc<RefCell<WidgetTree>>,
     handlers: Vec<Handler>,
     window_handlers: Vec<Handler>,
+    handler_index: HashMap<(Option<WidgetId>, HandlerEvent), usize>,
     pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
     bindings: Vec<Owned>,
     props: Vec<Owned>,
@@ -219,6 +220,7 @@ impl<T: Theme> Ui<T> {
             tree,
             handlers,
             window_handlers,
+            handler_index: HashMap::new(),
             commands,
             bindings: Vec::new(),
             props: Vec::new(),
@@ -233,7 +235,18 @@ impl<T: Theme> Ui<T> {
         ui.bind(bindings);
         ui.bind_props(props);
         ui.bind_structures(runtime::take_structures());
+        ui.index_handlers();
         ui
+    }
+
+    fn index_handlers(&mut self) {
+        self.handler_index = self
+            .handlers
+            .iter()
+            .enumerate()
+            .rev()
+            .map(|(at, handler)| ((handler.widget, handler.event), at))
+            .collect();
     }
 
     fn bind(&mut self, bindings: Vec<Binding>) {
@@ -321,6 +334,7 @@ impl<T: Theme> Ui<T> {
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
         self.handlers = handlers;
+        self.index_handlers();
         self.bindings.clear();
         self.props.clear();
         self.structures.clear();
@@ -374,23 +388,19 @@ impl<T: Theme> Ui<T> {
         let Some((widget, target)) = handler_target(event) else {
             return;
         };
-        let Some(handler) = self
-            .handlers
-            .iter()
-            .find(|handler| handler.widget == widget && handler.event == target)
-        else {
+        let Some(&at) = self.handler_index.get(&(widget, target)) else {
             return;
         };
+        let handler = &self.handlers[at];
         call(&handler.component, &handler.function, arguments(event));
     }
 
     fn close(&mut self) {
-        let handler = self
-            .handlers
-            .iter()
-            .find(|handler| handler.widget.is_none() && handler.event == HandlerEvent::Close);
-        match handler {
-            Some(handler) => call(&handler.component, &handler.function, Vec::new()),
+        match self.handler_index.get(&(None, HandlerEvent::Close)) {
+            Some(&at) => {
+                let handler = &self.handlers[at];
+                call(&handler.component, &handler.function, Vec::new());
+            }
             None => self.commands.borrow_mut().push(WindowCommand::Close),
         }
     }
@@ -501,6 +511,7 @@ impl<T: Theme> Ui<T> {
                 None => true,
             });
         }
+        self.index_handlers();
         self.bind(bindings);
         self.bind_props(props);
         self.bind_structures(added_structures);
@@ -1323,6 +1334,27 @@ mod tests {
         });
         ui.dispatch(&[WidgetEvent::Click(id)]);
         assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+    }
+
+    #[test]
+    fn dispatch_runs_the_first_of_two_handlers_of_a_widget() {
+        let component = component_with(
+            vec![
+                function("first", Vec::new(), vec![let_true("ran")]),
+                function("second", Vec::new(), vec![let_true("off")]),
+            ],
+            &["ran", "off"],
+        );
+        let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
+            vec![
+                Handler::new(&component, Some(id), HandlerEvent::Click, "first"),
+                Handler::new(&component, Some(id), HandlerEvent::Click, "second"),
+            ]
+        });
+
+        ui.dispatch(&[WidgetEvent::Click(id)]);
+        assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+        assert_ne!(ui.component.borrow().read("off"), Ok(Value::Bool(true)));
     }
 
     #[test]
