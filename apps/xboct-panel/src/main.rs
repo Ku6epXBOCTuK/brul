@@ -8,13 +8,13 @@ use brul::logging::{error, info};
 use brul::{command, host};
 
 use xboct_panel::{
-    Config, Service, ServiceError, ServiceSpec, Started, default_path, generated, log, service,
+    Config, Entry, Service, ServiceError, Started, default_path, generated, log, service,
 };
 
 const LOG_LINES: usize = 40;
 
 struct AppHost {
-    specs: Vec<ServiceSpec>,
+    specs: Vec<Entry>,
 }
 
 #[command]
@@ -50,7 +50,7 @@ fn refresh(host: &mut AppHost, name: String) -> Result<Value, brul::Error> {
     ])))
 }
 
-fn log_text(specs: &[ServiceSpec], name: &str) -> String {
+fn log_text(specs: &[Entry], name: &str) -> String {
     if name.is_empty() {
         return String::from("select a service to see its log");
     }
@@ -89,7 +89,7 @@ fn describe(report: &Started) -> String {
     parts.join("; ")
 }
 
-fn outcome(specs: &[ServiceSpec], status: String) -> Value {
+fn outcome(specs: &[Entry], status: String) -> Value {
     let (ok, services, status) = match service::query_all(specs) {
         Ok(services) => (true, rows(&services), status),
         Err(failure) => (
@@ -149,11 +149,11 @@ fn main() -> ExitCode {
     };
     info!(
         path = %path.display(),
-        services = config.services.len(),
+        entries = config.entries.len(),
         "starting panel"
     );
 
-    let services = match service::query_all(&config.services) {
+    let services = match service::query_all(&config.entries) {
         Ok(services) => services,
         Err(failure) => {
             error!(%failure, "services are unreadable");
@@ -166,10 +166,10 @@ fn main() -> ExitCode {
         ("services", rows(&services)),
         ("status", text(String::new())),
         ("selected", text(String::new())),
-        ("log", text(log_text(&config.services, ""))),
+        ("log", text(log_text(&config.entries, ""))),
     ];
     let host = AppHost {
-        specs: config.services,
+        specs: config.entries,
     };
 
     match brul::run_generated_with(
@@ -199,7 +199,7 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{Service, ServiceSpec, Value, describe, log_text, row};
+    use super::{Entry, Service, Value, describe, log_text, row};
     use xboct_panel::{ServiceError, ServiceState, StartType, Started};
 
     fn sample() -> Service {
@@ -271,11 +271,11 @@ mod tests {
         assert_eq!(describe(&Started::default()), "no manual services to start");
     }
 
-    fn spec(name: &str, log: Option<PathBuf>) -> ServiceSpec {
-        ServiceSpec {
+    fn spec(name: &str, log: Option<PathBuf>) -> Entry {
+        Entry {
             name: String::from(name),
-            port: None,
             log,
+            ..Entry::default()
         }
     }
 

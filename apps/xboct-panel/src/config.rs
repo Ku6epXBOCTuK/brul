@@ -1,39 +1,79 @@
-//! Panel config: which services to show, their ports and log files.
+//! Panel config: which services, programs and console commands to show.
 
+use std::collections::{BTreeMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub services: Vec<ServiceSpec>,
+    pub nssm: Option<PathBuf>,
+    pub entries: Vec<Entry>,
 }
 
-impl Default for Config {
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct Entry {
+    pub name: String,
+    pub kind: EntryKind,
+    pub display: Option<String>,
+    pub port: Option<u16>,
+    pub log: Option<PathBuf>,
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    pub workdir: Option<PathBuf>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "is_true")]
+    pub hidden: bool,
+    #[serde(skip_serializing_if = "is_never")]
+    pub restart: Restart,
+}
+
+impl Default for Entry {
     fn default() -> Self {
         Self {
-            services: vec![
-                ServiceSpec {
-                    name: String::from("Spooler"),
-                    ..ServiceSpec::default()
-                },
-                ServiceSpec {
-                    name: String::from("wuauserv"),
-                    ..ServiceSpec::default()
-                },
-            ],
+            name: String::new(),
+            kind: EntryKind::Service,
+            display: None,
+            port: None,
+            log: None,
+            command: None,
+            args: Vec::new(),
+            workdir: None,
+            env: BTreeMap::new(),
+            hidden: true,
+            restart: Restart::Never,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
-#[serde(default, deny_unknown_fields)]
-pub struct ServiceSpec {
-    pub name: String,
-    pub port: Option<u16>,
-    pub log: Option<PathBuf>,
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum EntryKind {
+    #[default]
+    Service,
+    Program,
+    Console,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Restart {
+    #[default]
+    Never,
+    OnCrash,
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
+fn is_never(value: &Restart) -> bool {
+    *value == Restart::Never
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
@@ -52,17 +92,36 @@ impl Config {
             path: path.to_path_buf(),
             message: error.to_string(),
         })?;
-        let unnamed = config
-            .services
-            .iter()
-            .position(|service| service.name.trim().is_empty());
-        match unnamed {
-            Some(index) => Err(ConfigError::Parse {
-                path: path.to_path_buf(),
-                message: format!("services[{index}] has no name"),
-            }),
-            None => Ok(config),
+        config.validate(path)?;
+        Ok(config)
+    }
+
+    fn validate(&self, path: &Path) -> Result<(), ConfigError> {
+        let fail = |message: String| ConfigError::Parse {
+            path: path.to_path_buf(),
+            message,
+        };
+        let mut seen = HashSet::new();
+        for (index, entry) in self.entries.iter().enumerate() {
+            if entry.name.trim().is_empty() {
+                return Err(fail(format!("entries[{index}] has no name")));
+            }
+            if !seen.insert(entry.name.as_str()) {
+                return Err(fail(format!(
+                    "entries[{index}] repeats name {:?}",
+                    entry.name
+                )));
+            }
+            if entry.kind != EntryKind::Service
+                && entry
+                    .command
+                    .as_deref()
+                    .is_none_or(|command| command.trim().is_empty())
+            {
+                return Err(fail(format!("entries[{index}] has no command")));
+            }
         }
+        Ok(())
     }
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
@@ -101,10 +160,6 @@ impl Config {
             }),
         }
     }
-
-    pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.services.iter().map(|service| service.name.as_str())
-    }
 }
 
 const CONFIG_FILE: &str = "xboct-panel.toml";
@@ -135,13 +190,15 @@ mod tests {
     #[test]
     fn a_service_with_port_and_log_is_read() {
         let source = r#"
-            [[services]]
+            [[entries]]
+            kind = "service"
             name = "sample-service"
             port = 8080
             log = 'C:\Logs\sample-service.log'
         "#;
         let config = Config::parse(source, Path::new(CONFIG_FILE)).expect("config");
-        let service = &config.services[0];
+        let service = &config.entries[0];
+        assert_eq!(service.kind, EntryKind::Service);
         assert_eq!(service.name, "sample-service");
         assert_eq!(service.port, Some(8080));
         assert_eq!(
@@ -151,17 +208,64 @@ mod tests {
     }
 
     #[test]
-    fn a_service_without_port_or_log_is_read() {
-        let config = Config::parse("[[services]]\nname = \"Spooler\"\n", Path::new("p.toml"))
-            .expect("config");
-        let service = &config.services[0];
-        assert_eq!(service.port, None);
-        assert_eq!(service.log, None);
+    fn a_program_carries_command_arguments_workdir_and_env() {
+        let source = r#"
+            [[entries]]
+            kind = "program"
+            name = "nobs"
+            command = 'C:\bin\nobs.exe'
+            args = ["--tray"]
+            workdir = 'C:\bin'
+            env = { OBS_PORT = "4455" }
+        "#;
+        let config = Config::parse(source, Path::new(CONFIG_FILE)).expect("config");
+        let program = &config.entries[0];
+        assert_eq!(program.kind, EntryKind::Program);
+        assert_eq!(program.command.as_deref(), Some(r"C:\bin\nobs.exe"));
+        assert_eq!(program.args, ["--tray"]);
+        assert_eq!(program.workdir.as_deref(), Some(Path::new(r"C:\bin")));
+        assert_eq!(
+            program.env.get("OBS_PORT").map(String::as_str),
+            Some("4455")
+        );
+    }
+
+    #[test]
+    fn a_console_is_hidden_and_can_restart_on_crash() {
+        let source = r#"
+            [[entries]]
+            kind = "console"
+            name = "deskflow-server"
+            command = 'deskflow-core server'
+            restart = "on-crash"
+        "#;
+        let config = Config::parse(source, Path::new(CONFIG_FILE)).expect("config");
+        let console = &config.entries[0];
+        assert_eq!(console.kind, EntryKind::Console);
+        assert!(console.hidden);
+        assert_eq!(console.restart, Restart::OnCrash);
+    }
+
+    #[test]
+    fn the_nssm_path_is_read() {
+        let source = "nssm = 'C:\\Tools\\nssm.exe'\n\n[[entries]]\nname = \"Spooler\"\n";
+        let config = Config::parse(source, Path::new(CONFIG_FILE)).expect("config");
+        assert_eq!(
+            config.nssm.as_deref(),
+            Some(Path::new(r"C:\Tools\nssm.exe"))
+        );
+    }
+
+    #[test]
+    fn the_old_services_table_is_rejected() {
+        let source = "[[services]]\nname = \"Spooler\"\n";
+        let failure = Config::parse(source, Path::new(CONFIG_FILE)).expect_err("error");
+        assert!(failure.to_string().contains("services"), "{failure}");
     }
 
     #[test]
     fn an_unknown_key_is_a_parse_error_with_the_line() {
-        let source = "[[services]]\nname = \"Spooler\"\nprot = 631\n";
+        let source = "[[entries]]\nname = \"Spooler\"\nprot = 631\n";
         let failure = Config::parse(source, Path::new(CONFIG_FILE)).expect_err("error");
         let message = failure.to_string();
         assert!(message.contains(CONFIG_FILE), "{message}");
@@ -169,11 +273,40 @@ mod tests {
     }
 
     #[test]
-    fn a_service_without_a_name_is_rejected() {
-        let source = "[[services]]\nport = 631\n";
+    fn an_entry_without_a_name_is_rejected() {
+        let source = "[[entries]]\nport = 631\n";
         let failure = Config::parse(source, Path::new(CONFIG_FILE)).expect_err("error");
         let message = failure.to_string();
-        assert!(message.contains("services[0] has no name"), "{message}");
+        assert!(message.contains("entries[0] has no name"), "{message}");
+    }
+
+    #[test]
+    fn a_program_without_a_command_is_rejected() {
+        let source = "[[entries]]\nkind = \"program\"\nname = \"nobs\"\n";
+        let failure = Config::parse(source, Path::new(CONFIG_FILE)).expect_err("error");
+        let message = failure.to_string();
+        assert!(message.contains("entries[0] has no command"), "{message}");
+    }
+
+    #[test]
+    fn a_repeated_name_is_rejected() {
+        let source = "[[entries]]\nname = \"Spooler\"\n\n[[entries]]\nname = \"Spooler\"\n";
+        let failure = Config::parse(source, Path::new(CONFIG_FILE)).expect_err("error");
+        let message = failure.to_string();
+        assert!(message.contains("entries[1] repeats name"), "{message}");
+    }
+
+    #[test]
+    fn a_default_config_has_no_entries() {
+        let config = Config::default();
+        assert!(config.entries.is_empty());
+        assert!(config.nssm.is_none());
+    }
+
+    #[test]
+    fn an_empty_file_is_an_empty_config() {
+        let config = Config::parse("", Path::new(CONFIG_FILE)).expect("config");
+        assert!(config.entries.is_empty());
     }
 
     #[test]

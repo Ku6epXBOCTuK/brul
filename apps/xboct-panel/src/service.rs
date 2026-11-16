@@ -19,7 +19,7 @@ use windows_sys::Win32::System::Services::{
     SERVICE_STOP_PENDING, SERVICE_STOPPED, SERVICE_SYSTEM_START, StartServiceW,
 };
 
-use crate::config::ServiceSpec;
+use crate::config::{Entry, EntryKind};
 
 const QUERY_ACCESS: u32 = SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS;
 const CONTROL_ACCESS: u32 = QUERY_ACCESS | SERVICE_START | SERVICE_STOP;
@@ -151,9 +151,13 @@ pub struct Started {
     pub failed: Vec<(String, ServiceError)>,
 }
 
-pub fn query_all(specs: &[ServiceSpec]) -> Result<Vec<Service>, ServiceError> {
+pub fn query_all(specs: &[Entry]) -> Result<Vec<Service>, ServiceError> {
     let manager = Manager::open()?;
-    specs.iter().map(|spec| manager.query(spec)).collect()
+    specs
+        .iter()
+        .filter(|spec| spec.kind == EntryKind::Service)
+        .map(|spec| manager.query(spec))
+        .collect()
 }
 
 pub fn start(name: &str) -> Result<(), ServiceError> {
@@ -168,10 +172,10 @@ pub fn restart(name: &str) -> Result<(), ServiceError> {
     Manager::open()?.restart(name)
 }
 
-pub fn start_manual(specs: &[ServiceSpec]) -> Result<Started, ServiceError> {
+pub fn start_manual(specs: &[Entry]) -> Result<Started, ServiceError> {
     let manager = Manager::open()?;
     let mut report = Started::default();
-    for spec in specs {
+    for spec in specs.iter().filter(|spec| spec.kind == EntryKind::Service) {
         let service = manager.query(spec)?;
         if !needs_start(service.state, service.start_type) {
             continue;
@@ -209,7 +213,7 @@ impl Manager {
         Ok(ServiceHandle(handle))
     }
 
-    fn query(&self, spec: &ServiceSpec) -> Result<Service, ServiceError> {
+    fn query(&self, spec: &Entry) -> Result<Service, ServiceError> {
         let name = spec.name.as_str();
         let handle = self.service(name, QUERY_ACCESS)?;
         let status = handle.status(name)?;
