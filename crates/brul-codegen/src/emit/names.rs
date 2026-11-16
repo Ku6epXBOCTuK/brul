@@ -63,8 +63,10 @@ fn block_node<'a>(block: &'a Block, names: &mut Names<'a>) {
         match item {
             BlockItem::Element(element) => element_node(element, names),
             BlockItem::If(block) => {
-                expression(&block.condition, names);
-                block_node(&block.then_block, names);
+                for branch in &block.branches {
+                    expression(&branch.condition, names);
+                    block_node(&branch.block, names);
+                }
                 if let Some(else_block) = &block.else_block {
                     block_node(else_block, names);
                 }

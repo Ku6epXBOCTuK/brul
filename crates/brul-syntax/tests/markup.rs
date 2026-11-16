@@ -1,7 +1,7 @@
 use brul_syntax::ast::{BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::markup::{
-    Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
-    IfBlock, Member, Prop, PropType, Widget, Window, parse_file,
+    Arg, Block, BlockItem, Branch, Component, Declaration, EachBlock, Element, Event, EventParam,
+    File, IfBlock, Member, Prop, PropType, Widget, Window, parse_file,
 };
 
 fn expr(kind: ExprKind) -> Expr {
@@ -332,7 +332,7 @@ fn if_else_blocks_parse() {
     let source = r#"component CheckRow {
         Row {
             @if (done) { Span { } } @else { View { } }
-            @if (failed) { Text { "no" } }
+            @if (failed) { Text { "no" } } @else if (retry) { Span { } }
         }
     }"#;
     let file = parse_file(source).unwrap();
@@ -356,27 +356,39 @@ fn if_else_blocks_parse() {
             block: Block {
                 items: vec![
                     BlockItem::If(IfBlock {
-                        condition: ident("done"),
-                        then_block: Block {
-                            items: vec![BlockItem::Element(element("Span"))],
-                        },
+                        branches: vec![Branch {
+                            condition: ident("done"),
+                            block: Block {
+                                items: vec![BlockItem::Element(element("Span"))],
+                            },
+                        }],
                         else_block: Some(Block {
                             items: vec![BlockItem::Element(element("View"))],
                         }),
                     }),
                     BlockItem::If(IfBlock {
-                        condition: ident("failed"),
-                        then_block: Block {
-                            items: vec![BlockItem::Element(Element {
-                                position: Position::default(),
-                                name: "Text".to_owned(),
-                                widget: Some(Widget::Text),
-                                args: Vec::new(),
+                        branches: vec![
+                            Branch {
+                                condition: ident("failed"),
                                 block: Block {
-                                    items: vec![BlockItem::Expr(string("no"))],
+                                    items: vec![BlockItem::Element(Element {
+                                        position: Position::default(),
+                                        name: "Text".to_owned(),
+                                        widget: Some(Widget::Text),
+                                        args: Vec::new(),
+                                        block: Block {
+                                            items: vec![BlockItem::Expr(string("no"))],
+                                        },
+                                    })],
                                 },
-                            })],
-                        },
+                            },
+                            Branch {
+                                condition: ident("retry"),
+                                block: Block {
+                                    items: vec![BlockItem::Element(element("Span"))],
+                                },
+                            },
+                        ],
                         else_block: None,
                     }),
                 ],

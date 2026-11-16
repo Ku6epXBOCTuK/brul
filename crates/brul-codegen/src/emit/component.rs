@@ -191,7 +191,9 @@ fn walk_block<'a>(
                 }
             }
             BlockItem::If(structure) => {
-                walk_block(&structure.then_block, definition, declared, false)?;
+                for branch in &structure.branches {
+                    walk_block(&branch.block, definition, declared, false)?;
+                }
                 if let Some(else_block) = &structure.else_block {
                     walk_block(else_block, definition, declared, false)?;
                 }

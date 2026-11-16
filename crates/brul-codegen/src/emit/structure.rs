@@ -33,11 +33,14 @@ pub(super) fn structure_if(
     counter: &mut usize,
 ) -> Result<(), Error> {
     let name = emit.structures.next(emit.base, "if");
-    emit.functions
-        .push(value_function(&name, &block.condition, emit.names));
+    for (index, branch) in block.branches.iter().enumerate() {
+        let function = format!("{name}_value{index}");
+        emit.functions
+            .push(value_function(&function, &branch.condition, emit.names));
+    }
     let arm = rebuild_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
-    inline(out, &name, false, frame, counter);
+    inline(out, &name, &format!("{name}_value0"), false, frame, counter);
     Ok(())
 }
 
@@ -49,20 +52,24 @@ pub(super) fn structure_each(
     counter: &mut usize,
 ) -> Result<(), Error> {
     let name = emit.structures.next(emit.base, "each");
-    emit.functions
-        .push(value_function(&name, &block.collection, emit.names));
+    emit.functions.push(value_function(
+        &format!("{name}_value"),
+        &block.collection,
+        emit.names,
+    ));
     if let Some(key) = &block.key {
-        emit.functions.push(key_function(&name, key, emit.names));
+        emit.functions
+            .push(key_function(&format!("{name}_key"), key, emit.names));
     }
     let arm = each_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
-    inline(out, &name, true, frame, counter);
+    inline(out, &name, &format!("{name}_value"), true, frame, counter);
     Ok(())
 }
 
 fn value_function(name: &str, value: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
     format!(
-        "fn {name}_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
+        "fn {name}(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
     let value = {};
     Ok(value)
 }}
@@ -73,7 +80,7 @@ fn value_function(name: &str, value: &brul_syntax::ast::Expr, names: &Names<'_>)
 
 fn key_function(name: &str, key: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
     format!(
-        "fn {name}_key(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
+        "fn {name}(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
     let value = {};
     Ok(value)
 }}
@@ -82,7 +89,14 @@ fn key_function(name: &str, key: &brul_syntax::ast::Expr, names: &Names<'_>) -> 
     )
 }
 
-fn inline(out: &mut String, name: &str, each: bool, frame: Frame<'_>, counter: &mut usize) {
+fn inline(
+    out: &mut String,
+    name: &str,
+    value: &str,
+    each: bool,
+    frame: Frame<'_>,
+    counter: &mut usize,
+) {
     let pad = "    ".repeat(frame.depth());
     let inner = "    ".repeat(frame.depth() + 1);
     let widget = format!("widget{}", *counter);
@@ -98,7 +112,7 @@ fn inline(out: &mut String, name: &str, each: bool, frame: Frame<'_>, counter: &
     let _ = writeln!(out, "{inner}let {widget} = built.widget;");
     let _ = writeln!(
         out,
-        "{inner}brul::register_structure(component, {widget}.id(), {each}, {name}_value, {name}_rebuild);"
+        "{inner}brul::register_structure(component, {widget}.id(), {each}, {value}, {name}_rebuild);"
     );
     let _ = writeln!(out, "{inner}{widget}");
     let _ = write!(out, "{pad}}}");
@@ -112,23 +126,40 @@ fn rebuild_arm(
 ) -> Result<String, Error> {
     let arm = arm_frame(emit.default_theme(), frame);
     let mut out = arm_header(name);
-    let _ = writeln!(
-        out,
-        "    let condition = {name}_value(&mut component.borrow_mut())\n        .map_err(brul::ViewError::from)?;\n    let children = match condition {{"
-    );
-    out.push_str("        brul::Value::Bool(true) => ");
+    out.push_str("    let children = {\n");
     let mut counter = 0;
-    arm_body(&mut out, &block.then_block, emit, arm, &mut counter)?;
-    out.push_str("        brul::Value::Bool(false) => ");
-    match &block.else_block {
-        Some(else_block) => arm_body(&mut out, else_block, emit, arm, &mut counter)?,
-        None => out.push_str("vec![],\n"),
-    }
-    out.push_str(
-        "        other => return Err(brul::ViewError::expected(\"if condition\", \"Bool\", other.type_name())),\n    };\n",
-    );
+    branch_chain(&mut out, name, block, emit, arm, &mut counter, 0)?;
+    out.push_str("    };\n");
     widget(&mut out);
     Ok(out)
+}
+
+fn branch_chain(
+    out: &mut String,
+    name: &str,
+    block: &IfBlock,
+    emit: &mut Emit<'_>,
+    frame: Frame<'_>,
+    counter: &mut usize,
+    index: usize,
+) -> Result<(), Error> {
+    let pad = "    ".repeat(2 + index);
+    let body = frame.deeper(index + 1);
+    let _ = writeln!(
+        out,
+        "{pad}let condition = {name}_value{index}(&mut component.borrow_mut())\n{pad}    .map_err(brul::ViewError::from)?;\n{pad}let condition = match condition {{\n{pad}    brul::Value::Bool(condition) => condition,\n{pad}    other => return Err(brul::ViewError::expected(\"if condition\", \"Bool\", other.type_name())),\n{pad}}};\n{pad}if condition {{"
+    );
+    arm_body(out, &block.branches[index].block, emit, body, counter)?;
+    let _ = writeln!(out, "{pad}}} else {{");
+    if index + 1 < block.branches.len() {
+        branch_chain(out, name, block, emit, frame, counter, index + 1)?;
+    } else if let Some(else_block) = &block.else_block {
+        arm_body(out, else_block, emit, body, counter)?;
+    } else {
+        let _ = writeln!(out, "{}vec![]", "    ".repeat(3 + index));
+    }
+    let _ = writeln!(out, "{pad}}}");
+    Ok(())
 }
 
 fn arm_body(
@@ -138,17 +169,18 @@ fn arm_body(
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
+    let pad = "    ".repeat(frame.depth().saturating_sub(1));
+    let inner = "    ".repeat(frame.depth());
     if contains_slot(block) {
-        out.push_str("{\n");
-        let pad = "    ".repeat(frame.depth());
-        let _ = writeln!(out, "{pad}let mut children = Vec::new();");
+        let _ = writeln!(out, "{pad}{{");
+        let _ = writeln!(out, "{inner}let mut children = Vec::new();");
         items_spliced(out, block, emit, frame, counter)?;
-        let _ = writeln!(out, "{pad}children");
-        out.push_str("        },\n");
+        let _ = writeln!(out, "{inner}children");
+        let _ = writeln!(out, "{pad}}}");
     } else {
-        out.push_str("vec![\n");
+        let _ = writeln!(out, "{pad}vec![");
         items(out, block, emit, frame, counter)?;
-        out.push_str("        ],\n");
+        let _ = writeln!(out, "{pad}]");
     }
     Ok(())
 }

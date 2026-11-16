@@ -625,18 +625,57 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "fn demo_if1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
+        "fn demo_if1_value0(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
         "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let mut bindings"
     ));
-    assert!(module.contains("brul::Value::Bool(true) => vec!["));
-    assert!(module.contains("brul::Value::Bool(false) => vec!["));
+    assert!(module.contains("    let children = {\n"), "{module}");
+    assert!(module.contains("brul::Value::Bool(condition) => condition,"));
+    assert!(module.contains("        vec![\n"));
     assert!(module.contains(
-        "brul::register_structure(component, widget0.id(), false, demo_if1_value, demo_if1_rebuild);"
+        "brul::register_structure(component, widget0.id(), false, demo_if1_value0, demo_if1_rebuild);"
     ));
     assert!(
         module.contains(r#"brul::ViewError::expected("if condition", "Bool", other.type_name())"#)
+    );
+}
+
+#[test]
+fn emits_an_if_chain_as_one_structure() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    Column {
+        @if (shown) {
+            Text { "a" }
+        } @else if (pending) {
+            Text { "b" }
+        } @else {
+            Text { "c" }
+        }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains("fn demo_if1_value0("), "{module}");
+    assert!(module.contains("fn demo_if1_value1("), "{module}");
+    assert!(!module.contains("demo_if2_"), "{module}");
+    assert_eq!(
+        module.matches("fn demo_if1_rebuild(").count(),
+        1,
+        "{module}"
+    );
+    assert_eq!(
+        module.matches("brul::register_structure(").count(),
+        1,
+        "{module}"
+    );
+    assert!(
+        module.contains(
+            "        } else {\n            let condition = demo_if1_value1(&mut component.borrow_mut())"
+        ),
+        "{module}"
     );
 }
 
@@ -1339,7 +1378,10 @@ fn emits_a_slot_inside_a_structure() {
         ],
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
-    assert!(module.contains("brul::Value::Bool(true) => {"), "{module}");
+    assert!(
+        module.contains("let mut children = Vec::new();"),
+        "{module}"
+    );
     assert!(
         module.contains("children.extend(built.widget.into_children());"),
         "{module}"

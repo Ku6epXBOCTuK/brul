@@ -18,7 +18,7 @@ HandlerRef    = "on" EventName ":" Ident ;  (* справа имя функци�
 Block         = "{" { BlockItem } "}" ;
 BlockItem     = Element | IfBlock | EachBlock | Slot ;
 Slot          = "@slot" [ "(" Ident ")" ] [ Block ] ;
-IfBlock       = "@if" "(" Script.Expr ")" Block [ "@else" Block ] ;
+IfBlock       = "@if" "(" Script.Expr ")" Block { "@else" "if" "(" Script.Expr ")" Block } [ "@else" Block ] ;
 EachBlock     = "@each" "(" Script.Expr "as" Ident [ "," Ident ] [ "(" Script.Expr ")" ] ")" Block ;
 EventName     = "click" | "key" | "drag" | Ident ;
 

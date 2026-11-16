@@ -81,9 +81,14 @@ pub struct Slot {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfBlock {
-    pub condition: Expr,
-    pub then_block: Block,
+    pub branches: Vec<Branch>,
     pub else_block: Option<Block>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Branch {
+    pub condition: Expr,
+    pub block: Block,
 }
 
 #[derive(Debug, Clone, PartialEq)]

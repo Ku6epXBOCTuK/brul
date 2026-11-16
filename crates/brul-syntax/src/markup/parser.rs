@@ -3,8 +3,8 @@ use crate::cursor::Cursor;
 use crate::error::Error;
 use crate::lexer::Span;
 use crate::markup::ast::{
-    Arg, Block, BlockItem, Component, Declaration, EachBlock, Element, Event, EventParam, File,
-    IfBlock, Member, Prop, PropType, Slot, Window,
+    Arg, Block, BlockItem, Branch, Component, Declaration, EachBlock, Element, Event, EventParam,
+    File, IfBlock, Member, Prop, PropType, Slot, Window,
 };
 use crate::markup::widget::Widget;
 
@@ -285,21 +285,29 @@ impl Cursor<'_> {
     }
 
     fn if_block(&mut self) -> Result<IfBlock, Error> {
+        let mut branches = vec![self.branch()?];
+        let mut else_block = None;
+        while self.eat_directive("else") {
+            if self.eat_keyword("if") {
+                branches.push(self.branch()?);
+            } else {
+                else_block = Some(self.block()?);
+                break;
+            }
+        }
+        Ok(IfBlock {
+            branches,
+            else_block,
+        })
+    }
+
+    fn branch(&mut self) -> Result<Branch, Error> {
         self.expect('(')?;
         let (condition, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
         self.set_pos(end);
         self.expect(')')?;
-        let then_block = self.block()?;
-        let else_block = if self.eat_directive("else") {
-            Some(self.block()?)
-        } else {
-            None
-        };
-        Ok(IfBlock {
-            condition,
-            then_block,
-            else_block,
-        })
+        let block = self.block()?;
+        Ok(Branch { condition, block })
     }
 
     fn prop(&mut self) -> Result<Member, Error> {
