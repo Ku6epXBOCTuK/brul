@@ -1,10 +1,10 @@
-use std::fmt::Write;
-
 use brul_syntax::ast::Position;
 use brul_syntax::style::Stylesheet;
 
 use crate::emit::class;
 use crate::error_at;
+
+use super::Out;
 
 #[derive(Default)]
 pub(super) struct ClassNames {
@@ -22,70 +22,75 @@ pub(super) fn index(names: &mut ClassNames, name: &str) -> usize {
 }
 
 pub(super) fn statics(
-    out: &mut String,
+    out: &mut Out<'_>,
     prefix: &str,
     stylesheet: &Stylesheet,
     names: &ClassNames,
 ) -> Result<(), brul_syntax::error::Error> {
     for theme in themes(stylesheet) {
-        let mut body = String::new();
-        for name in &names.names {
-            let class = brul_gui::style::class(stylesheet, name, theme).map_err(|error| {
-                error_at(
-                    Position { line: 1, column: 1 },
-                    format!("class '{name}': {error}"),
-                )
-            })?;
-            body.push_str(&indent(&class::literal(&class), "    "));
-            body.push_str(",\n");
-        }
-        let _ = writeln!(
-            out,
-            "\n#[allow(dead_code)]\nstatic {}: [brul::gui::Class; {}] = [\n{body}];",
+        out.end();
+        out.line(format_args!("#[allow(dead_code)]"));
+        out.line(format_args!(
+            "static {}: [brul::gui::Class; {}] = [",
             constant(prefix, theme),
             names.names.len()
-        );
-    }
-    let (parameter, body) = match stylesheet.themes.first() {
-        Some(first) => {
-            let mut arms = vec![format!(
-                "None | Some({:?}) => &{}",
-                first.name,
-                constant(prefix, Some(&first.name))
-            )];
-            for theme in &stylesheet.themes[1..] {
-                arms.push(format!(
-                    "Some({:?}) => &{}",
-                    theme.name,
-                    constant(prefix, Some(&theme.name))
-                ));
+        ));
+        out.indented(|out| -> Result<(), brul_syntax::error::Error> {
+            for name in &names.names {
+                let class = brul_gui::style::class(stylesheet, name, theme).map_err(|error| {
+                    error_at(
+                        Position { line: 1, column: 1 },
+                        format!("class '{name}': {error}"),
+                    )
+                })?;
+                class::literal(out, &class);
+                out.push(format_args!(","));
+                out.end();
             }
-            arms.push(format!(
-                "Some(_) => &{}",
-                constant(prefix, Some(&first.name))
-            ));
-            (
-                "theme",
-                format!(
-                    "match theme {{\n        {},\n    }}",
-                    arms.join(",\n        ")
-                ),
-            )
+            Ok(())
+        })?;
+        out.line(format_args!("];"));
+    }
+    out.end();
+    out.line(format_args!(
+        "fn {prefix}classes({}: Option<&str>) -> &'static [brul::gui::Class] {{",
+        parameter(stylesheet)
+    ));
+    out.indented(|out| match stylesheet.themes.first() {
+        Some(first) => {
+            out.line(format_args!("match theme {{"));
+            out.indented(|out| {
+                out.line(format_args!(
+                    "None | Some({:?}) => &{},",
+                    first.name,
+                    constant(prefix, Some(&first.name))
+                ));
+                for theme in &stylesheet.themes[1..] {
+                    out.line(format_args!(
+                        "Some({:?}) => &{},",
+                        theme.name,
+                        constant(prefix, Some(&theme.name))
+                    ));
+                }
+                out.line(format_args!(
+                    "Some(_) => &{},",
+                    constant(prefix, Some(&first.name))
+                ));
+            });
+            out.line(format_args!("}}"));
         }
-        None => ("_theme", format!("&{}", constant(prefix, None))),
-    };
-    let _ = writeln!(
-        out,
-        "\nfn {prefix}classes({parameter}: Option<&str>) -> &'static [brul::gui::Class] {{\n    {body}\n}}"
-    );
+        None => out.line(format_args!("&{}", constant(prefix, None))),
+    });
+    out.line(format_args!("}}"));
     Ok(())
 }
 
-fn indent(text: &str, prefix: &str) -> String {
-    text.lines()
-        .map(|line| format!("{prefix}{line}"))
-        .collect::<Vec<_>>()
-        .join("\n")
+fn parameter(stylesheet: &Stylesheet) -> &'static str {
+    if stylesheet.themes.is_empty() {
+        "_theme"
+    } else {
+        "theme"
+    }
 }
 
 fn themes(stylesheet: &Stylesheet) -> Vec<Option<&str>> {
@@ -124,42 +129,42 @@ pub(super) fn table(prefix: &str) -> String {
     format!("{prefix}class_table(theme)")
 }
 
-pub(super) fn tables(out: &mut String, prefix: &str, stylesheet: &Stylesheet) {
-    let mut themes: Vec<Option<&str>> = stylesheet
-        .themes
-        .iter()
-        .map(|theme| Some(theme.name.as_str()))
-        .collect();
-    if themes.is_empty() {
-        themes.push(None);
-    }
-    for theme in themes {
-        let _ = writeln!(
-            out,
-            "\n#[allow(dead_code)]\nfn {}(name: &str) -> Option<brul::gui::Class> {{\n    brul::gui::style::class({prefix}styles(), name, {:?}).ok()\n}}",
-            name(prefix, theme),
-            theme
-        );
+pub(super) fn tables(out: &mut Out<'_>, prefix: &str, stylesheet: &Stylesheet) {
+    for theme in themes(stylesheet) {
+        out.end();
+        out.line(format_args!("#[allow(dead_code)]"));
+        out.line(format_args!(
+            "fn {}(name: &str) -> Option<brul::gui::Class> {{",
+            name(prefix, theme)
+        ));
+        out.indented(|out| {
+            out.line(format_args!(
+                "brul::gui::style::class({prefix}styles(), name, {:?}).ok()",
+                theme
+            ));
+        });
+        out.line(format_args!("}}"));
     }
     let (parameter, body) = match stylesheet.themes.first() {
         Some(first) => {
             let first_name = name(prefix, Some(&first.name));
             let mut arms = format!("None | Some({:?}) => {first_name}", first.name);
             for theme in &stylesheet.themes[1..] {
-                let _ = write!(
-                    arms,
+                arms.push_str(&format!(
                     ", Some({:?}) => {}",
                     theme.name,
                     name(prefix, Some(&theme.name))
-                );
+                ));
             }
-            let _ = write!(arms, ", Some(_) => {first_name}");
+            arms.push_str(&format!(", Some(_) => {first_name}"));
             ("theme", format!("match theme {{ {arms} }}"))
         }
         None => ("_theme", name(prefix, None)),
     };
-    let _ = writeln!(
-        out,
-        "\nfn {prefix}class_table({parameter}: Option<&str>) -> brul::ClassTable {{\n    {body}\n}}"
-    );
+    out.end();
+    out.line(format_args!(
+        "fn {prefix}class_table({parameter}: Option<&str>) -> brul::ClassTable {{"
+    ));
+    out.indented(|out| out.line(format_args!("{body}")));
+    out.line(format_args!("}}"));
 }

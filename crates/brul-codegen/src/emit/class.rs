@@ -4,6 +4,8 @@ use brul_gui::{
     Class, Layers, LayoutPatch, StyleState, TextStylePatch, Transitions, WidgetStylePatch,
 };
 
+use super::Out;
+
 macro_rules! fields {
     ($out:expr, $patch:expr, $type:ident, { $($field:ident $(=> $convert:path)?),+ $(,)? }) => {{
         let brul_gui::$type { $($field),+ } = *$patch;
@@ -30,19 +32,24 @@ macro_rules! fields {
     };
 }
 
-pub(super) fn literal(class: &Class) -> String {
-    format!(
-        "brul::gui::Class {{\n\
-         \x20   layout: {},\n\
-         \x20   style: {},\n\
-         \x20   text: {},\n\
-         \x20   transitions: {},\n\
-         }}",
-        layout(&class.layout),
-        style(&class.style),
-        text(&class.text),
-        transitions(&class.transitions)
-    )
+pub(super) fn literal(out: &mut Out<'_>, class: &Class) {
+    out.line(format_args!("brul::gui::Class {{"));
+    out.indented(|out| {
+        out.line(format_args!("layout: {},", layout(&class.layout)));
+        out.start(format_args!("style: "));
+        style(out, &class.style);
+        out.push(format_args!(","));
+        out.end();
+        out.start(format_args!("text: "));
+        text(out, &class.text);
+        out.push(format_args!(","));
+        out.end();
+        out.line(format_args!(
+            "transitions: {},",
+            transitions(&class.transitions)
+        ));
+    });
+    out.start(format_args!("}}"));
 }
 
 fn layout(patch: &LayoutPatch) -> String {
@@ -62,32 +69,34 @@ fn layout(patch: &LayoutPatch) -> String {
     out
 }
 
-fn style(layers: &Layers<WidgetStylePatch>) -> String {
-    let mut out = format!("brul::gui::Layers::new({})", widget_patch(&layers.base()));
-    for state in StyleState::ALL {
-        if let Some(patch) = layers.patch(state) {
-            let _ = write!(
-                out,
-                "\n        .with(brul::gui::StyleState::{state:?}, {})",
-                widget_patch(&patch)
-            );
-        }
-    }
-    out
+fn style(out: &mut Out<'_>, layers: &Layers<WidgetStylePatch>) {
+    out.push(format_args!(
+        "brul::gui::Layers::new({})",
+        widget_patch(&layers.base())
+    ));
+    states(out, layers, widget_patch);
 }
 
-fn text(layers: &Layers<TextStylePatch>) -> String {
-    let mut out = format!("brul::gui::Layers::new({})", text_patch(&layers.base()));
+fn text(out: &mut Out<'_>, layers: &Layers<TextStylePatch>) {
+    out.push(format_args!(
+        "brul::gui::Layers::new({})",
+        text_patch(&layers.base())
+    ));
+    states(out, layers, text_patch);
+}
+
+fn states<T: Copy>(out: &mut Out<'_>, layers: &Layers<T>, patch_text: impl Fn(&T) -> String) {
     for state in StyleState::ALL {
         if let Some(patch) = layers.patch(state) {
-            let _ = write!(
-                out,
-                "\n        .with(brul::gui::StyleState::{state:?}, {})",
-                text_patch(&patch)
-            );
+            out.end();
+            out.indented(|out| {
+                out.start(format_args!(
+                    ".with(brul::gui::StyleState::{state:?}, {})",
+                    patch_text(&patch)
+                ));
+            });
         }
     }
-    out
 }
 
 fn widget_patch(patch: &WidgetStylePatch) -> String {

@@ -11,6 +11,7 @@ use crate::Definition;
 use crate::error_at;
 
 use super::Emit;
+use super::Out;
 use super::StructureNames;
 use super::classes::ClassNames;
 use super::{classes, events, names, resources, script, style, theme, view};
@@ -129,11 +130,16 @@ fn module_at(
         configs.push(config);
     }
     theme::id(&mut head, &parsed.stylesheet)?;
-    classes::statics(&mut head, "", &parsed.stylesheet, &class_names)?;
+    classes::statics(
+        &mut Out::new(&mut head),
+        "",
+        &parsed.stylesheet,
+        &class_names,
+    )?;
     if dynamic_classes {
-        classes::tables(&mut head, "", &parsed.stylesheet);
+        classes::tables(&mut Out::new(&mut head), "", &parsed.stylesheet);
     }
-    style::stylesheet(&mut head, "", &parsed.stylesheet);
+    style::stylesheet(&mut Out::new(&mut head), "", &parsed.stylesheet);
     head.push_str(&resources::functions("", &registry.resources));
 
     let mut files = Vec::new();
@@ -174,10 +180,15 @@ fn module_at(
             false,
         )?;
         if dynamic_classes {
-            classes::tables(&mut body, &prefix, &definition.stylesheet);
+            classes::tables(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
         }
-        classes::statics(&mut body, &prefix, &definition.stylesheet, &class_names)?;
-        style::stylesheet(&mut body, &prefix, &definition.stylesheet);
+        classes::statics(
+            &mut Out::new(&mut body),
+            &prefix,
+            &definition.stylesheet,
+            &class_names,
+        )?;
+        style::stylesheet(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
         let script_file = format!("{name}.script");
         body.push_str(&script::program(
             &format!("{prefix}script"),

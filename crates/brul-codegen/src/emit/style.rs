@@ -1,125 +1,125 @@
-use std::fmt::Write;
+use brul_syntax::style::{ClassRule, Color, ColorExpr, ColorValue, Kind, Stylesheet, Theme, Value};
 
-use brul_syntax::style::{
-    Animation, ClassRule, Color, ColorExpr, ColorValue, Kind, Property, Stylesheet, Theme,
-    ThemeEntry, Value,
-};
+use super::Out;
 
-pub(super) fn stylesheet(out: &mut String, prefix: &str, sheet: &Stylesheet) {
-    let themes = sheet
-        .themes
-        .iter()
-        .map(theme_line)
-        .collect::<Vec<_>>()
-        .join("\n");
-    let entries = sheet
-        .rules
-        .iter()
-        .map(rule_block)
-        .collect::<Vec<_>>()
-        .join("\n");
-    let _ = write!(
-        out,
-        "\n#[allow(dead_code)]\nfn {prefix}styles() -> &'static brul::style::Stylesheet {{
-    use brul::style as s;
-
-    static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {{
-        themes: {},
-        rules: {},
-    }});
-    &STYLES
-}}
-
-fn {prefix}styled(
-    mut widget: brul::gui::Widget,
-    indices: &[usize],
-    theme: Option<&str>,
-) -> brul::gui::Widget {{
-    let table = {prefix}classes(theme);
-    for index in indices {{
-        widget = widget.with_class(&table[*index]);
-    }}
-    widget
-}}
-",
-        list(&themes, "        "),
-        list(&entries, "        ")
-    );
+pub(super) fn stylesheet(out: &mut Out<'_>, prefix: &str, sheet: &Stylesheet) {
+    out.end();
+    out.line(format_args!("#[allow(dead_code)]"));
+    out.line(format_args!(
+        "fn {prefix}styles() -> &'static brul::style::Stylesheet {{"
+    ));
+    out.indented(|out| {
+        out.line(format_args!("use brul::style as s;"));
+        out.end();
+        out.line(format_args!(
+            "static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {{"
+        ));
+        out.indented(|out| {
+            out.start(format_args!("themes: "));
+            list(out, sheet.themes.is_empty(), |out| {
+                for theme in &sheet.themes {
+                    theme_line(out, theme);
+                }
+            });
+            out.push(format_args!(","));
+            out.end();
+            out.start(format_args!("rules: "));
+            list(out, sheet.rules.is_empty(), |out| {
+                for rule in &sheet.rules {
+                    rule_block(out, rule);
+                }
+            });
+            out.push(format_args!(","));
+            out.end();
+        });
+        out.line(format_args!("}});"));
+        out.line(format_args!("&STYLES"));
+    });
+    out.line(format_args!("}}"));
+    out.end();
+    out.line(format_args!("fn {prefix}styled("));
+    out.indented(|out| {
+        out.line(format_args!("mut widget: brul::gui::Widget,"));
+        out.line(format_args!("indices: &[usize],"));
+        out.line(format_args!("theme: Option<&str>,"));
+    });
+    out.line(format_args!(") -> brul::gui::Widget {{"));
+    out.indented(|out| {
+        out.line(format_args!("let table = {prefix}classes(theme);"));
+        out.line(format_args!("for index in indices {{"));
+        out.indented(|out| {
+            out.line(format_args!("widget = widget.with_class(&table[*index]);"));
+        });
+        out.line(format_args!("}}"));
+        out.line(format_args!("widget"));
+    });
+    out.line(format_args!("}}"));
 }
 
-fn theme_line(theme: &Theme) -> String {
-    let entries = theme
-        .properties
-        .iter()
-        .map(entry_line)
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!(
-        "            s::Theme {{ name: {:?}.into(), properties: {} }},",
-        theme.name,
-        list(&entries, "            ")
-    )
+fn theme_line(out: &mut Out<'_>, theme: &Theme) {
+    out.start(format_args!(
+        "s::Theme {{ name: {:?}.into(), properties: ",
+        theme.name
+    ));
+    list(out, theme.properties.is_empty(), |out| {
+        for entry in &theme.properties {
+            out.line(format_args!(
+                "s::ThemeEntry {{ key: {:?}.into(), value: {} }},",
+                entry.key,
+                value(&entry.value)
+            ));
+        }
+    });
+    out.push(format_args!(" }},"));
+    out.end();
 }
 
-fn entry_line(entry: &ThemeEntry) -> String {
-    format!(
-        "                s::ThemeEntry {{ key: {:?}.into(), value: {} }},",
-        entry.key,
-        value(&entry.value)
-    )
-}
-
-fn rule_block(rule: &ClassRule) -> String {
+fn rule_block(out: &mut Out<'_>, rule: &ClassRule) {
     let state = match rule.state {
         Some(state) => format!("Some(s::State::{state:?})"),
         None => "None".to_owned(),
     };
-    let properties = rule
-        .properties
-        .iter()
-        .map(property_line)
-        .collect::<Vec<_>>()
-        .join("\n");
-    let animations = rule
-        .animations
-        .iter()
-        .map(animation_line)
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!(
-        "            s::ClassRule {{
-                class: {:?}.into(),
-                state: {state},
-                properties: {},
-                animations: {},
-            }},",
-        rule.class,
-        list(&properties, "                "),
-        list(&animations, "                ")
-    )
+    out.line(format_args!("s::ClassRule {{"));
+    out.indented(|out| {
+        out.line(format_args!("class: {:?}.into(),", rule.class));
+        out.line(format_args!("state: {state},"));
+        out.start(format_args!("properties: "));
+        list(out, rule.properties.is_empty(), |out| {
+            for property in &rule.properties {
+                out.line(format_args!(
+                    "s::Property {{ kind: {}, value: {} }},",
+                    kind(property.kind),
+                    value(&property.value)
+                ));
+            }
+        });
+        out.push(format_args!(","));
+        out.end();
+        out.start(format_args!("animations: "));
+        list(out, rule.animations.is_empty(), |out| {
+            for animation in &rule.animations {
+                out.line(format_args!(
+                    "s::Animation {{ property: {}, duration: {:?} }},",
+                    kind(animation.property),
+                    animation.duration
+                ));
+            }
+        });
+        out.push(format_args!(","));
+        out.end();
+    });
+    out.line(format_args!("}},"));
 }
 
-fn property_line(property: &Property) -> String {
-    format!(
-        "                    s::Property {{ kind: {}, value: {} }},",
-        kind(property.kind),
-        value(&property.value)
-    )
-}
-
-fn animation_line(animation: &Animation) -> String {
-    format!(
-        "                    s::Animation {{ property: {}, duration: {:?} }},",
-        kind(animation.property),
-        animation.duration
-    )
-}
-
-fn list(entries: &str, indent: &str) -> String {
-    if entries.is_empty() {
-        return "vec![]".to_owned();
+fn list(out: &mut Out<'_>, empty: bool, body: impl FnOnce(&mut Out<'_>)) {
+    if empty {
+        out.push(format_args!("vec![]"));
+        return;
     }
-    format!("vec![\n{entries}\n{indent}]")
+    out.push(format_args!("vec!["));
+    out.end();
+    out.indented(body);
+    out.start(format_args!("]"));
 }
 
 fn kind(value: Kind) -> String {
