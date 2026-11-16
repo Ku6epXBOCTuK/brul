@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::rc::Rc;
 
 use bropicker::launcher::{Launcher, Runner};
@@ -202,20 +203,24 @@ fn remembered_value(config: &Config) -> Value {
     )
 }
 
-fn main() {
+fn main() -> ExitCode {
     brul::logging::init();
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         error!(panic = %info, "panic");
         default(info);
     }));
-    if let Err(error) = run() {
-        error!(%error, "bropicker failed");
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            error!(%error, "bropicker failed");
+            ExitCode::FAILURE
+        }
     }
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    let config = Config::load_default()?;
+    let config = Config::load_default();
     let url = std::env::args().nth(1);
     if let Some(url) = url.as_deref()
         && let Some(browser) = auto_browser(&config, url)

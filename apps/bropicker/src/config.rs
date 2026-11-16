@@ -34,6 +34,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use brul::logging::warn;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -248,7 +249,7 @@ impl Config {
         Self::parse_at(&source, Some(path))
     }
 
-    pub fn load_default() -> Result<Self, ConfigError> {
+    pub fn load_default() -> Self {
         Self::load_or_default(&default_path())
     }
 
@@ -275,14 +276,20 @@ impl Config {
         self.save(default_path())
     }
 
-    fn load_or_default(path: &Path) -> Result<Self, ConfigError> {
+    fn load_or_default(path: &Path) -> Self {
         match std::fs::read_to_string(path) {
-            Ok(source) => Self::parse_at(&source, Some(path)),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(error) => Err(ConfigError::Read {
-                path: path.to_path_buf(),
-                message: error.to_string(),
-            }),
+            Ok(source) => match Self::parse_at(&source, Some(path)) {
+                Ok(config) => config,
+                Err(error) => {
+                    warn!(%error, "config is unusable, using the defaults");
+                    Self::default()
+                }
+            },
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Self::default(),
+            Err(error) => {
+                warn!(path = %path.display(), %error, "config is unreadable, using the defaults");
+                Self::default()
+            }
         }
     }
 
@@ -457,7 +464,17 @@ mod tests {
 
     #[test]
     fn missing_file_loads_the_default_config() {
-        let config = Config::load_or_default(&temp_file("missing")).expect("default config");
+        let config = Config::load_or_default(&temp_file("missing"));
+
+        assert_eq!(config, Config::default());
+    }
+
+    #[test]
+    fn broken_file_loads_the_default_config() {
+        let path = temp_file("broken");
+        std::fs::write(&path, "browsers = [1, 2\n").expect("write config");
+        let config = Config::load_or_default(&path);
+        let _ = std::fs::remove_file(&path);
 
         assert_eq!(config, Config::default());
     }
@@ -466,7 +483,7 @@ mod tests {
     fn existing_file_is_parsed_on_load() {
         let path = temp_file("present");
         std::fs::write(&path, "theme = \"light\"\n").expect("write config");
-        let config = Config::load_or_default(&path).expect("parsed config");
+        let config = Config::load_or_default(&path);
         let _ = std::fs::remove_file(&path);
 
         assert_eq!(config.theme, Theme::Light);
@@ -609,10 +626,10 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_path_is_reported_as_a_read_error() {
-        assert!(matches!(
+    fn unreadable_path_loads_the_default_config() {
+        assert_eq!(
             Config::load_or_default(Path::new("config\0.toml")),
-            Err(ConfigError::Read { .. })
-        ));
+            Config::default()
+        );
     }
 }
