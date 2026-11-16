@@ -45,6 +45,7 @@ where
         Rc::clone(&error),
     );
     let result = event_loop.run_app(app);
+    crate::perf::exit();
 
     if let Some(error) = error.take() {
         return Err(error);

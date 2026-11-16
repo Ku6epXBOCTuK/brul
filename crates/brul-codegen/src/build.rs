@@ -10,6 +10,7 @@ use brul_syntax::error;
 use crate::emit::split_module_file;
 
 const VIEW: &str = "view.rs";
+const ALLOCATIONS: &str = "allocations.rs";
 
 #[derive(thiserror::Error)]
 pub enum Error {
@@ -29,11 +30,17 @@ impl fmt::Debug for Error {
 }
 
 pub fn app(entry: impl AsRef<Path>) -> Result<(), Error> {
+    println!("cargo:rerun-if-env-changed=BRUL_ALLOC_COUNT");
+    println!("cargo:rustc-check-cfg=cfg(brul_alloc_count)");
+    if env::var_os("BRUL_ALLOC_COUNT").is_some_and(|value| value != "0" && !value.is_empty()) {
+        println!("cargo:rustc-cfg=brul_alloc_count");
+    }
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let entry = root.join(entry);
     let module = split_module_file(&entry)?;
     let output = PathBuf::from(env::var("OUT_DIR")?);
     fs::write(output.join(VIEW), &module.root)?;
+    fs::write(output.join(ALLOCATIONS), crate::emit::allocations())?;
     for file in &module.files {
         fs::write(output.join(format!("{}.rs", file.name)), &file.source)?;
     }

@@ -19,6 +19,7 @@
 
 mod gpu;
 mod input;
+pub mod perf;
 mod surface;
 mod tree;
 mod window;

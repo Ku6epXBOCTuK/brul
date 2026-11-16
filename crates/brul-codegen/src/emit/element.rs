@@ -219,7 +219,7 @@ fn container(
             out.line(format_args!("children"));
             Ok(())
         })?;
-        out.start(format_args!("}}}})"));
+        out.start(format_args!("}})"));
         return Ok(());
     }
     out.push(format_args!("brul::gui::Widget::{call}(vec!["));

@@ -6,6 +6,7 @@ use crate::{Import, Registry, Resource};
 
 pub(super) use structure::StructureNames;
 
+mod alloc;
 mod class;
 mod classes;
 mod component;
@@ -22,6 +23,7 @@ mod style;
 mod theme;
 mod view;
 
+pub use alloc::allocations;
 pub use expression::{expression, operation};
 pub use module::{GeneratedFile, Module, module, module_file, split_module_file};
 pub(super) use out::Out;

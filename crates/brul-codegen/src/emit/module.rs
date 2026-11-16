@@ -14,7 +14,7 @@ use super::Emit;
 use super::Out;
 use super::StructureNames;
 use super::classes::ClassNames;
-use super::{classes, events, names, resources, script, style, theme, view};
+use super::{alloc, classes, events, names, resources, script, style, theme, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
 const ROOT_SCRIPT: &str = "view.script";
@@ -88,6 +88,7 @@ fn module_at(
     let mut head_functions = String::new();
     let mut configs = Vec::new();
 
+    alloc::include(&mut head);
     head.push_str(HEADER);
     let mut dynamic_classes = false;
     let mut class_names = ClassNames::default();
@@ -387,7 +388,9 @@ fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfi
 }
 
 fn window_table(out: &mut String, windows: &[Window], bases: &[String]) {
-    out.push_str("pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {\n    vec![\n");
+    out.push_str("pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {\n");
+    alloc::registration(out);
+    out.push_str("    vec![\n");
     for (index, window) in windows.iter().enumerate() {
         let base = &bases[index];
         let _ = writeln!(

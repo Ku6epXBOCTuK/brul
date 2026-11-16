@@ -25,6 +25,7 @@ pub use brul_style as style;
 pub use brul_syntax::ast;
 pub use brul_syntax::markup::PropType;
 pub use brul_syntax::script;
+pub use brul_window::perf;
 pub use brul_window::{WindowConfig, WindowPosition};
 pub use handle::{Handle, Signal};
 pub use run::{WindowDef, run_generated, run_generated_with};

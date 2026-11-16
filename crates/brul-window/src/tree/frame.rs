@@ -117,6 +117,7 @@ impl TreeApp {
         if !self.revealed {
             self.revealed = true;
             surface.set_visible(self.config.visible);
+            crate::perf::first_frame();
         }
         Ok(())
     }

@@ -11,8 +11,7 @@ window Demo (title: "demo") {
 }
 </markup>
 "#;
-    let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn demo_view(theme: Option<ThemeId>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let expected = r#"pub fn demo_view(theme: Option<ThemeId>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
     let theme = theme.map(brul::Theme::name);
     component.borrow_mut().set_names(names());
     let mut bindings = Vec::new();
@@ -110,6 +109,8 @@ pub fn demo_window() -> brul::WindowConfig {
 }
 
 pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
+    #[cfg(brul_alloc_count)]
+    brul::perf::measure(brul_allocations::reset, brul_allocations::report);
     vec![
         brul::WindowDef { name: "Demo", config: demo_window(), view: demo_view },
     ]
@@ -123,7 +124,36 @@ pub fn names() -> &'static [&'static str] {
     &[]
 }
 "#;
-    assert_eq!(emit::module(source).expect("module"), expected);
+    assert_eq!(views(emit::module(source).expect("module")), expected);
+}
+
+fn views(module: String) -> String {
+    module
+        .split_once("\npub fn ")
+        .map(|(_, rest)| format!("pub fn {rest}"))
+        .expect("a generated view")
+}
+
+#[test]
+fn emits_the_allocation_counter() {
+    let module = emit::module(
+        r#"<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#,
+    )
+    .expect("module");
+
+    assert!(module.contains("include!(concat!(env!(\"OUT_DIR\"), \"/allocations.rs\"));"));
+    let allocations = emit::allocations();
+    assert!(allocations.contains("#[cfg(brul_alloc_count)]\nmod brul_allocations {"));
+    assert!(allocations.contains("#[global_allocator]"));
+    assert!(allocations.contains("REALLOCATIONS.fetch_add(1, Ordering::Relaxed);"));
+    assert!(
+        module.contains("brul::perf::measure(brul_allocations::reset, brul_allocations::report);")
+    );
 }
 
 #[test]
@@ -150,8 +180,7 @@ window Styled (title: "styled") {
 }
 </markup>
 "#;
-    let expected = r#"#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn styled_view(theme: Option<ThemeId>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let expected = r#"pub fn styled_view(theme: Option<ThemeId>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
     let theme = theme.map(brul::Theme::name);
     component.borrow_mut().set_names(names());
     let mut bindings = Vec::new();
@@ -300,6 +329,8 @@ pub fn styled_window() -> brul::WindowConfig {
 }
 
 pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
+    #[cfg(brul_alloc_count)]
+    brul::perf::measure(brul_allocations::reset, brul_allocations::report);
     vec![
         brul::WindowDef { name: "Styled", config: styled_window(), view: styled_view },
     ]
@@ -313,7 +344,7 @@ pub fn names() -> &'static [&'static str] {
     &[]
 }
 "#;
-    assert_eq!(emit::module(source).expect("module"), expected);
+    assert_eq!(views(emit::module(source).expect("module")), expected);
 }
 
 #[test]
