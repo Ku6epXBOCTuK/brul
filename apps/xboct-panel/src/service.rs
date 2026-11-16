@@ -138,13 +138,15 @@ pub struct Started {
     pub failed: Vec<(String, ServiceError)>,
 }
 
-pub fn query_all(specs: &[Entry]) -> Result<Vec<Service>, ServiceError> {
+pub type Queried = (String, Result<Service, ServiceError>);
+
+pub fn query_all(specs: &[Entry]) -> Result<Vec<Queried>, ServiceError> {
     let manager = Manager::open()?;
-    specs
+    Ok(specs
         .iter()
         .filter(|spec| spec.kind == EntryKind::Service)
-        .map(|spec| manager.query(spec))
-        .collect()
+        .map(|spec| (spec.name.clone(), manager.query(spec)))
+        .collect())
 }
 
 pub fn start(name: &str) -> Result<(), ServiceError> {
@@ -171,7 +173,13 @@ pub fn start_manual(specs: &[Entry]) -> Result<Started, ServiceError> {
     let manager = Manager::open()?;
     let mut report = Started::default();
     for spec in specs.iter().filter(|spec| spec.kind == EntryKind::Service) {
-        let service = manager.query(spec)?;
+        let service = match manager.query(spec) {
+            Ok(service) => service,
+            Err(failure) => {
+                report.failed.push((spec.name.clone(), failure));
+                continue;
+            }
+        };
         if !needs_start(service.state, service.start_type) {
             continue;
         }
@@ -337,6 +345,20 @@ mod tests {
         assert_eq!(StartType::from_raw(SYSTEM_START), StartType::System);
         assert_eq!(StartType::from_raw(42), StartType::Unknown(42));
         assert_eq!(StartType::Manual.to_string(), "manual");
+    }
+
+    #[test]
+    fn a_service_that_the_manager_does_not_know_does_not_fail_the_query() {
+        let entry = Entry {
+            name: String::from("xboct-panel-no-such-service"),
+            kind: EntryKind::Service,
+            ..Entry::default()
+        };
+
+        let queried = query_all(std::slice::from_ref(&entry)).expect("the manager opens");
+
+        assert_eq!(queried.len(), 1);
+        assert!(queried[0].1.is_err());
     }
 
     #[test]

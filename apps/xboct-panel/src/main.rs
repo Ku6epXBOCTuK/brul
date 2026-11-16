@@ -370,10 +370,15 @@ fn collect(specs: &[Entry], consoles: &mut Consoles) -> Result<Vec<Value>, Servi
     Ok(specs
         .iter()
         .filter_map(|spec| match spec.kind {
-            EntryKind::Service => services
-                .iter()
-                .find(|service| service.name == spec.name)
-                .map(row),
+            EntryKind::Service => {
+                services
+                    .iter()
+                    .find(|(name, _)| name == &spec.name)
+                    .map(|(_, found)| match found {
+                        Ok(service) => row(service),
+                        Err(failure) => failed_row(spec, failure),
+                    })
+            }
             EntryKind::Program => programs
                 .iter()
                 .find(|program| program.name == spec.name)
@@ -460,6 +465,28 @@ fn row(service: &Service) -> Value {
                     .port
                     .map_or_else(String::new, |port| port.to_string()),
             ),
+        ),
+    ]))
+}
+
+fn failed_row(spec: &Entry, failure: &ServiceError) -> Value {
+    Value::Object(Rc::new(vec![
+        (String::from("name"), text(spec.name.clone())),
+        (
+            String::from("display"),
+            text(spec.display.clone().unwrap_or_else(|| spec.name.clone())),
+        ),
+        (String::from("state"), text(failure.to_string())),
+        (
+            String::from("start"),
+            text(
+                spec.start
+                    .map_or_else(String::new, |start| start.to_string()),
+            ),
+        ),
+        (
+            String::from("port"),
+            text(spec.port.map_or_else(String::new, |port| port.to_string())),
         ),
     ]))
 }
@@ -616,8 +643,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        Console, Draft, Entry, Program, Restart, Service, StartMode, Value, console_row, describe,
-        draft_value, launched, log_text, program_row, row,
+        Console, Draft, Entry, EntryKind, Program, Restart, Service, StartMode, Value, console_row,
+        describe, draft_value, failed_row, launched, log_text, program_row, row,
     };
     use xboct_panel::{ProgramState, ServiceError, ServiceState, StartType, Started};
 
@@ -652,6 +679,29 @@ mod tests {
         assert_eq!(field(&row, "state").as_text(), Some("running"));
         assert_eq!(field(&row, "start").as_text(), Some("automatic"));
         assert_eq!(field(&row, "port").as_text(), Some("8080"));
+    }
+
+    #[test]
+    fn a_service_that_the_manager_does_not_know_keeps_a_row_with_the_error() {
+        let entry = Entry {
+            name: String::from("typo"),
+            kind: EntryKind::Service,
+            port: Some(1234),
+            start: Some(StartMode::Manual),
+            ..Entry::default()
+        };
+        let failure = ServiceError::Open {
+            name: String::from("typo"),
+            code: 1060,
+        };
+
+        let row = failed_row(&entry, &failure);
+
+        assert_eq!(field(&row, "name").as_text(), Some("typo"));
+        assert_eq!(field(&row, "display").as_text(), Some("typo"));
+        assert_eq!(field(&row, "port").as_text(), Some("1234"));
+        assert_eq!(field(&row, "start").as_text(), Some("manual"));
+        assert!(field(&row, "state").as_text().unwrap().contains("1060"));
     }
 
     #[test]
