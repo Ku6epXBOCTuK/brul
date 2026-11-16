@@ -6,10 +6,11 @@ use std::process::ExitCode;
 use std::rc::Rc;
 
 use brul::Value;
-use brul::logging::{error, info};
+use brul::logging::{error, info, warn};
 use brul::{command, host};
 
 use xboct_panel::autostart::{self, AutostartError};
+use xboct_panel::ipc;
 use xboct_panel::single;
 use xboct_panel::{
     Config, ConfigError, Console, Consoles, Entry, EntryKind, Program, Restart, Service,
@@ -545,6 +546,12 @@ fn main() -> ExitCode {
         Some("--install") => return autostart_command(true),
         Some("--uninstall") => return autostart_command(false),
         Some("--autostart") => autostart = true,
+        Some("--quit") => {
+            if let Err(failure) = ipc::send(ipc::QUIT) {
+                info!(%failure, "no running panel to quit");
+            }
+            return ExitCode::SUCCESS;
+        }
         Some(argument) => {
             eprintln!("panel: unknown argument '{argument}'");
             return ExitCode::FAILURE;
@@ -568,6 +575,14 @@ fn main() -> ExitCode {
         }
         return ExitCode::SUCCESS;
     }
+
+    let command_socket = match ipc::bind() {
+        Ok(socket) => Some(socket),
+        Err(failure) => {
+            warn!(%failure, "ipc is unavailable");
+            None
+        }
+    };
 
     let path = default_path();
     let config = match Config::load_or_create(&path) {
@@ -618,6 +633,11 @@ fn main() -> ExitCode {
         &seeds,
         Some(Box::new(host)),
         move |handle| {
+            if let Some(socket) = command_socket
+                && let Err(failure) = ipc::serve(socket, handle.clone())
+            {
+                warn!(%failure, "ipc listener is unavailable");
+            }
             xboct_panel::tray::warn_missing(xboct_panel::tray::install(handle.clone()));
             if autostart {
                 handle.call("startHidden");

@@ -4,6 +4,7 @@ pub mod autostart;
 pub mod config;
 pub mod console;
 pub mod generated;
+pub mod ipc;
 pub mod log;
 pub mod nssm;
 pub mod program;
