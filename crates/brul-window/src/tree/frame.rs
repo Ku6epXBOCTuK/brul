@@ -58,6 +58,7 @@ impl TreeApp {
         } else {
             self.frame = Some(Frame::new(width, height));
         }
+        self.presented = false;
         surface.redraw();
         Step::Continue
     }
@@ -107,13 +108,16 @@ impl TreeApp {
             return Ok(());
         };
 
-        if rebuild || !dirty.is_empty() {
+        let changed = rebuild || !dirty.is_empty();
+        if changed {
             let mut tree = self.tree.borrow_mut();
             let snapshot = tree.snapshot()?;
             frame.paint(snapshot, engine.atlas(), &dirty);
         }
 
-        renderer.present(surface, frame);
+        if changed || !self.presented {
+            self.presented = renderer.present(surface, frame);
+        }
         let (width, height) = surface.size();
         crate::perf::startup(surface.scale_factor(), width, height);
         if !self.revealed {

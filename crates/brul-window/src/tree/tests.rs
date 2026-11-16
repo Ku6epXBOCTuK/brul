@@ -90,9 +90,32 @@ impl Renderer for FakeRenderer {
             .push(format!("resize {width}x{height}"));
     }
 
-    fn present(&mut self, _surface: &dyn Surface, _frame: &Frame) {
+    fn present(&mut self, _surface: &dyn Surface, _frame: &Frame) -> bool {
         self.calls.borrow_mut().push("present".to_owned());
+        true
     }
+}
+
+fn renderable_app() -> (TreeApp, FakeSurface, Rc<RefCell<Vec<String>>>) {
+    let surface = FakeSurface::new(1.0);
+    let mut app = tree_app(commands(Vec::new()));
+    let (renderer, calls) = FakeRenderer::new();
+    app.renderer = Some(Box::new(renderer));
+    let mut engine = TextEngine::new();
+    app.tree
+        .borrow_mut()
+        .layout(
+            &mut engine,
+            Size {
+                width: 8,
+                height: 6,
+            },
+            1.0,
+        )
+        .expect("layout");
+    app.engine = Some(engine);
+    app.frame = Some(Frame::new(8, 6));
+    (app, surface, calls)
 }
 
 fn tree_app(handler: EventHandler) -> TreeApp {
@@ -518,4 +541,33 @@ fn a_frame_is_painted_and_presented() {
 
     assert!(app.render_frame(&surface).is_ok());
     assert_eq!(calls.borrow().as_slice(), ["present"]);
+}
+
+#[test]
+fn a_frame_without_changes_is_not_presented_twice() {
+    let (mut app, surface, calls) = renderable_app();
+
+    assert!(app.render_frame(&surface).is_ok());
+    assert!(app.render_frame(&surface).is_ok());
+    assert_eq!(calls.borrow().as_slice(), ["present"]);
+}
+
+#[test]
+fn a_surface_without_the_frame_presents_it_again() {
+    let (mut app, surface, calls) = renderable_app();
+
+    assert!(app.render_frame(&surface).is_ok());
+    app.presented = false;
+    assert!(app.render_frame(&surface).is_ok());
+    assert_eq!(calls.borrow().as_slice(), ["present", "present"]);
+}
+
+#[test]
+fn a_resize_forgets_the_presented_frame() {
+    let (mut app, surface, _calls) = renderable_app();
+
+    assert!(app.render_frame(&surface).is_ok());
+    assert!(app.presented);
+    app.resize(&surface, 10, 8);
+    assert!(!app.presented);
 }

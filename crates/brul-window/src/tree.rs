@@ -62,6 +62,7 @@ pub(crate) struct TreeApp {
     ime_area: Option<CaretArea>,
     initial: Vec<WindowCommand>,
     revealed: bool,
+    presented: bool,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -115,6 +116,7 @@ pub(crate) fn tree_app(
         ime_area: None,
         initial: Vec::new(),
         revealed: false,
+        presented: false,
     };
     let (timers, initial) = timer::split_initial(initial);
     app.timers = timers;

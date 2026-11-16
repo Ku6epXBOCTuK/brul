@@ -59,7 +59,7 @@ impl Surface for Arc<dyn Window> {
 
 pub(crate) trait Renderer {
     fn resize(&mut self, width: u32, height: u32);
-    fn present(&mut self, surface: &dyn Surface, frame: &Frame);
+    fn present(&mut self, surface: &dyn Surface, frame: &Frame) -> bool;
 }
 
 impl Renderer for Gpu {
@@ -67,7 +67,7 @@ impl Renderer for Gpu {
         Gpu::resize(self, width, height);
     }
 
-    fn present(&mut self, surface: &dyn Surface, frame: &Frame) {
-        self.present_frame(surface, frame);
+    fn present(&mut self, surface: &dyn Surface, frame: &Frame) -> bool {
+        self.present_frame(surface, frame)
     }
 }
