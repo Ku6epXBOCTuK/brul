@@ -8,7 +8,8 @@ use brul::logging::{error, info};
 use brul::{command, host};
 
 use xboct_panel::{
-    Config, Entry, Service, ServiceError, Started, default_path, generated, log, service,
+    Config, Entry, EntryKind, Program, Service, Started, default_path, generated, log, program,
+    service,
 };
 
 const LOG_LINES: usize = 40;
@@ -19,13 +20,29 @@ struct AppHost {
 
 #[command]
 fn act(host: &mut AppHost, action: String, name: String) -> Result<Value, brul::Error> {
-    let status = match action.as_str() {
-        "start" => acted(service::start(&name), &action, &name),
-        "stop" => acted(service::stop(&name), &action, &name),
-        "restart" => acted(service::restart(&name), &action, &name),
-        other => format!("unknown action '{other}'"),
+    let status = match host.specs.iter().find(|spec| spec.name == name) {
+        None => format!("no entry '{name}' in the config"),
+        Some(entry) => match entry.kind {
+            EntryKind::Service => match action.as_str() {
+                "start" => acted(service::start(&name), &action, &name),
+                "stop" => acted(service::stop(&name), &action, &name),
+                "restart" => acted(service::restart(&name), &action, &name),
+                other => unknown(other),
+            },
+            EntryKind::Program => match action.as_str() {
+                "start" => acted(program::start(entry).map(|_| ()), &action, &name),
+                "stop" => acted(program::stop(entry), &action, &name),
+                "restart" => acted(program::restart(entry).map(|_| ()), &action, &name),
+                other => unknown(other),
+            },
+            EntryKind::Console => format!("console '{name}' is not supported yet"),
+        },
     };
     Ok(outcome(&host.specs, status))
+}
+
+fn unknown(action: &str) -> String {
+    format!("unknown action '{action}'")
 }
 
 #[command]
@@ -39,8 +56,8 @@ fn start_all_manual(host: &mut AppHost) -> Result<Value, brul::Error> {
 
 #[command]
 fn refresh(host: &mut AppHost, name: String) -> Result<Value, brul::Error> {
-    let (ok, services) = match service::query_all(&host.specs) {
-        Ok(services) => (true, rows(&services)),
+    let (ok, services) = match collect(&host.specs) {
+        Ok(rows) => (true, Value::Array(Rc::new(rows))),
         Err(_) => (false, Value::Null),
     };
     Ok(Value::Object(Rc::new(vec![
@@ -52,10 +69,10 @@ fn refresh(host: &mut AppHost, name: String) -> Result<Value, brul::Error> {
 
 fn log_text(specs: &[Entry], name: &str) -> String {
     if name.is_empty() {
-        return String::from("select a service to see its log");
+        return String::from("select an entry to see its log");
     }
     let Some(spec) = specs.iter().find(|spec| spec.name == name) else {
-        return format!("no service '{name}' in the config");
+        return format!("no entry '{name}' in the config");
     };
     let Some(path) = spec.log.as_deref() else {
         return format!("no log configured for '{name}'");
@@ -67,7 +84,7 @@ fn log_text(specs: &[Entry], name: &str) -> String {
     }
 }
 
-fn acted(result: Result<(), ServiceError>, action: &str, name: &str) -> String {
+fn acted<P: std::fmt::Display>(result: Result<(), P>, action: &str, name: &str) -> String {
     result.map_or_else(
         |failure| failure.to_string(),
         |()| format!("{action}: {name}"),
@@ -90,8 +107,8 @@ fn describe(report: &Started) -> String {
 }
 
 fn outcome(specs: &[Entry], status: String) -> Value {
-    let (ok, services, status) = match service::query_all(specs) {
-        Ok(services) => (true, rows(&services), status),
+    let (ok, services, status) = match collect(specs) {
+        Ok(rows) => (true, Value::Array(Rc::new(rows)), status),
         Err(failure) => (
             false,
             Value::Null,
@@ -105,8 +122,40 @@ fn outcome(specs: &[Entry], status: String) -> Value {
     ]))
 }
 
-fn rows(services: &[Service]) -> Value {
-    Value::Array(Rc::new(services.iter().map(row).collect()))
+fn collect(specs: &[Entry]) -> Result<Vec<Value>, String> {
+    let services = service::query_all(specs).map_err(|failure| failure.to_string())?;
+    let programs = program::query_all(specs);
+    Ok(specs
+        .iter()
+        .filter_map(|spec| match spec.kind {
+            EntryKind::Service => services
+                .iter()
+                .find(|service| service.name == spec.name)
+                .map(row),
+            EntryKind::Program => programs
+                .iter()
+                .find(|program| program.name == spec.name)
+                .map(program_row),
+            EntryKind::Console => None,
+        })
+        .collect())
+}
+
+fn program_row(program: &Program) -> Value {
+    Value::Object(Rc::new(vec![
+        (String::from("name"), text(program.name.clone())),
+        (String::from("display"), text(program.display.clone())),
+        (String::from("state"), text(program.state.to_string())),
+        (String::from("start"), text(String::from("program"))),
+        (
+            String::from("port"),
+            text(
+                program
+                    .port
+                    .map_or_else(String::new, |port| port.to_string()),
+            ),
+        ),
+    ]))
 }
 
 fn row(service: &Service) -> Value {
@@ -153,17 +202,17 @@ fn main() -> ExitCode {
         "starting panel"
     );
 
-    let services = match service::query_all(&config.entries) {
-        Ok(services) => services,
+    let services = match collect(&config.entries) {
+        Ok(rows) => Value::Array(Rc::new(rows)),
         Err(failure) => {
-            error!(%failure, "services are unreadable");
+            error!(%failure, "entries are unreadable");
             eprintln!("panel: {failure}");
             return ExitCode::FAILURE;
         }
     };
 
     let seeds = [
-        ("services", rows(&services)),
+        ("services", services),
         ("status", text(String::new())),
         ("selected", text(String::new())),
         ("log", text(log_text(&config.entries, ""))),
@@ -199,8 +248,8 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{Entry, Service, Value, describe, log_text, row};
-    use xboct_panel::{ServiceError, ServiceState, StartType, Started};
+    use super::{Entry, Program, Service, Value, describe, log_text, program_row, row};
+    use xboct_panel::{ProgramState, ServiceError, ServiceState, StartType, Started};
 
     fn sample() -> Service {
         Service {
@@ -271,6 +320,25 @@ mod tests {
         assert_eq!(describe(&Started::default()), "no manual services to start");
     }
 
+    #[test]
+    fn a_program_row_says_it_is_a_program() {
+        let program = Program {
+            name: String::from("caps-lang"),
+            display: String::from("caps-lang"),
+            state: ProgramState::Running,
+            port: None,
+            log: None,
+            pid: Some(7),
+        };
+
+        let row = program_row(&program);
+
+        assert_eq!(field(&row, "name").as_text(), Some("caps-lang"));
+        assert_eq!(field(&row, "state").as_text(), Some("running"));
+        assert_eq!(field(&row, "start").as_text(), Some("program"));
+        assert_eq!(field(&row, "port").as_text(), Some(""));
+    }
+
     fn spec(name: &str, log: Option<PathBuf>) -> Entry {
         Entry {
             name: String::from(name),
@@ -291,7 +359,7 @@ mod tests {
 
     #[test]
     fn a_log_without_a_selection_asks_for_one() {
-        assert_eq!(log_text(&[], ""), "select a service to see its log");
+        assert_eq!(log_text(&[], ""), "select an entry to see its log");
     }
 
     #[test]
@@ -306,7 +374,7 @@ mod tests {
     fn a_selection_unknown_to_the_config_is_reported() {
         assert_eq!(
             log_text(&[spec("sample-service", None)], "other-service"),
-            "no service 'other-service' in the config"
+            "no entry 'other-service' in the config"
         );
     }
 
