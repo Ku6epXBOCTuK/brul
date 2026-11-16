@@ -591,6 +591,7 @@ fn main() -> ExitCode {
         &seeds,
         Some(Box::new(host)),
         move |handle| {
+            xboct_panel::tray::warn_missing(xboct_panel::tray::install(handle.clone()));
             if autostart {
                 handle.call("startHidden");
             }

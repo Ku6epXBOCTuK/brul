@@ -93,6 +93,18 @@
         hideWindow();
     }
 
+    function hideToTray() {
+        hideWindow();
+    }
+
+    function trayShow() {
+        showWindow();
+    }
+
+    function trayQuit() {
+        exit();
+    }
+
     every(2000, poll);
 </script>
 
@@ -103,7 +115,7 @@
 </use>
 
 <markup>
-    window Services (title: "xboct-panel", width: 900, height: 560, centered: true) {
+    window Services (title: "xboct-panel", width: 900, height: 560, centered: true, on close: hideToTray) {
         Column (root) {
             Row (header) {
                 Text (title) { "xboct-panel" }

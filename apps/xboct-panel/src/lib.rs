@@ -25,6 +25,7 @@ pub mod single {
     }
 }
 pub(crate) mod sys;
+pub mod tray;
 
 pub use autostart::{AutostartError, Removed};
 pub use config::{Config, ConfigError, Entry, EntryKind, Restart, StartMode, default_path};
