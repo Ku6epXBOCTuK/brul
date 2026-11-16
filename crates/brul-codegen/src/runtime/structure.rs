@@ -12,7 +12,7 @@ use super::slot::{Slots, current_slots, with_slots};
 
 pub type StructureValue = fn(&mut Component) -> Result<Value, ScriptError>;
 pub type Rebuilt = Result<(Built, Vec<RowInfo>), ViewError>;
-pub type StructureRebuild = fn(Option<&str>, &ComponentHandle) -> Rebuilt;
+pub type StructureRebuild = fn(Option<&str>, &ComponentHandle, &[RowInfo]) -> Rebuilt;
 
 pub type View = fn(Option<&str>, &ComponentHandle) -> Result<Built, ViewError>;
 
@@ -33,6 +33,7 @@ pub struct RowInfo {
     pub item: Value,
     pub start: usize,
     pub count: usize,
+    pub reuse: Option<usize>,
 }
 
 pub struct Built {
@@ -84,8 +85,12 @@ pub fn take_structures() -> Vec<Structure> {
     })
 }
 
-pub fn rebuild_structure(structure: &Structure, theme: Option<&str>) -> Rebuilt {
+pub fn rebuild_structure(
+    structure: &Structure,
+    theme: Option<&str>,
+    old_rows: &[RowInfo],
+) -> Rebuilt {
     with_slots(structure.slots.clone(), || {
-        (structure.rebuild)(theme, &structure.component)
+        (structure.rebuild)(theme, &structure.component, old_rows)
     })
 }

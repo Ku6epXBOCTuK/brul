@@ -267,13 +267,32 @@ fn structure_rebuild_rebuilds_rows() {
         .iter()
         .find(|structure| structure.each)
         .expect("each structure");
-    let (rebuilt, rows) = (each.rebuild)(None, &component).expect("rebuild");
+    let (rebuilt, rows) = (each.rebuild)(None, &component, &[]).expect("rebuild");
     let rebuilt_structures = brul::take_structures();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].key, Some(Value::String("first".into())));
     assert_eq!(rows[0].count, 1);
     assert_nested_values(&rebuilt_structures);
     assert_eq!(rebuilt.widget.into_children().len(), 2);
+}
+
+#[test]
+fn structure_rebuild_reuses_matched_rows() {
+    let component = seeded();
+    let _ = generated::picker_view(None, &component).expect("generated view");
+    let structures = brul::take_structures();
+
+    let each = structures
+        .iter()
+        .find(|structure| structure.each)
+        .expect("each structure");
+    let (_, rows) = (each.rebuild)(None, &component, &[]).expect("first rebuild");
+    assert!(rows.iter().all(|row| row.reuse.is_none()));
+    let (_, again) = (each.rebuild)(None, &component, &rows).expect("second rebuild");
+    assert_eq!(
+        again.iter().map(|row| row.reuse).collect::<Vec<_>>(),
+        [Some(0), Some(1)]
+    );
 }
 
 #[test]

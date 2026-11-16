@@ -424,18 +424,30 @@ impl<T: Theme> Ui<T> {
             }
             let structure = structures[index].structure.clone();
             let component = Rc::clone(&structure.component);
+            let old_rows = if structure.each {
+                rows.iter()
+                    .position(|(id, _)| *id == parent)
+                    .map(|position| rows.remove(position).1)
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
             let count = structure.scopes.len();
             component
                 .borrow_mut()
                 .push_binding_scopes(&structure.scopes);
             let _ = runtime::take_structures();
-            let rebuilt = runtime::rebuild_structure(&structure, self.theme.map(Theme::name));
+            let rebuilt =
+                runtime::rebuild_structure(&structure, self.theme.map(Theme::name), &old_rows);
             let added = runtime::take_structures();
             component.borrow_mut().pop_binding_scopes(count);
             let (built, rebuilt_rows) = match rebuilt {
                 Ok(result) => result,
                 Err(message) => {
                     tracing::error!(%message, "view rebuild failed");
+                    if structure.each {
+                        rows.push((parent, old_rows));
+                    }
                     continue;
                 }
             };
@@ -446,11 +458,6 @@ impl<T: Theme> Ui<T> {
                 props: added_props,
             } = built;
             let children = if structure.each {
-                let old_rows = rows
-                    .iter()
-                    .position(|(id, _)| *id == parent)
-                    .map(|position| rows.remove(position).1)
-                    .unwrap_or_default();
                 rows.push((parent, rebuilt_rows.clone()));
                 reconcile_each(
                     &mut self.tree.borrow_mut(),
@@ -571,6 +578,7 @@ mod tests {
     fn rebuild_shown(
         theme: Option<&str>,
         component: &ComponentHandle,
+        _old_rows: &[RowInfo],
     ) -> Result<(Built, Vec<RowInfo>), ViewError> {
         if theme.is_some() {
             return Err(unknown_theme());
@@ -664,6 +672,7 @@ mod tests {
     fn rebuild_slot(
         _theme: Option<&str>,
         _component: &ComponentHandle,
+        _old_rows: &[RowInfo],
     ) -> Result<(Built, Vec<RowInfo>), ViewError> {
         let built = runtime::slot(None, runtime::DEFAULT_SLOT)?;
         Ok((
@@ -716,7 +725,7 @@ mod tests {
             generated_built(slot_view, NAMES, None, &[], None).expect("launch");
         let structures = runtime::take_structures();
         assert_eq!(structures.len(), 1);
-        let rebuilt = runtime::rebuild_structure(&structures[0], None).expect("rebuild");
+        let rebuilt = runtime::rebuild_structure(&structures[0], None, &[]).expect("rebuild");
         assert_eq!(rebuilt.0.widget.into_children().len(), 1);
     }
 
@@ -740,6 +749,7 @@ mod tests {
     fn rebuild_bound(
         theme: Option<&str>,
         component: &ComponentHandle,
+        _old_rows: &[RowInfo],
     ) -> Result<(Built, Vec<RowInfo>), ViewError> {
         if theme.is_some() {
             return Err(unknown_theme());

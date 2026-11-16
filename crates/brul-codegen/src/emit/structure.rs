@@ -87,7 +87,7 @@ fn inline(out: &mut Out<'_>, name: &str, value: &str, each: bool, counter: &mut 
     out.line(format_args!("{{"));
     out.indented(|out| {
         out.line(format_args!(
-            "let (built, _rows) = {name}_rebuild(theme, component)?;"
+            "let (built, _rows) = {name}_rebuild(theme, component, &[])?;"
         ));
         out.line(format_args!("bindings.extend(built.bindings);"));
         out.line(format_args!("handlers.extend(built.handlers);"));
@@ -210,6 +210,7 @@ fn each_arm(
             ));
         });
         out.line(format_args!("}};"));
+        out.line(format_args!("let mut matcher = brul::RowMatcher::new(old_rows);"));
         if let Some(else_block) = &block.else_block {
             out.line(format_args!("if items.is_empty() {{"));
             out.indented(|out| -> Result<(), Error> {
@@ -222,6 +223,7 @@ fn each_arm(
                     ));
                     out.line(format_args!("start: 0,"));
                     out.line(format_args!("count: children.len(),"));
+                    out.line(format_args!("reuse: None,"));
                 });
                 out.line(format_args!("}});"));
                 Ok(())
@@ -253,11 +255,22 @@ fn each_arm(
                 None => out.line(format_args!("let key = None;")),
             }
             out.line(format_args!("let start = children.len();"));
+            out.line(format_args!(
+                "if let Some(other) = matcher.take(key.as_ref(), &item, position) {{"
+            ));
+            out.indented(|out| {
+                out.line(format_args!(
+                    "rows.push(brul::RowInfo {{ key, item, start, count: 0, reuse: Some(other) }});"
+                ));
+                out.line(format_args!("component.borrow_mut().pop_build_scope();"));
+                out.line(format_args!("continue;"));
+            });
+            out.line(format_args!("}}"));
             each_body(out, &block.block, emit, arm)?;
             out.line(format_args!("let count = children.len() - start;"));
             out.line(format_args!("component.borrow_mut().pop_build_scope();"));
             out.line(format_args!(
-                "rows.push(brul::RowInfo {{ key, item, start, count }});"
+                "rows.push(brul::RowInfo {{ key, item, start, count, reuse: None }});"
             ));
             Ok(())
         })?;
@@ -301,7 +314,7 @@ fn arm_header(out: &mut Out<'_>, name: &str) {
         "#[allow(unused_mut, unused_variables, clippy::let_and_return)]"
     ));
     out.line(format_args!(
-        "fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{"
+        "fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {{"
     ));
     out.indented(|out| {
         for field in ["bindings", "handlers", "props", "rows"] {

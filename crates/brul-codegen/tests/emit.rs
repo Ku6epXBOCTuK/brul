@@ -659,7 +659,7 @@ window Demo (title: "demo") {
         "fn demo_if1_value0(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let mut bindings"
+        "fn demo_if1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
     ));
     assert!(module.contains("    let children = {\n"), "{module}");
     assert!(module.contains("brul::Value::Bool(condition) => condition,"));
@@ -725,7 +725,7 @@ window Demo (title: "demo") {
         "fn demo_each1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
     ));
     assert!(module.contains(
-        "fn demo_each1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {\n    let mut bindings"
+        "fn demo_each1_rebuild(theme: Option<&str>, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
     ));
     assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
     assert!(module.contains(
@@ -735,7 +735,9 @@ window Demo (title: "demo") {
         r#"brul::Variable { name: brul::VariableId::from_index(2), value: brul::Value::Number(position as f64) },"#
     ));
     assert!(module.contains("let key = demo_each1_key(&mut component.borrow_mut()).ok();"));
-    assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count });"));
+    assert!(module.contains("let mut matcher = brul::RowMatcher::new(old_rows);"));
+    assert!(module.contains("if let Some(other) = matcher.take(key.as_ref(), &item, position) {"));
+    assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count, reuse: None });"));
     assert!(module.contains(
         "brul::register_structure(component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);"
     ));
@@ -766,7 +768,7 @@ window Demo (title: "demo") {
     );
     assert!(
         module.contains(
-            "        rows.push(brul::RowInfo {\n            key: None,\n            item: brul::Value::Array(std::rc::Rc::new(Vec::new())),\n            start: 0,\n            count: children.len(),\n        });"
+            "        rows.push(brul::RowInfo {\n            key: None,\n            item: brul::Value::Array(std::rc::Rc::new(Vec::new())),\n            start: 0,\n            count: children.len(),\n            reuse: None,\n        });"
         ),
         "{module}"
     );

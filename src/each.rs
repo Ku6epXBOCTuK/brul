@@ -1,6 +1,11 @@
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use brul_gui::{Widget, WidgetId, WidgetTree};
+use brul_script::Value;
 
 use crate::RowInfo;
+
 pub(crate) fn reconcile_each(
     tree: &mut WidgetTree,
     parent: WidgetId,
@@ -14,14 +19,10 @@ pub(crate) fn reconcile_each(
     let mut old_widgets = group(old_children, old_rows);
     let mut new_widgets = group(new_widget.into_children(), new_rows);
 
-    let mut used = vec![false; old_widgets.len()];
     let mut children = Vec::new();
     for (index, row) in new_rows.iter().enumerate() {
-        match reuse_index(old_rows, row, index, &used) {
-            Some(other) => {
-                used[other] = true;
-                children.append(&mut old_widgets[other]);
-            }
+        match row.reuse.and_then(|other| old_widgets.get_mut(other)) {
+            Some(reused) => children.append(reused),
             None => children.append(&mut new_widgets[index]),
         }
     }
@@ -38,17 +39,86 @@ fn group(children: Vec<Widget>, rows: &[RowInfo]) -> Vec<Vec<Widget>> {
         .collect()
 }
 
-fn reuse_index(old_rows: &[RowInfo], row: &RowInfo, index: usize, used: &[bool]) -> Option<usize> {
-    let Some(key) = &row.key else {
-        let same_place = index < old_rows.len()
-            && !used[index]
-            && old_rows[index].key.is_none()
-            && old_rows[index].item == row.item;
-        return same_place.then_some(index);
-    };
-    old_rows.iter().enumerate().position(|(other, old)| {
-        !used[other] && old.key.as_ref() == Some(key) && old.item == row.item
-    })
+pub struct RowMatcher<'a> {
+    old: &'a [RowInfo],
+    taken: Vec<bool>,
+    keyed: HashMap<u64, Vec<usize>>,
+}
+
+impl<'a> RowMatcher<'a> {
+    pub fn new(old: &'a [RowInfo]) -> Self {
+        let mut keyed: HashMap<u64, Vec<usize>> = HashMap::new();
+        for (index, row) in old.iter().enumerate() {
+            if let Some(key) = &row.key {
+                keyed
+                    .entry(fingerprint(key, &row.item))
+                    .or_default()
+                    .push(index);
+            }
+        }
+        Self {
+            old,
+            taken: vec![false; old.len()],
+            keyed,
+        }
+    }
+
+    pub fn take(&mut self, key: Option<&Value>, item: &Value, index: usize) -> Option<usize> {
+        let Some(key) = key else {
+            let same_place = !self.taken.get(index).copied().unwrap_or(true)
+                && self
+                    .old
+                    .get(index)
+                    .is_some_and(|old| old.key.is_none() && old.item == *item);
+            return same_place.then(|| {
+                self.taken[index] = true;
+                index
+            });
+        };
+
+        let at = self
+            .keyed
+            .get(&fingerprint(key, item))?
+            .iter()
+            .copied()
+            .find(|&at| {
+                !self.taken[at]
+                    && self.old[at].key.as_ref() == Some(key)
+                    && self.old[at].item == *item
+            })?;
+        self.taken[at] = true;
+        Some(at)
+    }
+}
+
+fn fingerprint(key: &Value, item: &Value) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    hash_value(key, &mut hasher);
+    hash_value(item, &mut hasher);
+    hasher.finish()
+}
+
+fn hash_value(value: &Value, hasher: &mut DefaultHasher) {
+    match value {
+        Value::Number(number) => (0u8, number.to_bits()).hash(hasher),
+        Value::String(text) => (1u8, text.as_ref()).hash(hasher),
+        Value::Bool(flag) => (2u8, flag).hash(hasher),
+        Value::Null => 3u8.hash(hasher),
+        Value::Array(items) => {
+            4u8.hash(hasher);
+            for item in items.iter() {
+                hash_value(item, hasher);
+            }
+        }
+        Value::Object(entries) => {
+            5u8.hash(hasher);
+            for (name, value) in entries.iter() {
+                name.hash(hasher);
+                hash_value(value, hasher);
+            }
+        }
+        Value::Image(path) => (6u8, path.as_ref()).hash(hasher),
+    }
 }
 
 #[cfg(test)]
@@ -65,7 +135,19 @@ mod tests {
             item: Value::String(item.into()),
             start: 0,
             count,
+            reuse: None,
         }
+    }
+
+    fn matched(old: &[RowInfo], new: Vec<RowInfo>) -> Vec<RowInfo> {
+        let mut matcher = RowMatcher::new(old);
+        new.into_iter()
+            .enumerate()
+            .map(|(index, row)| RowInfo {
+                reuse: matcher.take(row.key.as_ref(), &row.item, index),
+                ..row
+            })
+            .collect()
     }
 
     #[test]
@@ -74,13 +156,9 @@ mod tests {
         let absent = Widget::text("absent").id();
         let fresh = Widget::view(Direction::Column, vec![Widget::text("a")]);
         let new_id = fresh.id();
-        let children = reconcile_each(
-            &mut tree,
-            absent,
-            &[row(None, "a", 1)],
-            fresh,
-            &[row(None, "a", 1)],
-        );
+        let old_rows = [row(None, "a", 1)];
+        let new_rows = matched(&old_rows, vec![row(None, "a", 1)]);
+        let children = reconcile_each(&mut tree, absent, &old_rows, fresh, &new_rows);
         assert_eq!(children.len(), 1);
         assert_ne!(children[0].id(), new_id);
     }
@@ -92,17 +170,23 @@ mod tests {
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
         let mut tree = WidgetTree::new(root);
-        let children = reconcile_each(
-            &mut tree,
-            parent,
-            &[row(None, "a", 1)],
-            Widget::view(Direction::Column, vec![Widget::text("empty")]),
-            &[RowInfo {
+        let old_rows = [row(None, "a", 1)];
+        let new_rows = matched(
+            &old_rows,
+            vec![RowInfo {
                 key: None,
                 item: Value::Array(std::rc::Rc::new(Vec::new())),
                 start: 0,
                 count: 1,
+                reuse: None,
             }],
+        );
+        let children = reconcile_each(
+            &mut tree,
+            parent,
+            &old_rows,
+            Widget::view(Direction::Column, vec![Widget::text("empty")]),
+            &new_rows,
         );
         assert_eq!(children.len(), 1);
         assert_ne!(children[0].id(), first_id);
@@ -115,12 +199,14 @@ mod tests {
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
         let mut tree = WidgetTree::new(root);
+        let old_rows = [row(None, "a", 1)];
+        let new_rows = matched(&old_rows, vec![row(None, "a", 1)]);
         let children = reconcile_each(
             &mut tree,
             parent,
-            &[row(None, "a", 1)],
+            &old_rows,
             Widget::view(Direction::Column, vec![Widget::text("a")]),
-            &[row(None, "a", 1)],
+            &new_rows,
         );
         assert_eq!(children[0].id(), first_id);
     }
@@ -132,12 +218,14 @@ mod tests {
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
         let mut tree = WidgetTree::new(root);
+        let old_rows = [row(None, "a", 1)];
+        let new_rows = matched(&old_rows, vec![row(None, "b", 1)]);
         let children = reconcile_each(
             &mut tree,
             parent,
-            &[row(None, "a", 1)],
+            &old_rows,
             Widget::view(Direction::Column, vec![Widget::text("b")]),
-            &[row(None, "b", 1)],
+            &new_rows,
         );
         assert_ne!(children[0].id(), first_id);
     }
@@ -150,12 +238,14 @@ mod tests {
         let parent = root.id();
         let mut tree = WidgetTree::new(root);
         let key = Some(Value::Number(1.0));
+        let old_rows = [row(key.clone(), "a", 1)];
+        let new_rows = matched(&old_rows, vec![row(key, "b", 1)]);
         let children = reconcile_each(
             &mut tree,
             parent,
-            &[row(key.clone(), "a", 1)],
+            &old_rows,
             Widget::view(Direction::Column, vec![Widget::text("b")]),
-            &[row(key, "b", 1)],
+            &new_rows,
         );
         assert_ne!(children[0].id(), first_id);
     }
@@ -172,13 +262,9 @@ mod tests {
             Direction::Column,
             vec![Widget::text("a"), Widget::text("a")],
         );
-        let children = reconcile_each(
-            &mut tree,
-            parent,
-            &[row(key.clone(), "a", 1)],
-            fresh,
-            &[row(key.clone(), "a", 1), row(key, "a", 1)],
-        );
+        let old_rows = [row(key.clone(), "a", 1)];
+        let new_rows = matched(&old_rows, vec![row(key.clone(), "a", 1), row(key, "a", 1)]);
+        let children = reconcile_each(&mut tree, parent, &old_rows, fresh, &new_rows);
         assert_eq!(children[0].id(), first_id);
         assert_ne!(children[1].id(), first_id);
     }
@@ -190,12 +276,14 @@ mod tests {
         let root = Widget::view(Direction::Column, vec![first]);
         let parent = root.id();
         let mut tree = WidgetTree::new(root);
+        let old_rows = [row(None, "a", 1)];
+        let new_rows = matched(&old_rows, vec![row(Some(Value::Number(1.0)), "a", 1)]);
         let children = reconcile_each(
             &mut tree,
             parent,
-            &[row(None, "a", 1)],
+            &old_rows,
             Widget::view(Direction::Column, vec![Widget::text("a")]),
-            &[row(Some(Value::Number(1.0)), "a", 1)],
+            &new_rows,
         );
         assert_ne!(children[0].id(), first_id);
     }
@@ -213,9 +301,10 @@ mod tests {
             item: Value::String(item.into()),
             start,
             count: 1,
+            reuse: None,
         };
         let old_rows = [row(1.0, "a", 0), row(2.0, "b", 1)];
-        let new_rows = [row(2.0, "b", 0), row(1.0, "a", 1)];
+        let new_rows = matched(&old_rows, vec![row(2.0, "b", 0), row(1.0, "a", 1)]);
         let fresh = Widget::view(
             Direction::Column,
             vec![Widget::text("b"), Widget::text("a")],
@@ -224,5 +313,54 @@ mod tests {
         let children = reconcile_each(&mut tree, parent, &old_rows, fresh, &new_rows);
         let ids: Vec<WidgetId> = children.iter().map(Widget::id).collect();
         assert_eq!(ids, vec![second_id, first_id]);
+    }
+
+    #[test]
+    fn a_matcher_gives_a_keyed_row_the_same_place_after_a_move() {
+        let old = [row(Some(Value::Number(1.0)), "a", 0)];
+        let mut matcher = RowMatcher::new(&old);
+        let key = Some(Value::Number(1.0));
+        assert_eq!(
+            matcher.take(key.as_ref(), &Value::String("a".into()), 3),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn a_matcher_ignores_the_position_of_a_keyed_row() {
+        let old = [
+            row(Some(Value::Number(1.0)), "a", 0),
+            row(Some(Value::Number(2.0)), "b", 1),
+        ];
+        let mut matcher = RowMatcher::new(&old);
+        let key = Some(Value::Number(2.0));
+        assert_eq!(
+            matcher.take(key.as_ref(), &Value::String("b".into()), 0),
+            Some(1)
+        );
+        assert_eq!(
+            matcher.take(key.as_ref(), &Value::String("b".into()), 1),
+            None
+        );
+    }
+
+    #[test]
+    fn a_matcher_needs_both_the_key_and_the_item_to_match() {
+        let old = [row(Some(Value::Number(1.0)), "a", 0)];
+        let mut matcher = RowMatcher::new(&old);
+        let key = Some(Value::Number(1.0));
+        assert_eq!(
+            matcher.take(key.as_ref(), &Value::String("b".into()), 0),
+            None
+        );
+    }
+
+    #[test]
+    fn a_matcher_keeps_unkeyed_rows_in_place() {
+        let old = [row(None, "a", 0), row(None, "b", 1)];
+        let mut matcher = RowMatcher::new(&old);
+        assert_eq!(matcher.take(None, &Value::String("b".into()), 1), Some(1));
+        assert_eq!(matcher.take(None, &Value::String("a".into()), 0), Some(0));
+        assert_eq!(matcher.take(None, &Value::String("a".into()), 0), None);
     }
 }
