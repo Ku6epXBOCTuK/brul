@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::fmt::Write;
 
 use brul_syntax::error::Error;
-use brul_syntax::markup::{EachBlock, IfBlock};
+use brul_syntax::markup::{Block, EachBlock, IfBlock};
 
 use super::Emit;
 use super::Frame;
@@ -27,7 +26,7 @@ impl StructureNames {
 }
 
 pub(super) fn structure_if(
-    out: &mut String,
+    out: &mut Out<'_>,
     block: &IfBlock,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
@@ -46,7 +45,7 @@ pub(super) fn structure_if(
 }
 
 pub(super) fn structure_each(
-    out: &mut String,
+    out: &mut Out<'_>,
     block: &EachBlock,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
@@ -60,7 +59,7 @@ pub(super) fn structure_each(
     ));
     if let Some(key) = &block.key {
         emit.functions
-            .push(key_function(&format!("{name}_key"), key, emit.names));
+            .push(value_function(&format!("{name}_key"), key, emit.names));
     }
     let arm = each_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
@@ -69,54 +68,45 @@ pub(super) fn structure_each(
 }
 
 fn value_function(name: &str, value: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
-    format!(
-        "fn {name}(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
-    let value = {};
-    Ok(value)
-}}
-",
-        operation(value, names)
-    )
-}
-
-fn key_function(name: &str, key: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
-    format!(
-        "fn {name}(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{
-    let value = {};
-    Ok(value)
-}}
-",
-        operation(key, names)
-    )
+    let mut text = String::new();
+    let mut out = Out::new(&mut text);
+    out.line(format_args!(
+        "fn {name}(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{"
+    ));
+    out.indented(|out| {
+        out.line(format_args!("let value = {};", operation(value, names)));
+        out.line(format_args!("Ok(value)"));
+    });
+    out.line(format_args!("}}"));
+    text
 }
 
 fn inline(
-    out: &mut String,
+    out: &mut Out<'_>,
     name: &str,
     value: &str,
     each: bool,
     frame: Frame<'_>,
     counter: &mut usize,
 ) {
-    let pad = "    ".repeat(frame.depth());
-    let inner = "    ".repeat(frame.depth() + 1);
+    let mut out = Out::at(out.raw(), frame.depth());
     let widget = format!("widget{}", *counter);
     *counter += 1;
-    let _ = writeln!(out, "{pad}{{");
-    let _ = writeln!(
-        out,
-        "{inner}let (built, _rows) = {name}_rebuild(theme, component)?;"
-    );
-    let _ = writeln!(out, "{inner}bindings.extend(built.bindings);");
-    let _ = writeln!(out, "{inner}handlers.extend(built.handlers);");
-    let _ = writeln!(out, "{inner}props.extend(built.props);");
-    let _ = writeln!(out, "{inner}let {widget} = built.widget;");
-    let _ = writeln!(
-        out,
-        "{inner}brul::register_structure(component, {widget}.id(), {each}, {value}, {name}_rebuild);"
-    );
-    let _ = writeln!(out, "{inner}{widget}");
-    let _ = write!(out, "{pad}}}");
+    out.line(format_args!("{{"));
+    out.indented(|out| {
+        out.line(format_args!(
+            "let (built, _rows) = {name}_rebuild(theme, component)?;"
+        ));
+        out.line(format_args!("bindings.extend(built.bindings);"));
+        out.line(format_args!("handlers.extend(built.handlers);"));
+        out.line(format_args!("props.extend(built.props);"));
+        out.line(format_args!("let {widget} = built.widget;"));
+        out.line(format_args!(
+            "brul::register_structure(component, {widget}.id(), {each}, {value}, {name}_rebuild);"
+        ));
+        out.line(format_args!("{widget}"));
+    });
+    out.start(format_args!("}}"));
 }
 
 fn rebuild_arm(
@@ -126,17 +116,22 @@ fn rebuild_arm(
     frame: Frame<'_>,
 ) -> Result<String, Error> {
     let arm = arm_frame(emit.default_theme(), frame);
-    let mut out = arm_header(name);
-    out.push_str("    let children = {\n");
-    let mut counter = 0;
-    branch_chain(&mut out, name, block, emit, arm, &mut counter, 0)?;
-    out.push_str("    };\n");
+    let mut text = String::new();
+    let mut out = Out::new(&mut text);
+    arm_header(&mut out, name);
+    out.indented(|out| -> Result<(), Error> {
+        out.line(format_args!("let children = {{"));
+        let mut counter = 0;
+        out.indented(|out| branch_chain(out, name, block, emit, arm, &mut counter, 0))?;
+        out.line(format_args!("}};"));
+        Ok(())
+    })?;
     widget(&mut out);
-    Ok(out)
+    Ok(text)
 }
 
 fn branch_chain(
-    out: &mut String,
+    out: &mut Out<'_>,
     name: &str,
     block: &IfBlock,
     emit: &mut Emit<'_>,
@@ -144,56 +139,57 @@ fn branch_chain(
     counter: &mut usize,
     index: usize,
 ) -> Result<(), Error> {
-    let pad = "    ".repeat(2 + index);
     let body = frame.deeper(index + 1);
-    let _ = writeln!(
-        out,
-        "{pad}let condition = {name}_value{index}(&mut component.borrow_mut())\n{pad}    .map_err(brul::ViewError::from)?;\n{pad}let condition = match condition {{\n{pad}    brul::Value::Bool(condition) => condition,\n{pad}    other => return Err(brul::ViewError::expected(\"if condition\", \"Bool\", other.type_name())),\n{pad}}};\n{pad}if condition {{"
-    );
+    out.line(format_args!(
+        "let condition = {name}_value{index}(&mut component.borrow_mut())"
+    ));
+    out.indented(|out| out.line(format_args!(".map_err(brul::ViewError::from)?;")));
+    out.line(format_args!("let condition = match condition {{"));
+    out.indented(|out| {
+        out.line(format_args!("brul::Value::Bool(condition) => condition,"));
+        out.line(format_args!(
+            "other => return Err(brul::ViewError::expected(\"if condition\", \"Bool\", other.type_name())),"
+        ));
+    });
+    out.line(format_args!("}};"));
+    out.line(format_args!("if condition {{"));
     arm_body(out, &block.branches[index].block, emit, body, counter)?;
-    let _ = writeln!(out, "{pad}}} else {{");
-    if index + 1 < block.branches.len() {
-        branch_chain(out, name, block, emit, frame, counter, index + 1)?;
-    } else if let Some(else_block) = &block.else_block {
-        arm_body(out, else_block, emit, body, counter)?;
-    } else {
-        let _ = writeln!(out, "{}vec![]", "    ".repeat(3 + index));
-    }
-    let _ = writeln!(out, "{pad}}}");
+    out.line(format_args!("}} else {{"));
+    out.indented(|out| -> Result<(), Error> {
+        if index + 1 < block.branches.len() {
+            branch_chain(out, name, block, emit, frame, counter, index + 1)?;
+        } else if let Some(else_block) = &block.else_block {
+            arm_body(out, else_block, emit, body, counter)?;
+        } else {
+            out.line(format_args!("vec![]"));
+        }
+        Ok(())
+    })?;
+    out.line(format_args!("}}"));
     Ok(())
 }
 
 fn arm_body(
-    out: &mut String,
-    block: &brul_syntax::markup::Block,
+    out: &mut Out<'_>,
+    block: &Block,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let pad = "    ".repeat(frame.depth().saturating_sub(1));
-    let inner = "    ".repeat(frame.depth());
+    let mut out = Out::at(out.raw(), frame.depth().saturating_sub(1));
     if contains_slot(block) {
-        let _ = writeln!(out, "{pad}{{");
-        let _ = writeln!(out, "{inner}let mut children = Vec::new();");
-        items_spliced(
-            &mut Out::at(out, frame.depth()),
-            block,
-            emit,
-            frame,
-            counter,
-        )?;
-        let _ = writeln!(out, "{inner}children");
-        let _ = writeln!(out, "{pad}}}");
+        out.line(format_args!("{{"));
+        out.indented(|out| -> Result<(), Error> {
+            out.line(format_args!("let mut children = Vec::new();"));
+            items_spliced(out, block, emit, frame, counter)?;
+            out.line(format_args!("children"));
+            Ok(())
+        })?;
+        out.line(format_args!("}}"));
     } else {
-        let _ = writeln!(out, "{pad}vec![");
-        items(
-            &mut Out::at(out, frame.depth()),
-            block,
-            emit,
-            frame,
-            counter,
-        )?;
-        let _ = writeln!(out, "{pad}]");
+        out.line(format_args!("vec!["));
+        out.indented(|out| items(out, block, emit, frame, counter))?;
+        out.line(format_args!("]"));
     }
     Ok(())
 }
@@ -205,87 +201,96 @@ fn each_arm(
     frame: Frame<'_>,
 ) -> Result<String, Error> {
     let arm = arm_frame(emit.default_theme(), frame);
-    let mut out = arm_header(name);
-    out.push_str("    let mut children = Vec::new();\n");
-    let _ = writeln!(
-        out,
-        "    let collection = {name}_value(&mut component.borrow_mut())\n        .map_err(brul::ViewError::from)?;\n    let items = match collection {{"
-    );
-    out.push_str("        brul::Value::Array(items) => std::rc::Rc::unwrap_or_clone(items),\n");
-    out.push_str(
-        "        other => return Err(brul::ViewError::expected(\"each\", \"Array\", other.type_name())),\n    };\n",
-    );
-    if let Some(else_block) = &block.else_block {
-        out.push_str("    if items.is_empty() {\n");
-        each_body(&mut out, else_block, emit, arm)?;
-        out.push_str("        rows.push(brul::RowInfo {\n");
-        out.push_str("            key: None,\n");
-        out.push_str("            item: brul::Value::Array(std::rc::Rc::new(Vec::new())),\n");
-        out.push_str("            start: 0,\n");
-        out.push_str("            count: children.len(),\n");
-        out.push_str("        });\n");
-        out.push_str("    }\n");
-    }
-    out.push_str("    for (position, item) in items.into_iter().enumerate() {\n");
-    out.push_str("        component.borrow_mut().push_build_scope(vec![\n");
-    let _ = writeln!(
-        out,
-        "            brul::Variable {{ name: brul::VariableId::from_index({}), value: item.clone() }},",
-        variable(block.item.as_str(), emit.names)
-    );
-    if let Some(index_name) = &block.index {
-        let _ = writeln!(
-            out,
-            "            brul::Variable {{ name: brul::VariableId::from_index({}), value: brul::Value::Number(position as f64) }},",
-            variable(index_name.as_str(), emit.names)
-        );
-    }
-    out.push_str("        ]);\n");
-    match &block.key {
-        Some(_) => {
-            let _ = writeln!(
-                out,
-                "        let key = {name}_key(&mut component.borrow_mut()).ok();"
-            );
+    let mut text = String::new();
+    let mut out = Out::new(&mut text);
+    arm_header(&mut out, name);
+    out.indented(|out| -> Result<(), Error> {
+        out.line(format_args!("let mut children = Vec::new();"));
+        out.line(format_args!(
+            "let collection = {name}_value(&mut component.borrow_mut())"
+        ));
+        out.indented(|out| out.line(format_args!(".map_err(brul::ViewError::from)?;")));
+        out.line(format_args!("let items = match collection {{"));
+        out.indented(|out| {
+            out.line(format_args!(
+                "brul::Value::Array(items) => std::rc::Rc::unwrap_or_clone(items),"
+            ));
+            out.line(format_args!(
+                "other => return Err(brul::ViewError::expected(\"each\", \"Array\", other.type_name())),"
+            ));
+        });
+        out.line(format_args!("}};"));
+        if let Some(else_block) = &block.else_block {
+            out.line(format_args!("if items.is_empty() {{"));
+            out.indented(|out| -> Result<(), Error> {
+                each_body(out, else_block, emit, arm)?;
+                out.line(format_args!("rows.push(brul::RowInfo {{"));
+                out.indented(|out| {
+                    out.line(format_args!("key: None,"));
+                    out.line(format_args!(
+                        "item: brul::Value::Array(std::rc::Rc::new(Vec::new())),"
+                    ));
+                    out.line(format_args!("start: 0,"));
+                    out.line(format_args!("count: children.len(),"));
+                });
+                out.line(format_args!("}});"));
+                Ok(())
+            })?;
+            out.line(format_args!("}}"));
         }
-        None => out.push_str("        let key = None;\n"),
-    }
-    out.push_str("        let start = children.len();\n");
-    each_body(&mut out, &block.block, emit, arm)?;
-    out.push_str("        let count = children.len() - start;\n");
-    out.push_str("        component.borrow_mut().pop_build_scope();\n");
-    out.push_str("        rows.push(brul::RowInfo { key, item, start, count });\n");
-    out.push_str("    }\n");
+        out.line(format_args!(
+            "for (position, item) in items.into_iter().enumerate() {{"
+        ));
+        out.indented(|out| -> Result<(), Error> {
+            out.line(format_args!("component.borrow_mut().push_build_scope(vec!["));
+            out.indented(|out| {
+                out.line(format_args!(
+                    "brul::Variable {{ name: brul::VariableId::from_index({}), value: item.clone() }},",
+                    variable(block.item.as_str(), emit.names)
+                ));
+                if let Some(index_name) = &block.index {
+                    out.line(format_args!(
+                        "brul::Variable {{ name: brul::VariableId::from_index({}), value: brul::Value::Number(position as f64) }},",
+                        variable(index_name.as_str(), emit.names)
+                    ));
+                }
+            });
+            out.line(format_args!("]);"));
+            match &block.key {
+                Some(_) => out.line(format_args!(
+                    "let key = {name}_key(&mut component.borrow_mut()).ok();"
+                )),
+                None => out.line(format_args!("let key = None;")),
+            }
+            out.line(format_args!("let start = children.len();"));
+            each_body(out, &block.block, emit, arm)?;
+            out.line(format_args!("let count = children.len() - start;"));
+            out.line(format_args!("component.borrow_mut().pop_build_scope();"));
+            out.line(format_args!(
+                "rows.push(brul::RowInfo {{ key, item, start, count }});"
+            ));
+            Ok(())
+        })?;
+        out.line(format_args!("}}"));
+        Ok(())
+    })?;
     widget(&mut out);
-    Ok(out)
+    Ok(text)
 }
 
 fn each_body(
-    out: &mut String,
-    block: &brul_syntax::markup::Block,
+    out: &mut Out<'_>,
+    block: &Block,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
 ) -> Result<(), Error> {
-    let pad = "    ".repeat(frame.depth().saturating_sub(1));
     let mut counter = 0;
     if contains_slot(block) {
-        items_spliced(
-            &mut Out::at(out, frame.depth()),
-            block,
-            emit,
-            frame,
-            &mut counter,
-        )?;
+        out.indented(|out| items_spliced(out, block, emit, frame, &mut counter))?;
     } else if !block.items.is_empty() {
-        let _ = writeln!(out, "{pad}children.extend([");
-        items(
-            &mut Out::at(out, frame.depth()),
-            block,
-            emit,
-            frame,
-            &mut counter,
-        )?;
-        let _ = writeln!(out, "{pad}]);");
+        out.line(format_args!("children.extend(["));
+        out.indented(|out| items(out, block, emit, frame, &mut counter))?;
+        out.line(format_args!("]);"));
     }
     Ok(())
 }
@@ -301,19 +306,28 @@ fn variable(name: &str, names: &Names<'_>) -> u32 {
         .index()
 }
 
-fn arm_header(name: &str) -> String {
-    format!(
-        "#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{
-    let mut bindings = Vec::new();
-    let mut handlers = Vec::new();
-    let mut props = Vec::new();
-    let mut rows = Vec::new();
-"
-    )
+fn arm_header(out: &mut Out<'_>, name: &str) {
+    out.line(format_args!(
+        "#[allow(unused_mut, unused_variables, clippy::let_and_return)]"
+    ));
+    out.line(format_args!(
+        "fn {name}_rebuild(theme: Option<&str>, component: &brul::ComponentHandle) -> brul::Rebuilt {{"
+    ));
+    out.indented(|out| {
+        for field in ["bindings", "handlers", "props", "rows"] {
+            out.line(format_args!("let mut {field} = Vec::new();"));
+        }
+    });
 }
 
-fn widget(out: &mut String) {
-    out.push_str("    let widget = brul::gui::Widget::structure(children);\n");
-    out.push_str("    Ok((brul::Built { widget, bindings, handlers, props }, rows))\n}\n");
+fn widget(out: &mut Out<'_>) {
+    out.indented(|out| {
+        out.line(format_args!(
+            "let widget = brul::gui::Widget::structure(children);"
+        ));
+        out.line(format_args!(
+            "Ok((brul::Built {{ widget, bindings, handlers, props }}, rows))"
+        ));
+    });
+    out.line(format_args!("}}"));
 }

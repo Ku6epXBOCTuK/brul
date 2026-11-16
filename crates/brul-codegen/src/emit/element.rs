@@ -279,11 +279,11 @@ pub(crate) fn items(
                 out.push(format_args!(",\n"));
             }
             BlockItem::If(structure) => {
-                structure::structure_if(out.raw(), structure, emit, frame, counter)?;
+                structure::structure_if(out, structure, emit, frame, counter)?;
                 out.push(format_args!(",\n"));
             }
             BlockItem::Each(structure) => {
-                structure::structure_each(out.raw(), structure, emit, frame, counter)?;
+                structure::structure_each(out, structure, emit, frame, counter)?;
                 out.push(format_args!(",\n"));
             }
             BlockItem::Slot(slot) => {
@@ -335,12 +335,18 @@ pub(crate) fn items_spliced(
             }
             BlockItem::If(structure) => {
                 let mut arm = String::new();
-                structure::structure_if(&mut arm, structure, emit, frame, counter)?;
+                structure::structure_if(&mut Out::new(&mut arm), structure, emit, frame, counter)?;
                 push_text(out, &arm);
             }
             BlockItem::Each(structure) => {
                 let mut arm = String::new();
-                structure::structure_each(&mut arm, structure, emit, frame, counter)?;
+                structure::structure_each(
+                    &mut Out::new(&mut arm),
+                    structure,
+                    emit,
+                    frame,
+                    counter,
+                )?;
                 push_text(out, &arm);
             }
             BlockItem::Slot(slot) => slot_item(out, slot, emit, frame)?,
