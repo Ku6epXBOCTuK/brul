@@ -7,12 +7,17 @@ pub(super) struct Pass<'a> {
     pub(super) tree: &'a [Node],
     pub(super) layouter: &'a mut Layouter<Slot>,
     pub(super) stale: &'a HashSet<Slot>,
+    pub(super) viewport: Size,
 }
 
 impl Pass<'_> {
     pub(super) fn build(&mut self, slot: Slot) -> Result<u32, WidgetError> {
         let node = &self.tree[slot.index()];
-        let layout_style = node.layout_style();
+        let mut layout_style = node.layout_style();
+        if node.layer {
+            layout_style.width = Dimension::Px(self.viewport.width);
+            layout_style.height = Dimension::Px(self.viewport.height);
+        }
         layout::validate(&layout_style)?;
         let key = slot.index() as u32;
 
@@ -46,11 +51,16 @@ impl Pass<'_> {
             NodeShape {
                 style: &layout_style,
                 direction,
-                offset: node.offset,
+                offset: if node.layer {
+                    Some(Offset { x: 0, y: 0 })
+                } else {
+                    node.offset
+                },
                 scroll,
                 content: slot,
                 children: &keys,
                 transparent,
+                layer: node.layer,
             },
         );
         if self.stale.contains(&slot) {
@@ -147,6 +157,7 @@ pub(super) fn max_scroll_offset(nodes: &[Node], slot: Slot, boxes: &[LayoutBox])
     let bottom = node
         .children
         .iter()
+        .filter(|&&child| !nodes[child.index()].layer)
         .map(|&child| {
             let placed = &boxes[child.index()];
             i64::from(placed.y) + i64::from(placed.height)

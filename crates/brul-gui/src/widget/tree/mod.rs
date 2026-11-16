@@ -1,6 +1,6 @@
 use super::style::Transition;
 use super::*;
-use crate::layout::{LayoutBox, Layouter, Offset, ScrollOffset, Size};
+use crate::layout::{Dimension, LayoutBox, Layouter, Offset, ScrollOffset, Size};
 use crate::text::TextLayout;
 use std::collections::{HashMap, HashSet};
 
@@ -32,6 +32,7 @@ struct Node {
     offset: Option<Offset>,
     draggable: bool,
     focusable: bool,
+    layer: bool,
     scroll_offset: ScrollOffset,
     children: Vec<Slot>,
     transition: Option<Transition>,
@@ -188,6 +189,7 @@ impl WidgetTree {
             offset,
             draggable,
             focusable,
+            layer,
         } = widget;
         let mut slots = Vec::with_capacity(children.len());
         for child in children {
@@ -204,6 +206,7 @@ impl WidgetTree {
             offset,
             draggable,
             focusable,
+            layer,
             scroll_offset: ScrollOffset::ZERO,
             children: slots,
             transition: None,
@@ -248,6 +251,7 @@ impl WidgetTree {
             offset: node.offset,
             draggable: node.draggable,
             focusable: node.focusable,
+            layer: node.layer,
         };
         self.index.remove(&widget.id);
         self.free.push(slot);

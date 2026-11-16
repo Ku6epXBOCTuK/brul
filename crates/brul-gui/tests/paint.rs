@@ -490,3 +490,34 @@ fn clips_children_to_a_rounded_parent() {
     assert_eq!(pixel(&frame, 20, 8), [0, 0, 0, 0]);
     assert_eq!(pixel(&frame, 0, 0), [0, 0, 0, 0]);
 }
+
+#[test]
+fn layer_paints_above_content_declared_after_it() {
+    let layer = Widget::layer(Vec::new()).with_styles(StyleSet::new(WidgetStyle {
+        background: Paint::Color(Color::rgb(0, 0, 255)),
+        ..WidgetStyle::default()
+    }));
+    let content = full_view(Color::rgb(255, 0, 0));
+    let root = Widget::column(vec![layer, content]).with_layout(LayoutStyle {
+        width: Dimension::Px(16),
+        height: Dimension::Px(16),
+        ..LayoutStyle::default()
+    });
+    let mut engine = TextEngine::new();
+    let mut tree = WidgetTree::new(root);
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 16,
+            height: 16,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let mut frame = Frame::new(16, 16);
+
+    frame.paint(snapshot, engine.atlas(), &Dirty::all());
+
+    assert_eq!(pixel(&frame, 8, 8), [0, 0, 255, 255]);
+}

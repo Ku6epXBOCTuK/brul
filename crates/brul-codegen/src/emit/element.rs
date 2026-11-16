@@ -109,7 +109,7 @@ fn content_needed(element: &Element, emit: &Emit<'_>) -> bool {
     match element.widget {
         Some(Widget::Text | Widget::TextInput) => !matches!(expression.kind, ExprKind::String(_)),
         Some(Widget::Image) => resource(expression, emit).is_none(),
-        Some(Widget::View | Widget::Row | Widget::Column) | None => false,
+        Some(Widget::View | Widget::Row | Widget::Column | Widget::Layer) | None => false,
     }
 }
 
@@ -149,11 +149,15 @@ fn kind(
 ) -> Result<Option<Content>, Error> {
     match element.widget {
         Some(Widget::Row) => {
-            container(out, element, true, emit, frame, counter)?;
+            container(out, element, Group::Row, emit, frame, counter)?;
             Ok(None)
         }
         Some(Widget::View | Widget::Column) => {
-            container(out, element, false, emit, frame, counter)?;
+            container(out, element, Group::Column, emit, frame, counter)?;
+            Ok(None)
+        }
+        Some(Widget::Layer) => {
+            container(out, element, Group::Layer, emit, frame, counter)?;
             Ok(None)
         }
         Some(Widget::Text) => Ok(text_widget(out, element)?.map(Content::Text)),
@@ -166,20 +170,44 @@ fn kind(
     }
 }
 
+#[derive(Clone, Copy)]
+enum Group {
+    Row,
+    Column,
+    Layer,
+}
+
+impl Group {
+    fn call(self) -> &'static str {
+        match self {
+            Self::Row => "row",
+            Self::Column => "column",
+            Self::Layer => "layer",
+        }
+    }
+
+    fn direction(self) -> &'static str {
+        match self {
+            Self::Row => "Row",
+            Self::Column | Self::Layer => "Column",
+        }
+    }
+}
+
 fn container(
     out: &mut String,
     element: &Element,
-    row: bool,
+    group: Group,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let call = if row { "row" } else { "column" };
+    let call = group.call();
     if element.block.items.is_empty() {
         let _ = write!(out, "brul::gui::Widget::{call}(vec![])");
         return Ok(());
     }
-    let direction = if row { "Row" } else { "Column" };
+    let direction = group.direction();
     let gap = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
         .map_err(|error| error_at(element.position, error.to_string()))?
         .layout

@@ -41,6 +41,7 @@ impl WidgetTree {
                 tree: &self.nodes,
                 layouter: &mut self.layouter,
                 stale: &self.stale,
+                viewport,
             };
             pass.build(self.root)?
         };

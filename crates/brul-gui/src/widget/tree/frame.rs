@@ -84,7 +84,18 @@ pub(super) fn snapshot_widget(
         return;
     }
     if matches!(node.data, Content::Structure) {
-        for &child in &node.children {
+        for &child in node
+            .children
+            .iter()
+            .filter(|child| !tree[child.index()].layer)
+        {
+            snapshot_widget(tree, child, boxes, texts, clips, focused, nodes);
+        }
+        for &child in node
+            .children
+            .iter()
+            .filter(|child| tree[child.index()].layer)
+        {
             snapshot_widget(tree, child, boxes, texts, clips, focused, nodes);
         }
         return;
@@ -193,7 +204,18 @@ pub(super) fn snapshot_widget(
             style.border_radius,
         ));
     }
-    for &child in &node.children {
+    for &child in node
+        .children
+        .iter()
+        .filter(|child| !tree[child.index()].layer)
+    {
+        snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
+    }
+    for &child in node
+        .children
+        .iter()
+        .filter(|child| tree[child.index()].layer)
+    {
         snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
     }
 }
@@ -208,8 +230,9 @@ pub(super) fn collect_hit(
     path: &mut Vec<Slot>,
 ) -> bool {
     let node = &tree[slot.index()];
+    let structure = matches!(node.data, Content::Structure);
     if !node.state.visible
-        || !contains(&boxes[slot.index()], x, y)
+        || (!structure && !contains(&boxes[slot.index()], x, y))
         || !clips.iter().all(|clip| clip.contains(x, y))
     {
         return false;
@@ -230,9 +253,24 @@ pub(super) fn collect_hit(
 
     path.push(slot);
     for &child in node.children.iter().rev() {
+        if !tree[child.index()].layer {
+            continue;
+        }
         if collect_hit(tree, child, boxes, &child_clips, x, y, path) {
             return true;
         }
+    }
+    for &child in node.children.iter().rev() {
+        if tree[child.index()].layer {
+            continue;
+        }
+        if collect_hit(tree, child, boxes, &child_clips, x, y, path) {
+            return true;
+        }
+    }
+    if node.layer || structure {
+        path.pop();
+        return false;
     }
     true
 }

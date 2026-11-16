@@ -43,4 +43,5 @@ widgets! {
     Text => leaf,
     TextInput => leaf,
     Image => leaf,
+    Layer => container,
 }

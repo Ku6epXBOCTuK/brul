@@ -1994,3 +1994,20 @@ fn themes_that_share_a_variant_are_an_error() {
         error.message
     );
 }
+
+#[test]
+fn emits_a_layer() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    Layer {
+        Text { "x" }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(
+        module.contains("brul::gui::Widget::layer(vec!["),
+        "{module}"
+    );
+}

@@ -270,6 +270,7 @@ pub struct NodeShape<'a, C> {
     pub content: C,
     pub children: &'a [u32],
     pub transparent: bool,
+    pub layer: bool,
 }
 
 struct Entry<C> {
@@ -282,6 +283,7 @@ struct Entry<C> {
     scroll: ScrollOffset,
     content: C,
     children: Vec<u32>,
+    layer: bool,
 }
 
 pub struct Layouter<C> {
@@ -342,6 +344,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
             entry.offset = shape.offset;
             entry.scroll = shape.scroll;
             entry.children = shape.children.to_vec();
+            entry.layer = shape.layer;
             let Some(node) = entry.node else {
                 entry.nodes = nodes;
                 return;
@@ -386,6 +389,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
                 scroll: shape.scroll,
                 content: shape.content,
                 children: shape.children.to_vec(),
+                layer: shape.layer,
             },
         );
     }
@@ -516,23 +520,27 @@ impl<C> Layouter<C> {
         let mut bounds: Option<(i32, i32, i32, i32)> = None;
         for child_key in &entry.children {
             let child = self.entries.get(child_key).expect("layout child");
-            let (child_x, child_y) = match child.node {
-                Some(node) => {
-                    let placed = self.tree.layout(node).expect("layout tree");
-                    let location = (placed.location.x as i32, placed.location.y as i32);
-                    child_position(
-                        own.direction,
-                        own.scroll,
-                        own.frame,
-                        own.origin,
-                        child.offset,
-                        location,
-                    )
+            let (child_x, child_y) = if child.layer {
+                (0, 0)
+            } else {
+                match child.node {
+                    Some(node) => {
+                        let placed = self.tree.layout(node).expect("layout tree");
+                        let location = (placed.location.x as i32, placed.location.y as i32);
+                        child_position(
+                            own.direction,
+                            own.scroll,
+                            own.frame,
+                            own.origin,
+                            child.offset,
+                            location,
+                        )
+                    }
+                    None => (own.frame.0, own.frame.1),
                 }
-                None => (own.frame.0, own.frame.1),
             };
             self.collect_entry(*child_key, child_x, child_y, own, boxes);
-            if entry.node.is_none() {
+            if entry.node.is_none() && !child.layer {
                 let placed = &boxes[*child_key as usize];
                 let right = placed.x + placed.width as i32;
                 let bottom = placed.y + placed.height as i32;
@@ -878,6 +886,7 @@ mod tests {
                     },
                     children: &[],
                     transparent: false,
+                    layer: false,
                 },
             );
             layouter.node(
@@ -893,6 +902,7 @@ mod tests {
                     },
                     children: &[1],
                     transparent: false,
+                    layer: false,
                 },
             );
             layouter.finish();

@@ -89,6 +89,7 @@ pub struct Widget {
     offset: Option<Offset>,
     draggable: bool,
     focusable: bool,
+    layer: bool,
 }
 
 enum Content {
@@ -163,6 +164,12 @@ impl Widget {
         Self::view(Direction::Column, children)
     }
 
+    pub fn layer(children: Vec<Self>) -> Self {
+        let mut widget = Self::column(children);
+        widget.layer = true;
+        widget
+    }
+
     pub fn text(content: impl Into<String>) -> Self {
         Self::styled_text(content, TextStyle::default())
     }
@@ -222,6 +229,7 @@ impl Widget {
             offset: None,
             draggable: false,
             focusable: false,
+            layer: false,
         }
     }
 
