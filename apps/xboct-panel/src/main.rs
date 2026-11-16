@@ -585,14 +585,7 @@ fn main() -> ExitCode {
     };
 
     let path = default_path();
-    let config = match Config::load_or_create(&path) {
-        Ok(config) => config,
-        Err(failure) => {
-            error!(%failure, "config is unusable");
-            eprintln!("panel: {failure}");
-            return ExitCode::FAILURE;
-        }
-    };
+    let config = Config::load_or_create(&path);
     info!(
         path = %path.display(),
         entries = config.entries.len(),

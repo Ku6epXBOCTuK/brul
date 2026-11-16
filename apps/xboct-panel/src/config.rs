@@ -5,6 +5,7 @@ use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use brul::logging::warn;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
@@ -215,19 +216,27 @@ impl Config {
         Ok(())
     }
 
-    pub fn load_or_create(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
+    pub fn load_or_create(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
         match std::fs::read_to_string(path) {
-            Ok(source) => Self::parse(&source, path),
+            Ok(source) => match Self::parse(&source, path) {
+                Ok(config) => config,
+                Err(error) => {
+                    warn!(%error, "config is unusable, using the defaults");
+                    Self::default()
+                }
+            },
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 let config = Self::default();
-                config.save(path)?;
-                Ok(config)
+                if let Err(error) = config.save(path) {
+                    warn!(%error, "config is not written");
+                }
+                config
             }
-            Err(error) => Err(ConfigError::Read {
-                path: path.to_path_buf(),
-                message: error.to_string(),
-            }),
+            Err(error) => {
+                warn!(path = %path.display(), %error, "config is unreadable, using the defaults");
+                Self::default()
+            }
         }
     }
 }
@@ -458,8 +467,17 @@ mod tests {
     #[test]
     fn a_missing_config_is_written_and_loaded() {
         let path = temp_file("missing");
-        let config = Config::load_or_create(&path).expect("config");
+        let config = Config::load_or_create(&path);
         assert_eq!(config, Config::default());
         assert!(path.exists(), "config was not written");
+    }
+
+    #[test]
+    fn a_broken_config_loads_the_defaults() {
+        let path = temp_file("broken-default");
+        std::fs::write(&path, "entries = [1, 2").expect("write config");
+        let config = Config::load_or_create(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(config, Config::default());
     }
 }
