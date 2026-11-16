@@ -123,7 +123,7 @@ impl WidgetTree {
         }
     }
 
-    fn within_scope(&self, scope: Slot, slot: Slot) -> bool {
+    pub(super) fn within_scope(&self, scope: Slot, slot: Slot) -> bool {
         if scope == slot {
             return true;
         }

@@ -432,6 +432,78 @@ fn an_inner_scroll_container_wins_over_the_root() {
     assert_eq!(tail.y, 80);
 }
 
+fn scrollable_list() -> (Widget, WidgetId) {
+    let first = Widget::text("one").with_layout(fixed(80, 60));
+    let first_id = first.id();
+    let list = Widget::column(vec![first, Widget::text("two").with_layout(fixed(80, 60))])
+        .with_layout(fixed(80, 80))
+        .with_styles(StyleSet::new(WidgetStyle {
+            clip: true,
+            scroll: true,
+            ..WidgetStyle::default()
+        }));
+    (list, first_id)
+}
+
+#[test]
+fn a_modal_layer_keeps_the_wheel_away_from_the_content_below() {
+    let (list, first_id) = scrollable_list();
+    let card = Widget::text("dialog").with_layout(fixed(20, 20));
+    let dialog = Widget::layer(vec![card]).modal(true);
+    let root = Widget::column(vec![list, dialog]).with_layout(fixed(80, 100));
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 80,
+        height: 100,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+
+    assert!(!tree.wheel(60, 60, 40));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
+    assert_eq!(first.expect("first").y, 0);
+}
+
+#[test]
+fn a_plain_layer_still_lets_the_wheel_through() {
+    let (list, first_id) = scrollable_list();
+    let card = Widget::text("tooltip").with_layout(fixed(20, 20));
+    let layer = Widget::layer(vec![card]);
+    let root = Widget::column(vec![list, layer]).with_layout(fixed(80, 100));
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 80,
+        height: 100,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+
+    assert!(tree.wheel(60, 60, 40));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
+    assert_eq!(first.expect("first").y, -40);
+}
+
+#[test]
+fn a_list_inside_a_modal_layer_still_scrolls() {
+    let (list, first_id) = scrollable_list();
+    let dialog = Widget::layer(vec![list]).modal(true);
+    let root = Widget::column(vec![dialog]).with_layout(fixed(80, 100));
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 80,
+        height: 100,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+
+    assert!(tree.wheel(10, 10, 40));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
+    assert_eq!(first.expect("first").y, -40);
+}
+
 #[test]
 fn a_clipped_child_is_not_hit() {
     let child = Widget::column(Vec::new()).with_layout(fixed(32, 16));

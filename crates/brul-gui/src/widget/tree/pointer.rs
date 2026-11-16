@@ -16,7 +16,10 @@ impl WidgetTree {
                 && (node.styles.resolve(node.state).scroll
                     || (self.root_scroll && *slot == self.root))
         });
-        let Some(target) = target else {
+        let Some(target) = target.filter(|target| {
+            self.modal_scope()
+                .is_none_or(|scope| self.within_scope(scope, *target))
+        }) else {
             return false;
         };
         let Some(geometry) = self.geometry.as_ref() else {
