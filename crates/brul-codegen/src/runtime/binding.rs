@@ -99,7 +99,6 @@ pub enum Write {
 }
 
 pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
-    binding.component.borrow().track();
     let count = binding.scopes.len();
     binding
         .component

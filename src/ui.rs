@@ -279,7 +279,6 @@ impl<T: Theme> Ui<T> {
             let scope = self.scope.child();
             scope.run(|| {
                 Effect::new(move || {
-                    component.borrow().track();
                     let count = scopes.len();
                     component.borrow_mut().push_binding_scopes(&scopes);
                     let evaluated = (structure.value)(&mut component.borrow_mut());
@@ -507,7 +506,6 @@ impl<T: Theme> Ui<T> {
 }
 
 pub(crate) fn apply_prop(prop: &PropBinding) {
-    prop.component.borrow().track();
     let count = prop.scopes.len();
     prop.component
         .borrow_mut()
@@ -565,7 +563,6 @@ mod tests {
     }
 
     fn shown(component: &mut Component) -> Result<Value, Error> {
-        component.track();
         let flag = component.read("shown")?.as_flag();
         Ok(Value::Bool(flag.unwrap_or(false)))
     }
