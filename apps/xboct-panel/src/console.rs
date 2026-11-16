@@ -1,36 +1,13 @@
 //! Console programs under conhost: hidden window, show and hide, exit code, restart.
 
 use std::collections::HashMap;
-use std::mem::{size_of, zeroed};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HWND, LocalFree, WAIT_OBJECT_0};
-use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
-};
-use windows_sys::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-    SetInformationJobObject, TerminateJobObject,
-};
-use windows_sys::Win32::System::Threading::{
-    CreateProcessW, GetExitCodeProcess, OpenProcess, PROCESS_INFORMATION,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, ResumeThread,
-    STARTF_USESHOWWINDOW, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
-};
-use windows_sys::Win32::UI::Shell::CommandLineToArgvW;
-use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetWindowThreadProcessId, IsWindow, IsWindowVisible, PostMessageW,
-    SW_HIDE, SW_SHOWNORMAL, SetForegroundWindow, SetWindowTextW, ShowWindow, WM_CLOSE,
-};
-
 use crate::config::{Entry, EntryKind, Restart};
-use crate::program::{self, ProgramState};
+use crate::program::ProgramState;
+use crate::sys::{Handle, Job, command, process, spawn_console, window};
 
-const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
-const CREATE_SUSPENDED: u32 = 0x0000_0004;
-const CREATE_UNICODE_ENVIRONMENT: u32 = 0x0000_0400;
 const STATUS_CONTROL_C_EXIT: u32 = 0xC000_013A;
 
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -54,14 +31,24 @@ pub struct Console {
     pub pid: Option<u32>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+#[error("process {pid} is still running")]
+pub struct StopFailure {
+    pid: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+#[error("no console window")]
+struct NoWindow;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConsoleError {
     #[error("no command for console '{name}'")]
     NoCommand { name: String },
     #[error("cannot start '{name}': {message}")]
     Spawn { name: String, message: String },
-    #[error("cannot stop '{name}': {message}")]
-    Stop { name: String, message: String },
+    #[error("cannot stop '{name}': {source}")]
+    Stop { name: String, source: StopFailure },
     #[error("console '{name}' is not running")]
     NotRunning { name: String },
     #[error("cannot find the console window of '{name}'")]
@@ -85,23 +72,10 @@ struct Track {
 struct Runner {
     conhost: u32,
     child: Option<u32>,
-    handle: *mut core::ffi::c_void,
-    job: *mut core::ffi::c_void,
-    window: HWND,
+    handle: Handle,
+    job: Option<Job>,
+    window: Option<window::Window>,
     started: Instant,
-}
-
-impl Drop for Runner {
-    fn drop(&mut self) {
-        unsafe {
-            if !self.handle.is_null() {
-                CloseHandle(self.handle);
-            }
-            if !self.job.is_null() {
-                CloseHandle(self.job);
-            }
-        }
-    }
 }
 
 impl Runner {
@@ -110,82 +84,50 @@ impl Runner {
     }
 
     fn alive(&self) -> bool {
-        if self.handle.is_null() {
-            return false;
-        }
-        unsafe { WaitForSingleObject(self.handle, 0) != WAIT_OBJECT_0 }
+        self.handle.is_alive()
     }
 
     fn exit_code(&self) -> Option<u32> {
-        if self.handle.is_null() || unsafe { WaitForSingleObject(self.handle, 0) } != WAIT_OBJECT_0
+        self.handle.exit_code()
+    }
+
+    fn stop(&self) -> Result<(), StopFailure> {
+        if let Some(window) = self.window {
+            window.close();
+        }
+        if self.handle.wait(CLOSE_TIMEOUT) {
+            return Ok(());
+        }
+        if let Some(job) = &self.job {
+            job.terminate();
+        }
+        self.handle.terminate();
+        if self.handle.wait(KILL_TIMEOUT) {
+            return Ok(());
+        }
+        Err(StopFailure { pid: self.pid() })
+    }
+
+    fn window(&mut self) -> Result<window::Window, NoWindow> {
+        if let Some(window) = self.window
+            && window.is_valid()
         {
-            return None;
+            return Ok(window);
         }
-        let mut code = 0;
-        unsafe {
-            GetExitCodeProcess(self.handle, &mut code);
-        }
-        Some(code)
-    }
-
-    fn wait(&self, timeout: Duration) -> bool {
-        if self.handle.is_null() {
-            return true;
-        }
-        unsafe { WaitForSingleObject(self.handle, timeout.as_millis() as u32) == WAIT_OBJECT_0 }
-    }
-
-    fn terminate(&self) {
-        unsafe {
-            if !self.job.is_null() {
-                TerminateJobObject(self.job, 1);
-            }
-            if !self.handle.is_null() {
-                TerminateProcess(self.handle, 1);
-            }
-        }
-    }
-
-    fn stop(&self) -> Result<(), String> {
-        if !self.window.is_null() {
-            unsafe {
-                PostMessageW(self.window, WM_CLOSE, 0, 0);
-            }
-        }
-        if self.wait(CLOSE_TIMEOUT) {
-            return Ok(());
-        }
-        self.terminate();
-        if self.wait(KILL_TIMEOUT) {
-            return Ok(());
-        }
-        Err(format!("process {} is still running", self.pid()))
-    }
-
-    fn window(&mut self) -> Result<HWND, ()> {
-        if !self.window.is_null() && unsafe { IsWindow(self.window) } != 0 {
-            return Ok(self.window);
-        }
-        let found = find_window(self.conhost, ADOPT_TIMEOUT);
-        if found.is_null() {
-            return Err(());
-        }
-        self.window = found;
+        let found = window::find_console(self.conhost, ADOPT_TIMEOUT).ok_or(NoWindow)?;
+        self.window = Some(found);
         Ok(found)
     }
 
-    fn toggle(&mut self) -> Result<bool, ()> {
+    fn toggle(&mut self) -> Result<bool, NoWindow> {
         let window = self.window()?;
-        let visible = unsafe { IsWindowVisible(window) } != 0;
-        unsafe {
-            if visible {
-                ShowWindow(window, SW_HIDE);
-            } else {
-                ShowWindow(window, SW_SHOWNORMAL);
-                SetForegroundWindow(window);
-            }
+        if window.is_visible() {
+            window.hide();
+            Ok(false)
+        } else {
+            window.show();
+            Ok(true)
         }
-        Ok(!visible)
     }
 }
 
@@ -244,15 +186,15 @@ impl Consoles {
         track.gave_up = false;
         track.next_at = None;
         if let Some(runner) = track.runner.take() {
-            return runner.stop().map_err(|message| ConsoleError::Stop {
+            return runner.stop().map_err(|source| ConsoleError::Stop {
                 name: entry.name.clone(),
-                message,
+                source,
             });
         }
         if let Some(pid) = running_pid(entry) {
-            kill(pid).map_err(|message| ConsoleError::Stop {
+            kill(pid).map_err(|source| ConsoleError::Stop {
                 name: entry.name.clone(),
-                message,
+                source,
             })?;
         }
         Ok(())
@@ -271,7 +213,7 @@ impl Consoles {
             .ok_or_else(|| ConsoleError::NotRunning {
                 name: entry.name.clone(),
             })?;
-        runner.toggle().map_err(|()| ConsoleError::Window {
+        runner.toggle().map_err(|_| ConsoleError::Window {
             name: entry.name.clone(),
         })
     }
@@ -335,8 +277,8 @@ fn is_user_stop(code: u32) -> bool {
 
 fn running_pid(entry: &Entry) -> Option<u32> {
     let command = entry.command.as_deref()?;
-    let (program, _) = split_command(command).ok()?;
-    program::find_by_exe(&program)
+    let (program, _) = command::split(command).ok()?;
+    process::find_by_exe(&program)
 }
 
 fn spawn(entry: &Entry) -> Result<Runner, ConsoleError> {
@@ -346,377 +288,98 @@ fn spawn(entry: &Entry) -> Result<Runner, ConsoleError> {
         .ok_or_else(|| ConsoleError::NoCommand {
             name: entry.name.clone(),
         })?;
-    let (program, mut args) = split_command(command).map_err(|message| ConsoleError::Spawn {
+    let (program, mut args) = command::split(command).map_err(|failure| ConsoleError::Spawn {
         name: entry.name.clone(),
-        message,
+        message: failure.to_string(),
     })?;
     args.extend(entry.args.iter().cloned());
-    let conhost = conhost_path();
-    let line = format!(
-        "{} {}",
-        program::quote(&conhost),
-        program::command_line(&program, &args)
-    );
-    let app = program::wide(&conhost);
-    let mut cmdline = program::wide(&line);
-    let cwd = entry
+    let workdir = entry
         .workdir
         .clone()
         .or_else(|| Path::new(&program).parent().map(Path::to_path_buf));
-    let cwd_wide = cwd.map(|dir| program::wide(&dir.to_string_lossy()));
-    let environment = program::environment(&entry.env);
-    let mut startup: STARTUPINFOW = unsafe { zeroed() };
-    startup.cb = size_of::<STARTUPINFOW>() as u32;
-    startup.dwFlags = STARTF_USESHOWWINDOW;
-    startup.wShowWindow = SW_HIDE as u16;
-    let mut process: PROCESS_INFORMATION = unsafe { zeroed() };
-    let ok = unsafe {
-        CreateProcessW(
-            app.as_ptr(),
-            cmdline.as_mut_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            0,
-            CREATE_NEW_CONSOLE | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
-            environment.as_ref().map_or(std::ptr::null(), |block| {
-                block.as_ptr().cast::<core::ffi::c_void>()
-            }),
-            cwd_wide
-                .as_ref()
-                .map_or(std::ptr::null(), |wide| wide.as_ptr()),
-            &startup,
-            &mut process,
-        )
+    let failure = |message: String| ConsoleError::Spawn {
+        name: entry.name.clone(),
+        message,
     };
-    if ok == 0 {
-        let error = unsafe { GetLastError() };
-        return Err(ConsoleError::Spawn {
-            name: entry.name.clone(),
-            message: format!("CreateProcessW failed (error {error}): {program}"),
-        });
+    let spawned = spawn_console(&program, &args, workdir.as_deref(), &entry.env)
+        .map_err(|error| failure(format!("{error}: {program}")))?;
+    let job =
+        Job::new().map_err(|error| failure(format!("cannot create a job object: {error}")))?;
+    if let Err(error) = job.assign(spawned.process()) {
+        spawned.process().terminate();
+        return Err(failure(format!(
+            "cannot put conhost into the job object: {error}"
+        )));
     }
-
-    let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
-    let mut failure = String::new();
-    if job.is_null() {
-        failure = String::from("cannot create a job object");
+    let conhost = spawned.pid();
+    let conhost_handle = spawned.resume();
+    let child = process::wait_for_child(conhost, CHILD_TIMEOUT);
+    let handle = match child.and_then(Handle::open) {
+        Some(child_handle) => child_handle,
+        None => conhost_handle,
+    };
+    let Some(window) = window::find_console(conhost, WINDOW_TIMEOUT) else {
+        job.terminate();
+        handle.terminate();
+        return Err(failure(String::from(
+            "console window not found, is it a console program?",
+        )));
+    };
+    window.set_title(&entry.name);
+    if entry.hidden {
+        window.hide();
     } else {
-        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        let configured = unsafe {
-            SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                &limits as *const _ as *const _,
-                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-            )
-        };
-        if configured == 0 {
-            failure = String::from("cannot configure the job object");
-        } else if unsafe { AssignProcessToJobObject(job, process.hProcess) } == 0 {
-            failure = String::from("cannot put conhost into the job object");
-        }
-    }
-    if !failure.is_empty() {
-        unsafe {
-            TerminateProcess(process.hProcess, 1);
-            CloseHandle(process.hThread);
-            CloseHandle(process.hProcess);
-            if !job.is_null() {
-                CloseHandle(job);
-            }
-        }
-        return Err(ConsoleError::Spawn {
-            name: entry.name.clone(),
-            message: failure,
-        });
-    }
-
-    unsafe {
-        ResumeThread(process.hThread);
-        CloseHandle(process.hThread);
-    }
-
-    let child = find_child(process.dwProcessId, CHILD_TIMEOUT);
-    let handle = match child.and_then(open_handle) {
-        Some(handle) => {
-            unsafe {
-                CloseHandle(process.hProcess);
-            }
-            handle
-        }
-        None => process.hProcess,
-    };
-    let window = find_window(process.dwProcessId, WINDOW_TIMEOUT);
-    if window.is_null() {
-        unsafe {
-            TerminateJobObject(job, 1);
-            CloseHandle(handle);
-            CloseHandle(job);
-        }
-        return Err(ConsoleError::Spawn {
-            name: entry.name.clone(),
-            message: String::from("console window not found, is it a console program?"),
-        });
-    }
-
-    let title = program::wide(&entry.name);
-    unsafe {
-        SetWindowTextW(window, title.as_ptr());
-        if entry.hidden {
-            ShowWindow(window, SW_HIDE);
-        } else {
-            ShowWindow(window, SW_SHOWNORMAL);
-        }
+        window.show();
     }
 
     Ok(Runner {
-        conhost: process.dwProcessId,
+        conhost,
         child,
         handle,
-        job,
-        window,
+        job: Some(job),
+        window: Some(window),
         started: Instant::now(),
     })
 }
 
 fn adopt(entry: &Entry, pid: u32) -> Option<Runner> {
-    let handle = open_handle(pid)?;
-    let conhost = parent_of(pid).unwrap_or(0);
+    let handle = Handle::open(pid)?;
+    let conhost = process::parent_of(pid).unwrap_or(0);
     let window = if conhost == 0 {
-        std::ptr::null_mut()
+        None
     } else {
-        find_window(conhost, ADOPT_TIMEOUT)
+        window::find_console(conhost, ADOPT_TIMEOUT)
     };
-    if !window.is_null() {
-        let title = program::wide(&entry.name);
-        unsafe {
-            SetWindowTextW(window, title.as_ptr());
-        }
+    if let Some(window) = window {
+        window.set_title(&entry.name);
     }
     Some(Runner {
         conhost,
         child: Some(pid),
         handle,
-        job: std::ptr::null_mut(),
+        job: None,
         window,
         started: Instant::now(),
     })
 }
 
-fn kill(pid: u32) -> Result<(), String> {
-    let Some(handle) = open_handle(pid) else {
+fn kill(pid: u32) -> Result<(), StopFailure> {
+    let Some(handle) = Handle::open(pid) else {
         return Ok(());
     };
-    let handle = Handle(handle);
-    if unsafe { WaitForSingleObject(handle.0, 0) } == WAIT_OBJECT_0 {
+    if !handle.is_alive() {
         return Ok(());
     }
-    unsafe {
-        TerminateProcess(handle.0, 1);
-    }
-    if unsafe { WaitForSingleObject(handle.0, KILL_TIMEOUT.as_millis() as u32) } == WAIT_OBJECT_0 {
+    handle.terminate();
+    if handle.wait(KILL_TIMEOUT) {
         return Ok(());
     }
-    Err(format!("process {pid} is still running"))
-}
-
-struct Handle(*mut core::ffi::c_void);
-
-impl Drop for Handle {
-    fn drop(&mut self) {
-        unsafe {
-            CloseHandle(self.0);
-        }
-    }
-}
-
-fn open_handle(pid: u32) -> Option<*mut core::ffi::c_void> {
-    let handle = unsafe {
-        OpenProcess(
-            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE | PROCESS_TERMINATE,
-            0,
-            pid,
-        )
-    };
-    (!handle.is_null()).then_some(handle)
-}
-
-fn conhost_path() -> String {
-    std::env::var("SystemRoot").unwrap_or_else(|_| String::from(r"C:\Windows"))
-        + r"\System32\conhost.exe"
-}
-
-fn split_command(command: &str) -> Result<(String, Vec<String>), String> {
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return Err(String::from("command is empty"));
-    }
-    let wide = program::wide(trimmed);
-    let mut argc = 0;
-    let argv = unsafe { CommandLineToArgvW(wide.as_ptr(), &mut argc) };
-    if argv.is_null() || argc == 0 {
-        return Err(format!("cannot parse command {command:?}"));
-    }
-    let mut parts = Vec::with_capacity(argc as usize);
-    for index in 0..argc as usize {
-        let ptr = unsafe { *argv.add(index) };
-        let len = unsafe { wide_len(ptr) };
-        parts.push(String::from_utf16_lossy(unsafe {
-            std::slice::from_raw_parts(ptr, len)
-        }));
-    }
-    unsafe {
-        LocalFree(argv as *mut core::ffi::c_void);
-    }
-    let program = parts.remove(0);
-    Ok((program, parts))
-}
-
-unsafe fn wide_len(ptr: *const u16) -> usize {
-    let mut len = 0;
-    while unsafe { *ptr.add(len) } != 0 {
-        len += 1;
-    }
-    len
-}
-
-fn find_child(parent: u32, timeout: Duration) -> Option<u32> {
-    let deadline = Instant::now() + timeout;
-    loop {
-        if let Some(child) = child_of(parent) {
-            return Some(child);
-        }
-        if Instant::now() >= deadline {
-            return None;
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-}
-
-fn child_of(parent: u32) -> Option<u32> {
-    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snapshot.is_null() {
-        return None;
-    }
-    let mut found = None;
-    let mut entry: PROCESSENTRY32W = unsafe { zeroed() };
-    entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
-    unsafe {
-        if Process32FirstW(snapshot, &mut entry) != 0 {
-            loop {
-                if entry.th32ParentProcessID == parent && entry.th32ProcessID != 0 {
-                    found = Some(entry.th32ProcessID);
-                    break;
-                }
-                if Process32NextW(snapshot, &mut entry) == 0 {
-                    break;
-                }
-            }
-        }
-        CloseHandle(snapshot);
-    }
-    found
-}
-
-fn parent_of(pid: u32) -> Option<u32> {
-    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snapshot.is_null() {
-        return None;
-    }
-    let mut found = None;
-    let mut entry: PROCESSENTRY32W = unsafe { zeroed() };
-    entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
-    unsafe {
-        if Process32FirstW(snapshot, &mut entry) != 0 {
-            loop {
-                if entry.th32ProcessID == pid {
-                    found = Some(entry.th32ParentProcessID);
-                    break;
-                }
-                if Process32NextW(snapshot, &mut entry) == 0 {
-                    break;
-                }
-            }
-        }
-        CloseHandle(snapshot);
-    }
-    found
-}
-
-struct WindowSearch {
-    conhost: u32,
-    found: HWND,
-}
-
-fn find_window(conhost: u32, timeout: Duration) -> HWND {
-    let deadline = Instant::now() + timeout;
-    loop {
-        let mut search = WindowSearch {
-            conhost,
-            found: std::ptr::null_mut(),
-        };
-        unsafe {
-            EnumWindows(Some(find_console_window), &mut search as *mut _ as isize);
-        }
-        if !search.found.is_null() {
-            return search.found;
-        }
-        if Instant::now() >= deadline {
-            return std::ptr::null_mut();
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-}
-
-unsafe extern "system" fn find_console_window(window: HWND, lparam: isize) -> i32 {
-    let search = unsafe { &mut *(lparam as *mut WindowSearch) };
-    let mut pid: u32 = 0;
-    unsafe {
-        GetWindowThreadProcessId(window, &mut pid);
-    }
-    if pid == 0 {
-        return 1;
-    }
-    let mut buffer = [0u16; 64];
-    let len = unsafe { GetClassNameW(window, buffer.as_mut_ptr(), 64) };
-    let class = String::from_utf16_lossy(&buffer[..len.max(0) as usize]);
-    if class == "ConsoleWindowClass" && belongs_to(pid, search.conhost) {
-        search.found = window;
-        return 0;
-    }
-    1
-}
-
-fn belongs_to(window_pid: u32, conhost: u32) -> bool {
-    window_pid == conhost || parent_of(window_pid).is_some_and(|parent| parent == conhost)
+    Err(StopFailure { pid })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_quoted_command_with_spaces_is_split() {
-        let (program, args) =
-            split_command(r#""C:\Program Files\Deskflow\deskflow-core.exe" server -s "a b.conf""#)
-                .expect("command");
-
-        assert_eq!(program, r"C:\Program Files\Deskflow\deskflow-core.exe");
-        assert_eq!(
-            args,
-            vec![
-                String::from("server"),
-                String::from("-s"),
-                String::from("a b.conf")
-            ]
-        );
-    }
-
-    #[test]
-    fn a_blank_command_is_rejected() {
-        assert!(split_command("   ").is_err());
-    }
 
     #[test]
     fn the_restart_delay_grows_to_its_cap() {
@@ -793,7 +456,7 @@ mod tests {
     fn an_adopted_console_is_found_by_its_command() {
         let (entry, dir) = ping_console("adopted");
         let (program, args) =
-            split_command(entry.command.as_deref().expect("command")).expect("split");
+            command::split(entry.command.as_deref().expect("command")).expect("split");
         let mut child = std::process::Command::new(program)
             .args(args)
             .spawn()

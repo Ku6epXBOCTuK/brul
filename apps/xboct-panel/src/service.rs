@@ -1,28 +1,15 @@
 //! Windows services from the SCM: state, start type and display name.
 
 use std::fmt;
-use std::mem::{size_of, zeroed};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{
-    ERROR_ACCESS_DENIED, ERROR_INSUFFICIENT_BUFFER, ERROR_SERVICE_ALREADY_RUNNING,
-    ERROR_SERVICE_NOT_ACTIVE, GetLastError,
-};
-use windows_sys::Win32::System::Services::{
-    CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW, QUERY_SERVICE_CONFIGW,
-    QueryServiceConfigW, QueryServiceStatusEx, SC_HANDLE, SC_MANAGER_CONNECT,
-    SC_STATUS_PROCESS_INFO, SERVICE_AUTO_START, SERVICE_BOOT_START, SERVICE_CONTINUE_PENDING,
-    SERVICE_CONTROL_STOP, SERVICE_DEMAND_START, SERVICE_DISABLED, SERVICE_PAUSE_PENDING,
-    SERVICE_PAUSED, SERVICE_QUERY_CONFIG, SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START,
-    SERVICE_START_PENDING, SERVICE_STATUS, SERVICE_STATUS_PROCESS, SERVICE_STOP,
-    SERVICE_STOP_PENDING, SERVICE_STOPPED, SERVICE_SYSTEM_START, StartServiceW,
-};
-
 use crate::config::{Entry, EntryKind};
-
-const QUERY_ACCESS: u32 = SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS;
-const CONTROL_ACCESS: u32 = QUERY_ACCESS | SERVICE_START | SERVICE_STOP;
+use crate::sys::service::{
+    self, ACCESS_DENIED, ALREADY_RUNNING, AUTO_START, BOOT_START, CONTINUE_PENDING, CONTROL,
+    DEMAND_START, DISABLED, NOT_ACTIVE, PAUSE_PENDING, PAUSED, QUERY, RUNNING, START_PENDING,
+    STOP_PENDING, STOPPED, SYSTEM_START, ScManager, ScService,
+};
 
 const POLL: Duration = Duration::from_millis(100);
 const TIMEOUT: Duration = Duration::from_secs(15);
@@ -42,13 +29,13 @@ pub enum ServiceState {
 impl ServiceState {
     pub fn from_raw(raw: u32) -> Self {
         match raw {
-            SERVICE_STOPPED => Self::Stopped,
-            SERVICE_START_PENDING => Self::StartPending,
-            SERVICE_STOP_PENDING => Self::StopPending,
-            SERVICE_RUNNING => Self::Running,
-            SERVICE_CONTINUE_PENDING => Self::ContinuePending,
-            SERVICE_PAUSE_PENDING => Self::PausePending,
-            SERVICE_PAUSED => Self::Paused,
+            STOPPED => Self::Stopped,
+            START_PENDING => Self::StartPending,
+            STOP_PENDING => Self::StopPending,
+            RUNNING => Self::Running,
+            CONTINUE_PENDING => Self::ContinuePending,
+            PAUSE_PENDING => Self::PausePending,
+            PAUSED => Self::Paused,
             other => Self::Unknown(other),
         }
     }
@@ -87,11 +74,11 @@ pub enum StartType {
 impl StartType {
     pub fn from_raw(raw: u32) -> Self {
         match raw {
-            SERVICE_BOOT_START => Self::Boot,
-            SERVICE_SYSTEM_START => Self::System,
-            SERVICE_AUTO_START => Self::Automatic,
-            SERVICE_DEMAND_START => Self::Manual,
-            SERVICE_DISABLED => Self::Disabled,
+            BOOT_START => Self::Boot,
+            SYSTEM_START => Self::System,
+            AUTO_START => Self::Automatic,
+            DEMAND_START => Self::Manual,
+            DISABLED => Self::Disabled,
             other => Self::Unknown(other),
         }
     }
@@ -192,146 +179,90 @@ fn needs_start(state: ServiceState, start_type: StartType) -> bool {
     start_type == StartType::Manual && !state.is_running()
 }
 
-struct Manager(SC_HANDLE);
+struct Manager(ScManager);
 
 impl Manager {
     fn open() -> Result<Self, ServiceError> {
-        let handle =
-            unsafe { OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT) };
-        if handle.is_null() {
-            return Err(ServiceError::Manager { code: last_error() });
-        }
-        Ok(Self(handle))
+        service::connect()
+            .map(Manager)
+            .map_err(|error| ServiceError::Manager { code: error.code() })
     }
 
-    fn service(&self, name: &str, access: u32) -> Result<ServiceHandle, ServiceError> {
-        let wide = wide(name);
-        let handle = unsafe { OpenServiceW(self.0, wide.as_ptr(), access) };
-        if handle.is_null() {
-            return Err(open_error(name));
-        }
-        Ok(ServiceHandle(handle))
+    fn service(&self, name: &str, access: u32) -> Result<ScService, ServiceError> {
+        self.0
+            .open(name, access)
+            .map_err(|error| open_error(name, error))
+    }
+
+    fn status(&self, name: &str) -> Result<ServiceState, ServiceError> {
+        let status = self
+            .service(name, QUERY)?
+            .status()
+            .map_err(|error| ServiceError::Status {
+                name: name.to_owned(),
+                code: error.code(),
+            })?;
+        Ok(ServiceState::from_raw(status.state))
     }
 
     fn query(&self, spec: &Entry) -> Result<Service, ServiceError> {
         let name = spec.name.as_str();
-        let handle = self.service(name, QUERY_ACCESS)?;
-        let status = handle.status(name)?;
-        let config = handle.config(name)?;
+        let handle = self.service(name, QUERY)?;
+        let status = handle.status().map_err(|error| ServiceError::Status {
+            name: name.to_owned(),
+            code: error.code(),
+        })?;
+        let config = handle.config().map_err(|error| ServiceError::Config {
+            name: name.to_owned(),
+            code: error.code(),
+        })?;
         Ok(Service {
             name: name.to_owned(),
-            display: wide_string(config.lpDisplayName),
-            state: ServiceState::from_raw(status.dwCurrentState),
-            start_type: StartType::from_raw(config.dwStartType),
+            display: config.display,
+            state: ServiceState::from_raw(status.state),
+            start_type: StartType::from_raw(config.start_type),
             port: spec.port,
             log: spec.log.clone(),
         })
     }
 
     fn start(&self, name: &str) -> Result<(), ServiceError> {
-        let handle = self.service(name, CONTROL_ACCESS)?;
-        let done = unsafe { StartServiceW(handle.0, 0, std::ptr::null()) };
-        if done == 0 {
-            let code = last_error();
-            if code != ERROR_SERVICE_ALREADY_RUNNING {
-                return Err(ServiceError::Start {
-                    name: name.to_owned(),
-                    code,
-                });
-            }
+        let handle = self.service(name, CONTROL)?;
+        if let Err(error) = handle.start()
+            && error.code() != ALREADY_RUNNING
+        {
+            return Err(ServiceError::Start {
+                name: name.to_owned(),
+                code: error.code(),
+            });
         }
-        handle.wait_for(name, ServiceState::Running)
+        self.wait_for(name, ServiceState::Running)
     }
 
     fn stop(&self, name: &str) -> Result<(), ServiceError> {
-        let handle = self.service(name, CONTROL_ACCESS)?;
-        let mut status: SERVICE_STATUS = unsafe { zeroed() };
-        let done = unsafe { ControlService(handle.0, SERVICE_CONTROL_STOP, &mut status) };
-        if done == 0 {
-            let code = last_error();
-            if code != ERROR_SERVICE_NOT_ACTIVE {
-                return Err(ServiceError::Stop {
-                    name: name.to_owned(),
-                    code,
-                });
-            }
+        let handle = self.service(name, CONTROL)?;
+        if let Err(error) = handle.stop()
+            && error.code() != NOT_ACTIVE
+        {
+            return Err(ServiceError::Stop {
+                name: name.to_owned(),
+                code: error.code(),
+            });
         }
-        handle.wait_for(name, ServiceState::Stopped)
+        self.wait_for(name, ServiceState::Stopped)
     }
 
     fn restart(&self, name: &str) -> Result<(), ServiceError> {
-        let state = self.service(name, CONTROL_ACCESS)?.status(name)?;
-        if ServiceState::from_raw(state.dwCurrentState) != ServiceState::Stopped {
+        if self.status(name)? != ServiceState::Stopped {
             self.stop(name)?;
         }
         self.start(name)
-    }
-}
-
-impl Drop for Manager {
-    fn drop(&mut self) {
-        unsafe { CloseServiceHandle(self.0) };
-    }
-}
-
-struct ServiceHandle(SC_HANDLE);
-
-impl ServiceHandle {
-    fn status(&self, name: &str) -> Result<SERVICE_STATUS_PROCESS, ServiceError> {
-        let mut status: SERVICE_STATUS_PROCESS = unsafe { zeroed() };
-        let mut needed = 0;
-        let size = size_of::<SERVICE_STATUS_PROCESS>() as u32;
-        let done = unsafe {
-            QueryServiceStatusEx(
-                self.0,
-                SC_STATUS_PROCESS_INFO,
-                &mut status as *mut SERVICE_STATUS_PROCESS as *mut u8,
-                size,
-                &mut needed,
-            )
-        };
-        if done == 0 {
-            return Err(ServiceError::Status {
-                name: name.to_owned(),
-                code: last_error(),
-            });
-        }
-        Ok(status)
-    }
-
-    fn config(&self, name: &str) -> Result<QUERY_SERVICE_CONFIGW, ServiceError> {
-        let slot = size_of::<QUERY_SERVICE_CONFIGW>();
-        let mut buffer = vec![QUERY_SERVICE_CONFIGW::default(); 1];
-        let mut needed = 0;
-        let size = slot as u32;
-        let done = unsafe { QueryServiceConfigW(self.0, buffer.as_mut_ptr(), size, &mut needed) };
-        if done != 0 {
-            return Ok(buffer[0]);
-        }
-        if last_error() != ERROR_INSUFFICIENT_BUFFER {
-            return Err(ServiceError::Config {
-                name: name.to_owned(),
-                code: last_error(),
-            });
-        }
-
-        let slots = (needed as usize).div_ceil(slot).max(1);
-        buffer = vec![QUERY_SERVICE_CONFIGW::default(); slots];
-        let size = (slots * slot) as u32;
-        let done = unsafe { QueryServiceConfigW(self.0, buffer.as_mut_ptr(), size, &mut needed) };
-        if done == 0 {
-            return Err(ServiceError::Config {
-                name: name.to_owned(),
-                code: last_error(),
-            });
-        }
-        Ok(buffer[0])
     }
 
     fn wait_for(&self, name: &str, expected: ServiceState) -> Result<(), ServiceError> {
         let deadline = Instant::now() + TIMEOUT;
         loop {
-            let state = ServiceState::from_raw(self.status(name)?.dwCurrentState);
+            let state = self.status(name)?;
             if state == expected {
                 return Ok(());
             }
@@ -347,44 +278,17 @@ impl ServiceHandle {
     }
 }
 
-impl Drop for ServiceHandle {
-    fn drop(&mut self) {
-        unsafe { CloseServiceHandle(self.0) };
-    }
-}
-
-fn last_error() -> u32 {
-    unsafe { GetLastError() }
-}
-
-fn open_error(name: &str) -> ServiceError {
-    let code = last_error();
-    if code == ERROR_ACCESS_DENIED {
+fn open_error(name: &str, error: crate::sys::Error) -> ServiceError {
+    if error.code() == ACCESS_DENIED {
         ServiceError::AccessDenied {
             name: name.to_owned(),
         }
     } else {
         ServiceError::Open {
             name: name.to_owned(),
-            code,
+            code: error.code(),
         }
     }
-}
-
-fn wide(text: &str) -> Vec<u16> {
-    text.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
-fn wide_string(pointer: *const u16) -> String {
-    if pointer.is_null() {
-        return String::new();
-    }
-    let mut length = 0;
-    while length < 1024 && unsafe { *pointer.add(length) } != 0 {
-        length += 1;
-    }
-    let units = unsafe { std::slice::from_raw_parts(pointer, length) };
-    String::from_utf16_lossy(units)
 }
 
 #[cfg(test)]
@@ -393,29 +297,23 @@ mod tests {
 
     #[test]
     fn every_known_state_is_named() {
+        assert_eq!(ServiceState::from_raw(RUNNING), ServiceState::Running);
+        assert_eq!(ServiceState::from_raw(STOPPED), ServiceState::Stopped);
         assert_eq!(
-            ServiceState::from_raw(SERVICE_RUNNING),
-            ServiceState::Running
-        );
-        assert_eq!(
-            ServiceState::from_raw(SERVICE_STOPPED),
-            ServiceState::Stopped
-        );
-        assert_eq!(
-            ServiceState::from_raw(SERVICE_START_PENDING),
+            ServiceState::from_raw(START_PENDING),
             ServiceState::StartPending
         );
         assert_eq!(
-            ServiceState::from_raw(SERVICE_STOP_PENDING),
+            ServiceState::from_raw(STOP_PENDING),
             ServiceState::StopPending
         );
         assert_eq!(
-            ServiceState::from_raw(SERVICE_PAUSE_PENDING),
+            ServiceState::from_raw(PAUSE_PENDING),
             ServiceState::PausePending
         );
-        assert_eq!(ServiceState::from_raw(SERVICE_PAUSED), ServiceState::Paused);
+        assert_eq!(ServiceState::from_raw(PAUSED), ServiceState::Paused);
         assert_eq!(
-            ServiceState::from_raw(SERVICE_CONTINUE_PENDING),
+            ServiceState::from_raw(CONTINUE_PENDING),
             ServiceState::ContinuePending
         );
         assert_eq!(ServiceState::from_raw(99), ServiceState::Unknown(99));
@@ -424,14 +322,11 @@ mod tests {
 
     #[test]
     fn every_known_start_type_is_named() {
-        assert_eq!(
-            StartType::from_raw(SERVICE_AUTO_START),
-            StartType::Automatic
-        );
-        assert_eq!(StartType::from_raw(SERVICE_DEMAND_START), StartType::Manual);
-        assert_eq!(StartType::from_raw(SERVICE_DISABLED), StartType::Disabled);
-        assert_eq!(StartType::from_raw(SERVICE_BOOT_START), StartType::Boot);
-        assert_eq!(StartType::from_raw(SERVICE_SYSTEM_START), StartType::System);
+        assert_eq!(StartType::from_raw(AUTO_START), StartType::Automatic);
+        assert_eq!(StartType::from_raw(DEMAND_START), StartType::Manual);
+        assert_eq!(StartType::from_raw(DISABLED), StartType::Disabled);
+        assert_eq!(StartType::from_raw(BOOT_START), StartType::Boot);
+        assert_eq!(StartType::from_raw(SYSTEM_START), StartType::System);
         assert_eq!(StartType::from_raw(42), StartType::Unknown(42));
         assert_eq!(StartType::Manual.to_string(), "manual");
     }
@@ -442,12 +337,5 @@ mod tests {
         assert!(!needs_start(ServiceState::Running, StartType::Manual));
         assert!(!needs_start(ServiceState::Stopped, StartType::Automatic));
         assert!(!needs_start(ServiceState::Stopped, StartType::Disabled));
-    }
-
-    #[test]
-    fn a_wide_string_is_read_until_the_terminator() {
-        let text = wide("Services");
-        assert_eq!(wide_string(text.as_ptr()), "Services");
-        assert_eq!(wide_string(std::ptr::null()), "");
     }
 }

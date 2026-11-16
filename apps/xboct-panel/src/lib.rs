@@ -6,6 +6,7 @@ pub mod generated;
 pub mod log;
 pub mod program;
 pub mod service;
+pub(crate) mod sys;
 
 pub use config::{Config, ConfigError, Entry, EntryKind, Restart, default_path};
 pub use console::{Console, ConsoleError, Consoles};

@@ -8,8 +8,8 @@ use brul::logging::{error, info};
 use brul::{command, host};
 
 use xboct_panel::{
-    Config, Console, Consoles, Entry, EntryKind, Program, Service, Started, default_path,
-    generated, log, program, service,
+    Config, Console, Consoles, Entry, EntryKind, Program, Service, ServiceError, Started,
+    default_path, generated, log, program, service,
 };
 
 const LOG_LINES: usize = 40;
@@ -146,8 +146,8 @@ fn outcome(specs: &[Entry], consoles: &mut Consoles, status: String) -> Value {
     ]))
 }
 
-fn collect(specs: &[Entry], consoles: &mut Consoles) -> Result<Vec<Value>, String> {
-    let services = service::query_all(specs).map_err(|failure| failure.to_string())?;
+fn collect(specs: &[Entry], consoles: &mut Consoles) -> Result<Vec<Value>, ServiceError> {
+    let services = service::query_all(specs)?;
     let programs = program::query_all(specs);
     let console_rows = consoles.query(specs);
     Ok(specs

@@ -1,27 +1,14 @@
 //! Programs the panel launches itself: detached process, PID in the state file.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
-use std::mem::{size_of, zeroed};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HWND, WAIT_OBJECT_0};
-use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
-};
-use windows_sys::Win32::System::Threading::{
-    CREATE_NEW_PROCESS_GROUP, CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DETACHED_PROCESS,
-    OpenProcess, PROCESS_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
-    PROCESS_TERMINATE, QueryFullProcessImageNameW, STARTUPINFOW, TerminateProcess,
-    WaitForSingleObject,
-};
-use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, PostMessageW, WM_CLOSE,
-};
 
 use crate::config::{Entry, EntryKind, default_path};
+use crate::sys::{self, Handle, process, window};
 
 const STATE_FILE: &str = "xboct-panel.state.toml";
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -127,35 +114,18 @@ fn stop_with(entry: &Entry, state: &Path) -> Result<(), ProgramError> {
     let Some(pid) = find_pid(entry, &saved) else {
         return forget(state, &mut saved, &entry.name);
     };
-    let handle = unsafe {
-        OpenProcess(
-            PROCESS_TERMINATE | PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
-            0,
-            pid,
-        )
-    };
-    if handle.is_null() {
+    let Some(handle) = Handle::open(pid) else {
         return forget(state, &mut saved, &entry.name);
-    }
-    close_windows(pid);
-    let stopped = unsafe { WaitForSingleObject(handle, CLOSE_TIMEOUT.as_millis() as u32) };
-    if stopped != WAIT_OBJECT_0 {
-        unsafe {
-            TerminateProcess(handle, 0);
-        }
-        let killed = unsafe { WaitForSingleObject(handle, KILL_TIMEOUT.as_millis() as u32) };
-        if killed != WAIT_OBJECT_0 {
-            unsafe {
-                CloseHandle(handle);
-            }
+    };
+    window::close_all(pid);
+    if !handle.wait(CLOSE_TIMEOUT) {
+        handle.terminate();
+        if !handle.wait(KILL_TIMEOUT) {
             return Err(ProgramError::Stop {
                 name: entry.name.clone(),
                 message: format!("process {pid} is still running"),
             });
         }
-    }
-    unsafe {
-        CloseHandle(handle);
     }
     forget(state, &mut saved, &entry.name)
 }
@@ -196,88 +166,12 @@ fn save(path: &Path, saved: &Saved) -> Result<(), ProgramError> {
 fn find_pid(entry: &Entry, saved: &Saved) -> Option<u32> {
     let exe = entry.command.as_deref()?;
     if let Some(&pid) = saved.pids.get(&entry.name)
-        && alive(pid)
-        && exe_path(pid).is_some_and(|path| same_path(&path, exe))
+        && process::alive(pid)
+        && process::exe_path(pid).is_some_and(|path| process::same_path(&path, exe))
     {
         return Some(pid);
     }
-    find_by_exe(exe)
-}
-
-fn alive(pid: u32) -> bool {
-    let handle = unsafe {
-        OpenProcess(
-            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
-            0,
-            pid,
-        )
-    };
-    if handle.is_null() {
-        return false;
-    }
-    let exited = unsafe { WaitForSingleObject(handle, 0) } == WAIT_OBJECT_0;
-    unsafe {
-        CloseHandle(handle);
-    }
-    !exited
-}
-
-pub(crate) fn exe_path(pid: u32) -> Option<String> {
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-    if handle.is_null() {
-        return None;
-    }
-    let mut buffer = [0u16; 1024];
-    let mut size = buffer.len() as u32;
-    let ok = unsafe { QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &mut size) };
-    unsafe {
-        CloseHandle(handle);
-    }
-    (ok != 0).then(|| String::from_utf16_lossy(&buffer[..size as usize]))
-}
-
-pub(crate) fn find_by_exe(exe: &str) -> Option<u32> {
-    let file = Path::new(exe)
-        .file_name()
-        .map(|name| name.to_string_lossy().to_lowercase())?;
-    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snapshot.is_null() {
-        return None;
-    }
-    let mut entry: PROCESSENTRY32W = unsafe { zeroed() };
-    entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
-    let mut found = None;
-    unsafe {
-        if Process32FirstW(snapshot, &mut entry) != 0 {
-            loop {
-                let name = String::from_utf16_lossy(
-                    &entry.szExeFile[..entry.szExeFile.iter().position(|c| *c == 0).unwrap_or(0)],
-                );
-                if name.to_lowercase() == file
-                    && entry.th32ProcessID != 0
-                    && exe_path(entry.th32ProcessID).is_some_and(|path| same_path(&path, exe))
-                {
-                    found = Some(entry.th32ProcessID);
-                    break;
-                }
-                if Process32NextW(snapshot, &mut entry) == 0 {
-                    break;
-                }
-            }
-        }
-        CloseHandle(snapshot);
-    }
-    found
-}
-
-fn same_path(left: &str, right: &str) -> bool {
-    fn normalize(path: &str) -> String {
-        path.trim()
-            .trim_matches('"')
-            .replace('/', "\\")
-            .to_lowercase()
-    }
-    normalize(left) == normalize(right)
+    process::find_by_exe(exe)
 }
 
 fn spawn(entry: &Entry) -> Result<u32, ProgramError> {
@@ -293,143 +187,17 @@ fn spawn(entry: &Entry) -> Result<u32, ProgramError> {
             name: entry.name.clone(),
         });
     }
-    let exe_wide = wide(exe);
-    let mut cmdline = wide(&command_line(exe, &entry.args));
-    let cwd = entry
+    let workdir = entry
         .workdir
         .clone()
         .or_else(|| Path::new(exe).parent().map(Path::to_path_buf));
-    let cwd_wide = cwd.map(|dir| wide(&dir.to_string_lossy()));
-    let environment = environment(&entry.env);
-    let mut startup: STARTUPINFOW = unsafe { zeroed() };
-    startup.cb = size_of::<STARTUPINFOW>() as u32;
-    let mut process: PROCESS_INFORMATION = unsafe { zeroed() };
-    let ok = unsafe {
-        CreateProcessW(
-            exe_wide.as_ptr(),
-            cmdline.as_mut_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            0,
-            DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_UNICODE_ENVIRONMENT,
-            environment.as_ref().map_or(std::ptr::null(), |block| {
-                block.as_ptr().cast::<core::ffi::c_void>()
-            }),
-            cwd_wide
-                .as_ref()
-                .map_or(std::ptr::null(), |wide| wide.as_ptr()),
-            &startup,
-            &mut process,
-        )
-    };
-    if ok == 0 {
-        let error = unsafe { GetLastError() };
-        return Err(ProgramError::Spawn {
+    let (pid, process) = sys::spawn_detached(exe, &entry.args, workdir.as_deref(), &entry.env)
+        .map_err(|error| ProgramError::Spawn {
             name: entry.name.clone(),
-            message: format!("CreateProcessW failed (error {error}): {exe}"),
-        });
-    }
-    unsafe {
-        CloseHandle(process.hThread);
-        CloseHandle(process.hProcess);
-    }
-    Ok(process.dwProcessId)
-}
-
-pub(crate) fn command_line(exe: &str, args: &[String]) -> String {
-    let mut line = quote(exe);
-    for arg in args {
-        line.push(' ');
-        line.push_str(&quote(arg));
-    }
-    line
-}
-
-pub(crate) fn quote(arg: &str) -> String {
-    if !arg.is_empty() && !arg.contains([' ', '\t', '"']) {
-        return arg.to_string();
-    }
-    let mut out = String::with_capacity(arg.len() + 2);
-    out.push('"');
-    let mut backslashes = 0;
-    for c in arg.chars() {
-        match c {
-            '\\' => backslashes += 1,
-            '"' => {
-                out.extend(std::iter::repeat_n('\\', backslashes * 2 + 1));
-                out.push('"');
-                backslashes = 0;
-            }
-            _ => {
-                out.extend(std::iter::repeat_n('\\', backslashes));
-                out.push(c);
-                backslashes = 0;
-            }
-        }
-    }
-    out.extend(std::iter::repeat_n('\\', backslashes * 2));
-    out.push('"');
-    out
-}
-
-pub(crate) fn environment(overrides: &BTreeMap<String, String>) -> Option<Vec<u16>> {
-    if overrides.is_empty() {
-        return None;
-    }
-    let replaced: BTreeSet<String> = overrides.keys().map(|key| key.to_uppercase()).collect();
-    let mut pairs: Vec<(String, String)> = std::env::vars_os()
-        .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
-        .filter(|(key, _)| !replaced.contains(&key.to_uppercase()))
-        .collect();
-    pairs.extend(
-        overrides
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone())),
-    );
-    pairs.sort_by_key(|(key, _)| key.to_uppercase());
-    let mut block = Vec::new();
-    for (key, value) in pairs {
-        block.extend(format!("{key}={value}").encode_utf16());
-        block.push(0);
-    }
-    block.push(0);
-    Some(block)
-}
-
-struct CloseRequest {
-    pid: u32,
-    windows: Vec<HWND>,
-}
-
-fn close_windows(pid: u32) {
-    let mut request = CloseRequest {
-        pid,
-        windows: Vec::new(),
-    };
-    unsafe {
-        EnumWindows(Some(collect_windows), &mut request as *mut _ as isize);
-    }
-    for window in request.windows {
-        unsafe {
-            PostMessageW(window, WM_CLOSE, 0, 0);
-        }
-    }
-}
-
-unsafe extern "system" fn collect_windows(window: HWND, lparam: isize) -> i32 {
-    let request = unsafe { &mut *(lparam as *mut CloseRequest) };
-    let mut pid: u32 = 0;
-    unsafe {
-        GetWindowThreadProcessId(window, &mut pid);
-    }
-    if pid == request.pid {
-        request.windows.push(window);
-    }
-    1
-}
-
-pub(crate) fn wide(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(std::iter::once(0)).collect()
+            message: format!("{error}: {exe}"),
+        })?;
+    drop(process);
+    Ok(pid)
 }
 
 #[cfg(test)]
@@ -493,21 +261,12 @@ mod tests {
     }
 
     #[test]
-    fn paths_compare_ignoring_case_and_quotes() {
-        assert!(same_path(
-            r#""C:\Program Files\Deskflow\deskflow-core.exe""#,
-            r"c:/program files/deskflow/deskflow-core.exe"
-        ));
-        assert!(!same_path(r"C:\one\app.exe", r"C:\two\app.exe"));
-    }
-
-    #[test]
     fn a_program_is_started_once_and_stopped() {
         let state = temp_state("lifecycle");
         let entry = ping("lifecycle");
 
         let pid = start_with(&entry, &state).expect("start");
-        assert!(alive(pid));
+        assert!(process::alive(pid));
         assert_eq!(start_with(&entry, &state).expect("second start"), pid);
         let running = program(&entry, &load(&state));
         assert_eq!(running.state, ProgramState::Running);
@@ -515,7 +274,7 @@ mod tests {
 
         stop_with(&entry, &state).expect("stop");
 
-        assert!(!alive(pid));
+        assert!(!process::alive(pid));
         assert_eq!(program(&entry, &load(&state)).state, ProgramState::Stopped);
         let _ = std::fs::remove_file(&state);
         cleanup(&entry);
@@ -571,18 +330,5 @@ mod tests {
         assert_eq!(row.port, Some(8080));
         assert_eq!(row.log, entry.log);
         cleanup(&entry);
-    }
-
-    #[test]
-    fn an_environment_block_overrides_and_sorts() {
-        let mut overrides = BTreeMap::new();
-        overrides.insert(String::from("XBOCT_PANEL_TEST"), String::from("1"));
-
-        let block = environment(&overrides).expect("block");
-        let text = String::from_utf16_lossy(&block);
-
-        assert!(text.contains("XBOCT_PANEL_TEST=1\0"), "{text}");
-        assert!(text.ends_with("\0\0"), "{text}");
-        assert!(environment(&BTreeMap::new()).is_none());
     }
 }
