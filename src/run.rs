@@ -589,7 +589,7 @@ mod tests {
     fn a_handle_call_runs_the_script_function() {
         let seeds = [("name", Value::String("".into()))];
         let program = script::Program {
-            functions: vec![script::Function {
+            functions: vec![Arc::new(script::Function {
                 name: "mark".to_owned(),
                 params: Vec::new(),
                 body: vec![script::Statement::Expr(Expr::new(
@@ -606,7 +606,7 @@ mod tests {
                     },
                     Position::default(),
                 ))],
-            }],
+            })],
             statements: Vec::new(),
         };
         let component = generated_component(NAMES, Some(&program), &seeds).expect("component");
@@ -684,10 +684,12 @@ mod tests {
         script::Program {
             functions: ["handleKey", "handleSettingsKey"]
                 .into_iter()
-                .map(|name| script::Function {
-                    name: name.to_owned(),
-                    params: vec!["ev".to_owned()],
-                    body: vec![exit.clone()],
+                .map(|name| {
+                    Arc::new(script::Function {
+                        name: name.to_owned(),
+                        params: vec!["ev".to_owned()],
+                        body: vec![exit.clone()],
+                    })
                 })
                 .collect(),
             statements: Vec::new(),

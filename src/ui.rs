@@ -533,6 +533,7 @@ mod tests {
 
     use std::cell::RefCell;
     use std::rc::Rc;
+    use std::sync::Arc;
 
     use brul_gui::{Direction, Size, TextEngine, Texture, Widget};
     use brul_syntax::ast::{AssignOp, Expr, ExprKind, Position};
@@ -1488,7 +1489,11 @@ mod tests {
             return Err(unknown_theme());
         }
         let program = script::Program {
-            functions: vec![function("raise", Vec::new(), vec![raise("clicked")])],
+            functions: vec![Arc::new(function(
+                "raise",
+                Vec::new(),
+                vec![raise("clicked")],
+            ))],
             statements: Vec::new(),
         };
         let events = [runtime::ComponentEvent {
@@ -1536,11 +1541,11 @@ mod tests {
         let click = built.handlers[0].widget.expect("widget");
         let text = built.bindings[0].widget;
         let program = script::Program {
-            functions: vec![function(
+            functions: vec![Arc::new(function(
                 "applied",
                 Vec::new(),
                 vec![assign_string("label", "after")],
-            )],
+            ))],
             statements: Vec::new(),
         };
         crate::execute_program(&mut component.borrow_mut(), &program).expect("program");

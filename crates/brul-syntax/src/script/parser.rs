@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::ast::Expr;
 use crate::error::Error;
 use crate::lexer::{self, Punct, Span, Token, TokenKind};
@@ -14,7 +16,7 @@ pub fn parse(source: &str) -> Result<Program, Error> {
     let mut statements = Vec::new();
     while !parser.at_end() {
         if parser.at_keyword("function") {
-            functions.push(parser.function()?);
+            functions.push(Arc::new(parser.function()?));
         } else {
             statements.push(parser.statement()?);
         }

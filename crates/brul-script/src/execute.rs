@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use brul_syntax::script::{Program, Statement};
 
 use crate::component::Component;
@@ -7,7 +9,7 @@ use crate::value::Value;
 
 pub fn execute_program(component: &mut Component, program: &Program) -> Result<(), Error> {
     for function in &program.functions {
-        component.define_function(function.clone())?;
+        component.define_function(Arc::clone(function))?;
     }
     execute(component, &program.statements)
 }

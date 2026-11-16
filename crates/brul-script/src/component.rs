@@ -2,6 +2,7 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use brul_reactive::Signal;
 use brul_syntax::script::Function;
@@ -46,7 +47,7 @@ pub struct Component {
     index: Index,
     environment: Environment,
     properties: Vec<Property>,
-    functions: Vec<Function>,
+    functions: Vec<Arc<Function>>,
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
     build_scopes: Vec<Rc<[Variable]>>,
@@ -154,9 +155,10 @@ impl Component {
         }
     }
 
-    pub fn define_function(&mut self, function: Function) -> Result<(), Error> {
+    pub fn define_function(&mut self, function: impl Into<Arc<Function>>) -> Result<(), Error> {
+        let function = function.into();
         if self.has_function(&function.name) {
-            return Err(Error::FunctionRedeclared(function.name));
+            return Err(Error::FunctionRedeclared(function.name.clone()));
         }
         self.functions.push(function);
         Ok(())
@@ -167,17 +169,13 @@ impl Component {
     }
 
     pub fn call_function(&mut self, name: &str, arguments: Vec<Value>) -> Result<Value, Error> {
-        let Some(function) = self
-            .functions
-            .iter()
-            .find(|function| function.name == name)
-            .cloned()
-        else {
+        let Some(found) = self.functions.iter().find(|function| function.name == name) else {
             return Err(Error::UnknownFunction(name.to_owned()));
         };
+        let function = Arc::clone(found);
         if function.params.len() != arguments.len() {
             return Err(Error::FunctionArity {
-                name: function.name,
+                name: function.name.clone(),
                 expected: function.params.len(),
                 found: arguments.len(),
             });

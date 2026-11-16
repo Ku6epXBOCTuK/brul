@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position};
 use brul_syntax::script::{Function, Program, Statement, parse};
 
@@ -242,7 +244,7 @@ fn function_parses_params_and_body() {
     let program = parse("function launch(i) { let browser = browsers[i]; }").unwrap();
     assert_eq!(
         program.functions,
-        vec![Function {
+        vec![Arc::new(Function {
             name: "launch".to_owned(),
             params: vec!["i".to_owned()],
             body: vec![Statement::Let {
@@ -250,7 +252,7 @@ fn function_parses_params_and_body() {
                 name: "browser".to_owned(),
                 value: Some(index(ident("browsers"), ident("i"))),
             }],
-        }]
+        })]
     );
 }
 
@@ -259,11 +261,11 @@ fn function_without_params_parses_empty_list() {
     let program = parse("function exit() { quit(); }").unwrap();
     assert_eq!(
         program.functions,
-        vec![Function {
+        vec![Arc::new(Function {
             name: "exit".to_owned(),
             params: vec![],
             body: vec![Statement::Expr(call(ident("quit"), vec![]))],
-        }]
+        })]
     );
 }
 

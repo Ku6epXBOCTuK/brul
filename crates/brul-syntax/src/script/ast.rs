@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use crate::ast::Expr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub functions: Vec<Function>,
+    pub functions: Vec<Arc<Function>>,
     pub statements: Vec<Statement>,
 }
 
