@@ -21,10 +21,14 @@ impl<'a> Out<'a> {
     }
 
     pub(super) fn start(&mut self, args: fmt::Arguments<'_>) {
+        self.indent();
+        self.push(args);
+    }
+
+    pub(super) fn indent(&mut self) {
         for _ in 0..self.depth {
             self.text.push_str("    ");
         }
-        self.push(args);
     }
 
     pub(super) fn push(&mut self, args: fmt::Arguments<'_>) {

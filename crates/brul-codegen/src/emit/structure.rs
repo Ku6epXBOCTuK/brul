@@ -6,6 +6,7 @@ use brul_syntax::markup::{EachBlock, IfBlock};
 
 use super::Emit;
 use super::Frame;
+use super::Out;
 use super::expression::operation;
 use super::{contains_slot, items, items_spliced};
 
@@ -174,12 +175,24 @@ fn arm_body(
     if contains_slot(block) {
         let _ = writeln!(out, "{pad}{{");
         let _ = writeln!(out, "{inner}let mut children = Vec::new();");
-        items_spliced(out, block, emit, frame, counter)?;
+        items_spliced(
+            &mut Out::at(out, frame.depth()),
+            block,
+            emit,
+            frame,
+            counter,
+        )?;
         let _ = writeln!(out, "{inner}children");
         let _ = writeln!(out, "{pad}}}");
     } else {
         let _ = writeln!(out, "{pad}vec![");
-        items(out, block, emit, frame, counter)?;
+        items(
+            &mut Out::at(out, frame.depth()),
+            block,
+            emit,
+            frame,
+            counter,
+        )?;
         let _ = writeln!(out, "{pad}]");
     }
     Ok(())
@@ -256,10 +269,22 @@ fn each_body(
     let pad = "    ".repeat(frame.depth().saturating_sub(1));
     let mut counter = 0;
     if contains_slot(block) {
-        items_spliced(out, block, emit, frame, &mut counter)?;
+        items_spliced(
+            &mut Out::at(out, frame.depth()),
+            block,
+            emit,
+            frame,
+            &mut counter,
+        )?;
     } else if !block.items.is_empty() {
         let _ = writeln!(out, "{pad}children.extend([");
-        items(out, block, emit, frame, &mut counter)?;
+        items(
+            &mut Out::at(out, frame.depth()),
+            block,
+            emit,
+            frame,
+            &mut counter,
+        )?;
         let _ = writeln!(out, "{pad}]);");
     }
     Ok(())

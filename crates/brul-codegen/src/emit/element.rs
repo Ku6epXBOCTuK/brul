@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
@@ -10,12 +8,13 @@ use crate::styles;
 
 use super::Emit;
 use super::Frame;
+use super::Out;
 use super::classes;
 use super::{component, events, expression, structure};
 use crate::runtime::HandlerEvent;
 
 pub(super) fn widget(
-    out: &mut String,
+    out: &mut Out<'_>,
     element: &Element,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
@@ -27,15 +26,13 @@ pub(super) fn widget(
         .find(|import| import.name == element.name)
         .map(|import| import.definition)
     {
-        return component::component(out, element, index, emit, frame, counter);
+        return component::component(out, element, index, emit, counter);
     }
     let classes = classes(element)
         .iter()
         .map(|class| classes::index(emit.classes, class))
         .collect::<Vec<_>>();
     let events = events::widget(element, emit.program)?;
-    let pad = "    ".repeat(frame.depth());
-    let inner = "    ".repeat(frame.depth() + 1);
     let needs = content_needed(element, emit)
         || !events.handlers.is_empty()
         || element
@@ -43,7 +40,7 @@ pub(super) fn widget(
             .iter()
             .any(|arg| matches!(arg, Arg::Named { .. }));
     if !needs {
-        let _ = write!(out, "{pad}");
+        out.indent();
         element_expression(
             out,
             element,
@@ -57,20 +54,24 @@ pub(super) fn widget(
     }
     let name = format!("widget{}", *counter);
     *counter += 1;
-    let _ = writeln!(out, "{pad}{{");
-    let _ = write!(out, "{inner}let {name} = ");
-    let content = element_expression(out, element, &classes, &events, emit, frame, counter)?;
-    out.push_str(";\n");
-    content_binding(out, content, &name, &inner, emit.names);
-    parameters(out, element, &name, &inner, emit.names, emit)?;
-    handler_bindings(out, &events.handlers, &name, &inner);
-    let _ = writeln!(out, "{inner}{name}");
-    let _ = write!(out, "{pad}}}");
+    out.line(format_args!("{{"));
+    out.indented(|out| -> Result<(), Error> {
+        out.start(format_args!("let {name} = "));
+        let content = element_expression(out, element, &classes, &events, emit, frame, counter)?;
+        out.push(format_args!(";"));
+        out.end();
+        content_binding(out, content, &name, emit.names);
+        parameters(out, element, &name, emit.names, emit)?;
+        handler_bindings(out, &events.handlers, &name);
+        out.line(format_args!("{name}"));
+        Ok(())
+    })?;
+    out.start(format_args!("}}"));
     Ok(())
 }
 
 fn element_expression(
-    out: &mut String,
+    out: &mut Out<'_>,
     element: &Element,
     classes: &[usize],
     events: &events::Events,
@@ -80,7 +81,7 @@ fn element_expression(
 ) -> Result<Option<Content>, Error> {
     let styled = !classes.is_empty();
     if styled {
-        let _ = write!(out, "{}styled(", emit.resource_prefix);
+        out.push(format_args!("{}styled(", emit.resource_prefix));
     }
     let content = kind(out, element, emit, frame, counter)?;
     if styled {
@@ -89,19 +90,19 @@ fn element_expression(
             .map(|index| index.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        let _ = write!(out, ", &[{list}], theme)");
+        out.push(format_args!(", &[{list}], theme)"));
     }
     if events.drag {
-        out.push_str(".draggable(true)");
+        out.push(format_args!(".draggable(true)"));
     }
     if events.focusable {
-        out.push_str(".focusable(true)");
+        out.push(format_args!(".focusable(true)"));
     }
     if events.multiline {
-        out.push_str(".multiline(true)");
+        out.push(format_args!(".multiline(true)"));
     }
     if events.modal {
-        out.push_str(".modal(true)");
+        out.push(format_args!(".modal(true)"));
     }
     Ok(content)
 }
@@ -145,7 +146,7 @@ enum Content {
 }
 
 fn kind(
-    out: &mut String,
+    out: &mut Out<'_>,
     element: &Element,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
@@ -199,7 +200,7 @@ impl Group {
 }
 
 fn container(
-    out: &mut String,
+    out: &mut Out<'_>,
     element: &Element,
     group: Group,
     emit: &mut Emit<'_>,
@@ -208,7 +209,7 @@ fn container(
 ) -> Result<(), Error> {
     let call = group.call();
     if element.block.items.is_empty() {
-        let _ = write!(out, "brul::gui::Widget::{call}(vec![])");
+        out.push(format_args!("brul::gui::Widget::{call}(vec![])"));
         return Ok(());
     }
     let direction = group.direction();
@@ -217,29 +218,30 @@ fn container(
         .layout
         .gap;
     let children = frame.deeper(2).inside(direction, gap);
+    let mut out = Out::at(out.raw(), frame.depth());
     if contains_slot(&element.block) {
-        let inner = "    ".repeat(frame.depth() + 1);
-        let _ = writeln!(out, "brul::gui::Widget::{call}({{");
-        let _ = writeln!(out, "{inner}let mut children = Vec::new();");
-        items_spliced(out, &element.block, emit, children.shallower(1), counter)?;
-        let _ = writeln!(out, "{inner}children");
-        let _ = write!(out, "{}}})", "    ".repeat(frame.depth()));
+        out.push(format_args!("brul::gui::Widget::{call}({{"));
+        out.end();
+        out.indented(|out| -> Result<(), Error> {
+            out.line(format_args!("let mut children = Vec::new();"));
+            items_spliced(out, &element.block, emit, children.shallower(1), counter)?;
+            out.line(format_args!("children"));
+            Ok(())
+        })?;
+        out.start(format_args!("}}}})"));
         return Ok(());
     }
-    let _ = writeln!(out, "brul::gui::Widget::{call}(vec![");
-    items(out, &element.block, emit, children, counter)?;
-    let inner = "    ".repeat(frame.depth() + 1);
-    let _ = write!(out, "{inner}])");
+    out.push(format_args!("brul::gui::Widget::{call}(vec!["));
+    out.end();
+    out.indented(|out| -> Result<(), Error> {
+        out.indented(|out| items(out, &element.block, emit, children, counter))?;
+        out.start(format_args!("])"));
+        Ok(())
+    })?;
     Ok(())
 }
 
-fn content_binding(
-    out: &mut String,
-    content: Option<Content>,
-    name: &str,
-    inner: &str,
-    names: &Names<'_>,
-) {
+fn content_binding(out: &mut Out<'_>, content: Option<Content>, name: &str, names: &Names<'_>) {
     let Some(content) = content else {
         return;
     };
@@ -248,30 +250,23 @@ fn content_binding(
         Content::Input(expression) => ("Input", expression),
         Content::Image(expression) => ("Image", expression),
     };
-    let _ = writeln!(
-        out,
-        "{inner}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({})));",
+    out.line(format_args!(
+        "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({})));",
         expression::closure(&expression, names)
-    );
+    ));
 }
 
-fn handler_bindings(
-    out: &mut String,
-    handlers: &[(HandlerEvent, String)],
-    name: &str,
-    inner: &str,
-) {
+fn handler_bindings(out: &mut Out<'_>, handlers: &[(HandlerEvent, String)], name: &str) {
     for (event, handler) in handlers {
         let handler = handler.as_str();
-        let _ = writeln!(
-            out,
-            "{inner}handlers.push(brul::Handler::new(component, Some({name}.id()), brul::HandlerEvent::{event:?}, {handler:?}));"
-        );
+        out.line(format_args!(
+            "handlers.push(brul::Handler::new(component, Some({name}.id()), brul::HandlerEvent::{event:?}, {handler:?}));"
+        ));
     }
 }
 
 pub(crate) fn items(
-    out: &mut String,
+    out: &mut Out<'_>,
     block: &Block,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
@@ -281,15 +276,15 @@ pub(crate) fn items(
         match item {
             BlockItem::Element(child) => {
                 widget(out, child, emit, frame, counter)?;
-                out.push_str(",\n");
+                out.push(format_args!(",\n"));
             }
             BlockItem::If(structure) => {
-                structure::structure_if(out, structure, emit, frame, counter)?;
-                out.push_str(",\n");
+                structure::structure_if(out.raw(), structure, emit, frame, counter)?;
+                out.push(format_args!(",\n"));
             }
             BlockItem::Each(structure) => {
-                structure::structure_each(out, structure, emit, frame, counter)?;
-                out.push_str(",\n");
+                structure::structure_each(out.raw(), structure, emit, frame, counter)?;
+                out.push(format_args!(",\n"));
             }
             BlockItem::Slot(slot) => {
                 return Err(error_at(
@@ -327,7 +322,7 @@ pub(crate) fn contains_slot(block: &Block) -> bool {
 }
 
 pub(crate) fn items_spliced(
-    out: &mut String,
+    out: &mut Out<'_>,
     block: &Block,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
@@ -341,12 +336,12 @@ pub(crate) fn items_spliced(
             BlockItem::If(structure) => {
                 let mut arm = String::new();
                 structure::structure_if(&mut arm, structure, emit, frame, counter)?;
-                push_text(out, &arm, frame);
+                push_text(out, &arm);
             }
             BlockItem::Each(structure) => {
                 let mut arm = String::new();
                 structure::structure_each(&mut arm, structure, emit, frame, counter)?;
-                push_text(out, &arm, frame);
+                push_text(out, &arm);
             }
             BlockItem::Slot(slot) => slot_item(out, slot, emit, frame)?,
             BlockItem::Expr(expression) => {
@@ -361,25 +356,30 @@ pub(crate) fn items_spliced(
 }
 
 fn push(
-    out: &mut String,
+    out: &mut Out<'_>,
     child: &Element,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
     let mut item = String::new();
-    widget(&mut item, child, emit, frame, counter)?;
-    push_text(out, &item, frame);
+    widget(
+        &mut Out::at(&mut item, frame.depth()),
+        child,
+        emit,
+        frame,
+        counter,
+    )?;
+    push_text(out, &item);
     Ok(())
 }
 
-fn push_text(out: &mut String, item: &str, frame: Frame<'_>) {
-    let pad = "    ".repeat(frame.depth());
-    let _ = writeln!(out, "{pad}children.push({});", item.trim_start());
+fn push_text(out: &mut Out<'_>, item: &str) {
+    out.line(format_args!("children.push({});", item.trim_start()));
 }
 
 fn slot_item(
-    out: &mut String,
+    out: &mut Out<'_>,
     slot: &Slot,
     emit: &Emit<'_>,
     frame: Frame<'_>,
@@ -400,30 +400,31 @@ fn slot_item(
         Some(name) => format!("{name:?}"),
         None => "brul::DEFAULT_SLOT".to_owned(),
     };
-    let pad = "    ".repeat(frame.depth());
-    let _ = writeln!(out, "{pad}{{");
-    let _ = writeln!(out, "{pad}    let built = brul::slot(theme, {target})?;");
-    for field in ["bindings", "handlers", "props"] {
-        let _ = writeln!(out, "{pad}    {field}.extend(built.{field});");
-    }
-    let _ = writeln!(
-        out,
-        "{pad}    children.extend(built.widget.into_children());"
-    );
-    let _ = write!(out, "{pad}}}");
+    let mut out = Out::at(out.raw(), frame.depth());
+    out.line(format_args!("{{"));
+    out.indented(|out| {
+        out.line(format_args!("let built = brul::slot(theme, {target})?;"));
+        for field in ["bindings", "handlers", "props"] {
+            out.line(format_args!("{field}.extend(built.{field});"));
+        }
+        out.line(format_args!(
+            "children.extend(built.widget.into_children());"
+        ));
+    });
+    out.start(format_args!("}}"));
     Ok(())
 }
 
-fn text_widget(out: &mut String, element: &Element) -> Result<Option<Expr>, Error> {
+fn text_widget(out: &mut Out<'_>, element: &Element) -> Result<Option<Expr>, Error> {
     field_widget(out, element, "text", "Text")
 }
 
-fn input_widget(out: &mut String, element: &Element) -> Result<Option<Expr>, Error> {
+fn input_widget(out: &mut Out<'_>, element: &Element) -> Result<Option<Expr>, Error> {
     field_widget(out, element, "input", "TextInput")
 }
 
 fn field_widget(
-    out: &mut String,
+    out: &mut Out<'_>,
     element: &Element,
     constructor: &str,
     label: &str,
@@ -431,10 +432,12 @@ fn field_widget(
     match element.block.items.as_slice() {
         [BlockItem::Expr(expression)] => {
             let ExprKind::String(content) = &expression.kind else {
-                let _ = write!(out, "brul::gui::Widget::{constructor}(\"\")");
+                out.push(format_args!("brul::gui::Widget::{constructor}(\"\")"));
                 return Ok(Some(expression.clone()));
             };
-            let _ = write!(out, "brul::gui::Widget::{constructor}({content:?})");
+            out.push(format_args!(
+                "brul::gui::Widget::{constructor}({content:?})"
+            ));
             Ok(None)
         }
         _ => Err(error_at(
@@ -445,7 +448,7 @@ fn field_widget(
 }
 
 fn image_widget(
-    out: &mut String,
+    out: &mut Out<'_>,
     element: &Element,
     emit: &Emit<'_>,
 ) -> Result<Option<Expr>, Error> {
@@ -456,22 +459,22 @@ fn image_widget(
         ));
     };
     if let Some(name) = resource(expression, emit) {
-        let _ = write!(
-            out,
+        out.push(format_args!(
             "brul::gui::Widget::image(brul::gui::Image::from_bytes({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
             emit.resource_prefix
-        );
+        ));
         return Ok(None);
     }
-    out.push_str("brul::gui::Widget::image(brul::gui::Texture::empty())");
+    out.push(format_args!(
+        "brul::gui::Widget::image(brul::gui::Texture::empty())"
+    ));
     Ok(Some(expression.clone()))
 }
 
 fn parameters(
-    out: &mut String,
+    out: &mut Out<'_>,
     element: &Element,
     name: &str,
-    pad: &str,
     names: &Names<'_>,
     emit: &mut Emit<'_>,
 ) -> Result<(), Error> {
@@ -513,28 +516,25 @@ fn parameters(
                 ));
             }
         };
-        let _ = writeln!(
-            out,
-            "{pad}bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
+        out.line(format_args!(
+            "bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
             expression::closure(value, names)
-        );
+        ));
     }
     if x.is_some() || y.is_some() {
         let x = optional_expression(x, names);
         let y = optional_expression(y, names);
-        let _ = writeln!(
-            out,
-            "{pad}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Offset {{ x: {x}, y: {y} }}));"
-        );
+        out.line(format_args!(
+            "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Offset {{ x: {x}, y: {y} }}));"
+        ));
     }
     if let Some(value) = class {
         *emit.dynamic_classes = true;
         let table = classes::table(emit.resource_prefix);
-        let _ = writeln!(
-            out,
-            "{pad}bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
+        out.line(format_args!(
+            "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
             expression::closure(value, names)
-        );
+        ));
     }
     Ok(())
 }

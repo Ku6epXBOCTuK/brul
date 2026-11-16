@@ -35,7 +35,7 @@ pub(super) fn view(
         out.line(format_args!("let mut props = Vec::new();"));
         out.line(format_args!("let widget = {{"));
         let mut counter = 0;
-        out.indented(|out| widget(out.raw(), root, emit, frame, &mut counter))?;
+        out.indented(|out| widget(out, root, emit, frame, &mut counter))?;
         out.end();
         out.line(format_args!("}};"));
         for (event, handler) in handlers {
