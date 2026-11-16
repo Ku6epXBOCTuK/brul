@@ -318,7 +318,10 @@ pub(crate) fn contains_slot(block: &Block) -> bool {
                 .any(|branch| contains_slot(&branch.block))
                 || structure.else_block.as_ref().is_some_and(contains_slot)
         }
-        BlockItem::Each(structure) => contains_slot(&structure.block),
+        BlockItem::Each(structure) => {
+            contains_slot(&structure.block)
+                || structure.else_block.as_ref().is_some_and(contains_slot)
+        }
         BlockItem::Element(_) | BlockItem::Expr(_) => false,
     })
 }

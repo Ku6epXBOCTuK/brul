@@ -200,6 +200,9 @@ fn walk_block<'a>(
             }
             BlockItem::Each(structure) => {
                 walk_block(&structure.block, definition, declared, false)?;
+                if let Some(else_block) = &structure.else_block {
+                    walk_block(else_block, definition, declared, false)?;
+                }
             }
             BlockItem::Element(child) => walk_slots(child, definition, declared)?,
             BlockItem::Expr(_) => {}

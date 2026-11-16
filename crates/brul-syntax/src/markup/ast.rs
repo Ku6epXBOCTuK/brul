@@ -98,6 +98,7 @@ pub struct EachBlock {
     pub index: Option<String>,
     pub key: Option<Expr>,
     pub block: Block,
+    pub else_block: Option<Block>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

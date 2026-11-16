@@ -601,6 +601,7 @@ fn each_blocks_parse() {
             @each (items as item, idx) { Row (number: idx) { } }
             @each (items as item (item.id)) { Row { } }
             @each (groups[0] as item, idx (item.id)) { Row { } }
+            @each (items as item) { Row { } } @else { View { } }
         }
     }"#;
     let file = parse_file(source).unwrap();
@@ -636,6 +637,7 @@ fn each_blocks_parse() {
                         index: None,
                         key: None,
                         block: Block { items: vec![row()] },
+                        else_block: None,
                     }),
                     BlockItem::Each(EachBlock {
                         collection: ident("items"),
@@ -654,6 +656,7 @@ fn each_blocks_parse() {
                                 block: Block { items: Vec::new() },
                             })],
                         },
+                        else_block: None,
                     }),
                     BlockItem::Each(EachBlock {
                         collection: ident("items"),
@@ -661,6 +664,7 @@ fn each_blocks_parse() {
                         index: None,
                         key: key(),
                         block: Block { items: vec![row()] },
+                        else_block: None,
                     }),
                     BlockItem::Each(EachBlock {
                         collection: expr(ExprKind::Index {
@@ -671,6 +675,17 @@ fn each_blocks_parse() {
                         index: Some("idx".to_owned()),
                         key: key(),
                         block: Block { items: vec![row()] },
+                        else_block: None,
+                    }),
+                    BlockItem::Each(EachBlock {
+                        collection: ident("items"),
+                        item: "item".to_owned(),
+                        index: None,
+                        key: None,
+                        block: Block { items: vec![row()] },
+                        else_block: Some(Block {
+                            items: vec![BlockItem::Element(element("View"))],
+                        }),
                     }),
                 ],
             },

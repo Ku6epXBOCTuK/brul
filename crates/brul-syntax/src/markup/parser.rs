@@ -275,12 +275,18 @@ impl Cursor<'_> {
         };
         self.expect(')')?;
         let block = self.block()?;
+        let else_block = if self.eat_directive("else") {
+            Some(self.block()?)
+        } else {
+            None
+        };
         Ok(EachBlock {
             collection,
             item,
             index,
             key,
             block,
+            else_block,
         })
     }
 

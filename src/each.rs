@@ -86,6 +86,29 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_branch_row_replaces_the_items() {
+        let first = Widget::text("a");
+        let first_id = first.id();
+        let root = Widget::view(Direction::Column, vec![first]);
+        let parent = root.id();
+        let mut tree = WidgetTree::new(root);
+        let children = reconcile_each(
+            &mut tree,
+            parent,
+            &[row(None, "a", 1)],
+            Widget::view(Direction::Column, vec![Widget::text("empty")]),
+            &[RowInfo {
+                key: None,
+                item: Value::Array(std::rc::Rc::new(Vec::new())),
+                start: 0,
+                count: 1,
+            }],
+        );
+        assert_eq!(children.len(), 1);
+        assert_ne!(children[0].id(), first_id);
+    }
+
+    #[test]
     fn an_unkeyed_row_reuses_the_widget_in_the_same_place() {
         let first = Widget::text("a");
         let first_id = first.id();

@@ -202,6 +202,17 @@ fn each_arm(
     out.push_str(
         "        other => return Err(brul::ViewError::expected(\"each\", \"Array\", other.type_name())),\n    };\n",
     );
+    if let Some(else_block) = &block.else_block {
+        out.push_str("    if items.is_empty() {\n");
+        each_body(&mut out, else_block, emit, arm)?;
+        out.push_str("        rows.push(brul::RowInfo {\n");
+        out.push_str("            key: None,\n");
+        out.push_str("            item: brul::Value::Array(std::rc::Rc::new(Vec::new())),\n");
+        out.push_str("            start: 0,\n");
+        out.push_str("            count: children.len(),\n");
+        out.push_str("        });\n");
+        out.push_str("    }\n");
+    }
     out.push_str("    for (position, item) in items.into_iter().enumerate() {\n");
     out.push_str("        component.borrow_mut().push_build_scope(vec![\n");
     let _ = writeln!(
@@ -227,21 +238,31 @@ fn each_arm(
         None => out.push_str("        let key = None;\n"),
     }
     out.push_str("        let start = children.len();\n");
-    if contains_slot(&block.block) {
-        let mut counter = 0;
-        items_spliced(&mut out, &block.block, emit, arm, &mut counter)?;
-    } else if !block.block.items.is_empty() {
-        out.push_str("        children.extend([\n");
-        let mut counter = 0;
-        items(&mut out, &block.block, emit, arm, &mut counter)?;
-        out.push_str("        ]);\n");
-    }
+    each_body(&mut out, &block.block, emit, arm)?;
     out.push_str("        let count = children.len() - start;\n");
     out.push_str("        component.borrow_mut().pop_build_scope();\n");
     out.push_str("        rows.push(brul::RowInfo { key, item, start, count });\n");
     out.push_str("    }\n");
     widget(&mut out);
     Ok(out)
+}
+
+fn each_body(
+    out: &mut String,
+    block: &brul_syntax::markup::Block,
+    emit: &mut Emit<'_>,
+    frame: Frame<'_>,
+) -> Result<(), Error> {
+    let pad = "    ".repeat(frame.depth().saturating_sub(1));
+    let mut counter = 0;
+    if contains_slot(block) {
+        items_spliced(out, block, emit, frame, &mut counter)?;
+    } else if !block.items.is_empty() {
+        let _ = writeln!(out, "{pad}children.extend([");
+        items(out, block, emit, frame, &mut counter)?;
+        let _ = writeln!(out, "{pad}]);");
+    }
+    Ok(())
 }
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {

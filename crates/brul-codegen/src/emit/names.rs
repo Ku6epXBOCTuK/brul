@@ -81,6 +81,9 @@ fn block_node<'a>(block: &'a Block, names: &mut Names<'a>) {
                     expression(key, names);
                 }
                 block_node(&each.block, names);
+                if let Some(else_block) = &each.else_block {
+                    block_node(else_block, names);
+                }
             }
             BlockItem::Expr(expr) => expression(expr, names),
             BlockItem::Slot(_) => {}

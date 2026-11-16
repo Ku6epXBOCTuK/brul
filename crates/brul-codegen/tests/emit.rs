@@ -711,6 +711,37 @@ window Demo (title: "demo") {
 }
 
 #[test]
+fn emits_each_else_for_an_empty_collection() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    Column {
+        @each (items as item) { Text { item.name } } @else { Text { "empty" } }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    let empty = module
+        .find("    if items.is_empty() {")
+        .expect("empty test");
+    let loop_ = module
+        .find("    for (position, item) in items.into_iter().enumerate() {")
+        .expect("collect loop");
+    assert!(empty < loop_, "{module}");
+    assert!(module.contains("        children.extend([\n"), "{module}");
+    assert!(
+        module.contains("brul::gui::Widget::text(\"empty\"),"),
+        "{module}"
+    );
+    assert!(
+        module.contains(
+            "        rows.push(brul::RowInfo {\n            key: None,\n            item: brul::Value::Array(std::rc::Rc::new(Vec::new())),\n            start: 0,\n            count: children.len(),\n        });"
+        ),
+        "{module}"
+    );
+}
+
+#[test]
 fn emits_window_handler() {
     let source = r#"<script>
     function quit(ev) { }
