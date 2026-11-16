@@ -109,6 +109,49 @@ fn a_disabled_widget_is_not_focusable() {
 }
 
 #[test]
+fn tab_stays_inside_a_visible_modal_layer() {
+    let trigger = field();
+    let inside = field();
+    let (trigger_id, inside_id) = (trigger.id(), inside.id());
+    let dialog = Widget::layer(vec![inside]).modal(true);
+    let dialog_id = dialog.id();
+    let mut tree = laid_out(Widget::column(vec![trigger, dialog]).with_layout(fixed(100, 100)));
+
+    assert_eq!(tree.press_key("Tab"), vec![WidgetEvent::Focus(inside_id)]);
+    assert!(tree.press_key("Tab").is_empty());
+    assert_eq!(tree.focused(), Some(inside_id));
+
+    tree.set_modifiers(KeyModifiers {
+        shift: true,
+        ..KeyModifiers::default()
+    });
+    assert!(tree.press_key("Tab").is_empty());
+    assert_eq!(tree.focused(), Some(inside_id));
+    assert_ne!(tree.focused(), Some(trigger_id));
+    assert_eq!(
+        tree.press_key("Escape"),
+        vec![WidgetEvent::Dismiss(dialog_id)]
+    );
+}
+
+#[test]
+fn a_hidden_modal_layer_gives_the_focus_back() {
+    let trigger = field();
+    let inside = field();
+    let (trigger_id, inside_id) = (trigger.id(), inside.id());
+    let dialog = Widget::layer(vec![inside]).modal(true);
+    let dialog_id = dialog.id();
+    let mut tree = laid_out(Widget::column(vec![trigger, dialog]).with_layout(fixed(100, 100)));
+    tree.set_visible(dialog_id, false);
+
+    assert_eq!(tree.press_key("Tab"), vec![WidgetEvent::Focus(trigger_id)]);
+    tree.set_visible(dialog_id, true);
+    assert_eq!(tree.focused(), Some(inside_id));
+    tree.set_visible(dialog_id, false);
+    assert_eq!(tree.focused(), Some(trigger_id));
+}
+
+#[test]
 fn a_widget_without_focusable_takes_no_focus() {
     let plain = Widget::text("x").with_layout(fixed(40, 20));
     let mut tree = laid_out(Widget::column(vec![plain]).with_layout(fixed(100, 100)));

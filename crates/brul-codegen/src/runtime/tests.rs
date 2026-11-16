@@ -241,6 +241,7 @@ fn event_names_round_trip_and_stay_distinct() {
         HandlerEvent::Blur,
         HandlerEvent::Input,
         HandlerEvent::Submit,
+        HandlerEvent::Dismiss,
     ];
     for event in events {
         assert_eq!(HandlerEvent::parse(event.name()), Some(event));

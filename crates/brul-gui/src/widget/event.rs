@@ -36,6 +36,7 @@ pub enum WidgetEvent {
     Blur(WidgetId),
     Input(WidgetId, String, usize),
     Submit(WidgetId),
+    Dismiss(WidgetId),
     Copy(String),
     Paste,
 }

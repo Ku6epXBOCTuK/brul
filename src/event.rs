@@ -46,6 +46,7 @@ pub(crate) fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, H
         WidgetEvent::Blur(id) => Some((Some(*id), HandlerEvent::Blur)),
         WidgetEvent::Input(id, _, _) => Some((Some(*id), HandlerEvent::Input)),
         WidgetEvent::Submit(id) => Some((Some(*id), HandlerEvent::Submit)),
+        WidgetEvent::Dismiss(id) => Some((Some(*id), HandlerEvent::Dismiss)),
         WidgetEvent::Key { .. } => Some((None, HandlerEvent::Key)),
         WidgetEvent::Close => Some((None, HandlerEvent::Close)),
         WidgetEvent::Drag(_) => None,
@@ -79,6 +80,7 @@ mod tests {
                 HandlerEvent::Input,
             ),
             (WidgetEvent::Submit(id), HandlerEvent::Submit),
+            (WidgetEvent::Dismiss(id), HandlerEvent::Dismiss),
         ];
         for (event, expected) in cases {
             assert_eq!(handler_target(&event), Some((Some(id), expected)));

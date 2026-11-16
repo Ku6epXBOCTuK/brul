@@ -99,6 +99,9 @@ fn element_expression(
     if events.multiline {
         out.push_str(".multiline(true)");
     }
+    if events.modal {
+        out.push_str(".modal(true)");
+    }
     Ok(content)
 }
 
@@ -495,6 +498,7 @@ fn parameters(
             }
             "focusable" => continue,
             "multiline" => continue,
+            "modal" => continue,
             _ => {
                 return Err(error_at(
                     value.position,

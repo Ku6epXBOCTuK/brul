@@ -12,6 +12,7 @@ pub(super) struct Events {
     pub drag: bool,
     pub focusable: bool,
     pub multiline: bool,
+    pub modal: bool,
     pub handlers: Vec<(HandlerEvent, String)>,
 }
 
@@ -19,6 +20,7 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
     let mut drag = false;
     let mut focusable = false;
     let mut multiline = false;
+    let mut modal = false;
     let mut handlers = Vec::new();
     for arg in &element.args {
         if let Some(enabled) = literal_flag(arg, "focusable")? {
@@ -27,6 +29,10 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
         }
         if let Some(enabled) = literal_flag(arg, "multiline")? {
             multiline = enabled;
+            continue;
+        }
+        if let Some(enabled) = literal_flag(arg, "modal")? {
+            modal = enabled;
             continue;
         }
         let Arg::Handler { event, handler } = arg else {
@@ -76,6 +82,7 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
         drag,
         focusable,
         multiline,
+        modal,
         handlers,
     })
 }

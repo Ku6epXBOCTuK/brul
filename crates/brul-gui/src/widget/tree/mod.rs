@@ -33,6 +33,7 @@ struct Node {
     draggable: bool,
     focusable: bool,
     layer: bool,
+    modal: bool,
     scroll_offset: ScrollOffset,
     children: Vec<Slot>,
     transition: Option<Transition>,
@@ -76,6 +77,7 @@ pub struct WidgetTree {
     hovered: Vec<Slot>,
     pressed: Vec<Slot>,
     focused: Option<Slot>,
+    modal_focus: Option<Slot>,
     modifiers: KeyModifiers,
     dirty: HashSet<WidgetId>,
     stale: HashSet<Slot>,
@@ -167,6 +169,7 @@ impl WidgetTree {
             hovered: Vec::new(),
             pressed: Vec::new(),
             focused: None,
+            modal_focus: None,
             modifiers: KeyModifiers::default(),
             dirty: HashSet::new(),
             stale: HashSet::new(),
@@ -190,6 +193,7 @@ impl WidgetTree {
             draggable,
             focusable,
             layer,
+            modal,
         } = widget;
         let mut slots = Vec::with_capacity(children.len());
         for child in children {
@@ -207,6 +211,7 @@ impl WidgetTree {
             draggable,
             focusable,
             layer,
+            modal,
             scroll_offset: ScrollOffset::ZERO,
             children: slots,
             transition: None,
@@ -252,6 +257,7 @@ impl WidgetTree {
             draggable: node.draggable,
             focusable: node.focusable,
             layer: node.layer,
+            modal: node.modal,
         };
         self.index.remove(&widget.id);
         self.free.push(slot);
@@ -414,6 +420,7 @@ impl WidgetTree {
         if !self.update_state(id, |state| state.visible = visible) {
             return false;
         }
+        self.sync_modal_focus();
         self.full_dirty = true;
         self.dirty.clear();
         true

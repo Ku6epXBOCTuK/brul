@@ -1,6 +1,6 @@
 # Kit
 
-Стандартные компоненты BRUL: `Button`, `Card`, `Tooltip`, `Checkbox`.
+Стандартные компоненты BRUL: `Button`, `Card`, `Tooltip`, `Checkbox`, `Dialog`.
 
 Каждый файл несёт только классы, а палитру объявляет приложение в `<style>`
 корневого окна: компонент наследует её и берёт оттуда `theme.surface`,
@@ -13,6 +13,7 @@
     import Card from "../../../kit/card.brul";
     import Tooltip from "../../../kit/tooltip.brul";
     import Checkbox from "../../../kit/checkbox.brul";
+    import Dialog from "../../../kit/dialog.brul";
 </use>
 ```
 
@@ -25,10 +26,19 @@ Card {
 }
 Tooltip (text: "Подсказка") { Text { "Наведи" } }
 Checkbox (label: "Запомнить", checked: always) { }
+Dialog (open: shown, title: "Правка", on closed: finish) {
+    TextInput (name) { draft }
+}
 ```
 
 `variant` у `Button`: `primary`, `secondary` (по умолчанию), `ghost`. `Tooltip`
 сейчас показывает пузырь в потоке, а не поверх содержимого.
+
+`Dialog` живёт на модальном `Layer`: тело — слот, внизу свои «Отмена» и
+подтверждение (`confirm`, по умолчанию «Сохранить»), клик по затемнению и Escape
+закрывают его. Видимостью владеет вызывающий: `open` — его сигнал, а
+`closed(result: Bool)` сообщает `true` только при подтверждении (обработчик
+обычно пишет `open = false`). Пока диалог открыт, Tab не выходит из него.
 
 Классы кита переопределяются из приложения: блок
 `override <Имя> { .класс { … } }` в `<style>` корневого окна дописывает правила

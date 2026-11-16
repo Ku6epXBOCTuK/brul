@@ -24,6 +24,11 @@ impl WidgetTree {
     }
 
     pub fn press_key(&mut self, code: &str) -> Vec<WidgetEvent> {
+        if code == "Escape"
+            && let Some(scope) = self.modal_scope()
+        {
+            return vec![WidgetEvent::Dismiss(self.nodes[scope.index()].id)];
+        }
         if code == "Tab" {
             return if self.modifiers.shift {
                 self.focus_previous()

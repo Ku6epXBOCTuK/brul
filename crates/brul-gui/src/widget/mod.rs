@@ -90,6 +90,7 @@ pub struct Widget {
     draggable: bool,
     focusable: bool,
     layer: bool,
+    modal: bool,
 }
 
 enum Content {
@@ -230,6 +231,7 @@ impl Widget {
             draggable: false,
             focusable: false,
             layer: false,
+            modal: false,
         }
     }
 
@@ -291,6 +293,11 @@ impl Widget {
 
     pub fn focusable(mut self, focusable: bool) -> Self {
         self.focusable = focusable;
+        self
+    }
+
+    pub fn modal(mut self, modal: bool) -> Self {
+        self.modal = modal;
         self
     }
 

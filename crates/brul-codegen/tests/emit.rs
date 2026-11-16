@@ -1443,7 +1443,7 @@ fn emits_the_kit_components() {
     let kit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kit");
     let dir = scratch("kit", &[]);
     std::fs::create_dir_all(dir.join("kit")).unwrap();
-    for name in ["button", "card", "tooltip", "checkbox"] {
+    for name in ["button", "card", "tooltip", "checkbox", "dialog"] {
         std::fs::copy(
             kit.join(format!("{name}.brul")),
             dir.join("kit").join(format!("{name}.brul")),
@@ -1452,7 +1452,12 @@ fn emits_the_kit_components() {
     }
     std::fs::write(
         dir.join("window.brul"),
-        r#"<style>
+        r#"<script>
+    let shown = false;
+    let draft = "";
+</script>
+
+<style>
     theme dark {
         surface: #1e293b;
         surface-hover: #273549;
@@ -1478,6 +1483,7 @@ fn emits_the_kit_components() {
     import Card from "./kit/card.brul";
     import Tooltip from "./kit/tooltip.brul";
     import Checkbox from "./kit/checkbox.brul";
+    import Dialog from "./kit/dialog.brul";
 </use>
 
 <markup>
@@ -1491,6 +1497,9 @@ window Demo (title: "demo") {
         }
         Tooltip (text: "tip") { Text { "trigger" } }
         Checkbox (label: "Remember") { }
+        Dialog (open: shown, title: "Edit") {
+            TextInput (name) { draft }
+        }
     }
 }
 </markup>
@@ -1498,7 +1507,7 @@ window Demo (title: "demo") {
     )
     .unwrap();
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
-    for name in ["button", "card", "tooltip", "checkbox"] {
+    for name in ["button", "card", "tooltip", "checkbox", "dialog"] {
         assert!(
             module.contains(&format!("pub fn {name}_view(")),
             "{name}: {module}"
@@ -2008,6 +2017,28 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(
         module.contains("brul::gui::Widget::layer(vec!["),
+        "{module}"
+    );
+}
+
+#[test]
+fn emits_a_modal_layer_that_dismisses() {
+    let source = r#"<script>
+    function dismiss() { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Layer (modal: true, on dismiss: dismiss) {
+        Text { "x" }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(".modal(true)"), "{module}");
+    assert!(
+        module.contains("brul::HandlerEvent::Dismiss, \"dismiss\""),
         "{module}"
     );
 }

@@ -23,6 +23,7 @@ pub enum HandlerEvent {
     Blur,
     Input,
     Submit,
+    Dismiss,
 }
 
 impl HandlerEvent {
@@ -40,6 +41,7 @@ impl HandlerEvent {
             Self::Blur => "blur",
             Self::Input => "input",
             Self::Submit => "submit",
+            Self::Dismiss => "dismiss",
         }
     }
 
@@ -57,6 +59,7 @@ impl HandlerEvent {
             "blur" => Some(Self::Blur),
             "input" => Some(Self::Input),
             "submit" => Some(Self::Submit),
+            "dismiss" => Some(Self::Dismiss),
             _ => None,
         }
     }
