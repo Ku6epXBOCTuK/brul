@@ -1,5 +1,6 @@
 //! xboct-panel: a Windows services and programs panel on the DSL.
 
+pub mod autostart;
 pub mod config;
 pub mod console;
 pub mod generated;
@@ -9,6 +10,7 @@ pub mod program;
 pub mod service;
 pub(crate) mod sys;
 
+pub use autostart::{AutostartError, Removed};
 pub use config::{Config, ConfigError, Entry, EntryKind, Restart, StartMode, default_path};
 pub use console::{Console, ConsoleError, Consoles};
 pub use log::{LogError, tail};

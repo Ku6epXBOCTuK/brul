@@ -9,6 +9,7 @@ use brul::Value;
 use brul::logging::{error, info};
 use brul::{command, host};
 
+use xboct_panel::autostart::{self, AutostartError};
 use xboct_panel::{
     Config, ConfigError, Console, Consoles, Entry, EntryKind, Program, Restart, Service,
     ServiceError, StartMode, Started, default_path, generated, log, nssm, program, service,
@@ -441,11 +442,58 @@ fn text(value: String) -> Value {
 
 host! { AppHost: act, start_all_manual, refresh, toggle_console, entry_draft, save_entry }
 
+fn autostart_command(install: bool) -> ExitCode {
+    let result = if install {
+        std::env::current_exe()
+            .map_err(|error| AutostartError::Path {
+                message: error.to_string(),
+            })
+            .and_then(|exe| autostart::install(&exe).map(Some))
+    } else {
+        autostart::uninstall().map(|()| None)
+    };
+    match result {
+        Ok(Some(removed)) => {
+            info!(shortcut = removed.shortcut, run = ?removed.run, "autostart installed");
+            println!(
+                "autostart installed; legacy shortcut removed: {}, legacy run removed: {}",
+                removed.shortcut,
+                if removed.run.is_empty() {
+                    String::from("none")
+                } else {
+                    removed.run.join(", ")
+                }
+            );
+            ExitCode::SUCCESS
+        }
+        Ok(None) => {
+            info!("autostart removed");
+            println!("autostart removed");
+            ExitCode::SUCCESS
+        }
+        Err(failure) => {
+            error!(%failure, "autostart failed");
+            eprintln!("panel: {failure}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
     brul::logging::init_with(&[env!("CARGO_PKG_NAME")]);
     std::panic::set_hook(Box::new(|info| error!(panic = %info, "panic")));
 
     info!(version = env!("CARGO_PKG_VERSION"), "panel starting");
+
+    match std::env::args().nth(1).as_deref() {
+        Some("--install") => return autostart_command(true),
+        Some("--uninstall") => return autostart_command(false),
+        Some(argument) => {
+            eprintln!("panel: unknown argument '{argument}'");
+            return ExitCode::FAILURE;
+        }
+        None => {}
+    }
 
     let path = default_path();
     let config = match Config::load_or_create(&path) {
