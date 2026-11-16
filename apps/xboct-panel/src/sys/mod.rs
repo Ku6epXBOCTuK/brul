@@ -8,6 +8,7 @@ mod text;
 pub(crate) mod command;
 pub(crate) mod process;
 pub(crate) mod service;
+pub(crate) mod single;
 pub(crate) mod window;
 
 pub(crate) use error::Error;

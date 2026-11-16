@@ -8,6 +8,22 @@ pub mod log;
 pub mod nssm;
 pub mod program;
 pub mod service;
+pub mod single {
+    //! One panel per session: a second launch reveals the first window.
+
+    pub use crate::sys::single::{Claim, InstanceError};
+
+    const TITLE: &str = "xboct-panel";
+    const NAME: &str = r"Local\xboct-panel";
+
+    pub fn claim() -> Result<Claim, InstanceError> {
+        crate::sys::single::claim(NAME)
+    }
+
+    pub fn reveal() -> bool {
+        crate::sys::single::reveal(TITLE)
+    }
+}
 pub(crate) mod sys;
 
 pub use autostart::{AutostartError, Removed};

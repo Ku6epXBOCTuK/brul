@@ -10,6 +10,7 @@ use brul::logging::{error, info};
 use brul::{command, host};
 
 use xboct_panel::autostart::{self, AutostartError};
+use xboct_panel::single;
 use xboct_panel::{
     Config, ConfigError, Console, Consoles, Entry, EntryKind, Program, Restart, Service,
     ServiceError, StartMode, Started, default_path, generated, log, nssm, program, service,
@@ -385,6 +386,33 @@ fn collect(specs: &[Entry], consoles: &mut Consoles) -> Result<Vec<Value>, Servi
         .collect())
 }
 
+fn launch(specs: &[Entry], consoles: &mut Consoles) -> String {
+    let mut started = Vec::new();
+    let mut failed = Vec::new();
+    for entry in specs {
+        let result = match entry.kind {
+            EntryKind::Service => continue,
+            EntryKind::Program => program::start(entry)
+                .map(|_| ())
+                .map_err(|failure| failure.to_string()),
+            EntryKind::Console => consoles.start(entry).map_err(|failure| failure.to_string()),
+        };
+        match result {
+            Ok(()) => started.push(entry.name.clone()),
+            Err(failure) => failed.push(format!("{}: {failure}", entry.name)),
+        }
+    }
+    launched(started, failed)
+}
+
+fn launched(started: Vec<String>, failed: Vec<String>) -> String {
+    let mut parts = failed;
+    if !started.is_empty() {
+        parts.push(format!("started: {}", started.join(", ")));
+    }
+    parts.join("; ")
+}
+
 fn console_row(console: &Console) -> Value {
     Value::Object(Rc::new(vec![
         (String::from("name"), text(console.name.clone())),
@@ -485,14 +513,33 @@ fn main() -> ExitCode {
 
     info!(version = env!("CARGO_PKG_VERSION"), "panel starting");
 
+    let mut autostart = false;
     match std::env::args().nth(1).as_deref() {
         Some("--install") => return autostart_command(true),
         Some("--uninstall") => return autostart_command(false),
+        Some("--autostart") => autostart = true,
         Some(argument) => {
             eprintln!("panel: unknown argument '{argument}'");
             return ExitCode::FAILURE;
         }
         None => {}
+    }
+
+    let instance = match single::claim() {
+        Ok(instance) => instance,
+        Err(failure) => {
+            error!(%failure, "cannot claim the panel instance");
+            eprintln!("panel: {failure}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if instance.running() {
+        if autostart {
+            info!("panel is already running");
+        } else if single::reveal() {
+            info!("revealed the running panel");
+        }
+        return ExitCode::SUCCESS;
     }
 
     let path = default_path();
@@ -511,6 +558,7 @@ fn main() -> ExitCode {
     );
 
     let mut consoles = Consoles::new();
+    let status = launch(&config.entries, &mut consoles);
     let services = match collect(&config.entries, &mut consoles) {
         Ok(rows) => Value::Array(Rc::new(rows)),
         Err(failure) => {
@@ -522,7 +570,7 @@ fn main() -> ExitCode {
 
     let seeds = [
         ("services", services),
-        ("status", text(String::new())),
+        ("status", text(status)),
         ("selected", text(String::new())),
         ("log", text(log_text(&config.entries, ""))),
         ("draft", draft_value(None)),
@@ -542,7 +590,11 @@ fn main() -> ExitCode {
         None,
         &seeds,
         Some(Box::new(host)),
-        |_| {},
+        move |handle| {
+            if autostart {
+                handle.call("startHidden");
+            }
+        },
     ) {
         Ok(()) => {
             info!("panel closed");
@@ -564,7 +616,7 @@ mod tests {
 
     use super::{
         Console, Draft, Entry, Program, Restart, Service, StartMode, Value, console_row, describe,
-        draft_value, log_text, program_row, row,
+        draft_value, launched, log_text, program_row, row,
     };
     use xboct_panel::{ProgramState, ServiceError, ServiceState, StartType, Started};
 
@@ -630,6 +682,15 @@ mod tests {
             text.contains("two: access to service two is denied"),
             "{text}"
         );
+    }
+
+    #[test]
+    fn a_launch_report_lists_what_started_and_what_failed() {
+        assert_eq!(
+            launched(vec![String::from("one")], vec![String::from("two: broken")],),
+            "two: broken; started: one"
+        );
+        assert_eq!(launched(Vec::new(), Vec::new()), "");
     }
 
     #[test]

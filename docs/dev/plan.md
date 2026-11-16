@@ -279,9 +279,10 @@ RGB. Язык и резолв живут в `brul-style`, рантайм по-п
   `xboct-panel.toml` для program и console.
 - [x] BRUL-463 — служба создаётся и правится из панели: `nssm install` и
   `nssm set Start` с путём `nssm` из конфига.
-- [ ] BRUL-454 — при автозапуске окно скрыто и панель сама поднимает записи
-  конфига; реальный `xboct-panel.toml` (`xboct-log` — Automatic,
-  `xboct-log-work` — Manual). Задачу ставит `xboct-panel --install`.
+- [x] BRUL-454 — при автозапуске окно панели скрыто и открывается вручную;
+  реальный `xboct-panel.toml` (`xboct-log` — Automatic, `xboct-log-work` —
+  Manual). Задачу ставит `xboct-panel --install`.
+- [ ] BRUL-467 — иконка в трее: показать окно, выход.
 
 ## 8. Замеры и готовность (BRUL-234)
 

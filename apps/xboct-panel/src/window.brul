@@ -89,6 +89,10 @@
 
     function toggleHidden() { draft.hidden = !draft.hidden; }
 
+    function startHidden() {
+        hideWindow();
+    }
+
     every(2000, poll);
 </script>
 
