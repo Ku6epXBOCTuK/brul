@@ -124,7 +124,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     };
 
     let path = default_path();
-    let config = Config::load_or_create(&path)?;
+    let config = Config::load_or_create(&path);
     info!(path = %path.display(), target = %config.target(), "starting nobs");
 
     let hint = format!(

@@ -3,6 +3,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+use brul::logging::warn;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -88,19 +89,27 @@ impl Config {
         })
     }
 
-    pub fn load_or_create(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
+    pub fn load_or_create(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
         match std::fs::read_to_string(path) {
-            Ok(source) => Self::parse(&source, path),
+            Ok(source) => match Self::parse(&source, path) {
+                Ok(config) => config,
+                Err(error) => {
+                    warn!(%error, "config is unusable, using the defaults");
+                    Self::default()
+                }
+            },
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 let config = Self::default();
-                config.save(path)?;
-                Ok(config)
+                if let Err(error) = config.save(path) {
+                    warn!(%error, "config is not written");
+                }
+                config
             }
-            Err(error) => Err(ConfigError::Read {
-                path: path.to_path_buf(),
-                message: error.to_string(),
-            }),
+            Err(error) => {
+                warn!(path = %path.display(), %error, "config is unreadable, using the defaults");
+                Self::default()
+            }
         }
     }
 
@@ -179,7 +188,7 @@ mod tests {
         let path = temp_file("created");
         std::fs::create_dir_all(path.parent().expect("parent")).expect("temp dir");
 
-        let config = Config::load_or_create(&path).expect("created config");
+        let config = Config::load_or_create(&path);
         let source = std::fs::read_to_string(&path).expect("template on disk");
         let _ = std::fs::remove_file(&path);
 
@@ -213,6 +222,19 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert!(matches!(error, ConfigError::Parse { .. }));
+    }
+
+    #[test]
+    fn a_broken_file_loads_the_defaults() {
+        let path = temp_file("broken-default");
+        std::fs::write(&path, "port = \"not a number\"").expect("write config");
+
+        let config = Config::load_or_create(&path);
+        let source = std::fs::read_to_string(&path).expect("file is kept");
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(config, Config::default());
+        assert_eq!(source, "port = \"not a number\"");
     }
 
     #[test]
