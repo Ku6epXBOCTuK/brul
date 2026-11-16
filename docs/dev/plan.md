@@ -277,7 +277,7 @@ RGB. Язык и резолв живут в `brul-style`, рантайм по-п
   закрытия.
 - [x] BRUL-453 — диалог добавления и редактирования записи: `[[entries]]` в
   `xboct-panel.toml` для program и console.
-- [ ] BRUL-463 — служба создаётся и правится из панели: `nssm install` и
+- [x] BRUL-463 — служба создаётся и правится из панели: `nssm install` и
   `nssm set Start` с путём `nssm` из конфига.
 - [ ] BRUL-454 — автозапуск панели в Task Scheduler, снятие ярлыка Startup и
   записей HKCU Run, реальный `xboct-panel.toml`.

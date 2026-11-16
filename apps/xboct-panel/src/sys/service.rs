@@ -22,6 +22,8 @@ use super::{
 pub(crate) const ACCESS_DENIED: u32 = ERROR_ACCESS_DENIED;
 pub(crate) const ALREADY_RUNNING: u32 = ERROR_SERVICE_ALREADY_RUNNING;
 pub(crate) const NOT_ACTIVE: u32 = ERROR_SERVICE_NOT_ACTIVE;
+// NOTE: windows-sys does not generate ERROR_SERVICE_DOES_NOT_EXIST
+pub(crate) const MISSING: u32 = 1060;
 
 pub(crate) const QUERY: u32 = SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS;
 pub(crate) const CONTROL: u32 = QUERY | SERVICE_START | SERVICE_STOP;

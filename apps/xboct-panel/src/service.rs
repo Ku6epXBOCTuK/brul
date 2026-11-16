@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use crate::config::{Entry, EntryKind};
 use crate::sys::service::{
     self, ACCESS_DENIED, ALREADY_RUNNING, AUTO_START, BOOT_START, CONTINUE_PENDING, CONTROL,
-    DEMAND_START, DISABLED, NOT_ACTIVE, PAUSE_PENDING, PAUSED, QUERY, RUNNING, START_PENDING,
-    STOP_PENDING, STOPPED, SYSTEM_START, ScManager, ScService,
+    DEMAND_START, DISABLED, MISSING, NOT_ACTIVE, PAUSE_PENDING, PAUSED, QUERY, RUNNING,
+    START_PENDING, STOP_PENDING, STOPPED, SYSTEM_START, ScManager, ScService,
 };
 
 const POLL: Duration = Duration::from_millis(100);
@@ -157,6 +157,14 @@ pub fn stop(name: &str) -> Result<(), ServiceError> {
 
 pub fn restart(name: &str) -> Result<(), ServiceError> {
     Manager::open()?.restart(name)
+}
+
+pub fn known(name: &str) -> Result<bool, ServiceError> {
+    match Manager::open()?.service(name, QUERY) {
+        Ok(_) => Ok(true),
+        Err(ServiceError::Open { code, .. }) if code == MISSING => Ok(false),
+        Err(failure) => Err(failure),
+    }
 }
 
 pub fn start_manual(specs: &[Entry]) -> Result<Started, ServiceError> {

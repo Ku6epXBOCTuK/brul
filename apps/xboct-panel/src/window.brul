@@ -68,7 +68,7 @@
         if (result) {
             let saved = saveEntry(draft.original, draft.kind, draft.name, draft.command,
                 draft.args, draft.workdir, draft.env, draft.port, draft.log,
-                draft.restart, draft.hidden);
+                draft.restart, draft.start, draft.hidden);
             status = saved.status;
             if (saved.ok) {
                 services = saved.services;
@@ -85,6 +85,7 @@
     function changePort(ev) { draft.port = ev.value; }
     function changeLog(ev) { draft.log = ev.value; }
     function changeRestart(ev) { draft.restart = ev.value; }
+    function changeStart(ev) { draft.start = ev.value; }
 
     function toggleHidden() { draft.hidden = !draft.hidden; }
 
@@ -177,7 +178,13 @@
                             TextInput (field-input, on input: changeRestart) { draft.restart }
                         }
                     }
-                    Checkbox (label: "Hidden", checked: draft.hidden, on toggled: toggleHidden) { }
+                    Row (field-row) {
+                        Column (field) {
+                            Text (field-label) { "Start (auto, manual)" }
+                            TextInput (field-input, on input: changeStart) { draft.start }
+                        }
+                        Checkbox (label: "Hidden", checked: draft.hidden, on toggled: toggleHidden) { }
+                    }
                 }
             }
         }

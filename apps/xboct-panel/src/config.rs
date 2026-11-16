@@ -32,6 +32,8 @@ pub struct Entry {
     pub hidden: bool,
     #[serde(skip_serializing_if = "is_never")]
     pub restart: Restart,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<StartMode>,
 }
 
 impl Default for Entry {
@@ -48,6 +50,7 @@ impl Default for Entry {
             env: BTreeMap::new(),
             hidden: true,
             restart: Restart::Never,
+            start: None,
         }
     }
 }
@@ -67,6 +70,13 @@ pub enum Restart {
     #[default]
     Never,
     OnCrash,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum StartMode {
+    Auto,
+    Manual,
 }
 
 fn is_true(value: &bool) -> bool {
@@ -93,6 +103,16 @@ impl fmt::Display for Restart {
         let label = match self {
             Self::Never => "never",
             Self::OnCrash => "on-crash",
+        };
+        formatter.write_str(label)
+    }
+}
+
+impl fmt::Display for StartMode {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Auto => "auto",
+            Self::Manual => "manual",
         };
         formatter.write_str(label)
     }
@@ -304,6 +324,18 @@ mod tests {
             config.nssm.as_deref(),
             Some(Path::new(r"C:\Tools\nssm.exe"))
         );
+    }
+
+    #[test]
+    fn the_start_mode_is_read_and_written_only_when_set() {
+        let source = "[[entries]]\nname = \"caps-lang\"\nkind = \"service\"\nstart = \"auto\"\n\n[[entries]]\nname = \"Spooler\"\nkind = \"service\"\n";
+        let config = Config::parse(source, Path::new(CONFIG_FILE)).expect("config");
+
+        assert_eq!(config.entries[0].start, Some(StartMode::Auto));
+        assert_eq!(config.entries[1].start, None);
+        let written = toml::to_string_pretty(&config).expect("toml");
+        assert!(written.contains("start = \"auto\""));
+        assert_eq!(written.matches("start =").count(), 1);
     }
 
     #[test]

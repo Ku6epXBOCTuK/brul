@@ -11,7 +11,7 @@ use brul::{command, host};
 
 use xboct_panel::{
     Config, ConfigError, Console, Consoles, Entry, EntryKind, Program, Restart, Service,
-    ServiceError, Started, default_path, generated, log, program, service,
+    ServiceError, StartMode, Started, default_path, generated, log, nssm, program, service,
 };
 
 const LOG_LINES: usize = 40;
@@ -104,6 +104,7 @@ fn save_entry(
     port: String,
     log: String,
     restart: String,
+    start: String,
     hidden: bool,
 ) -> Result<Value, brul::Error> {
     let draft = Draft {
@@ -116,17 +117,32 @@ fn save_entry(
         port: &port,
         log: &log,
         restart: &restart,
+        start: &start,
         hidden,
     };
     let base = host.specs.iter().find(|spec| spec.name == original);
     let status = match draft.entry(base) {
         Err(message) => message,
-        Ok(entry) => match update(host, &original, entry) {
-            Ok(()) => format!("saved: {}", name.trim()),
+        Ok(entry) => match update(host, &original, entry.clone()) {
             Err(failure) => failure.to_string(),
+            Ok(()) => match provision(host, &entry) {
+                Ok(()) => format!("saved: {}", entry.name),
+                Err(message) => message,
+            },
         },
     };
     Ok(outcome(&host.specs, &mut host.consoles, status))
+}
+
+fn provision(host: &AppHost, entry: &Entry) -> Result<(), String> {
+    if entry.kind != EntryKind::Service {
+        return Ok(());
+    }
+    let Some(nssm) = host.nssm.as_deref() else {
+        return Err(String::from("nssm is not set in xboct-panel.toml"));
+    };
+    let exists = service::known(&entry.name).map_err(|failure| failure.to_string())?;
+    nssm::apply(nssm, entry, exists).map_err(|failure| failure.to_string())
 }
 
 struct Draft<'a> {
@@ -139,6 +155,7 @@ struct Draft<'a> {
     port: &'a str,
     log: &'a str,
     restart: &'a str,
+    start: &'a str,
     hidden: bool,
 }
 
@@ -174,6 +191,12 @@ impl Draft<'_> {
             "" | "never" => Restart::Never,
             "on-crash" => Restart::OnCrash,
             other => return Err(format!("unknown restart '{other}'")),
+        };
+        entry.start = match self.start.trim() {
+            "" => None,
+            "auto" => Some(StartMode::Auto),
+            "manual" => Some(StartMode::Manual),
+            other => return Err(format!("unknown start '{other}'")),
         };
         entry.hidden = self.hidden;
         Ok(entry)
@@ -219,6 +242,7 @@ fn update(host: &mut AppHost, original: &str, entry: Entry) -> Result<(), Config
 fn draft_value(spec: Option<&Entry>) -> Value {
     let blank = Entry {
         kind: EntryKind::Program,
+        hidden: false,
         ..Entry::default()
     };
     let spec = spec.unwrap_or(&blank);
@@ -249,6 +273,13 @@ fn draft_value(spec: Option<&Entry>) -> Value {
         ),
         (String::from("log"), path_text(spec.log.as_ref())),
         (String::from("restart"), text(spec.restart.to_string())),
+        (
+            String::from("start"),
+            text(
+                spec.start
+                    .map_or_else(String::new, |start| start.to_string()),
+            ),
+        ),
         (String::from("hidden"), Value::Bool(spec.hidden)),
     ]))
 }
@@ -484,7 +515,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        Console, Draft, Entry, Program, Restart, Service, Value, console_row, describe,
+        Console, Draft, Entry, Program, Restart, Service, StartMode, Value, console_row, describe,
         draft_value, log_text, program_row, row,
     };
     use xboct_panel::{ProgramState, ServiceError, ServiceState, StartType, Started};
@@ -664,6 +695,7 @@ mod tests {
             port: "",
             log: "",
             restart: "on-crash",
+            start: "auto",
             hidden: true,
         };
 
@@ -673,6 +705,7 @@ mod tests {
         assert_eq!(entry.args, ["--startrecording"]);
         assert_eq!(entry.env.get("OBS_DEBUG").map(String::as_str), Some("1"));
         assert_eq!(entry.restart, Restart::OnCrash);
+        assert_eq!(entry.start, Some(StartMode::Auto));
         assert!(entry.hidden);
     }
 
@@ -697,6 +730,7 @@ mod tests {
             port: "",
             log: "",
             restart: "never",
+            start: "",
             hidden: false,
         };
 
