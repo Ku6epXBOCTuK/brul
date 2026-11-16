@@ -184,6 +184,7 @@ impl WindowError {
 }
 
 pub fn run(config: WindowConfig) -> Result<(), WindowError> {
+    crate::perf::start();
     config.validate()?;
     let event_loop = EventLoop::new().map_err(WindowError::event_loop)?;
     event_loop.set_control_flow(ControlFlow::Wait);
@@ -236,6 +237,7 @@ pub fn run_tree_themed(
     mut build: impl FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>> + 'static,
     handler: impl FnMut(&[WidgetEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
+    crate::perf::start();
     config.validate()?;
     let event_loop = EventLoop::new().map_err(WindowError::event_loop)?;
     event_loop.set_control_flow(ControlFlow::Wait);
@@ -266,6 +268,7 @@ pub fn run_windows(
     ready: impl FnOnce(Waker) + 'static,
     wake: impl FnMut() + 'static,
 ) -> Result<(), WindowError> {
+    crate::perf::start();
     crate::windows::run(initial, create, handler, closed, ready, wake)
 }
 

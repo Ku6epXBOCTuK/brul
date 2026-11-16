@@ -114,6 +114,8 @@ impl TreeApp {
         }
 
         renderer.present(surface, frame);
+        let (width, height) = surface.size();
+        crate::perf::startup(surface.scale_factor(), width, height);
         if !self.revealed {
             self.revealed = true;
             surface.set_visible(self.config.visible);
