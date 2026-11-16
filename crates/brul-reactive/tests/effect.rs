@@ -156,3 +156,24 @@ fn effect_drops_stale_dependencies() {
     flush();
     assert_eq!(runs.get(), 3);
 }
+
+#[test]
+fn a_reused_slot_does_not_run_a_memo_from_the_queue() {
+    let scope = EffectScope::new();
+    let source = Signal::new(0);
+    let (runs, count) = counter();
+    scope.run(move || {
+        Effect::new(move || {
+            source.get();
+            count();
+        });
+    });
+
+    source.set(1);
+    scope.dispose();
+    let memo = Memo::new(|| 7);
+    flush();
+
+    assert_eq!(runs.get(), 1, "the disposed effect stays stopped");
+    assert_eq!(memo.get(), 7);
+}

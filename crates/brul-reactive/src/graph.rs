@@ -22,6 +22,7 @@ struct Node {
 #[derive(Default)]
 struct Arena {
     nodes: Vec<Node>,
+    free: Vec<u32>,
     queue: VecDeque<u32>,
     live: usize,
 }
@@ -35,8 +36,7 @@ thread_local! {
 pub(crate) fn create(kind: Kind, payload: Rc<dyn Any>) -> u32 {
     ARENA.with(|arena| {
         let mut arena = arena.borrow_mut();
-        let id = arena.nodes.len() as u32;
-        arena.nodes.push(Node {
+        let node = Node {
             kind,
             subscribers: Vec::new(),
             dependencies: Vec::new(),
@@ -44,9 +44,18 @@ pub(crate) fn create(kind: Kind, payload: Rc<dyn Any>) -> u32 {
             queued: false,
             disposed: false,
             payload: Some(payload),
-        });
+        };
         arena.live += 1;
-        id
+        match arena.free.pop() {
+            Some(id) => {
+                arena.nodes[id as usize] = node;
+                id
+            }
+            None => {
+                arena.nodes.push(node);
+                (arena.nodes.len() - 1) as u32
+            }
+        }
     })
 }
 
@@ -164,6 +173,10 @@ pub(crate) fn clear_dependencies(id: u32) {
     });
 }
 
+pub(crate) fn is_effect(id: u32) -> bool {
+    ARENA.with(|arena| matches!(arena.borrow().nodes[id as usize].kind, Kind::Effect))
+}
+
 pub(crate) fn is_dirty(id: u32) -> bool {
     ARENA.with(|arena| arena.borrow().nodes[id as usize].dirty)
 }
@@ -214,6 +227,7 @@ pub(crate) fn dispose(id: u32) {
         node.dirty = false;
         node.queued = false;
         node.payload = None;
+        node.subscribers.clear();
         let dependencies = std::mem::take(&mut node.dependencies);
         for dependency in dependencies {
             arena.nodes[dependency as usize]
@@ -221,5 +235,41 @@ pub(crate) fn dispose(id: u32) {
                 .retain(|subscriber| *subscriber != id);
         }
         arena.live -= 1;
+        arena.free.push(id);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn callback() -> Rc<dyn Any> {
+        Rc::new(RefCell::new(Box::new(|| {}) as Box<dyn Fn()>))
+    }
+
+    fn slots() -> usize {
+        ARENA.with(|arena| arena.borrow().nodes.len())
+    }
+
+    #[test]
+    fn a_disposed_slot_serves_the_next_node() {
+        let base = slots();
+        let first = create(Kind::Effect, callback());
+        assert_eq!(slots(), base + 1);
+        dispose(first);
+        let second = create(Kind::Effect, callback());
+        assert_eq!(second, first);
+        assert_eq!(slots(), base + 1);
+        dispose(second);
+    }
+
+    #[test]
+    fn cycles_do_not_grow_the_arena() {
+        let base = slots();
+        for _ in 0..5 {
+            let id = create(Kind::Signal, Rc::new(RefCell::new(0)));
+            dispose(id);
+        }
+        assert_eq!(slots(), base + 1, "slots are reused instead of appended");
+    }
 }

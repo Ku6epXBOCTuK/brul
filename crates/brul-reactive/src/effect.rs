@@ -87,6 +87,11 @@ pub fn flush() {
         if graph::disposed(id) {
             continue;
         }
+        // NOTE: a queue entry outlives its effect, and a reused slot may hold
+        // a signal or memo now
+        if !graph::is_effect(id) {
+            continue;
+        }
         if graph::take_dirty(id) {
             graph::run(id);
         }
