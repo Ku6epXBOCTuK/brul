@@ -1,4 +1,4 @@
-use super::frame::{build_snapshot, reveal_carets};
+use super::frame::{build_snapshot, reveal_carets, snapshot_node};
 use super::render::{Pass, measure_text};
 use super::style::Transition;
 use super::*;
@@ -109,17 +109,61 @@ impl WidgetTree {
     }
 
     pub fn snapshot(&mut self) -> Result<&WidgetSnapshot, WidgetError> {
-        if self.snapshot.is_none() {
+        if self.snapshot.is_none() || (self.snapshot_stale && !self.patch_snapshot()) {
             let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
             let snapshot =
                 build_snapshot(&self.nodes, self.root, geometry, &self.texts, self.focused);
             self.snapshot = Some(snapshot);
         }
+        self.snapshot_stale = false;
+        self.pending.clear();
         Ok(self.snapshot.as_ref().expect("snapshot built"))
     }
 
+    fn patch_snapshot(&mut self) -> bool {
+        let Some(geometry) = self.geometry.as_ref() else {
+            return false;
+        };
+        let Some(snapshot) = self.snapshot.as_mut() else {
+            return false;
+        };
+        for id in std::mem::take(&mut self.pending) {
+            let Some(&slot) = self.index.get(&id) else {
+                return false;
+            };
+            let Some(&at) = snapshot.index.get(&id) else {
+                return false;
+            };
+            let node = &self.nodes[slot.index()];
+            if !node.state.visible {
+                return false;
+            }
+            let clips = std::mem::take(&mut snapshot.nodes[at].clips);
+            let fresh = snapshot_node(
+                node,
+                slot,
+                &geometry.boxes[slot.index()],
+                &self.texts,
+                &clips,
+                self.focused,
+            );
+            let old = &snapshot.nodes[at];
+            let reshapes = old.x != fresh.x
+                || old.y != fresh.y
+                || old.width != fresh.width
+                || old.height != fresh.height
+                || old.style.clip != fresh.style.clip
+                || old.style.border_radius != fresh.style.border_radius;
+            if reshapes {
+                return false;
+            }
+            snapshot.nodes[at] = fresh;
+        }
+        true
+    }
+
     pub fn snapshot_dirty(&self) -> bool {
-        self.snapshot.is_none()
+        self.snapshot.is_none() || self.snapshot_stale
     }
 
     pub fn take_dirty(&mut self) -> Dirty {
@@ -147,7 +191,6 @@ impl WidgetTree {
         }
         let slots: Vec<Slot> = self.index.values().copied().collect();
         let mut running = false;
-        let mut changed = false;
         for slot in slots {
             let node = &mut self.nodes[slot.index()];
             let Some(transition) = node.transition.as_mut() else {
@@ -159,11 +202,7 @@ impl WidgetTree {
             }
             let id = node.id;
             running |= active;
-            changed = true;
             self.mark_dirty(id);
-        }
-        if changed {
-            self.snapshot = None;
         }
         running
     }

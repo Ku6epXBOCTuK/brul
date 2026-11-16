@@ -3,16 +3,18 @@ use crate::image::Image;
 use crate::layout::Size;
 use crate::rect::ClipRect;
 use crate::text::{CaretPosition, SelectionRect, TextLayout};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct WidgetSnapshot {
     pub size: Size,
     pub nodes: Vec<WidgetSnapshotNode>,
+    pub index: HashMap<WidgetId, usize>,
 }
 
 impl WidgetSnapshot {
     pub fn node(&self, id: WidgetId) -> Option<&WidgetSnapshotNode> {
-        self.nodes.iter().find(|node| node.id == id)
+        self.index.get(&id).map(|&at| &self.nodes[at])
     }
 }
 

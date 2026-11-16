@@ -73,6 +73,8 @@ pub struct WidgetTree {
     root_scroll: bool,
     geometry: Option<Geometry>,
     snapshot: Option<WidgetSnapshot>,
+    snapshot_stale: bool,
+    pending: Vec<WidgetId>,
     texts: HashMap<WidgetId, ShapedText>,
     hovered: Vec<Slot>,
     pressed: Vec<Slot>,
@@ -165,6 +167,8 @@ impl WidgetTree {
             root_scroll: false,
             geometry: None,
             snapshot: None,
+            snapshot_stale: false,
+            pending: Vec::new(),
             texts: HashMap::new(),
             hovered: Vec::new(),
             pressed: Vec::new(),
@@ -411,7 +415,6 @@ impl WidgetTree {
             return true;
         }
         self.retarget(slot);
-        self.snapshot = None;
         self.mark_dirty(id);
         true
     }
@@ -421,6 +424,7 @@ impl WidgetTree {
             return false;
         }
         self.sync_modal_focus();
+        self.snapshot = None;
         self.full_dirty = true;
         self.dirty.clear();
         true
@@ -495,7 +499,6 @@ impl WidgetTree {
         if let Some(&slot) = self.index.get(&id) {
             self.retarget(slot);
         }
-        self.snapshot = None;
         self.mark_dirty(id);
         Some(checked)
     }

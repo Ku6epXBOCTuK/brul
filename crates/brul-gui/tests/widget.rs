@@ -924,6 +924,43 @@ fn a_class_carries_state_patches_and_transitions() {
 }
 
 #[test]
+fn a_style_patch_rewrites_the_snapshot_in_place() {
+    let view = Widget::column(Vec::new())
+        .with_layout(fixed(50, 50))
+        .with_styles(StyleSet::new(style(Color::rgb(1, 2, 3))));
+    let id = view.id();
+    let mut tree = WidgetTree::new(view);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 50,
+        height: 50,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    let before = tree.snapshot().expect("snapshot").nodes.as_ptr();
+
+    let class = Class {
+        style: Layers::new(WidgetStylePatch {
+            background: Some(Paint::Color(Color::rgb(9, 8, 7))),
+            ..WidgetStylePatch::default()
+        }),
+        ..Class::default()
+    };
+    assert!(tree.apply_class(id, Some(&class)));
+    assert!(
+        tree.snapshot_dirty(),
+        "the stale snapshot waits for a patch"
+    );
+
+    let snapshot = tree.snapshot().expect("snapshot");
+    assert_eq!(snapshot.nodes.as_ptr(), before, "patched in place");
+    assert_eq!(
+        snapshot.node(id).expect("node").style.background,
+        Paint::Color(Color::rgb(9, 8, 7))
+    );
+    assert!(!tree.snapshot_dirty());
+}
+
+#[test]
 fn a_class_carrying_a_layout_relayouts_the_widget() {
     let view = Widget::column(Vec::new()).with_layout(fixed(50, 50));
     let id = view.id();

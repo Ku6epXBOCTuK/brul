@@ -60,6 +60,11 @@ pub(super) fn build_snapshot(
 ) -> WidgetSnapshot {
     let mut nodes = Vec::new();
     snapshot_widget(tree, root, &geometry.boxes, texts, &[], focused, &mut nodes);
+    let index = nodes
+        .iter()
+        .enumerate()
+        .map(|(at, node)| (node.id, at))
+        .collect();
     let root_box = &geometry.boxes[root.index()];
     WidgetSnapshot {
         size: Size {
@@ -67,6 +72,7 @@ pub(super) fn build_snapshot(
             height: root_box.height,
         },
         nodes,
+        index,
     }
 }
 
@@ -102,6 +108,43 @@ pub(super) fn snapshot_widget(
     }
 
     let layout_box = &boxes[slot.index()];
+    let style = node.style();
+    nodes.push(snapshot_node(node, slot, layout_box, texts, clips, focused));
+
+    let mut child_clips = clips.to_vec();
+    if style.clip {
+        child_clips.push(ClipRect::new(
+            layout_box.x,
+            layout_box.y,
+            layout_box.width,
+            layout_box.height,
+            style.border_radius,
+        ));
+    }
+    for &child in node
+        .children
+        .iter()
+        .filter(|child| !tree[child.index()].layer)
+    {
+        snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
+    }
+    for &child in node
+        .children
+        .iter()
+        .filter(|child| tree[child.index()].layer)
+    {
+        snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
+    }
+}
+
+pub(super) fn snapshot_node(
+    node: &Node,
+    slot: Slot,
+    layout_box: &LayoutBox,
+    texts: &HashMap<WidgetId, ShapedText>,
+    clips: &[ClipRect],
+    focused: Option<Slot>,
+) -> WidgetSnapshotNode {
     let layout_style = node.layout_style();
     let style = node.style();
     let content_x = layout_box.x.saturating_add(
@@ -171,7 +214,7 @@ pub(super) fn snapshot_widget(
         _ => None,
     };
 
-    nodes.push(WidgetSnapshotNode {
+    WidgetSnapshotNode {
         id: node.id,
         kind: node.data.kind(),
         x: layout_box.x,
@@ -192,31 +235,6 @@ pub(super) fn snapshot_widget(
         scroll,
         image,
         clips: node_clips,
-    });
-
-    let mut child_clips = clips.to_vec();
-    if style.clip {
-        child_clips.push(ClipRect::new(
-            layout_box.x,
-            layout_box.y,
-            layout_box.width,
-            layout_box.height,
-            style.border_radius,
-        ));
-    }
-    for &child in node
-        .children
-        .iter()
-        .filter(|child| !tree[child.index()].layer)
-    {
-        snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
-    }
-    for &child in node
-        .children
-        .iter()
-        .filter(|child| tree[child.index()].layer)
-    {
-        snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
     }
 }
 

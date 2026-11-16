@@ -74,7 +74,6 @@ impl WidgetTree {
             events.push(WidgetEvent::PointerEnter(id));
         }
         self.hovered = path;
-        self.snapshot = None;
         Ok(events)
     }
 
@@ -103,9 +102,6 @@ impl WidgetTree {
                 events.push(WidgetEvent::Drag(id));
             }
         }
-        if !path.is_empty() {
-            self.snapshot = None;
-        }
         self.pressed = path;
         Ok(events)
     }
@@ -127,9 +123,6 @@ impl WidgetTree {
             for &slot in path.iter().rev() {
                 events.push(WidgetEvent::Click(self.nodes[slot.index()].id));
             }
-        }
-        if !pressed.is_empty() {
-            self.snapshot = None;
         }
         Ok(events)
     }
@@ -155,9 +148,6 @@ impl WidgetTree {
             self.retarget(*slot);
             events.push(WidgetEvent::Release(id));
         }
-        if !hovered.is_empty() || !pressed.is_empty() {
-            self.snapshot = None;
-        }
         events
     }
 
@@ -180,7 +170,6 @@ impl WidgetTree {
         if let Some(&slot) = self.index.get(&id) {
             self.retarget(slot);
         }
-        self.snapshot = None;
         self.mark_dirty(id);
         true
     }
@@ -189,6 +178,8 @@ impl WidgetTree {
         if !self.full_dirty {
             self.dirty.insert(id);
         }
+        self.pending.push(id);
+        self.snapshot_stale = true;
     }
 
     pub(super) fn clear_interaction(&mut self) {
@@ -209,7 +200,6 @@ impl WidgetTree {
     }
 
     pub(super) fn set_pressed(&mut self, pressed: bool) {
-        let had_pressed = !self.pressed.is_empty();
         let slots = std::mem::take(&mut self.pressed);
         for &slot in &slots {
             let node = &mut self.nodes[slot.index()];
@@ -217,9 +207,6 @@ impl WidgetTree {
             let id = node.id;
             self.mark_dirty(id);
             self.retarget(slot);
-        }
-        if had_pressed {
-            self.snapshot = None;
         }
     }
 
