@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -412,17 +412,19 @@ impl<T: Theme> Ui<T> {
         let mut props = Vec::new();
         let mut added_structures = Vec::new();
         let mut changed = false;
+        let index: HashMap<WidgetId, usize> = structures
+            .iter()
+            .enumerate()
+            .map(|(at, owned)| (owned.structure.parent, at))
+            .collect();
         for parent in requests {
-            let Some(index) = structures
-                .iter()
-                .position(|owned| owned.structure.parent == parent)
-            else {
+            let Some(&at) = index.get(&parent) else {
                 continue;
             };
             if !self.tree.borrow().contains(parent) {
                 continue;
             }
-            let structure = structures[index].structure.clone();
+            let structure = structures[at].structure.clone();
             let component = Rc::clone(&structure.component);
             let old_rows = if structure.each {
                 rows.iter()
@@ -457,21 +459,14 @@ impl<T: Theme> Ui<T> {
                 handlers: added_handlers,
                 props: added_props,
             } = built;
+            let mut tree = self.tree.borrow_mut();
             let children = if structure.each {
                 rows.push((parent, rebuilt_rows.clone()));
-                reconcile_each(
-                    &mut self.tree.borrow_mut(),
-                    parent,
-                    &old_rows,
-                    widget,
-                    &rebuilt_rows,
-                )
+                reconcile_each(&mut tree, parent, &old_rows, widget, &rebuilt_rows)
             } else {
                 widget.into_children()
             };
-            self.tree
-                .borrow_mut()
-                .replace_all_children(parent, children);
+            tree.replace_all_children(parent, children);
             bindings.extend(added_bindings);
             handlers.extend(added_handlers);
             props.extend(added_props);
@@ -483,29 +478,29 @@ impl<T: Theme> Ui<T> {
         if !changed {
             return;
         }
-        let tree = Rc::clone(&self.tree);
-        let parents: Vec<WidgetId> = added_structures
+        let parents: HashSet<WidgetId> = added_structures
             .iter()
             .map(|structure| structure.parent)
             .collect();
-        self.structures.retain(|owned| {
-            tree.borrow().contains(owned.structure.parent)
-                && !parents.contains(&owned.structure.parent)
-        });
-        self.rows.retain(|(id, _)| tree.borrow().contains(*id));
-        let widgets: Vec<WidgetId> = bindings.iter().map(|binding| binding.widget).collect();
-        self.bindings.retain(|owned| {
-            tree.borrow().contains(owned.widget) && !widgets.contains(&owned.widget)
-        });
-        let widgets: Vec<WidgetId> = props.iter().map(|prop| prop.widget).collect();
-        self.props.retain(|owned| {
-            tree.borrow().contains(owned.widget) && !widgets.contains(&owned.widget)
-        });
-        self.handlers.extend(handlers);
-        self.handlers.retain(|handler| match handler.widget {
-            Some(widget) => tree.borrow().contains(widget),
-            None => true,
-        });
+        {
+            let tree = self.tree.borrow();
+            self.structures.retain(|owned| {
+                tree.contains(owned.structure.parent) && !parents.contains(&owned.structure.parent)
+            });
+            self.rows.retain(|(id, _)| tree.contains(*id));
+            let widgets: HashSet<WidgetId> =
+                bindings.iter().map(|binding| binding.widget).collect();
+            self.bindings
+                .retain(|owned| tree.contains(owned.widget) && !widgets.contains(&owned.widget));
+            let widgets: HashSet<WidgetId> = props.iter().map(|prop| prop.widget).collect();
+            self.props
+                .retain(|owned| tree.contains(owned.widget) && !widgets.contains(&owned.widget));
+            self.handlers.extend(handlers);
+            self.handlers.retain(|handler| match handler.widget {
+                Some(widget) => tree.contains(widget),
+                None => true,
+            });
+        }
         self.bind(bindings);
         self.bind_props(props);
         self.bind_structures(added_structures);
