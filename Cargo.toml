@@ -35,6 +35,10 @@ harness = false
 name = "layout"
 harness = false
 
+[[bench]]
+name = "dpi"
+harness = false
+
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*"]
