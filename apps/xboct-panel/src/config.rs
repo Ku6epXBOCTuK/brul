@@ -1,6 +1,7 @@
 //! Panel config: which services, programs and console commands to show.
 
 use std::collections::{BTreeMap, HashSet};
+use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -76,6 +77,27 @@ fn is_never(value: &Restart) -> bool {
     *value == Restart::Never
 }
 
+impl fmt::Display for EntryKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Service => "service",
+            Self::Program => "program",
+            Self::Console => "console",
+        };
+        formatter.write_str(label)
+    }
+}
+
+impl fmt::Display for Restart {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Never => "never",
+            Self::OnCrash => "on-crash",
+        };
+        formatter.write_str(label)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ConfigError {
     #[error("failed to read {}: {message}", .path.display())]
@@ -84,6 +106,10 @@ pub enum ConfigError {
     Parse { path: PathBuf, message: String },
     #[error("failed to write {}: {message}", .path.display())]
     Write { path: PathBuf, message: String },
+    #[error("an entry named {name:?} already exists")]
+    Duplicate { name: String },
+    #[error("invalid config: {message}")]
+    Invalid { message: String },
 }
 
 impl Config {
@@ -96,21 +122,28 @@ impl Config {
         Ok(config)
     }
 
-    fn validate(&self, path: &Path) -> Result<(), ConfigError> {
-        let fail = |message: String| ConfigError::Parse {
-            path: path.to_path_buf(),
-            message,
-        };
+    pub fn validate(&self, path: &Path) -> Result<(), ConfigError> {
+        self.verify().map_err(|error| match error {
+            ConfigError::Invalid { message } => ConfigError::Parse {
+                path: path.to_path_buf(),
+                message,
+            },
+            error => error,
+        })
+    }
+
+    pub fn verify(&self) -> Result<(), ConfigError> {
         let mut seen = HashSet::new();
         for (index, entry) in self.entries.iter().enumerate() {
             if entry.name.trim().is_empty() {
-                return Err(fail(format!("entries[{index}] has no name")));
+                return Err(ConfigError::Invalid {
+                    message: format!("entries[{index}] has no name"),
+                });
             }
             if !seen.insert(entry.name.as_str()) {
-                return Err(fail(format!(
-                    "entries[{index}] repeats name {:?}",
-                    entry.name
-                )));
+                return Err(ConfigError::Invalid {
+                    message: format!("entries[{index}] repeats name {:?}", entry.name),
+                });
             }
             if entry.kind != EntryKind::Service
                 && entry
@@ -118,7 +151,9 @@ impl Config {
                     .as_deref()
                     .is_none_or(|command| command.trim().is_empty())
             {
-                return Err(fail(format!("entries[{index}] has no command")));
+                return Err(ConfigError::Invalid {
+                    message: format!("entries[{index}] has no command"),
+                });
             }
         }
         Ok(())
@@ -143,6 +178,21 @@ impl Config {
             path: path.to_path_buf(),
             message: error.to_string(),
         })
+    }
+
+    pub fn upsert(&mut self, original: &str, entry: Entry) -> Result<(), ConfigError> {
+        if self
+            .entries
+            .iter()
+            .any(|other| other.name == entry.name && other.name != original)
+        {
+            return Err(ConfigError::Duplicate { name: entry.name });
+        }
+        match self.entries.iter_mut().find(|other| other.name == original) {
+            Some(slot) => *slot = entry,
+            None => self.entries.push(entry),
+        }
+        Ok(())
     }
 
     pub fn load_or_create(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
@@ -307,6 +357,61 @@ mod tests {
     fn an_empty_file_is_an_empty_config() {
         let config = Config::parse("", Path::new(CONFIG_FILE)).expect("config");
         assert!(config.entries.is_empty());
+    }
+
+    #[test]
+    fn an_upsert_replaces_the_entry_by_its_old_name() {
+        let mut config = Config::default();
+        let mut entry = Entry {
+            name: String::from("nobs"),
+            ..Entry::default()
+        };
+        config.upsert("", entry.clone()).expect("added");
+        entry.name = String::from("obs");
+        config.upsert("nobs", entry).expect("renamed");
+
+        assert_eq!(config.entries.len(), 1);
+        assert_eq!(config.entries[0].name, "obs");
+    }
+
+    #[test]
+    fn an_upsert_rejects_a_name_another_entry_has() {
+        let mut config = Config::default();
+        for name in ["one", "two"] {
+            let entry = Entry {
+                name: String::from(name),
+                ..Entry::default()
+            };
+            config.upsert("", entry).expect("added");
+        }
+        let entry = Entry {
+            name: String::from("two"),
+            ..Entry::default()
+        };
+
+        let failure = config.upsert("one", entry).expect_err("duplicate");
+
+        assert_eq!(
+            failure,
+            ConfigError::Duplicate {
+                name: String::from("two")
+            }
+        );
+        assert_eq!(config.entries[0].name, "one");
+    }
+
+    #[test]
+    fn an_upsert_keeps_an_entry_that_was_renamed_to_itself() {
+        let mut config = Config::default();
+        let entry = Entry {
+            name: String::from("one"),
+            ..Entry::default()
+        };
+        config.upsert("", entry.clone()).expect("added");
+
+        config.upsert("one", entry).expect("updated");
+
+        assert_eq!(config.entries.len(), 1);
     }
 
     #[test]

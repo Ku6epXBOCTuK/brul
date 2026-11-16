@@ -1072,6 +1072,34 @@ fn emits_imported_component() {
 }
 
 #[test]
+fn resolves_an_import_that_declares_imports_of_its_own() {
+    let dir = scratch(
+        "nested-import",
+        &[
+            (
+                "label.brul",
+                "<markup>\ncomponent Label {\n    Text { \"label\" }\n}\n</markup>\n",
+            ),
+            (
+                "badge.brul",
+                "<use>\n    import Label from \"./label.brul\";\n</use>\n\n<markup>\ncomponent Badge {\n    Label { }\n}\n</markup>\n",
+            ),
+            (
+                "other.brul",
+                "<markup>\ncomponent Other {\n    prop note: String = \"\";\n    Text { note }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Badge from \"./badge.brul\";\n    import Other from \"./other.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Other (note: \"hi\") { }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(module.contains("pub fn other_view"), "{module}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn splits_every_component_into_its_own_file() {
     let dir = scratch(
         "split",

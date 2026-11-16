@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::rc::Rc;
 
@@ -8,8 +10,8 @@ use brul::logging::{error, info};
 use brul::{command, host};
 
 use xboct_panel::{
-    Config, Console, Consoles, Entry, EntryKind, Program, Service, ServiceError, Started,
-    default_path, generated, log, program, service,
+    Config, ConfigError, Console, Consoles, Entry, EntryKind, Program, Restart, Service,
+    ServiceError, Started, default_path, generated, log, program, service,
 };
 
 const LOG_LINES: usize = 40;
@@ -17,6 +19,8 @@ const LOG_LINES: usize = 40;
 struct AppHost {
     specs: Vec<Entry>,
     consoles: Consoles,
+    nssm: Option<PathBuf>,
+    path: PathBuf,
 }
 
 #[command]
@@ -67,6 +71,186 @@ fn toggle_console(host: &mut AppHost, name: String) -> Result<Value, brul::Error
 
 fn unknown(action: &str) -> String {
     format!("unknown action '{action}'")
+}
+
+#[command]
+fn entry_draft(host: &mut AppHost, name: String) -> Result<Value, brul::Error> {
+    let spec = host.specs.iter().find(|spec| spec.name == name);
+    let ok = name.is_empty() || spec.is_some();
+    let status = if ok {
+        String::new()
+    } else {
+        format!("no entry '{name}' in the config")
+    };
+    Ok(Value::Object(Rc::new(vec![
+        (String::from("ok"), Value::Bool(ok)),
+        (String::from("status"), text(status)),
+        (String::from("draft"), draft_value(spec)),
+    ])))
+}
+
+#[command]
+// NOTE: the command macro takes only scalars, so the whole draft cannot be one argument
+#[allow(clippy::too_many_arguments)]
+fn save_entry(
+    host: &mut AppHost,
+    original: String,
+    kind: String,
+    name: String,
+    command: String,
+    args: String,
+    workdir: String,
+    env: String,
+    port: String,
+    log: String,
+    restart: String,
+    hidden: bool,
+) -> Result<Value, brul::Error> {
+    let draft = Draft {
+        kind: &kind,
+        name: &name,
+        command: &command,
+        args: &args,
+        workdir: &workdir,
+        env: &env,
+        port: &port,
+        log: &log,
+        restart: &restart,
+        hidden,
+    };
+    let base = host.specs.iter().find(|spec| spec.name == original);
+    let status = match draft.entry(base) {
+        Err(message) => message,
+        Ok(entry) => match update(host, &original, entry) {
+            Ok(()) => format!("saved: {}", name.trim()),
+            Err(failure) => failure.to_string(),
+        },
+    };
+    Ok(outcome(&host.specs, &mut host.consoles, status))
+}
+
+struct Draft<'a> {
+    kind: &'a str,
+    name: &'a str,
+    command: &'a str,
+    args: &'a str,
+    workdir: &'a str,
+    env: &'a str,
+    port: &'a str,
+    log: &'a str,
+    restart: &'a str,
+    hidden: bool,
+}
+
+impl Draft<'_> {
+    fn entry(&self, base: Option<&Entry>) -> Result<Entry, String> {
+        let name = self.name.trim();
+        if name.is_empty() {
+            return Err(String::from("an entry needs a name"));
+        }
+        let kind = match self.kind.trim() {
+            "service" => EntryKind::Service,
+            "program" => EntryKind::Program,
+            "console" => EntryKind::Console,
+            other => return Err(format!("unknown kind '{other}'")),
+        };
+        let mut entry = base.cloned().unwrap_or_default();
+        entry.name = String::from(name);
+        entry.kind = kind;
+        entry.command = optional(self.command);
+        entry.args = lines(self.args);
+        entry.workdir = optional(self.workdir).map(PathBuf::from);
+        entry.env = env_pairs(self.env)?;
+        entry.port = match self.port.trim() {
+            "" => None,
+            value => Some(
+                value
+                    .parse()
+                    .map_err(|_| format!("port '{value}' is not a number"))?,
+            ),
+        };
+        entry.log = optional(self.log).map(PathBuf::from);
+        entry.restart = match self.restart.trim() {
+            "" | "never" => Restart::Never,
+            "on-crash" => Restart::OnCrash,
+            other => return Err(format!("unknown restart '{other}'")),
+        };
+        entry.hidden = self.hidden;
+        Ok(entry)
+    }
+}
+
+fn optional(text: &str) -> Option<String> {
+    let text = text.trim();
+    (!text.is_empty()).then(|| String::from(text))
+}
+
+fn lines(text: &str) -> Vec<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+fn env_pairs(text: &str) -> Result<BTreeMap<String, String>, String> {
+    let mut pairs = BTreeMap::new();
+    for line in lines(text) {
+        let Some((key, value)) = line.split_once('=') else {
+            return Err(format!("env line '{line}' has no '='"));
+        };
+        pairs.insert(String::from(key.trim()), String::from(value.trim()));
+    }
+    Ok(pairs)
+}
+
+fn update(host: &mut AppHost, original: &str, entry: Entry) -> Result<(), ConfigError> {
+    let mut config = Config {
+        nssm: host.nssm.clone(),
+        entries: host.specs.clone(),
+    };
+    config.upsert(original, entry)?;
+    config.verify()?;
+    config.save(&host.path)?;
+    host.specs = config.entries;
+    Ok(())
+}
+
+fn draft_value(spec: Option<&Entry>) -> Value {
+    let blank = Entry {
+        kind: EntryKind::Program,
+        ..Entry::default()
+    };
+    let spec = spec.unwrap_or(&blank);
+    let args = spec.args.join("\n");
+    let env = spec
+        .env
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let path_text = |path: Option<&PathBuf>| {
+        text(path.map_or_else(String::new, |path| path.display().to_string()))
+    };
+    Value::Object(Rc::new(vec![
+        (String::from("original"), text(spec.name.clone())),
+        (String::from("kind"), text(spec.kind.to_string())),
+        (String::from("name"), text(spec.name.clone())),
+        (
+            String::from("command"),
+            text(spec.command.clone().unwrap_or_default()),
+        ),
+        (String::from("args"), text(args)),
+        (String::from("workdir"), path_text(spec.workdir.as_ref())),
+        (String::from("env"), text(env)),
+        (
+            String::from("port"),
+            text(spec.port.map_or_else(String::new, |port| port.to_string())),
+        ),
+        (String::from("log"), path_text(spec.log.as_ref())),
+        (String::from("restart"), text(spec.restart.to_string())),
+        (String::from("hidden"), Value::Bool(spec.hidden)),
+    ]))
 }
 
 #[command]
@@ -224,7 +408,7 @@ fn text(value: String) -> Value {
     Value::String(value.into())
 }
 
-host! { AppHost: act, start_all_manual, refresh, toggle_console }
+host! { AppHost: act, start_all_manual, refresh, toggle_console, entry_draft, save_entry }
 
 fn main() -> ExitCode {
     brul::logging::init_with(&[env!("CARGO_PKG_NAME")]);
@@ -262,10 +446,14 @@ fn main() -> ExitCode {
         ("status", text(String::new())),
         ("selected", text(String::new())),
         ("log", text(log_text(&config.entries, ""))),
+        ("draft", draft_value(None)),
+        ("dialogOpen", Value::Bool(false)),
     ];
     let host = AppHost {
         specs: config.entries,
         consoles,
+        nssm: config.nssm,
+        path,
     };
 
     match brul::run_generated_with(
@@ -296,7 +484,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        Console, Entry, Program, Service, Value, console_row, describe, log_text, program_row, row,
+        Console, Draft, Entry, Program, Restart, Service, Value, console_row, describe,
+        draft_value, log_text, program_row, row,
     };
     use xboct_panel::{ProgramState, ServiceError, ServiceState, StartType, Started};
 
@@ -455,6 +644,65 @@ mod tests {
         );
         assert!(text.ends_with("two\nthree"), "{text}");
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_draft_carries_the_entry_fields_and_keeps_the_display_name() {
+        let base = Entry {
+            name: String::from("obs"),
+            display: Some(String::from("OBS Studio")),
+            command: Some(String::from("C:/obs/obs64.exe")),
+            ..Entry::default()
+        };
+        let draft = Draft {
+            kind: "program",
+            name: "obs",
+            command: "C:/obs/obs64.exe",
+            args: "--startrecording",
+            workdir: "C:/obs",
+            env: "OBS_PORT=4455\nOBS_DEBUG=1",
+            port: "",
+            log: "",
+            restart: "on-crash",
+            hidden: true,
+        };
+
+        let entry = draft.entry(Some(&base)).expect("entry");
+
+        assert_eq!(entry.display.as_deref(), Some("OBS Studio"));
+        assert_eq!(entry.args, ["--startrecording"]);
+        assert_eq!(entry.env.get("OBS_DEBUG").map(String::as_str), Some("1"));
+        assert_eq!(entry.restart, Restart::OnCrash);
+        assert!(entry.hidden);
+    }
+
+    #[test]
+    fn a_new_draft_is_a_program_with_empty_fields() {
+        let draft = draft_value(None);
+
+        assert_eq!(field(&draft, "kind").as_text(), Some("program"));
+        assert_eq!(field(&draft, "name").as_text(), Some(""));
+        assert_eq!(field(&draft, "restart").as_text(), Some("never"));
+    }
+
+    #[test]
+    fn an_env_line_without_a_separator_is_rejected() {
+        let draft = Draft {
+            kind: "console",
+            name: "shell",
+            command: "cmd.exe",
+            args: "",
+            workdir: "",
+            env: "BROKEN",
+            port: "",
+            log: "",
+            restart: "never",
+            hidden: false,
+        };
+
+        let failure = draft.entry(None).expect_err("broken env");
+
+        assert!(failure.contains("BROKEN"), "{failure}");
     }
 
     #[test]

@@ -18,6 +18,10 @@
     function toggleConsole() {
         consoleRequested(name);
     }
+
+    function editService() {
+        editRequested(name);
+    }
 </script>
 
 <markup>
@@ -34,6 +38,7 @@
         event stopRequested(service: String);
         event restartRequested(service: String);
         event consoleRequested(service: String);
+        event editRequested(service: String);
 
         Row (row, class: selected ? "selected" : "", on click: selectService) {
             Column (row-titles) {
@@ -58,6 +63,9 @@
                 View (row-action, on click: toggleConsole) {
                     Text (row-action-label) { "Console" }
                 }
+            }
+            View (row-action, on click: editService) {
+                Text (row-action-label) { "Edit" }
             }
         }
     }

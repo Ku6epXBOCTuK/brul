@@ -24,7 +24,8 @@ pub(super) fn widget(
     if let Some(index) = emit
         .imports
         .iter()
-        .position(|import| import.name == element.name)
+        .find(|import| import.name == element.name)
+        .map(|import| import.definition)
     {
         return component::component(out, element, index, emit, frame, counter);
     }
