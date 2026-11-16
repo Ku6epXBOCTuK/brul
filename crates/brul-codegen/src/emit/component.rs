@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use brul_script::Names;
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
@@ -10,6 +8,7 @@ use crate::loader::Definition;
 
 use super::Emit;
 use super::Frame;
+use super::Out;
 use super::{events, expression, items_spliced};
 
 type Props<'a> = Vec<(&'a str, PropType, &'a Expr)>;
@@ -214,22 +213,31 @@ fn walk_block<'a>(
 fn filler(block: &Block, emit: &mut Emit<'_>) -> Result<String, Error> {
     let name = emit.structures.next(emit.base, "slot");
     let theme = emit.default_theme();
-    let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\nfn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
-    );
-    out.push_str("    let mut bindings = Vec::new();\n");
-    out.push_str("    let mut handlers = Vec::new();\n");
-    out.push_str("    let mut props = Vec::new();\n");
-    out.push_str("    let mut children = Vec::new();\n");
-    let mut counter = 0;
-    items_spliced(&mut out, block, emit, Frame::root(theme, 1), &mut counter)?;
-    out.push_str(
-        "    let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);\n",
-    );
-    out.push_str("    Ok(brul::Built { widget, bindings, handlers, props })\n}\n");
-    emit.functions.push(out);
+    let mut text = String::new();
+    let mut out = Out::new(&mut text);
+    out.line(format_args!(
+        "#[allow(unused_mut, unused_variables, clippy::let_and_return)]"
+    ));
+    out.line(format_args!(
+        "fn {name}(theme: Option<&str>, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
+    ));
+    out.indented(|out| -> Result<(), Error> {
+        out.line(format_args!("let mut bindings = Vec::new();"));
+        out.line(format_args!("let mut handlers = Vec::new();"));
+        out.line(format_args!("let mut props = Vec::new();"));
+        out.line(format_args!("let mut children = Vec::new();"));
+        let mut counter = 0;
+        items_spliced(out.raw(), block, emit, Frame::root(theme, 1), &mut counter)?;
+        out.line(format_args!(
+            "let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);"
+        ));
+        out.line(format_args!(
+            "Ok(brul::Built {{ widget, bindings, handlers, props }})"
+        ));
+        Ok(())
+    })?;
+    out.line(format_args!("}}"));
+    emit.functions.push(text);
     Ok(name)
 }
 
@@ -387,97 +395,97 @@ fn write(
     } = call;
     let widget = format!("widget{}", *counter);
     *counter += 1;
-    let pad = "    ".repeat(frame.depth());
-    let inner = "    ".repeat(frame.depth() + 1);
-    let _ = writeln!(out, "{pad}{{");
-    let _ = writeln!(
-        out,
-        "{inner}let built = brul::instance(component, brul::Instance {{"
-    );
-    let _ = writeln!(out, "{inner}    theme,");
-    let _ = writeln!(out, "{inner}    view: {base}_view,");
-    let _ = writeln!(out, "{inner}    script: {base}_script(),");
-    let _ = writeln!(out, "{inner}    name: {name:?},");
-    let _ = writeln!(out, "{inner}    names: names(),");
-    arguments(out, "props", &props, &inner, names);
-    arguments(out, "defaults", &defaults, &inner, names);
-    let _ = writeln!(out, "{inner}    events: &[");
-    for (event, handler, params) in &events {
-        let params = params
-            .iter()
-            .map(|ty| format!("brul::PropType::{ty:?}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let _ = writeln!(
-            out,
-            "{inner}        brul::ComponentEvent {{ name: {event:?}, function: {handler:?}, params: &[{params}], component: std::rc::Rc::clone(component) }},"
-        );
-    }
-    let _ = writeln!(out, "{inner}    ],");
-    if slots.is_empty() {
-        let _ = writeln!(out, "{inner}    slots: &[],");
-    } else {
-        let _ = writeln!(out, "{inner}    slots: &[");
-        for slot in &slots {
-            let name = match slot.name {
-                Some(name) => format!("{name:?}"),
-                None => "brul::DEFAULT_SLOT".to_owned(),
-            };
-            let _ = writeln!(
-                out,
-                "{inner}        brul::SlotArgument {{ name: {name}, view: {} }},",
-                slot.view
-            );
+    let mut out = Out::at(out, frame.depth());
+    out.line(format_args!("{{"));
+    out.indented(|out| {
+        out.line(format_args!("let built = brul::instance(component, brul::Instance {{"));
+        out.indented(|out| {
+            out.line(format_args!("theme,"));
+            out.line(format_args!("view: {base}_view,"));
+            out.line(format_args!("script: {base}_script(),"));
+            out.line(format_args!("name: {name:?},"));
+            out.line(format_args!("names: names(),"));
+            arguments(out, "props", &props, names);
+            arguments(out, "defaults", &defaults, names);
+            out.line(format_args!("events: &["));
+            out.indented(|out| {
+                for (event, handler, params) in &events {
+                    let params = params
+                        .iter()
+                        .map(|ty| format!("brul::PropType::{ty:?}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    out.line(format_args!(
+                        "brul::ComponentEvent {{ name: {event:?}, function: {handler:?}, params: &[{params}], component: std::rc::Rc::clone(component) }},"
+                    ));
+                }
+            });
+            out.line(format_args!("],"));
+            if slots.is_empty() {
+                out.line(format_args!("slots: &[],"));
+            } else {
+                out.line(format_args!("slots: &["));
+                out.indented(|out| {
+                    for slot in &slots {
+                        let name = match slot.name {
+                            Some(name) => format!("{name:?}"),
+                            None => "brul::DEFAULT_SLOT".to_owned(),
+                        };
+                        out.line(format_args!(
+                            "brul::SlotArgument {{ name: {name}, view: {} }},",
+                            slot.view
+                        ));
+                    }
+                });
+                out.line(format_args!("],"));
+            }
+        });
+        out.line(format_args!("}})?;"));
+        for field in ["bindings", "handlers", "props"] {
+            out.line(format_args!("{field}.extend(built.{field});"));
         }
-        let _ = writeln!(out, "{inner}    ],");
-    }
-    let _ = writeln!(out, "{inner}}})?;");
-    for field in ["bindings", "handlers", "props"] {
-        let _ = writeln!(out, "{inner}{field}.extend(built.{field});");
-    }
-    if classes.is_empty() {
-        let _ = writeln!(out, "{inner}let {widget} = built.widget;");
-    } else {
-        let classes = classes
-            .iter()
-            .map(|class| super::classes::index(emit.classes, class).to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let _ = writeln!(
-            out,
-            "{inner}let {widget} = {prefix}styled(built.widget, &[{classes}], theme);"
-        );
-    }
-    if let Some(value) = class {
-        *dynamic_classes = true;
-        let _ = writeln!(
-            out,
-            "{inner}bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {} }}));",
-            expression::closure(value, names)
-        );
-    }
-    let _ = writeln!(out, "{inner}{widget}");
-    let _ = write!(out, "{pad}}}");
+        if classes.is_empty() {
+            out.line(format_args!("let {widget} = built.widget;"));
+        } else {
+            let classes = classes
+                .iter()
+                .map(|class| super::classes::index(emit.classes, class).to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.line(format_args!(
+                "let {widget} = {prefix}styled(built.widget, &[{classes}], theme);"
+            ));
+        }
+        if let Some(value) = class {
+            *dynamic_classes = true;
+            out.line(format_args!(
+                "bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {} }}));",
+                expression::closure(value, names)
+            ));
+        }
+        out.line(format_args!("{widget}"));
+    });
+    out.start(format_args!("}}"));
 }
 
 fn arguments(
-    out: &mut String,
+    out: &mut Out<'_>,
     field: &str,
     arguments: &[(&str, PropType, &Expr)],
-    inner: &str,
     names: &Names<'_>,
 ) {
-    let _ = writeln!(out, "{inner}    {field}: &[");
-    for (name, ty, value) in arguments {
-        let id = names
-            .get(name)
-            .expect("prop is collected into the name table")
-            .index();
-        let _ = writeln!(
-            out,
-            "{inner}        brul::PropArgument {{ name: brul::VariableId::from_index({id}), ty: brul::PropType::{ty:?}, expression: {} }},",
-            expression::closure(value, names)
-        );
-    }
-    let _ = writeln!(out, "{inner}    ],");
+    out.line(format_args!("{field}: &["));
+    out.indented(|out| {
+        for (name, ty, value) in arguments {
+            let id = names
+                .get(name)
+                .expect("prop is collected into the name table")
+                .index();
+            out.line(format_args!(
+                "brul::PropArgument {{ name: brul::VariableId::from_index({id}), ty: brul::PropType::{ty:?}, expression: {} }},",
+                expression::closure(value, names)
+            ));
+        }
+    });
+    out.line(format_args!("],"));
 }

@@ -8,7 +8,11 @@ pub struct Out<'a> {
 
 impl<'a> Out<'a> {
     pub(super) fn new(text: &'a mut String) -> Self {
-        Self { text, depth: 0 }
+        Self::at(text, 0)
+    }
+
+    pub(super) fn at(text: &'a mut String, depth: usize) -> Self {
+        Self { text, depth }
     }
 
     pub(super) fn line(&mut self, args: fmt::Arguments<'_>) {
