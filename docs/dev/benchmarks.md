@@ -18,82 +18,79 @@
 Время — центральная оценка Criterion; разброс и выбросы остаются в отчёте
 прогона.
 
-## 2026-11-07 — реактивное ядро
+## 2026-11-17 — после перф-серии (BRUL-415…489)
+
+Прогоны той же машины и toolchain, что и раньше; снимок заменяет два прошлых
+раздела о ядре и чтении, шаги серии до BRUL-415 остались в истории файла.
 
 `cargo bench -p brul-reactive`
 
 | Сценарий         | Размер |   Время |
 | ---------------- | -----: | ------: |
-| chain            |     10 | 2.10 µs |
-| chain            |    100 | 18.7 µs |
-| chain            |   1000 |  182 µs |
-| diamond          |      — | 0.99 µs |
-| many_subscribers |     10 | 1.47 µs |
-| many_subscribers |    100 | 18.7 µs |
-| many_subscribers |   1000 |  577 µs |
-| batched_writes   |     10 | 2.73 µs |
-| batched_writes   |    100 | 16.5 µs |
-
-`chain` — цепочка memo от одного сигнала до эффекта, `diamond` — два memo из
-одного сигнала и общий join, `many_subscribers` — столько эффектов на одном
-сигнале, `batched_writes` — батч из стольких записей и один эффект, читающий их
-все.
-
-## 2026-11-11 — чтение переменной и пропса, построение строки `each`
+| chain            |     10 |  637 ns |
+| chain            |    100 | 5.43 µs |
+| chain            |   1000 | 55.6 µs |
+| diamond          |      — |  262 ns |
+| many_subscribers |     10 |  649 ns |
+| many_subscribers |    100 | 11.3 µs |
+| many_subscribers |   1000 |  557 µs |
+| batched_writes   |     10 |  410 ns |
+| batched_writes   |    100 | 3.69 µs |
 
 `cargo bench -p brul --bench read`
 
 | Сценарий                  |   Время |
 | ------------------------- | ------: |
-| read/property_string      | 31.2 ns |
-| read/property_string_id   | 19.6 ns |
-| read/property_scalar      | 31.4 ns |
-| read/property_scalar_id   | 19.2 ns |
-| read/variable_in_frame    | 22.0 ns |
-| read/variable_in_frame_id | 10.3 ns |
-| binding/props_read        |  100 ns |
-| binding/props_read_id     | 69.1 ns |
-| binding/frame_only        | 11.3 ns |
-
-`read/property_string` и `read/property_scalar` — чтение пропса без переменной в
-окружении, `read/variable_in_frame` — переменная в кадре биндинга,
-`binding/props_read` — кадр из двух переменных и три чтения пропсов внутри него,
-`binding/frame_only` — только кадр, контроль шума. Строки `_id` читают по
-`VariableId` — так делает сгенерированный код; строки без суффикса идут через
-имя и платят за поиск в таблице имён.
+| read/property_string      | 32.6 ns |
+| read/property_string_id   | 20.9 ns |
+| read/property_scalar      | 46.1 ns |
+| read/property_scalar_id   | 25.6 ns |
+| read/variable_in_frame    | 41.7 ns |
+| read/variable_in_frame_id | 24.5 ns |
+| binding/props_read        |  138 ns |
+| binding/props_read_id     | 87.9 ns |
+| binding/frame_only        | 12.4 ns |
 
 `cargo bench -p brul --bench each`
 
 | Сценарий                   |   Время |
 | -------------------------- | ------: |
-| each_row/scopes_6_bindings |  986 ns |
-| each_row/widgets           |  693 ns |
-| build_scopes/depth_1       | 8.98 ns |
-| build_scopes/depth_3       | 9.41 ns |
-| apply_row/declares         | 10.7 ns |
+| each_row/scopes_6_bindings | 1.16 µs |
+| each_row/widgets           |  888 ns |
+| build_scopes/depth_1       | 10.0 ns |
+| build_scopes/depth_3       | 9.73 ns |
+| apply_row/declares         | 12.8 ns |
+| row_match/keyed_100        | 81.0 µs |
+| row_match/keyed_1000       |  765 µs |
 
-`each_row/scopes_6_bindings` — уровень `each` с двумя переменными, шесть взятий
-снимка scope и снятие уровня, `each_row/widgets` — построение виджетов строки
-(контроль шума), `apply_row/declares` — кадр биндинга из готового снимка.
+`cargo bench -p brul --bench layout`
 
-Что дал каждый шаг:
+| Сценарий             |   Время |
+| -------------------- | ------: |
+| layout/note-obs      | 83.4 µs |
+| layout/synthetic-500 |  551 µs |
 
-- BRUL-222 — промах в окружении больше не собирает `Error::Undefined` с копией
-  имени: `read/property_string` 203 → 105 ns, `read/property_scalar` 103 → 28.9
-  ns, `binding/props_read` 1.52 → 1.25 µs.
-- BRUL-227 — переменные хранятся по `VariableId`, без `String` на `declare` и
-  без сравнения имён на чтении: `read/variable_in_frame_id` 17.2 → 14.0 ns.
-- BRUL-229 — пропс ищется по `VariableId`, `PropBinding` больше не держит
-  `String`: `read/property_scalar_id` 28.4 → 23.6 ns, `read/property_string_id`
-  106 → 94.1 ns.
-- BRUL-223 — кадр биндинга ссылается на снимок scope вместо копии значений:
-  `binding/frame_only` 777 → 12.2 ns, `binding/props_read_id` 1.09 µs → 328 ns.
-- BRUL-231 — строки, массивы и объекты в `Value` лежат под `Rc`, клон стал
-  счётчиком ссылок: `read/property_string_id` 94.1 → 19.6 ns,
-  `binding/props_read_id` 328 → 69.1 ns.
-- BRUL-230 — кадр сборки и снимок scope делят один `Rc<[Variable]>` вместо двух
-  копий: `each_row/scopes_6_bindings` 1.09 → 0.99 µs, `apply_row/declares` 11.2
-  → 10.7 ns.
+`row_match/keyed_N` — сборка `RowMatcher` по N строкам и по одному поиску на
+строку: 0.81 µs на строку при 100 и 0.77 µs при 1000, от N не зависит. В эту
+цену входит хеш всего элемента, а не только ключа.
+
+Что изменилось с прошлого снимка:
+
+- BRUL-415 — свойство читается своим сигналом, а не общей ревизией компонента:
+  `chain/1000` 182 → 55.6 µs, `diamond` 0.99 → 0.26 µs, `batched_writes/100`
+  16.5 → 3.69 µs. Плата — чтение переменной окружения: она подписывается на
+  грубый сигнал `external`, и чтение стало сигнальным,
+  `read/variable_in_frame_id` 10.3 → 24.5 ns. Контроль `binding/frame_only`
+  вырос на 10%, поэтому меньше чем на 3 ns разницу не читать.
+- BRUL-416 и BRUL-485, BRUL-489 — арена переиспользует слоты, помечивание идёт
+  своим стеком и очередью, список зависимостей не теряет ёмкость. Время толчка
+  бенч не выделяет, гарантию держат `brul-reactive/tests/alloc_notify.rs` и
+  раздел о пересборке ниже.
+- BRUL-419 — совпавшая строка `each` не собирается вовсе; `row_match` замерен
+  впервые, прежние `each_row/*` остались как были.
+
+Разброс между двумя прогонами `read` и `each` — до 15% по разным строкам, шум
+прогона выше разницы в единицы наносекунд.
 
 ## Счётчик аллокаций в приложении (BRUL-232)
 

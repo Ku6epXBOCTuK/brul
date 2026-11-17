@@ -106,5 +106,35 @@ fn apply_row(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, each_row, build_scopes, apply_row);
+fn row_rows(count: usize) -> Vec<brul::RowInfo> {
+    (0..count)
+        .map(|at| brul::RowInfo {
+            key: Some(Value::Number(at as f64)),
+            item: item(),
+            start: at,
+            count: 1,
+            reuse: None,
+        })
+        .collect()
+}
+
+fn row_match(c: &mut Criterion) {
+    let mut group = group(c, "row_match");
+    let item = item();
+    for count in [100, 1000] {
+        let old = row_rows(count);
+        let keys: Vec<Value> = (0..count).map(|at| Value::Number(at as f64)).collect();
+        group.bench_function(format!("keyed_{count}"), |b| {
+            b.iter(|| {
+                let mut matcher = brul::RowMatcher::new(&old);
+                for (at, key) in keys.iter().enumerate() {
+                    black_box(matcher.take(Some(key), &item, at));
+                }
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, each_row, build_scopes, apply_row, row_match);
 criterion_main!(benches);
