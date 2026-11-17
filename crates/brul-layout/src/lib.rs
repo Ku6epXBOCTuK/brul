@@ -290,6 +290,8 @@ pub struct Layouter<C> {
     tree: TaffyTree<C>,
     entries: HashMap<u32, Entry<C>>,
     live: HashSet<u32>,
+    scratch: Vec<NodeId>,
+    stack: Vec<u32>,
 }
 
 impl<C: PartialEq + Clone> Layouter<C> {
@@ -298,6 +300,8 @@ impl<C: PartialEq + Clone> Layouter<C> {
             tree: TaffyTree::new(),
             entries: HashMap::new(),
             live: HashSet::new(),
+            scratch: Vec::new(),
+            stack: Vec::new(),
         }
     }
 
@@ -306,104 +310,143 @@ impl<C: PartialEq + Clone> Layouter<C> {
     }
 
     pub fn finish(&mut self) {
-        let gone = self
-            .entries
-            .keys()
-            .filter(|key| !self.live.contains(key))
-            .copied()
-            .collect::<Vec<_>>();
-        for key in gone {
-            let entry = self.entries.remove(&key).expect("layout entry");
-            if let Some(node) = entry.node {
-                self.tree.remove(node).expect("layout tree");
+        let Self {
+            entries,
+            live,
+            tree,
+            ..
+        } = self;
+        entries.retain(|key, entry| {
+            if live.contains(key) {
+                return true;
             }
-        }
+            if let Some(node) = entry.node {
+                tree.remove(node).expect("layout tree");
+            }
+            false
+        });
     }
 
     pub fn node(&mut self, key: u32, shape: NodeShape<C>) {
         self.live.insert(key);
-        let taffy = taffy_style(shape.style, shape.direction, shape.offset);
-        let context = shape.content.clone();
-        let nodes = self.child_nodes(shape.children);
+        self.child_nodes(shape.children);
         let placed = !shape.transparent;
 
-        if self
-            .entries
+        let Self {
+            tree,
+            entries,
+            scratch,
+            ..
+        } = self;
+
+        if entries
             .get(&key)
             .is_some_and(|entry| entry.node.is_some() != placed)
         {
-            let entry = self.entries.remove(&key).expect("layout entry");
+            let entry = entries.remove(&key).expect("layout entry");
             if let Some(node) = entry.node {
-                self.tree.remove(node).expect("layout tree");
+                tree.remove(node).expect("layout tree");
             }
         }
 
-        if let Some(entry) = self.entries.get_mut(&key) {
-            entry.layout = *shape.style;
-            entry.direction = shape.direction;
-            entry.offset = shape.offset;
+        if let Some(entry) = entries.get_mut(&key) {
             entry.scroll = shape.scroll;
-            entry.children = shape.children.to_vec();
             entry.layer = shape.layer;
+            if entry.children.as_slice() != shape.children {
+                entry.children.clear();
+                entry.children.extend_from_slice(shape.children);
+            }
+            update_nodes(entry, tree, scratch);
+
             let Some(node) = entry.node else {
-                entry.nodes = nodes;
+                entry.layout = *shape.style;
+                entry.direction = shape.direction;
+                entry.offset = shape.offset;
+                entry.content = shape.content;
                 return;
             };
-            if entry.style != taffy {
-                entry.style = taffy.clone();
-                self.tree.set_style(node, taffy).expect("layout tree");
-            }
-            if entry.content != context {
-                entry.content = context.clone();
-                self.tree
-                    .set_node_context(node, Some(context))
-                    .expect("layout tree");
-            }
-            if entry.nodes != nodes {
-                entry.nodes = nodes;
-                self.tree
-                    .set_children(node, &entry.nodes)
+            update_style(entry, tree, node, &shape);
+            if entry.content != shape.content {
+                entry.content = shape.content.clone();
+                tree.set_node_context(node, Some(shape.content))
                     .expect("layout tree");
             }
             return;
         }
 
-        self.entries.insert(
+        let taffy = taffy_style(shape.style, shape.direction, shape.offset);
+        let content = shape.content;
+        entries.insert(
             key,
             Entry {
                 node: placed.then(|| {
-                    let node = self
-                        .tree
-                        .new_leaf_with_context(taffy.clone(), context.clone())
+                    let node = tree
+                        .new_leaf_with_context(taffy.clone(), content.clone())
                         .expect("layout tree");
-                    if !nodes.is_empty() {
-                        self.tree.set_children(node, &nodes).expect("layout tree");
+                    if !scratch.is_empty() {
+                        tree.set_children(node, scratch).expect("layout tree");
                     }
                     node
                 }),
-                nodes,
+                nodes: scratch.to_vec(),
                 style: taffy,
                 layout: *shape.style,
                 direction: shape.direction,
                 offset: shape.offset,
                 scroll: shape.scroll,
-                content: shape.content,
+                content,
                 children: shape.children.to_vec(),
                 layer: shape.layer,
             },
         );
     }
 
-    fn child_nodes(&self, children: &[u32]) -> Vec<NodeId> {
-        let mut nodes = Vec::new();
-        for key in children {
-            let entry = self.entries.get(key).expect("layout child");
+    fn child_nodes(&mut self, children: &[u32]) {
+        let Self {
+            entries,
+            scratch,
+            stack,
+            ..
+        } = self;
+        scratch.clear();
+        stack.clear();
+        stack.extend(children.iter().copied().rev());
+        while let Some(key) = stack.pop() {
+            let entry = entries.get(&key).expect("layout child");
             match entry.node {
-                Some(node) => nodes.push(node),
-                None => nodes.extend(self.child_nodes(&entry.children)),
+                Some(node) => scratch.push(node),
+                None => stack.extend(entry.children.iter().copied().rev()),
             }
         }
-        nodes
+    }
+}
+
+fn update_nodes<C>(entry: &mut Entry<C>, tree: &mut TaffyTree<C>, nodes: &[NodeId]) {
+    if entry.nodes.as_slice() != nodes {
+        entry.nodes.clear();
+        entry.nodes.extend_from_slice(nodes);
+        if let Some(node) = entry.node {
+            tree.set_children(node, nodes).expect("layout tree");
+        }
+    }
+}
+
+fn update_style<C>(
+    entry: &mut Entry<C>,
+    tree: &mut TaffyTree<C>,
+    node: NodeId,
+    shape: &NodeShape<'_, C>,
+) {
+    if entry.layout != *shape.style
+        || entry.direction != shape.direction
+        || entry.offset != shape.offset
+    {
+        let taffy = taffy_style(shape.style, shape.direction, shape.offset);
+        entry.style = taffy.clone();
+        tree.set_style(node, taffy).expect("layout tree");
+        entry.layout = *shape.style;
+        entry.direction = shape.direction;
+        entry.offset = shape.offset;
     }
 }
 
@@ -841,6 +884,72 @@ mod tests {
         fn eq(&self, other: &Self) -> bool {
             self.id == other.id
         }
+    }
+
+    struct Counted {
+        id: u32,
+        clones: Rc<Cell<usize>>,
+    }
+
+    impl PartialEq for Counted {
+        fn eq(&self, other: &Self) -> bool {
+            self.id == other.id
+        }
+    }
+
+    impl Clone for Counted {
+        fn clone(&self) -> Self {
+            self.clones.set(self.clones.get() + 1);
+            Self {
+                id: self.id,
+                clones: Rc::clone(&self.clones),
+            }
+        }
+    }
+
+    #[test]
+    fn a_repeat_pass_reuses_layout_buffers() {
+        let clones = Rc::new(Cell::new(0));
+        let style = LayoutStyle::default();
+        let empty: &[u32] = &[];
+        let single: &[u32] = &[1];
+        let mut layouter = Layouter::<Counted>::new();
+
+        let pass = |layouter: &mut Layouter<Counted>| {
+            layouter.begin();
+            for (key, children) in [(1, empty), (0, single)] {
+                layouter.node(
+                    key,
+                    NodeShape {
+                        style: &style,
+                        direction: Direction::Row,
+                        offset: None,
+                        scroll: ScrollOffset::ZERO,
+                        content: Counted {
+                            id: key,
+                            clones: Rc::clone(&clones),
+                        },
+                        children,
+                        transparent: false,
+                        layer: false,
+                    },
+                );
+            }
+            layouter.finish();
+        };
+
+        pass(&mut layouter);
+        let baseline = clones.get();
+        let (children, nodes) = {
+            let root = layouter.entries.get(&0).expect("layout entry");
+            (root.children.as_ptr(), root.nodes.as_ptr())
+        };
+
+        pass(&mut layouter);
+        let root = layouter.entries.get(&0).expect("layout entry");
+        assert_eq!(clones.get(), baseline);
+        assert_eq!(root.children.as_ptr(), children);
+        assert_eq!(root.nodes.as_ptr(), nodes);
     }
 
     #[test]
