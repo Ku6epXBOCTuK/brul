@@ -102,19 +102,48 @@ pub struct SelectionRect {
     pub height: i32,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TextLine {
+    y: i32,
+    height: i32,
+    start: usize,
+    end: usize,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextLayout {
     pub size: TextSize,
     pub glyphs: Vec<PlacedGlyph>,
     pub carets: Vec<CaretStop>,
+    lines: Vec<TextLine>,
 }
 
 impl TextLayout {
+    fn new(size: TextSize, glyphs: Vec<PlacedGlyph>, mut carets: Vec<CaretStop>) -> Self {
+        carets.sort_by_key(|stop| stop.byte);
+        let mut lines: Vec<TextLine> = Vec::new();
+        for (index, stop) in carets.iter().enumerate() {
+            match lines.last_mut() {
+                Some(line) if line.y == stop.y => line.end = index + 1,
+                _ => lines.push(TextLine {
+                    y: stop.y,
+                    height: stop.height,
+                    start: index,
+                    end: index + 1,
+                }),
+            }
+        }
+        Self {
+            size,
+            glyphs,
+            carets,
+            lines,
+        }
+    }
+
     pub fn caret(&self, byte: usize) -> CaretPosition {
-        self.carets
-            .iter()
-            .rev()
-            .find(|stop| stop.byte <= byte)
+        self.carets[..self.carets.partition_point(|stop| stop.byte <= byte)]
+            .last()
             .map_or_default(|stop| CaretPosition {
                 x: stop.x,
                 y: stop.y,
@@ -128,19 +157,14 @@ impl TextLayout {
 
     pub fn line_start(&self, byte: usize) -> usize {
         let line = self.caret(byte).y;
-        self.carets
-            .iter()
-            .find(|stop| stop.y == line)
-            .map_or(0, |stop| stop.byte)
+        self.line(line)
+            .map_or(0, |line| self.carets[line.start].byte)
     }
 
     pub fn line_end(&self, byte: usize) -> usize {
         let line = self.caret(byte).y;
-        self.carets
-            .iter()
-            .rev()
-            .find(|stop| stop.y == line)
-            .map_or(0, |stop| stop.byte)
+        self.line(line)
+            .map_or(0, |line| self.carets[line.end - 1].byte)
     }
 
     pub fn selection(&self, anchor: usize, caret: usize) -> Vec<SelectionRect> {
@@ -150,14 +174,8 @@ impl TextLayout {
             (caret, anchor)
         };
         let mut rects = Vec::new();
-        let mut index = 0;
-        while index < self.carets.len() {
-            let line = self.carets[index].y;
-            let first = index;
-            while index < self.carets.len() && self.carets[index].y == line {
-                index += 1;
-            }
-            let stops = &self.carets[first..index];
+        for line in &self.lines {
+            let stops = &self.carets[line.start..line.end];
             let line_start = stops.first().map_or(0, |stop| stop.byte);
             let line_end = stops.last().map_or(0, |stop| stop.byte);
             let from = start.max(line_start);
@@ -172,9 +190,9 @@ impl TextLayout {
             }
             rects.push(SelectionRect {
                 x,
-                y: stops[0].y,
+                y: line.y,
                 width,
-                height: stops[0].height,
+                height: line.height,
             });
         }
         rects
@@ -190,37 +208,32 @@ impl TextLayout {
 
     fn caret_neighbour(&self, byte: usize, down: bool) -> Option<usize> {
         let current = self.caret(byte);
-        let lines = self.lines();
-        let index = lines.iter().position(|line| *line == current.y)?;
+        let index = self.lines.iter().position(|line| line.y == current.y)?;
         let neighbour = if down {
-            lines.get(index + 1)
+            self.lines.get(index + 1)
         } else {
-            lines.get(index.checked_sub(1)?)
+            self.lines.get(index.checked_sub(1)?)
         }?;
-        Some(self.nearest(*neighbour, current.x))
+        Some(self.nearest(neighbour.y, current.x))
     }
 
-    fn lines(&self) -> Vec<i32> {
-        let mut lines: Vec<i32> = Vec::new();
-        for stop in &self.carets {
-            if lines.last() != Some(&stop.y) {
-                lines.push(stop.y);
-            }
-        }
-        lines
+    fn line(&self, y: i32) -> Option<&TextLine> {
+        self.lines.iter().find(|line| line.y == y)
     }
 
     fn line_at(&self, y: i32) -> i32 {
-        self.lines()
-            .into_iter()
-            .min_by_key(|line| (*line - y).abs())
-            .unwrap_or(0)
+        self.lines
+            .iter()
+            .min_by_key(|line| (line.y - y).abs())
+            .map_or(0, |line| line.y)
     }
 
-    fn nearest(&self, line: i32, x: i32) -> usize {
-        self.carets
+    fn nearest(&self, line_y: i32, x: i32) -> usize {
+        let Some(line) = self.line(line_y) else {
+            return 0;
+        };
+        self.carets[line.start..line.end]
             .iter()
-            .filter(|stop| stop.y == line)
             .min_by_key(|stop| ((stop.x - x).abs(), stop.byte))
             .map_or(0, |stop| stop.byte)
     }
@@ -381,14 +394,14 @@ fn place_glyphs(
         height = style.line_height;
     }
 
-    Ok(TextLayout {
-        size: TextSize {
+    Ok(TextLayout::new(
+        TextSize {
             width: ceil_pixels(width * scale),
             height: ceil_pixels(height * scale),
         },
         glyphs,
         carets,
-    })
+    ))
 }
 
 fn ceil_pixels(value: f32) -> u32 {
@@ -397,7 +410,79 @@ fn ceil_pixels(value: f32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::TextError;
+    use super::{CaretStop, SelectionRect, TextError, TextLayout, TextSize};
+
+    fn stop(byte: usize, x: i32, y: i32) -> CaretStop {
+        CaretStop {
+            byte,
+            x,
+            y,
+            height: 20,
+        }
+    }
+
+    fn layout() -> TextLayout {
+        TextLayout::new(
+            TextSize {
+                width: 60,
+                height: 40,
+            },
+            Vec::new(),
+            vec![
+                stop(3, 0, 20),
+                stop(0, 0, 0),
+                stop(5, 20, 20),
+                stop(1, 10, 0),
+                stop(4, 10, 20),
+                stop(2, 20, 0),
+            ],
+        )
+    }
+
+    #[test]
+    fn caret_lookup_uses_sorted_stops() {
+        let layout = layout();
+        assert_eq!(layout.caret(0).x, 0);
+        assert_eq!(layout.caret(1).x, 10);
+        assert_eq!(layout.caret(2).x, 20);
+        assert_eq!(layout.caret(3).x, 0);
+        assert_eq!(layout.caret(usize::MAX).x, 20);
+        assert_eq!(layout.caret_at(12, 21), 4);
+    }
+
+    #[test]
+    fn line_queries_use_cached_line_starts() {
+        let layout = layout();
+        assert_eq!(layout.line_start(1), 0);
+        assert_eq!(layout.line_end(1), 2);
+        assert_eq!(layout.line_start(4), 3);
+        assert_eq!(layout.line_end(4), 5);
+        assert_eq!(layout.caret_above(4), Some(1));
+        assert_eq!(layout.caret_below(1), Some(4));
+    }
+
+    #[test]
+    fn selection_spans_only_intersecting_cached_lines() {
+        let layout = layout();
+        assert_eq!(
+            layout.selection(1, 4),
+            vec![
+                SelectionRect {
+                    x: 10,
+                    y: 0,
+                    width: 10,
+                    height: 20,
+                },
+                SelectionRect {
+                    x: 0,
+                    y: 20,
+                    width: 10,
+                    height: 20,
+                },
+            ]
+        );
+        assert!(layout.selection(4, 4).is_empty());
+    }
 
     #[test]
     fn every_text_error_has_its_own_message() {
