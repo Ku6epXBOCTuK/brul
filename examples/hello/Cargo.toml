@@ -1,0 +1,15 @@
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Ku6epXBOCTuK/brul"
+
+[lints]
+workspace = true
+
+[dependencies]
+brul = { workspace = true }
+
+[build-dependencies]
+brul = { workspace = true }

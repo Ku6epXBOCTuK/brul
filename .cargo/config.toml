@@ -1,2 +1,3 @@
 [alias]
 bropicker = "run -p bropicker"
+hello = "run -p hello"

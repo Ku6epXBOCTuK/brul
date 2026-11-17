@@ -1,0 +1,87 @@
+<script>
+    function updateName(ev) {
+        name = ev.value;
+    }
+
+    function sayHello() {
+        greeting = greet(name);
+    }
+
+    function clearGreeting() {
+        greeting = "";
+    }
+
+    function handleKey(ev) {
+        if (ev.code == "Escape") {
+            exit();
+        }
+    }
+</script>
+
+<use>
+    import Button from "brul:button";
+</use>
+
+<markup>
+    window Hello (
+        title: "hello",
+        width: 420,
+        height: 240,
+        centered: true,
+        on key: handleKey
+    ) {
+        Column (root) {
+            Text (title) { "BRUL hello" }
+            TextInput (field, on input: updateName) { name }
+            Row (actions) {
+                Button (label: "Say hello", variant: "primary", on clicked: sayHello) { }
+                Button (label: "Clear", on clicked: clearGreeting) { }
+            }
+            Text (greeting) { greeting }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        background: #12141c;
+        surface: #1c2028;
+        surface-hover: #232936;
+        border: #334155;
+        text: #ffffff;
+        muted: #8c94a8;
+        accent: #4c8dff;
+        accent-hover: #6ba0ff;
+    }
+    theme light {
+        background: #f4f6f9;
+        surface: #ffffff;
+        surface-hover: #eef2f7;
+        border: #e2e8f0;
+        text: #0f172a;
+        muted: #64748b;
+        accent: #2563eb;
+        accent-hover: #1d4ed8;
+    }
+    .root {
+        width: 100%;
+        height: 100%;
+        padding: 18px;
+        gap: 12px;
+        background: theme.background;
+    }
+    .title { color: theme.text; font-size: 20px; }
+    .field {
+        width: 100%;
+        height: 32px;
+        padding-left: 10px;
+        padding-right: 10px;
+        background: theme.surface;
+        border: 1px theme.border;
+        border-radius: 10px;
+        color: theme.text;
+        font-size: 14px;
+    }
+    .actions { gap: 10px; align-items: center; }
+    .greeting { color: theme.muted; font-size: 14px; }
+</style>
