@@ -117,18 +117,23 @@ impl Frame {
 
     fn paint_shadow(&mut self, node: &WidgetSnapshotNode, rect: &Rect, opacity: f32, clip: Clip) {
         let shadow = node.style.shadow;
+        if shadow.color.a == 0 || rect.width == 0 || rect.height == 0 {
+            return;
+        }
         let Some(area) = paint_clip(node, clip) else {
             return;
         };
+        let clips = &node.clips;
         for y in area.top..area.bottom {
             for x in area.left..area.right {
-                if !visible(&node.clips, x as i32, y as i32) {
+                let coverage = shadow.coverage(x as i32, y as i32, rect);
+                if coverage <= 0.0 {
                     continue;
                 }
-                let coverage = shadow.coverage(x as i32, y as i32, rect);
-                if coverage > 0.0 {
-                    self.blend(x as i32, y as i32, shadow.color, opacity * coverage);
+                if !clips.is_empty() && !visible(clips, x as i32, y as i32) {
+                    continue;
                 }
+                self.blend(x as i32, y as i32, shadow.color, opacity * coverage);
             }
         }
     }
