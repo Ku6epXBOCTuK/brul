@@ -16,4 +16,4 @@ pub use eval::eval;
 pub use execute::{execute, execute_program};
 pub use host::Host;
 pub use names::{Names, VariableId};
-pub use value::Value;
+pub use value::{Fields, Value};

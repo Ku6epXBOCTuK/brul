@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::Error;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
@@ -78,6 +80,84 @@ impl From<f64> for Value {
 impl From<bool> for Value {
     fn from(flag: bool) -> Self {
         Self::Bool(flag)
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for &'a str {
+    type Error = Error;
+
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::String(text) => Ok(text),
+            other => Err(Error::conversion("String", other)),
+        }
+    }
+}
+
+impl TryFrom<&Value> for String {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::String(text) => Ok(text.to_string()),
+            other => Err(Error::conversion("String", other)),
+        }
+    }
+}
+
+impl TryFrom<&Value> for f64 {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Number(number) => Ok(*number),
+            other => Err(Error::conversion("Number", other)),
+        }
+    }
+}
+
+impl TryFrom<&Value> for bool {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(flag) => Ok(*flag),
+            other => Err(Error::conversion("Bool", other)),
+        }
+    }
+}
+
+impl TryFrom<&Value> for usize {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Number(number) if number.fract() == 0.0 && *number >= 0.0 => Ok(*number as Self),
+            other => Err(Error::conversion("a non-negative integer", other)),
+        }
+    }
+}
+
+pub struct Fields<'a> {
+    fields: &'a [(String, Value)],
+}
+
+impl<'a> Fields<'a> {
+    pub fn new(value: &'a Value) -> Result<Self, Error> {
+        match value {
+            Value::Object(fields) => Ok(Self { fields }),
+            other => Err(Error::conversion("Object", other)),
+        }
+    }
+
+    pub fn take<T: TryFrom<&'a Value, Error = Error>>(&mut self, name: &str) -> Result<T, Error> {
+        let fields = self.fields;
+        let value = fields
+            .iter()
+            .find(|(field, _)| field == name)
+            .map(|(_, value)| value)
+            .ok_or_else(|| Error::MissingField(name.to_owned()))?;
+        T::try_from(value)
     }
 }
 

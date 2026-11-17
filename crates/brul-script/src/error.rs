@@ -1,5 +1,7 @@
 use brul_syntax::ast::Position;
 
+use crate::Value;
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("line {}, column {}: {}", .0.line, .0.column, .1)]
@@ -61,11 +63,33 @@ pub enum Error {
     },
     #[error("string '{0}' cannot be converted to Number")]
     InvalidNumber(String),
+    #[error("expected {}, got {}", .expected, .found)]
+    Conversion {
+        expected: &'static str,
+        found: &'static str,
+    },
     #[error("{0} is not supported yet")]
     Unsupported(&'static str),
 }
 
 impl Error {
+    pub fn conversion(expected: &'static str, found: &Value) -> Self {
+        Error::Conversion {
+            expected,
+            found: found.type_name(),
+        }
+    }
+
+    pub fn at_command(self, command: &'static str) -> Self {
+        match self {
+            Error::Conversion { expected, found } => Error::Argument {
+                name: command,
+                expected,
+                found,
+            },
+            error => error,
+        }
+    }
     pub fn at(self, position: Position) -> Self {
         match self {
             Error::At(..) => self,

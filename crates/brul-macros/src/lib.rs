@@ -52,7 +52,6 @@ fn signature(function: &ItemFn) -> Result<Signature> {
         let Pat::Ident(name) = &**pat else {
             return Err(syn::Error::new_spanned(pat, "an argument needs a name"));
         };
-        kind(ty)?;
         values.push((name.ident.clone(), (**ty).clone()));
     }
     Ok(Signature {
@@ -60,80 +59,6 @@ fn signature(function: &ItemFn) -> Result<Signature> {
         host_type: (**ty).clone(),
         values,
     })
-}
-
-enum Kind {
-    Text,
-    Owned,
-    Number,
-    Flag,
-    Index,
-}
-
-fn kind(ty: &Type) -> Result<Kind> {
-    if let Type::Reference(reference) = ty
-        && let Type::Path(path) = &*reference.elem
-        && path.path.is_ident("str")
-    {
-        return Ok(Kind::Text);
-    }
-    let Type::Path(path) = ty else {
-        return Err(syn::Error::new_spanned(ty, "unsupported argument type"));
-    };
-    let Some(segment) = path.path.segments.last() else {
-        return Err(syn::Error::new_spanned(ty, "unsupported argument type"));
-    };
-    if !matches!(segment.arguments, syn::PathArguments::None) {
-        return Err(syn::Error::new_spanned(ty, "unsupported argument type"));
-    }
-    match segment.ident.to_string().as_str() {
-        "String" => Ok(Kind::Owned),
-        "f64" => Ok(Kind::Number),
-        "bool" => Ok(Kind::Flag),
-        "usize" => Ok(Kind::Index),
-        _ => Err(syn::Error::new_spanned(
-            ty,
-            "a command argument is &str, String, f64, bool or usize",
-        )),
-    }
-}
-
-fn conversion(kind: Kind, value: &Ident, command: &str) -> TokenStream2 {
-    let (matched, extracted, expected) = match kind {
-        Kind::Text => (
-            quote!(::brul::Value::String(text)),
-            quote!(&**text),
-            "String",
-        ),
-        Kind::Owned => (
-            quote!(::brul::Value::String(text)),
-            quote!(::std::string::ToString::to_string(text)),
-            "String",
-        ),
-        Kind::Number => (
-            quote!(::brul::Value::Number(number)),
-            quote!(*number),
-            "Number",
-        ),
-        Kind::Flag => (quote!(::brul::Value::Bool(flag)), quote!(*flag), "Bool"),
-        Kind::Index => (
-            quote!(::brul::Value::Number(number) if number.fract() == 0.0 && *number >= 0.0),
-            quote!(*number as usize),
-            "a non-negative integer",
-        ),
-    };
-    quote! {
-        match #value {
-            #matched => #extracted,
-            value => {
-                return ::std::result::Result::Err(::brul::Error::Argument {
-                    name: #command,
-                    expected: #expected,
-                    found: value.type_name(),
-                });
-            }
-        }
-    }
 }
 
 fn expand(function: ItemFn) -> Result<TokenStream2> {
@@ -161,9 +86,17 @@ fn expand(function: ItemFn) -> Result<TokenStream2> {
         .iter()
         .enumerate()
         .map(|(index, (name, ty))| {
-            let kind = kind(ty)?;
-            let conversion = conversion(kind, &values[index], &command);
-            Ok(quote! { let #name = #conversion; })
+            let value = &values[index];
+            Ok(quote! {
+                let #name: #ty = match ::std::convert::TryFrom::try_from(#value) {
+                    ::std::result::Result::Ok(value) => value,
+                    ::std::result::Result::Err(error) => {
+                        return ::std::result::Result::Err(
+                            ::brul::Error::at_command(error, #command),
+                        );
+                    }
+                };
+            })
         })
         .collect::<Result<_>>()?;
 
@@ -290,15 +223,10 @@ mod tests {
     }
 
     #[test]
-    fn a_text_argument_is_recognized() {
-        assert!(matches!(
-            kind(&syn::parse_str("&str").expect("type")),
-            Ok(Kind::Text)
-        ));
-    }
-
-    #[test]
-    fn an_argument_of_an_unknown_type_is_rejected() {
-        assert!(kind(&syn::parse_str("::brul::Value").expect("type")).is_err());
+    fn an_argument_of_any_named_type_is_accepted() {
+        let function: ItemFn =
+            syn::parse_str("fn act(host: &mut Host, draft: Draft) {}").expect("fn");
+        let signature = signature(&function).expect("signature");
+        assert_eq!(signature.values.len(), 1);
     }
 }
