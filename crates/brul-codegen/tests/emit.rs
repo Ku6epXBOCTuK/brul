@@ -968,6 +968,10 @@ fn emits_script_program() {
             count = count + step;
         }
     }
+
+    function closePanel() {
+        count = 0;
+    }
 </script>
 
 <markup>
@@ -982,6 +986,13 @@ window Demo (title: "demo") {
     assert!(module.contains("const limit = 2;"));
     assert!(module.contains("brul::script::parse(&text)"));
     assert!(!module.contains("brul::script::Statement::"));
+    assert!(module.contains("#[allow(dead_code)]\npub struct Script(brul::Handle);"));
+    assert!(module.contains(
+        "pub fn bump(&self, step: impl Into<brul::Value>) {\n        self.0.call_with(\"bump\", ::std::vec![step.into()]);\n    }"
+    ));
+    assert!(
+        module.contains("pub fn close_panel(&self) {\n        self.0.call(\"closePanel\");\n    }")
+    );
 }
 
 #[test]

@@ -229,6 +229,7 @@ fn module_at(
         parsed.script.as_ref(),
         split.then_some(ROOT_SCRIPT),
     ));
+    tail.push_str(&script::handle(parsed.program.as_ref()));
     tail.push_str(&names::output(&names));
 
     let mut root = head.clone();
