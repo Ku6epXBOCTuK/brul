@@ -21,6 +21,23 @@ pub fn path(name: &str) -> PathBuf {
     Path::new(DIR).join(format!("{name}.brul"))
 }
 
+pub fn dir() -> &'static Path {
+    Path::new(ROOT)
+}
+
 pub fn is_virtual(path: &Path) -> bool {
     path.parent().is_some_and(|parent| parent == Path::new(DIR))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dir, names};
+
+    #[test]
+    fn every_embedded_file_lives_in_the_kit_directory() {
+        for name in names() {
+            let path = dir().join(format!("{name}.brul"));
+            assert!(path.is_file(), "{}", path.display());
+        }
+    }
 }

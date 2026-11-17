@@ -18,7 +18,10 @@ fn main() {
         }
     }
     sources.sort();
-    let mut table = String::from("pub static SOURCES: &[(&str, &str)] = &[\n");
+    let dir = fs::canonicalize(&dir).expect("cannot canonicalize the kit directory");
+    let mut table = String::from("pub static ROOT: &str = \"");
+    table.push_str(&dir.display().to_string().replace('\\', "/"));
+    table.push_str("\";\n\npub static SOURCES: &[(&str, &str)] = &[\n");
     for path in &sources {
         println!("cargo:rerun-if-changed={}", path.display());
         let name = path

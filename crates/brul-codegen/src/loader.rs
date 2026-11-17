@@ -190,7 +190,7 @@ impl Loader<'_> {
         if self.stack.contains(&path) {
             return Err(self.cycle(&path));
         }
-        self.define(path, source.to_owned(), None)
+        self.define(path, source.to_owned(), Some(kit::dir()))
     }
 
     fn file(&mut self, path: &Path, origin: Option<&Path>) -> Result<usize, Error> {
@@ -408,5 +408,48 @@ component Screen {
         let parsed = parse(source, Path::new("screen.brul"), &[]).unwrap();
         assert_eq!(parsed.uses.uses.len(), 1);
         assert_eq!(parsed.uses.uses[0].name, "Card");
+    }
+
+    #[test]
+    fn a_resource_resolves_against_the_base_directory() {
+        let dir = std::env::temp_dir().join(format!("brul-loader-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("check.svg"),
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8"/></svg>"#,
+        )
+        .unwrap();
+        let source = r#"
+<use>
+    resource Check from "./check.svg";
+</use>
+
+<markup>
+component Card {
+    Text (text) { "hi" }
+}
+</markup>
+"#;
+        let mut loader = Loader {
+            definitions: Vec::new(),
+            index: HashMap::new(),
+            stack: Vec::new(),
+            palette: &[],
+        };
+        let index = loader
+            .define(
+                Path::new("kit/card.brul").to_path_buf(),
+                source.to_owned(),
+                Some(&dir),
+            )
+            .unwrap();
+        let definition = &loader.definitions[index];
+        assert_eq!(definition.resources.len(), 1);
+        assert_eq!(definition.resources[0].name, "Check");
+        assert_eq!(
+            fs::read_to_string(&definition.resources[0].path).unwrap(),
+            fs::read_to_string(dir.join("check.svg")).unwrap()
+        );
+        fs::remove_dir_all(&dir).unwrap();
     }
 }
