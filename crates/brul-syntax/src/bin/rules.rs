@@ -25,13 +25,25 @@ const GRAMMARS: [(&str, &str, &str); 4] = [
     ),
 ];
 
-fn main() -> Result<(), String> {
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error("{0}")]
+    Ebnf(#[from] ebnf::Error),
+    #[error("failed to write {path}: {source}")]
+    Write {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+fn main() -> Result<(), Error> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for (grammar, target, source) in GRAMMARS {
         let rules = ebnf::parse(grammar, source)?;
         let path = root.join(target);
         fs::write(&path, ebnf::render(grammar, &rules))
-            .map_err(|error| format!("{}: {error}", path.display()))?;
+            .map_err(|source| Error::Write { path, source })?;
     }
     Ok(())
 }
