@@ -55,35 +55,31 @@ impl<'a> Scope<'a> {
 }
 
 fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
-    let mut parser = Parser::new(source);
+    let mut cursor = Cursor::new(source);
     let mut themes = Vec::new();
     let mut theme_positions = Vec::new();
     let mut rules = Vec::new();
     let mut positions = Vec::new();
     let mut overrides = Vec::new();
     loop {
-        parser.cursor.skip_trivia();
-        if parser.cursor.peek().is_none() {
+        cursor.skip_trivia();
+        if cursor.peek().is_none() {
             break;
         }
-        if parser.cursor.eat_keyword("theme") {
+        if cursor.eat_keyword("theme") {
             if scope.palette().is_some() {
-                return Err(parser
-                    .cursor
-                    .error("a theme can only be declared in the root <style>"));
+                return Err(cursor.error("a theme can only be declared in the root <style>"));
             }
-            let (theme, position) = parser.theme()?;
+            let (theme, position) = cursor.theme()?;
             themes.push(theme);
             theme_positions.push(position);
-        } else if parser.cursor.eat_keyword("override") {
+        } else if cursor.eat_keyword("override") {
             if !scope.allows_overrides() {
-                return Err(parser
-                    .cursor
-                    .error("an override can only be declared in the root <style>"));
+                return Err(cursor.error("an override can only be declared in the root <style>"));
             }
-            overrides.push(parser.override_block()?);
+            overrides.push(cursor.override_block()?);
         } else {
-            let (rule, position) = parser.class_rule()?;
+            let (rule, position) = cursor.class_rule()?;
             rules.push(rule);
             positions.push(position);
         }
@@ -110,198 +106,146 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
     })
 }
 
-struct Parser<'a> {
-    cursor: Cursor<'a>,
-}
-
-impl<'a> Parser<'a> {
-    fn new(source: &'a str) -> Self {
-        Self {
-            cursor: Cursor::new(source),
-        }
-    }
-
+impl Cursor<'_> {
     fn class_rule(&mut self) -> Result<(ClassRule, RuleAt), Error> {
-        self.cursor.expect('.')?;
-        let class_at = self.cursor.value_start();
-        let class = self.cursor.ident()?;
+        self.expect('.')?;
+        let class_at = self.value_start();
+        let class = self.ident()?;
         let state = self.state()?;
-        self.cursor.expect('{')?;
         let mut properties = Vec::new();
         let mut positions = Vec::new();
         let mut animations = Vec::new();
         let mut animation_positions = Vec::new();
-        loop {
-            self.cursor.skip_trivia();
-            match self.cursor.peek() {
-                Some('}') => {
-                    self.cursor.bump();
-                    return Ok((
-                        ClassRule {
-                            class,
-                            state,
-                            properties,
-                            animations,
-                        },
-                        RuleAt {
-                            class_at,
-                            properties: positions,
-                            animations: animation_positions,
-                        },
-                    ));
-                }
-                None => return Err(self.cursor.error("expected '}'")),
-                _ => {
-                    let at = self.cursor.value_start();
-                    if self.cursor.eat_keyword("animate") {
-                        animations.push(self.animation()?);
-                        animation_positions.push(PropertyAt { at });
-                        continue;
-                    }
-                    for (property, at) in self.property()? {
-                        properties.push(property);
-                        positions.push(at);
-                    }
+        self.braced_items(|cursor| {
+            let at = cursor.value_start();
+            if cursor.eat_keyword("animate") {
+                animations.push(cursor.animation()?);
+                animation_positions.push(PropertyAt { at });
+            } else {
+                for (property, at) in cursor.property()? {
+                    properties.push(property);
+                    positions.push(at);
                 }
             }
-        }
+            Ok(())
+        })?;
+        Ok((
+            ClassRule {
+                class,
+                state,
+                properties,
+                animations,
+            },
+            RuleAt {
+                class_at,
+                properties: positions,
+                animations: animation_positions,
+            },
+        ))
     }
 
     fn override_block(&mut self) -> Result<Override, Error> {
-        let component_at = self.cursor.value_start();
-        let component = self.cursor.ident()?;
-        self.cursor.expect('{')?;
+        let component_at = self.value_start();
+        let component = self.ident()?;
         let mut rules = Vec::new();
         let mut positions = Vec::new();
-        loop {
-            self.cursor.skip_trivia();
-            match self.cursor.peek() {
-                Some('}') => {
-                    self.cursor.bump();
-                    return Ok(Override {
-                        component,
-                        component_at,
-                        rules,
-                        positions,
-                    });
-                }
-                None => return Err(self.cursor.error("expected '}'")),
-                _ => {
-                    let (rule, position) = self.class_rule()?;
-                    rules.push(rule);
-                    positions.push(position);
-                }
-            }
-        }
+        self.braced_items(|cursor| {
+            let (rule, position) = cursor.class_rule()?;
+            rules.push(rule);
+            positions.push(position);
+            Ok(())
+        })?;
+        Ok(Override {
+            component,
+            component_at,
+            rules,
+            positions,
+        })
     }
 
     fn animation(&mut self) -> Result<Animation, Error> {
-        let at = self.cursor.value_start();
-        let name = self.cursor.ident()?;
-        let property = Kind::from_name(&name).ok_or_else(|| {
-            Error::at(
-                self.cursor.source(),
-                at,
-                format!("unknown property '{name}'"),
-            )
-        })?;
+        let at = self.value_start();
+        let name = self.ident()?;
+        let property = Kind::from_name(&name)
+            .ok_or_else(|| Error::at(self.source(), at, format!("unknown property '{name}'")))?;
         if !property.animatable() {
             return Err(Error::at(
-                self.cursor.source(),
+                self.source(),
                 at,
                 format!("property '{name}' cannot be animated"),
             ));
         }
-        self.cursor.expect(':')?;
-        let duration = value::duration(&mut self.cursor, &name)?;
-        self.cursor.expect(';')?;
+        self.expect(':')?;
+        let duration = value::duration(&mut *self, &name)?;
+        self.expect(';')?;
         Ok(Animation { property, duration })
     }
 
     fn state(&mut self) -> Result<Option<State>, Error> {
-        if !self.cursor.eat(':') {
+        if !self.eat(':') {
             return Ok(None);
         }
-        let at = self.cursor.value_start();
-        let name = self.cursor.ident()?;
+        let at = self.value_start();
+        let name = self.ident()?;
         let state = match name.as_str() {
             "hover" => State::Hover,
             "pressed" => State::Pressed,
             "checked" => State::Checked,
             "selected" => State::Selected,
             "disabled" => State::Disabled,
-            _ => return Err(Error::at(self.cursor.source(), at, "unknown state")),
+            _ => return Err(Error::at(self.source(), at, "unknown state")),
         };
         Ok(Some(state))
     }
 
     fn theme(&mut self) -> Result<(Theme, ThemeAt), Error> {
-        let name_at = self.cursor.value_start();
-        let name = self.cursor.ident()?;
-        self.cursor.expect('{')?;
+        let name_at = self.value_start();
+        let name = self.ident()?;
         let mut properties = Vec::new();
         let mut positions = Vec::new();
-        loop {
-            self.cursor.skip_trivia();
-            match self.cursor.peek() {
-                Some('}') => {
-                    self.cursor.bump();
-                    return Ok((
-                        Theme { name, properties },
-                        ThemeAt {
-                            name_at,
-                            properties: positions,
-                        },
-                    ));
-                }
-                None => return Err(self.cursor.error("expected '}'")),
-                _ => {
-                    let (property, at) = self.theme_property()?;
-                    properties.push(property);
-                    positions.push(at);
-                }
-            }
-        }
+        self.braced_items(|cursor| {
+            let (property, at) = cursor.theme_property()?;
+            properties.push(property);
+            positions.push(at);
+            Ok(())
+        })?;
+        Ok((
+            Theme { name, properties },
+            ThemeAt {
+                name_at,
+                properties: positions,
+            },
+        ))
     }
 
     fn property(&mut self) -> Result<Vec<(Property, PropertyAt)>, Error> {
-        let at = self.cursor.value_start();
-        let name = self.cursor.ident()?;
+        let at = self.value_start();
+        let name = self.ident()?;
         if let Some(shorthand) = shorthand::get(&name) {
-            self.cursor.expect(':')?;
-            let values = (shorthand.parse)(&mut self.cursor, &name)?;
-            self.cursor.expect(';')?;
+            self.expect(':')?;
+            let values = (shorthand.parse)(&mut *self, &name)?;
+            self.expect(';')?;
             return Ok(shorthand
                 .properties(values)
                 .into_iter()
                 .map(|property| (property, PropertyAt { at }))
                 .collect());
         }
-        let kind = Kind::from_name(&name).ok_or_else(|| {
-            Error::at(
-                self.cursor.source(),
-                at,
-                format!("unknown property '{name}'"),
-            )
-        })?;
+        let kind = Kind::from_name(&name)
+            .ok_or_else(|| Error::at(self.source(), at, format!("unknown property '{name}'")))?;
         let spec = kind.spec();
-        self.cursor.expect(':')?;
-        let value = value::value(
-            &mut self.cursor,
-            spec.theme_type().is_some(),
-            spec.ty,
-            &name,
-        )?;
-        self.cursor.expect(';')?;
+        self.expect(':')?;
+        let value = value::value(&mut *self, spec.theme_type().is_some(), spec.ty, &name)?;
+        self.expect(';')?;
         Ok(vec![(Property { kind, value }, PropertyAt { at })])
     }
 
     fn theme_property(&mut self) -> Result<(ThemeEntry, ThemeKeyAt), Error> {
-        let at = self.cursor.value_start();
-        let key = self.cursor.ident()?;
-        self.cursor.expect(':')?;
-        let value = value::value(&mut self.cursor, false, Type::ThemeKey, &key)?;
-        self.cursor.expect(';')?;
+        let at = self.value_start();
+        let key = self.ident()?;
+        self.expect(':')?;
+        let value = value::value(&mut *self, false, Type::ThemeKey, &key)?;
+        self.expect(';')?;
         Ok((
             ThemeEntry {
                 key: key.clone(),

@@ -62,19 +62,7 @@ impl Cursor<'_> {
     }
 
     fn members(&mut self) -> Result<Vec<Member>, Error> {
-        self.expect('{')?;
-        let mut members = Vec::new();
-        loop {
-            self.skip_trivia();
-            match self.peek() {
-                Some('}') => {
-                    self.bump();
-                    return Ok(members);
-                }
-                None => return Err(self.error("expected '}'")),
-                _ => members.push(self.member()?),
-            }
-        }
+        self.braced_items(Self::member)
     }
 
     fn member(&mut self) -> Result<Member, Error> {
@@ -172,19 +160,9 @@ impl Cursor<'_> {
     }
 
     fn block(&mut self) -> Result<Block, Error> {
-        self.expect('{')?;
-        let mut items = Vec::new();
-        loop {
-            self.skip_trivia();
-            match self.peek() {
-                Some('}') => {
-                    self.bump();
-                    return Ok(Block { items });
-                }
-                None => return Err(self.error("expected '}'")),
-                _ => items.push(self.block_item()?),
-            }
-        }
+        Ok(Block {
+            items: self.braced_items(Self::block_item)?,
+        })
     }
 
     fn block_item(&mut self) -> Result<BlockItem, Error> {

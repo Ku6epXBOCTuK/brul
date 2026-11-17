@@ -62,6 +62,25 @@ impl<'a> Cursor<'a> {
         }
     }
 
+    pub fn braced_items<T>(
+        &mut self,
+        mut parse: impl FnMut(&mut Self) -> Result<T, Error>,
+    ) -> Result<Vec<T>, Error> {
+        self.expect('{')?;
+        let mut items = Vec::new();
+        loop {
+            self.skip_trivia();
+            match self.peek() {
+                Some('}') => {
+                    self.bump();
+                    return Ok(items);
+                }
+                None => return Err(self.error("expected '}'")),
+                _ => items.push(parse(self)?),
+            }
+        }
+    }
+
     pub fn ident(&mut self) -> Result<String, Error> {
         self.skip_trivia();
         let start = self.pos;
