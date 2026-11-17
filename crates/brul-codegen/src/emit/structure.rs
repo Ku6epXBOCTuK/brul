@@ -122,6 +122,33 @@ fn rebuild_arm(
     Ok(text)
 }
 
+fn bind_value(out: &mut Out<'_>, binding: &str, call: &str) {
+    out.line(format_args!(
+        "let {binding} = {call}(&mut component.borrow_mut())"
+    ));
+    out.indented(|out| out.line(format_args!(".map_err(brul::ViewError::from)?;")));
+}
+
+fn unwrap_value(
+    out: &mut Out<'_>,
+    source: &str,
+    binding: &str,
+    variant: &str,
+    expected: &str,
+    transform: &str,
+) {
+    out.line(format_args!("let {binding} = match {source} {{"));
+    out.indented(|out| {
+        out.line(format_args!(
+            "brul::Value::{variant}({binding}) => {transform},"
+        ));
+        out.line(format_args!(
+            "other => return Err(brul::ViewError::expected(\"{expected}\", \"{variant}\", other.type_name())),"
+        ));
+    });
+    out.line(format_args!("}};"));
+}
+
 fn branch_chain(
     out: &mut Out<'_>,
     name: &str,
@@ -131,18 +158,15 @@ fn branch_chain(
     counter: &mut usize,
     index: usize,
 ) -> Result<(), Error> {
-    out.line(format_args!(
-        "let condition = {name}_value{index}(&mut component.borrow_mut())"
-    ));
-    out.indented(|out| out.line(format_args!(".map_err(brul::ViewError::from)?;")));
-    out.line(format_args!("let condition = match condition {{"));
-    out.indented(|out| {
-        out.line(format_args!("brul::Value::Bool(condition) => condition,"));
-        out.line(format_args!(
-            "other => return Err(brul::ViewError::expected(\"if condition\", \"Bool\", other.type_name())),"
-        ));
-    });
-    out.line(format_args!("}};"));
+    bind_value(out, "condition", &format!("{name}_value{index}"));
+    unwrap_value(
+        out,
+        "condition",
+        "condition",
+        "Bool",
+        "if condition",
+        "condition",
+    );
     out.line(format_args!("if condition {{"));
     out.indented(|out| arm_body(out, &block.branches[index].block, emit, frame, counter))?;
     out.line(format_args!("}} else {{"));
@@ -195,90 +219,125 @@ fn each_arm(
     let mut out = Out::new(&mut text);
     arm_header(&mut out, name);
     out.indented(|out| -> Result<(), Error> {
-        out.line(format_args!("let mut children = Vec::new();"));
+        each_collection(out, name);
         out.line(format_args!(
-            "let collection = {name}_value(&mut component.borrow_mut())"
+            "let mut matcher = brul::RowMatcher::new(old_rows);"
         ));
-        out.indented(|out| out.line(format_args!(".map_err(brul::ViewError::from)?;")));
-        out.line(format_args!("let items = match collection {{"));
-        out.indented(|out| {
-            out.line(format_args!(
-                "brul::Value::Array(items) => std::sync::Arc::unwrap_or_clone(items),"
-            ));
-            out.line(format_args!(
-                "other => return Err(brul::ViewError::expected(\"each\", \"Array\", other.type_name())),"
-            ));
-        });
-        out.line(format_args!("}};"));
-        out.line(format_args!("let mut matcher = brul::RowMatcher::new(old_rows);"));
-        if let Some(else_block) = &block.else_block {
-            out.line(format_args!("if items.is_empty() {{"));
-            out.indented(|out| -> Result<(), Error> {
-                each_body(out, else_block, emit, arm)?;
-                out.line(format_args!("rows.push(brul::RowInfo {{"));
-                out.indented(|out| {
-                    out.line(format_args!("key: brul::RowKey::Index(0),"));
-                    out.line(format_args!(
-                        "item: brul::Value::Array(std::sync::Arc::new(Vec::new())),"
-                    ));
-                    out.line(format_args!("start: 0,"));
-                    out.line(format_args!("count: children.len(),"));
-                    out.line(format_args!("reuse: None,"));
-                });
-                out.line(format_args!("}});"));
-                Ok(())
-            })?;
-            out.line(format_args!("}}"));
-        }
+        each_else(out, block, emit, arm)?;
         out.line(format_args!(
             "for (position, item) in items.into_iter().enumerate() {{"
         ));
-        out.indented(|out| -> Result<(), Error> {
-            out.line(format_args!("component.borrow_mut().push_build_scope(vec!["));
-            out.indented(|out| {
-                out.line(format_args!(
-                    "brul::Variable {{ name: brul::VariableId::from_index({}), value: item.clone() }},",
-                    variable(block.item.as_str(), emit.names)
-                ));
-                if let Some(index_name) = &block.index {
-                    out.line(format_args!(
-                        "brul::Variable {{ name: brul::VariableId::from_index({}), value: brul::Value::Number(position as f64) }},",
-                        variable(index_name.as_str(), emit.names)
-                    ));
-                }
-            });
-            out.line(format_args!("]);"));
-            match &block.key {
-                Some(_) => out.line(format_args!(
-                    "let key = {name}_key(&mut component.borrow_mut()).map(brul::RowKey::Explicit).unwrap_or(brul::RowKey::Index(position));"
-                )),
-                None => out.line(format_args!("let key = brul::RowKey::Index(position);")),
-            }
-            out.line(format_args!("let start = children.len();"));
-            out.line(format_args!(
-                "if let Some(other) = matcher.take(&key, &item, position) {{"
-            ));
-            out.indented(|out| {
-                out.line(format_args!(
-                    "rows.push(brul::RowInfo {{ key, item, start, count: 0, reuse: Some(other) }});"
-                ));
-                out.line(format_args!("component.borrow_mut().pop_build_scope();"));
-                out.line(format_args!("continue;"));
-            });
-            out.line(format_args!("}}"));
-            each_body(out, &block.block, emit, arm)?;
-            out.line(format_args!("let count = children.len() - start;"));
-            out.line(format_args!("component.borrow_mut().pop_build_scope();"));
-            out.line(format_args!(
-                "rows.push(brul::RowInfo {{ key, item, start, count, reuse: None }});"
-            ));
-            Ok(())
-        })?;
+        out.indented(|out| each_row(out, name, block, emit, arm))?;
         out.line(format_args!("}}"));
         Ok(())
     })?;
     widget(&mut out);
     Ok(text)
+}
+
+fn each_collection(out: &mut Out<'_>, name: &str) {
+    out.line(format_args!("let mut children = Vec::new();"));
+    bind_value(out, "collection", &format!("{name}_value"));
+    unwrap_value(
+        out,
+        "collection",
+        "items",
+        "Array",
+        "each",
+        "std::sync::Arc::unwrap_or_clone(items)",
+    );
+}
+
+fn each_else(
+    out: &mut Out<'_>,
+    block: &EachBlock,
+    emit: &mut Emit<'_>,
+    arm: Frame<'_>,
+) -> Result<(), Error> {
+    let Some(else_block) = &block.else_block else {
+        return Ok(());
+    };
+    out.line(format_args!("if items.is_empty() {{"));
+    out.indented(|out| -> Result<(), Error> {
+        each_body(out, else_block, emit, arm)?;
+        out.line(format_args!("rows.push(brul::RowInfo {{"));
+        out.indented(|out| {
+            out.line(format_args!("key: brul::RowKey::Index(0),"));
+            out.line(format_args!(
+                "item: brul::Value::Array(std::sync::Arc::new(Vec::new())),"
+            ));
+            out.line(format_args!("start: 0,"));
+            out.line(format_args!("count: children.len(),"));
+            out.line(format_args!("reuse: None,"));
+        });
+        out.line(format_args!("}});"));
+        Ok(())
+    })?;
+    out.line(format_args!("}}"));
+    Ok(())
+}
+
+fn each_row(
+    out: &mut Out<'_>,
+    name: &str,
+    block: &EachBlock,
+    emit: &mut Emit<'_>,
+    arm: Frame<'_>,
+) -> Result<(), Error> {
+    each_scope(out, block, emit);
+    each_key(out, name, block);
+    out.line(format_args!("let start = children.len();"));
+    each_take(out);
+    each_body(out, &block.block, emit, arm)?;
+    out.line(format_args!("let count = children.len() - start;"));
+    out.line(format_args!("component.borrow_mut().pop_build_scope();"));
+    out.line(format_args!(
+        "rows.push(brul::RowInfo {{ key, item, start, count, reuse: None }});"
+    ));
+    Ok(())
+}
+
+fn each_scope(out: &mut Out<'_>, block: &EachBlock, emit: &mut Emit<'_>) {
+    out.line(format_args!(
+        "component.borrow_mut().push_build_scope(vec!["
+    ));
+    out.indented(|out| {
+        out.line(format_args!(
+            "brul::Variable {{ name: brul::VariableId::from_index({}), value: item.clone() }},",
+            variable(block.item.as_str(), emit.names)
+        ));
+        if let Some(index_name) = &block.index {
+            out.line(format_args!(
+                "brul::Variable {{ name: brul::VariableId::from_index({}), value: brul::Value::Number(position as f64) }},",
+                variable(index_name.as_str(), emit.names)
+            ));
+        }
+    });
+    out.line(format_args!("]);"));
+}
+
+fn each_key(out: &mut Out<'_>, name: &str, block: &EachBlock) {
+    if block.key.is_some() {
+        out.line(format_args!(
+            "let key = {name}_key(&mut component.borrow_mut()).map(brul::RowKey::Explicit).unwrap_or(brul::RowKey::Index(position));"
+        ));
+    } else {
+        out.line(format_args!("let key = brul::RowKey::Index(position);"));
+    }
+}
+
+fn each_take(out: &mut Out<'_>) {
+    out.line(format_args!(
+        "if let Some(other) = matcher.take(&key, &item, position) {{"
+    ));
+    out.indented(|out| {
+        out.line(format_args!(
+            "rows.push(brul::RowInfo {{ key, item, start, count: 0, reuse: Some(other) }});"
+        ));
+        out.line(format_args!("component.borrow_mut().pop_build_scope();"));
+        out.line(format_args!("continue;"));
+    });
+    out.line(format_args!("}}"));
 }
 
 fn each_body(
