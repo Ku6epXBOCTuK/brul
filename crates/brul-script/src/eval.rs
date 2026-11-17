@@ -94,7 +94,7 @@ fn call_every(component: &mut Component, arguments: &[Expr]) -> Result<Value, Er
         return Err(Error::Argument {
             name: "every",
             expected: "function name",
-            found: expression_name(function),
+            found: function.kind.name(),
         });
     };
     component.every(interval, function)?;
@@ -145,7 +145,7 @@ fn assign_to(component: &mut Component, target: &Expr, value: Value) -> Result<(
             assign_index(&mut container, &index, value)?;
             assign_to(component, target, container)
         }
-        other => Err(Error::Unsupported(expression_name(other))),
+        other => Err(Error::Unsupported(other.kind.name())),
     }
 }
 
@@ -173,107 +173,4 @@ fn eval_binary(
     let left = eval(component, left)?;
     let right = eval(component, right)?;
     apply_binary(op, left, right)
-}
-
-fn expression_name(expression: &Expr) -> &'static str {
-    match &expression.kind {
-        ExprKind::Ident(_) => "identifier",
-        ExprKind::Field { .. } => "field access",
-        ExprKind::Index { .. } => "index access",
-        ExprKind::Call { .. } => "call",
-        ExprKind::Assign { .. } => "assignment",
-        ExprKind::Array(_) => "array literal",
-        ExprKind::Object(_) => "object literal",
-        ExprKind::Template(_) => "template string",
-        ExprKind::Number(_)
-        | ExprKind::String(_)
-        | ExprKind::Bool(_)
-        | ExprKind::Null
-        | ExprKind::Unary { .. }
-        | ExprKind::Binary { .. }
-        | ExprKind::Ternary { .. } => "expression",
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use brul_syntax::ast::Position;
-
-    use super::*;
-
-    const POSITION: Position = Position { line: 1, column: 1 };
-
-    fn ident() -> Expr {
-        Expr::new(ExprKind::Ident("x".to_owned()), POSITION)
-    }
-
-    #[test]
-    fn expression_name_spells_every_kind() {
-        let target = || Box::new(ident());
-        let named = [
-            (ExprKind::Ident("x".to_owned()), "identifier"),
-            (
-                ExprKind::Field {
-                    target: target(),
-                    name: "x".to_owned(),
-                },
-                "field access",
-            ),
-            (
-                ExprKind::Index {
-                    target: target(),
-                    index: target(),
-                },
-                "index access",
-            ),
-            (
-                ExprKind::Call {
-                    target: target(),
-                    args: Vec::new(),
-                },
-                "call",
-            ),
-            (
-                ExprKind::Assign {
-                    target: target(),
-                    op: AssignOp::Set,
-                    value: target(),
-                },
-                "assignment",
-            ),
-            (ExprKind::Array(Vec::new()), "array literal"),
-            (ExprKind::Object(Vec::new()), "object literal"),
-            (ExprKind::Template(Vec::new()), "template string"),
-            (ExprKind::Number(1.0), "expression"),
-            (ExprKind::String(String::new()), "expression"),
-            (ExprKind::Bool(true), "expression"),
-            (ExprKind::Null, "expression"),
-            (
-                ExprKind::Unary {
-                    op: UnaryOp::Not,
-                    operand: target(),
-                },
-                "expression",
-            ),
-            (
-                ExprKind::Binary {
-                    op: BinaryOp::Add,
-                    left: target(),
-                    right: target(),
-                },
-                "expression",
-            ),
-            (
-                ExprKind::Ternary {
-                    condition: target(),
-                    then_branch: target(),
-                    else_branch: target(),
-                },
-                "expression",
-            ),
-        ];
-        for (kind, name) in named {
-            assert_eq!(expression_name(&Expr::new(kind, POSITION)), name);
-        }
-    }
 }

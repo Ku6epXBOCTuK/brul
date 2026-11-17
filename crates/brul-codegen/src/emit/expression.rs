@@ -256,7 +256,7 @@ fn every(arguments: &[Expr], names: &Names<'_>) -> String {
     let ExprKind::Ident(function) = &function.kind else {
         return format!(
             "{{ return Err(brul::Error::Argument {{ name: \"every\", expected: \"function name\", found: {:?} }}) }}",
-            kind_name(&function.kind)
+            function.kind.name()
         );
     };
     format!(
@@ -331,27 +331,7 @@ fn assign_to(
         other => write!(
             out,
             "return Err(brul::Error::Unsupported({:?}));",
-            kind_name(other)
+            other.name()
         ),
-    }
-}
-
-fn kind_name(kind: &ExprKind) -> &'static str {
-    match kind {
-        ExprKind::Ident(_) => "identifier",
-        ExprKind::Field { .. } => "field access",
-        ExprKind::Index { .. } => "index access",
-        ExprKind::Call { .. } => "call",
-        ExprKind::Assign { .. } => "assignment",
-        ExprKind::Array(_) => "array literal",
-        ExprKind::Object(_) => "object literal",
-        ExprKind::Template(_) => "template string",
-        ExprKind::Number(_)
-        | ExprKind::String(_)
-        | ExprKind::Bool(_)
-        | ExprKind::Null
-        | ExprKind::Unary { .. }
-        | ExprKind::Binary { .. }
-        | ExprKind::Ternary { .. } => "expression",
     }
 }
