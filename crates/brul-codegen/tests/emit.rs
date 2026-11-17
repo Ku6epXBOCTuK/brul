@@ -770,7 +770,7 @@ window Demo (title: "demo") {
     );
     assert!(
         module.contains(
-            "        rows.push(brul::RowInfo {\n            key: brul::RowKey::Index(0),\n            item: brul::Value::Array(std::rc::Rc::new(Vec::new())),\n            start: 0,\n            count: children.len(),\n            reuse: None,\n        });"
+            "        rows.push(brul::RowInfo {\n            key: brul::RowKey::Index(0),\n            item: brul::Value::Array(std::sync::Arc::new(Vec::new())),\n            start: 0,\n            count: children.len(),\n            reuse: None,\n        });"
         ),
         "{module}"
     );

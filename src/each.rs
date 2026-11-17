@@ -171,7 +171,7 @@ mod tests {
             &old_rows,
             vec![RowInfo {
                 key: RowKey::Index(0),
-                item: Value::Array(std::rc::Rc::new(Vec::new())),
+                item: Value::Array(std::sync::Arc::new(Vec::new())),
                 start: 0,
                 count: 1,
                 reuse: None,

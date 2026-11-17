@@ -28,7 +28,7 @@ pub use brul_syntax::script;
 pub use brul_window::perf;
 pub use brul_window::{WindowConfig, WindowPosition};
 pub use each::RowMatcher;
-pub use handle::{Handle, Signal};
+pub use handle::Handle;
 pub use run::{WindowDef, run_generated, run_generated_with};
 pub use ui::Ui;
 

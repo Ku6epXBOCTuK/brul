@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::error::Error;
 use crate::value::Value;
@@ -18,7 +18,7 @@ pub fn read_field(target: &Value, name: &str) -> Result<Value, Error> {
 
 pub fn assign_field(target: &mut Value, name: &str, value: Value) -> Result<(), Error> {
     match target {
-        Value::Object(fields) => match Rc::make_mut(fields)
+        Value::Object(fields) => match Arc::make_mut(fields)
             .iter_mut()
             .find(|(field, _)| field == name)
         {
@@ -62,14 +62,14 @@ pub fn assign_index(target: &mut Value, index: &Value, value: Value) -> Result<(
                 return Err(expected("[]", "Number", index));
             };
             let index = array_index(items.len(), index)?;
-            Rc::make_mut(items)[index] = value;
+            Arc::make_mut(items)[index] = value;
             Ok(())
         }
         Value::Object(fields) => {
             let Value::String(key) = index else {
                 return Err(expected("[]", "String", index));
             };
-            match Rc::make_mut(fields)
+            match Arc::make_mut(fields)
                 .iter_mut()
                 .find(|(field, _)| field.as_str() == key.as_ref())
             {

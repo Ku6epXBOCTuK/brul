@@ -1,14 +1,14 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
-    String(Rc<str>),
+    String(Arc<str>),
     Bool(bool),
     Null,
-    Array(Rc<Vec<Value>>),
-    Object(Rc<Vec<(String, Value)>>),
-    Image(Rc<str>),
+    Array(Arc<Vec<Value>>),
+    Object(Arc<Vec<(String, Value)>>),
+    Image(Arc<str>),
 }
 
 impl Value {
@@ -57,6 +57,30 @@ impl Value {
     }
 }
 
+impl From<&str> for Value {
+    fn from(text: &str) -> Self {
+        Self::String(Arc::from(text))
+    }
+}
+
+impl From<String> for Value {
+    fn from(text: String) -> Self {
+        Self::String(Arc::from(text))
+    }
+}
+
+impl From<f64> for Value {
+    fn from(number: f64) -> Self {
+        Self::Number(number)
+    }
+}
+
+impl From<bool> for Value {
+    fn from(flag: bool) -> Self {
+        Self::Bool(flag)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,6 +107,14 @@ mod tests {
         ] {
             assert_eq!(Value::Number(value).as_pixels(), None, "{value}");
         }
+    }
+
+    #[test]
+    fn a_scalar_becomes_a_value() {
+        assert_eq!(Value::from("a"), Value::String("a".into()));
+        assert_eq!(Value::from("a".to_owned()), Value::String("a".into()));
+        assert_eq!(Value::from(1.5), Value::Number(1.5));
+        assert_eq!(Value::from(true), Value::Bool(true));
     }
 
     #[test]

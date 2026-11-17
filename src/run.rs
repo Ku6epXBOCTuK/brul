@@ -285,16 +285,16 @@ impl<T: Theme> Runtime<T> {
     fn apply(&mut self, messages: Vec<Message>) {
         for message in messages {
             match message {
-                Message::Set(name, signal) => {
-                    if let Err(error) = self.component.borrow_mut().assign(&name, signal.value()) {
+                Message::Set(name, value) => {
+                    if let Err(error) = self.component.borrow_mut().assign(&name, value) {
                         tracing::error!(%error, %name, "handle set failed");
                     }
                 }
-                Message::Call(function) => {
+                Message::Call(function, arguments) => {
                     if let Err(error) = self
                         .component
                         .borrow_mut()
-                        .call_function(&function, Vec::new())
+                        .call_function(&function, arguments)
                     {
                         tracing::error!(%error, %function, "handle call failed");
                     }
@@ -336,7 +336,6 @@ mod tests {
     use brul_gui::{Widget, WidgetEvent, WidgetId};
     use brul_syntax::ast::{Expr, ExprKind, Position};
 
-    use crate::handle::Signal;
     use crate::ui::{CommandHost, Ui};
     use crate::{Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, Value};
 
@@ -583,10 +582,7 @@ mod tests {
             .with(|slot| slot.borrow_mut().take())
             .expect("widget");
 
-        runtime.apply(vec![Message::Set(
-            "name".to_owned(),
-            Signal::Text("live".to_owned()),
-        )]);
+        runtime.apply(vec![Message::Set("name".to_owned(), "live".into())]);
 
         let tree = &mut runtime.uis[&WindowKey(0)].tree.borrow_mut();
         assert!(!tree.set_text(id, "live".to_owned()));
@@ -637,10 +633,75 @@ mod tests {
             .with(|slot| slot.borrow_mut().take())
             .expect("widget");
 
-        runtime.apply(vec![Message::Call("mark".to_owned())]);
+        runtime.apply(vec![Message::Call("mark".to_owned(), Vec::new())]);
 
         let tree = &mut runtime.uis[&WindowKey(0)].tree.borrow_mut();
         assert!(!tree.set_text(id, "called".to_owned()));
+    }
+
+    #[test]
+    fn a_handle_call_passes_arguments() {
+        const CALL_NAMES: &[&str] = &["name", "label"];
+        let seeds = [("name", Value::from(""))];
+        let program = script::Program {
+            functions: vec![Arc::new(script::Function {
+                name: "mark".to_owned(),
+                params: vec!["label".to_owned()],
+                body: vec![script::Statement::Expr(Expr::new(
+                    ExprKind::Assign {
+                        target: Box::new(Expr::new(
+                            ExprKind::Ident("name".to_owned()),
+                            Position::default(),
+                        )),
+                        op: brul_syntax::ast::AssignOp::Set,
+                        value: Box::new(Expr::new(
+                            ExprKind::Ident("label".to_owned()),
+                            Position::default(),
+                        )),
+                    },
+                    Position::default(),
+                ))],
+            })],
+            statements: Vec::new(),
+        };
+        let component = generated_component(CALL_NAMES, Some(&program), &seeds).expect("component");
+        let mut runtime = Runtime::new(
+            defs(),
+            component,
+            Rc::new(RefCell::new(Vec::new())),
+            None,
+            Rc::new(RefCell::new(None)),
+            Vec::new(),
+        );
+
+        runtime.apply(vec![Message::Call(
+            "mark".to_owned(),
+            vec![Value::from("argument")],
+        )]);
+
+        assert_eq!(
+            runtime.component.borrow().read("name"),
+            Ok(Value::from("argument"))
+        );
+    }
+
+    #[test]
+    fn a_handle_set_carries_a_list() {
+        let component =
+            generated_component(NAMES, None, &[("name", Value::Null)]).expect("component");
+        let mut runtime = Runtime::new(
+            defs(),
+            component,
+            Rc::new(RefCell::new(Vec::new())),
+            None,
+            Rc::new(RefCell::new(None)),
+            Vec::new(),
+        );
+        let rows = Value::Array(vec![Value::from(1.0), Value::from(2.0)].into());
+
+        runtime.apply(vec![Message::Set("name".to_owned(), rows.clone())]);
+
+        assert_eq!(runtime.component.borrow().read("name"), Ok(rows));
     }
 
     #[test]

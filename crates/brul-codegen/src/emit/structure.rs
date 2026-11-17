@@ -203,7 +203,7 @@ fn each_arm(
         out.line(format_args!("let items = match collection {{"));
         out.indented(|out| {
             out.line(format_args!(
-                "brul::Value::Array(items) => std::rc::Rc::unwrap_or_clone(items),"
+                "brul::Value::Array(items) => std::sync::Arc::unwrap_or_clone(items),"
             ));
             out.line(format_args!(
                 "other => return Err(brul::ViewError::expected(\"each\", \"Array\", other.type_name())),"
@@ -219,7 +219,7 @@ fn each_arm(
                 out.indented(|out| {
                     out.line(format_args!("key: brul::RowKey::Index(0),"));
                     out.line(format_args!(
-                        "item: brul::Value::Array(std::rc::Rc::new(Vec::new())),"
+                        "item: brul::Value::Array(std::sync::Arc::new(Vec::new())),"
                     ));
                     out.line(format_args!("start: 0,"));
                     out.line(format_args!("count: children.len(),"));
