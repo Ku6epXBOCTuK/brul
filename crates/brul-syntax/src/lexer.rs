@@ -1,3 +1,5 @@
+use crate::error::Error as ParseError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: usize,
@@ -70,6 +72,79 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
+}
+
+pub struct TokenStream<'a> {
+    pub(crate) source: &'a str,
+    pub(crate) tokens: Vec<Token>,
+    pub(crate) at: usize,
+}
+
+impl<'a> TokenStream<'a> {
+    pub fn new(source: &'a str, tokens: Vec<Token>) -> Self {
+        Self {
+            source,
+            tokens,
+            at: 0,
+        }
+    }
+
+    pub fn at_end(&self) -> bool {
+        self.tokens[self.at].kind == TokenKind::Eof
+    }
+
+    pub fn at_keyword(&self, keyword: &str) -> bool {
+        matches!(&self.tokens[self.at].kind, TokenKind::Ident(name) if name == keyword)
+    }
+
+    pub fn expect_keyword(&mut self, keyword: &str) -> Result<(), ParseError> {
+        let token = &self.tokens[self.at];
+        match &token.kind {
+            TokenKind::Ident(name) if name == keyword => {
+                self.at += 1;
+                Ok(())
+            }
+            _ => Err(self.error(token.span, format!("expected '{keyword}'"))),
+        }
+    }
+
+    pub fn ident(&mut self, message: &str) -> Result<String, ParseError> {
+        let token = &self.tokens[self.at];
+        match &token.kind {
+            TokenKind::Ident(name) => {
+                let name = name.clone();
+                self.at += 1;
+                Ok(name)
+            }
+            _ => Err(self.error(token.span, message)),
+        }
+    }
+
+    pub fn string(&mut self, message: &str) -> Result<String, ParseError> {
+        let token = &self.tokens[self.at];
+        match &token.kind {
+            TokenKind::String(value) => {
+                let value = value.clone();
+                self.at += 1;
+                Ok(value)
+            }
+            _ => Err(self.error(token.span, message)),
+        }
+    }
+
+    pub fn expect_punct(&mut self, punct: Punct, message: &str) -> Result<(), ParseError> {
+        let token = &self.tokens[self.at];
+        if token.kind == TokenKind::Punct(punct) {
+            self.at += 1;
+            Ok(())
+        } else {
+            Err(self.error(token.span, message))
+        }
+    }
+
+    pub fn error(&self, span: Span, message: impl Into<String>) -> ParseError {
+        ParseError::at_span(self.source, span, message)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

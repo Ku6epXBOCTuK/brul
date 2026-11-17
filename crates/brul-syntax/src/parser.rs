@@ -1,11 +1,25 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 pub use crate::error::Error;
-use crate::lexer::{self, Punct, Span, Token, TokenKind};
+use crate::lexer::{self, Punct, Span, TokenKind, TokenStream};
 
 pub struct Parser<'a> {
-    source: &'a str,
-    tokens: Vec<Token>,
-    at: usize,
+    stream: TokenStream<'a>,
+}
+
+impl<'a> Deref for Parser<'a> {
+    type Target = TokenStream<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.stream
+    }
+}
+
+impl DerefMut for Parser<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.stream
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -21,9 +35,7 @@ impl<'a> Parser<'a> {
             token.span.end += offset;
         }
         Ok(Self {
-            source,
-            tokens,
-            at: 0,
+            stream: TokenStream::new(source, tokens),
         })
     }
 
@@ -350,39 +362,12 @@ impl<'a> Parser<'a> {
     }
 
     fn expect_ident(&mut self) -> Result<String, Error> {
-        let token = &self.tokens[self.at];
-        match &token.kind {
-            TokenKind::Ident(name) => {
-                let name = name.clone();
-                self.at += 1;
-                Ok(name)
-            }
-            _ => Err(self.error(token.span, "expected field name")),
-        }
-    }
-
-    fn expect_punct(&mut self, punct: Punct, message: &str) -> Result<(), Error> {
-        let token = &self.tokens[self.at];
-        if token.kind == TokenKind::Punct(punct) {
-            self.at += 1;
-            Ok(())
-        } else {
-            Err(self.error(token.span, message))
-        }
+        self.ident("expected field name")
     }
 
     fn located(&self, kind: ExprKind, span: Span) -> Expr {
         let (line, column) = span.line_col(self.source);
         Expr::new(kind, Position { line, column })
-    }
-
-    fn error(&self, span: Span, message: &str) -> Error {
-        let (line, column) = span.line_col(self.source);
-        Error {
-            message: message.to_owned(),
-            line,
-            column,
-        }
     }
 }
 

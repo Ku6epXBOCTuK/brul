@@ -10,11 +10,18 @@ pub struct Error {
 
 impl Error {
     pub fn at(source: &str, pos: usize, message: impl Into<String>) -> Self {
-        let (line, column) = Span {
-            start: pos,
-            end: pos,
-        }
-        .line_col(source);
+        Self::at_span(
+            source,
+            Span {
+                start: pos,
+                end: pos,
+            },
+            message,
+        )
+    }
+
+    pub fn at_span(source: &str, span: Span, message: impl Into<String>) -> Self {
+        let (line, column) = span.line_col(source);
         Self {
             message: message.into(),
             line,
