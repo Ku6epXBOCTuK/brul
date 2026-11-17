@@ -26,6 +26,13 @@ impl Value {
         }
     }
 
+    fn as_number(&self) -> Option<f64> {
+        match self {
+            Value::Number(number) => Some(*number),
+            _ => None,
+        }
+    }
+
     pub fn as_image(&self) -> Option<&str> {
         match self {
             Value::Image(path) => Some(path.as_ref()),
@@ -48,14 +55,12 @@ impl Value {
     }
 
     pub fn as_pixels(&self) -> Option<i32> {
-        match self {
-            Value::Number(value) if value.is_finite() => {
-                let pixels = value.round();
-                (pixels >= f64::from(i32::MIN) && pixels <= f64::from(i32::MAX))
-                    .then_some(pixels as i32)
-            }
-            _ => None,
+        let number = self.as_number()?;
+        if !number.is_finite() {
+            return None;
         }
+        let pixels = number.round();
+        (pixels >= f64::from(i32::MIN) && pixels <= f64::from(i32::MAX)).then_some(pixels as i32)
     }
 }
 
@@ -87,10 +92,9 @@ impl<'a> TryFrom<&'a Value> for &'a str {
     type Error = Error;
 
     fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::String(text) => Ok(text),
-            other => Err(Error::conversion("String", other)),
-        }
+        value
+            .as_text()
+            .ok_or_else(|| Error::conversion("String", value))
     }
 }
 
@@ -98,10 +102,10 @@ impl TryFrom<&Value> for String {
     type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::String(text) => Ok(text.to_string()),
-            other => Err(Error::conversion("String", other)),
-        }
+        value
+            .as_text()
+            .map(str::to_owned)
+            .ok_or_else(|| Error::conversion("String", value))
     }
 }
 
@@ -109,10 +113,9 @@ impl TryFrom<&Value> for f64 {
     type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::Number(number) => Ok(*number),
-            other => Err(Error::conversion("Number", other)),
-        }
+        value
+            .as_number()
+            .ok_or_else(|| Error::conversion("Number", value))
     }
 }
 
@@ -120,10 +123,9 @@ impl TryFrom<&Value> for bool {
     type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::Bool(flag) => Ok(*flag),
-            other => Err(Error::conversion("Bool", other)),
-        }
+        value
+            .as_flag()
+            .ok_or_else(|| Error::conversion("Bool", value))
     }
 }
 
@@ -131,9 +133,9 @@ impl TryFrom<&Value> for usize {
     type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::Number(number) if number.fract() == 0.0 && *number >= 0.0 => Ok(*number as Self),
-            other => Err(Error::conversion("a non-negative integer", other)),
+        match value.as_number() {
+            Some(number) if number.fract() == 0.0 && number >= 0.0 => Ok(number as Self),
+            _ => Err(Error::conversion("a non-negative integer", value)),
         }
     }
 }
@@ -223,5 +225,29 @@ mod tests {
         ] {
             assert_eq!(value.as_pixels(), None, "{value:?}");
         }
+    }
+
+    #[test]
+    fn try_from_uses_the_same_conversions_as_the_accessors() {
+        let text = Value::String("a".into());
+        assert_eq!(<&str>::try_from(&text), Ok("a"));
+        assert_eq!(String::try_from(&text), Ok("a".to_owned()));
+
+        let flag = Value::Bool(true);
+        assert_eq!(bool::try_from(&flag), Ok(true));
+
+        let number = Value::Number(2.0);
+        assert_eq!(f64::try_from(&number), Ok(2.0));
+        assert_eq!(usize::try_from(&number), Ok(2));
+        assert_eq!(number.as_pixels(), Some(2));
+
+        for value in [Value::Null, Value::Number(1.5), Value::Bool(true)] {
+            assert!(<&str>::try_from(&value).is_err(), "{value:?}");
+        }
+        for value in [Value::Null, Value::String("1".into()), Value::Number(1.5)] {
+            assert!(bool::try_from(&value).is_err(), "{value:?}");
+        }
+        assert!(usize::try_from(&Value::Number(-1.0)).is_err());
+        assert!(usize::try_from(&Value::Number(1.5)).is_err());
     }
 }
