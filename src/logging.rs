@@ -153,13 +153,10 @@ mod tests {
     fn the_log_lives_in_the_engine_directory() {
         let home = PathBuf::from("C:\\Users\\tester");
         assert_eq!(
-            log_path_for(Some(home.clone()), "bropicker"),
-            home.join(".config").join("brul").join("bropicker.log")
+            log_path_for(Some(home.clone()), "sample"),
+            home.join(".config").join("brul").join("sample.log")
         );
-        assert_eq!(
-            log_path_for(None, "bropicker"),
-            PathBuf::from("bropicker.log")
-        );
+        assert_eq!(log_path_for(None, "sample"), PathBuf::from("sample.log"));
     }
 
     #[test]

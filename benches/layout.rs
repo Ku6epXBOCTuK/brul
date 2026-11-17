@@ -83,7 +83,7 @@ fn action(width: u32) -> LayoutNode {
     LayoutNode::row(vec![LayoutNode::leaf(60, 18)]).with_style(style)
 }
 
-fn note_obs() -> LayoutNode {
+fn window() -> LayoutNode {
     let root = LayoutStyle {
         width: Dimension::Percent(100.0),
         height: Dimension::Percent(100.0),
@@ -213,17 +213,17 @@ fn report_footprint(name: &str, tree: &LayoutNode) {
 }
 
 fn measure(criterion: &mut Criterion) {
-    let note_obs = note_obs();
+    let window = window();
     let synthetic = synthetic(25, 19);
 
-    report_footprint("note-obs", &note_obs);
+    report_footprint("window", &window);
     report_footprint("synthetic-500", &synthetic);
 
     let mut group = criterion.benchmark_group("layout");
 
-    group.throughput(Throughput::Elements(nodes(&note_obs) as u64));
-    group.bench_function("note-obs", |bencher| {
-        bencher.iter(|| layout(black_box(&note_obs), VIEWPORT).expect("note-obs tree is valid"));
+    group.throughput(Throughput::Elements(nodes(&window) as u64));
+    group.bench_function("window", |bencher| {
+        bencher.iter(|| layout(black_box(&window), VIEWPORT).expect("tree is valid"));
     });
 
     group.throughput(Throughput::Elements(nodes(&synthetic) as u64));

@@ -916,7 +916,7 @@ window Demo (title: "demo", width: 488, height: 800, frameless: true, transparen
 #[test]
 fn emits_every_window_with_its_flags() {
     let source = r#"<markup>
-window Picker (title: "bropicker", width: 488, height: 800, frameless: true, transparent: true) {
+window Picker (title: "picker", width: 488, height: 800, frameless: true, transparent: true) {
     View { }
 }
 

@@ -80,12 +80,12 @@ Text (badge-text) { "По умолчанию" }
 оконная система.
 
 ```brul
-window Picker (title: "bropicker", width: 488, height: 800,
+window Picker (title: "picker", width: 488, height: 800,
                frameless: true, transparent: true) {
     // ...
 }
 
-window Note (title: "nobs", width: 520, height: 480, centered: true) {
+window Note (title: "note", width: 520, height: 480, centered: true) {
     // ...
 }
 ```
@@ -400,7 +400,7 @@ window Demo (title: "demo") {
 - Свои виджеты на Rust как элементы разметки.
 - Вызов функций компонента из выражений разметки.
 
-## Тест-примеры (покрывают грамматику; bropicker, упрощённо)
+## Тест-примеры (покрывают грамматику; сцены упрощены)
 
 ### 1. CheckRow (чекбокс-строка)
 
@@ -479,7 +479,7 @@ component BrowserItem {
 }
 ```
 
-### 3. Header (шапка пикера)
+### 3. Header (шапка)
 
 ```brul
 component Header {
@@ -505,10 +505,10 @@ component Header {
 }
 ```
 
-### 4. Окно пикера (сборка)
+### 4. Окно (сборка)
 
 ```brul
-window Picker (title: "bropicker", width: 488, height: 800,
+window Picker (title: "picker", width: 488, height: 800,
                frameless: true, transparent: true, on key: handleKey) {
     Column (root) {
         Header (url: currentUrl) { }

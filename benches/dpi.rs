@@ -12,16 +12,16 @@ const SCALES: &[(&str, f32)] = &[
 
 #[allow(clippy::non_ascii_literal)]
 const STRINGS: &[&str] = &[
-    "nobs",
+    "sample",
     "Отправить",
     "Пресеты",
     "AFK: нет активности",
     "Скопировано в OBS",
-    "bropicker",
+    "picker",
     "Папки проекта",
     "Выбрать",
     "Настройки",
-    "xboct-panel",
+    "panel",
     "Службы остановлены",
     "Перезапустить",
     "Sublime Text",

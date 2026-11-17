@@ -385,7 +385,7 @@ override Button {
 .text-main:hover { font-weight: 600; }
 ```
 
-### 3. Темы (фрагмент bropicker)
+### 3. Темы (фрагмент)
 
 ```css
 theme light {
