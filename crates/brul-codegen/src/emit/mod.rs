@@ -53,6 +53,54 @@ pub(super) struct Emit<'a> {
     slots: bool,
 }
 
+struct EmitSources<'a> {
+    registry: &'a Registry,
+    imports: &'a [Import],
+    resources: &'a [Resource],
+    stylesheet: &'a Stylesheet,
+    names: &'a Names<'a>,
+    program: Option<&'a Program>,
+    base: &'a str,
+    resource_prefix: &'a str,
+}
+
+struct EmitOutputs<'a> {
+    functions: &'a mut Vec<String>,
+    bases: &'a [String],
+    structures: &'a mut StructureNames,
+    dynamic_classes: &'a mut bool,
+    classes: &'a mut classes::ClassNames,
+}
+
+impl<'a> Emit<'a> {
+    fn window(sources: EmitSources<'a>, outputs: EmitOutputs<'a>) -> Self {
+        Self::new(sources, outputs, false)
+    }
+
+    fn component(sources: EmitSources<'a>, outputs: EmitOutputs<'a>) -> Self {
+        Self::new(sources, outputs, true)
+    }
+
+    fn new(sources: EmitSources<'a>, outputs: EmitOutputs<'a>, slots: bool) -> Self {
+        Self {
+            registry: sources.registry,
+            imports: sources.imports,
+            resources: sources.resources,
+            base: sources.base,
+            resource_prefix: sources.resource_prefix,
+            stylesheet: sources.stylesheet,
+            names: sources.names,
+            program: sources.program,
+            functions: outputs.functions,
+            bases: outputs.bases,
+            structures: outputs.structures,
+            dynamic_classes: outputs.dynamic_classes,
+            classes: outputs.classes,
+            slots,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct Frame<'a> {
     theme: Option<&'a str>,

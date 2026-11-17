@@ -12,6 +12,8 @@ use crate::error_at;
 use crate::kit;
 
 use super::Emit;
+use super::EmitOutputs;
+use super::EmitSources;
 use super::Out;
 use super::StructureNames;
 use super::classes::ClassNames;
@@ -107,28 +109,28 @@ fn module_at(
             &format!("{}_view", window_bases[index]),
             root,
             &window_handlers,
-            &mut Emit {
-                registry: &registry,
-                imports: &registry.imports,
-                resources: &registry.resources,
-                base: &window_bases[index],
-                resource_prefix: "",
-                stylesheet: &parsed.stylesheet,
-                names: &names,
-                program: parsed.program.as_ref(),
-                functions: &mut functions,
-                bases: &component_bases,
-                structures: &mut structures,
-                dynamic_classes: &mut dynamic_classes,
-                classes: &mut class_names,
-                slots: false,
-            },
+            &mut Emit::window(
+                EmitSources {
+                    registry: &registry,
+                    imports: &registry.imports,
+                    resources: &registry.resources,
+                    stylesheet: &parsed.stylesheet,
+                    names: &names,
+                    program: parsed.program.as_ref(),
+                    base: &window_bases[index],
+                    resource_prefix: "",
+                },
+                EmitOutputs {
+                    functions: &mut functions,
+                    bases: &component_bases,
+                    structures: &mut structures,
+                    dynamic_classes: &mut dynamic_classes,
+                    classes: &mut class_names,
+                },
+            ),
             true,
         )?;
-        for function in &functions {
-            head_functions.push('\n');
-            head_functions.push_str(function);
-        }
+        append_functions(&mut head_functions, &functions);
         configs.push(config);
     }
     theme::id(&mut head, &parsed.stylesheet)?;
@@ -163,22 +165,25 @@ fn module_at(
             &format!("{prefix}view"),
             root,
             &[],
-            &mut Emit {
-                registry: &registry,
-                imports: &definition.imports,
-                resources: &definition.resources,
-                base,
-                resource_prefix: &prefix,
-                stylesheet: &definition.stylesheet,
-                names: &names,
-                program: definition.program.as_ref(),
-                functions: &mut functions,
-                bases: &component_bases,
-                structures: &mut structures,
-                dynamic_classes: &mut dynamic_classes,
-                classes: &mut class_names,
-                slots: true,
-            },
+            &mut Emit::component(
+                EmitSources {
+                    registry: &registry,
+                    imports: &definition.imports,
+                    resources: &definition.resources,
+                    stylesheet: &definition.stylesheet,
+                    names: &names,
+                    program: definition.program.as_ref(),
+                    base,
+                    resource_prefix: &prefix,
+                },
+                EmitOutputs {
+                    functions: &mut functions,
+                    bases: &component_bases,
+                    structures: &mut structures,
+                    dynamic_classes: &mut dynamic_classes,
+                    classes: &mut class_names,
+                },
+            ),
             false,
         )?;
         if dynamic_classes {
@@ -199,18 +204,9 @@ fn module_at(
         ));
         body.push_str(&resources::functions(&prefix, &definition.resources));
         let mut functions_block = String::new();
-        for function in &functions {
-            functions_block.push('\n');
-            functions_block.push_str(function);
-            component_functions.push('\n');
-            component_functions.push_str(function);
-        }
-        if let Some(script) = &definition.script {
-            scripts.push(GeneratedFile {
-                name: script_file,
-                source: script.text.clone(),
-            });
-        }
+        append_functions(&mut functions_block, &functions);
+        append_functions(&mut component_functions, &functions);
+        push_script(&mut scripts, script_file, definition.script.as_ref());
         let mut file = String::from("use super::*;\n");
         file.push_str(&body);
         file.push_str(&functions_block);
@@ -249,12 +245,7 @@ fn module_at(
     flat.push('\n');
     flat.push_str(&tail);
 
-    if let Some(script) = &parsed.script {
-        scripts.push(GeneratedFile {
-            name: ROOT_SCRIPT.to_owned(),
-            source: script.text.clone(),
-        });
-    }
+    push_script(&mut scripts, ROOT_SCRIPT.to_owned(), parsed.script.as_ref());
 
     Ok(Module {
         root,
@@ -263,6 +254,26 @@ fn module_at(
         sources: module_sources(&registry, entry),
         flat,
     })
+}
+
+fn append_functions(out: &mut String, functions: &[String]) {
+    for function in functions {
+        out.push('\n');
+        out.push_str(function);
+    }
+}
+
+fn push_script(
+    scripts: &mut Vec<GeneratedFile>,
+    name: String,
+    script: Option<&crate::source::Script>,
+) {
+    if let Some(script) = script {
+        scripts.push(GeneratedFile {
+            name,
+            source: script.text.clone(),
+        });
+    }
 }
 
 fn module_sources(registry: &crate::Registry, entry: Option<&Path>) -> Vec<PathBuf> {
