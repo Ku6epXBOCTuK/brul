@@ -100,10 +100,6 @@ pub(super) fn measure_text(
         _ => return Ok(Size::default()),
     };
 
-    let mut styles = styles.clone();
-    if let Some(class) = &node.class {
-        styles.apply_layers(&class.text);
-    }
     let max_width = width.map(|width| width as f32 / scale);
     let cached = texts.get(&node.id).filter(|cached| {
         cached.width == width
@@ -112,6 +108,10 @@ pub(super) fn measure_text(
             && cached.preedit_text == preedit
     });
     if cached.is_none() {
+        let mut styles = styles.clone();
+        if let Some(class) = &node.class {
+            styles.apply_layers(&class.text);
+        }
         let mut variants =
             TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
         for state in StyleState::ALL {
