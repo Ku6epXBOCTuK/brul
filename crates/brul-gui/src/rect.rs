@@ -54,7 +54,7 @@ impl Rect {
             return RectSample::Outside;
         }
 
-        let distance = self.distance(x as f32 + 0.5, y as f32 + 0.5);
+        let distance = self.distance(x, y);
         if distance > 0.0 {
             RectSample::Outside
         } else if self.border_width > 0 && distance > -(self.border_width as f32) {
@@ -64,14 +64,8 @@ impl Rect {
         }
     }
 
-    fn distance(&self, x: f32, y: f32) -> f32 {
-        rounded_distance(
-            x - self.x as f32,
-            y - self.y as f32,
-            self.width,
-            self.height,
-            self.radius,
-        )
+    fn distance(&self, x: i32, y: i32) -> f32 {
+        rounded_distance(x, y, self.x, self.y, self.width, self.height, self.radius)
     }
 }
 
@@ -89,8 +83,10 @@ impl Shadow {
             return 0.0;
         }
         let distance = rounded_distance(
-            x as f32 + 0.5 - rect.x.saturating_add(self.x) as f32,
-            y as f32 + 0.5 - rect.y.saturating_add(self.y) as f32,
+            x,
+            y,
+            rect.x.saturating_add(self.x),
+            rect.y.saturating_add(self.y),
             rect.width,
             rect.height,
             rect.radius,
@@ -127,18 +123,35 @@ impl ClipRect {
         if self.width == 0 || self.height == 0 {
             return false;
         }
-        rounded_distance(
-            x as f32 + 0.5 - self.x as f32,
-            y as f32 + 0.5 - self.y as f32,
-            self.width,
-            self.height,
-            self.radius,
-        ) <= 0.0
+        rounded_distance(x, y, self.x, self.y, self.width, self.height, self.radius) <= 0.0
     }
 }
 
-fn rounded_distance(x: f32, y: f32, width: u32, height: u32, radius: u32) -> f32 {
-    let radius = radius.min(width.min(height) / 2) as f32;
+fn rounded_distance(
+    x: i32,
+    y: i32,
+    left: i32,
+    top: i32,
+    width: u32,
+    height: u32,
+    radius: u32,
+) -> f32 {
+    let radius = radius.min(width.min(height) / 2);
+    if radius == 0 {
+        let dx = (i64::from(x) - i64::from(left)) * 2 + 1;
+        let dy = (i64::from(y) - i64::from(top)) * 2 + 1;
+        let qx = (dx - i64::from(width)).abs() - i64::from(width);
+        let qy = (dy - i64::from(height)).abs() - i64::from(height);
+        return if qx > 0 && qy > 0 {
+            ((qx as f32) * (qx as f32) + (qy as f32) * (qy as f32)).sqrt() / 2.0
+        } else {
+            qx.max(qy) as f32 / 2.0
+        };
+    }
+
+    let x = (i64::from(x) - i64::from(left)) as f32 + 0.5;
+    let y = (i64::from(y) - i64::from(top)) as f32 + 0.5;
+    let radius = radius as f32;
     let half_width = width as f32 / 2.0;
     let half_height = height as f32 / 2.0;
 
@@ -148,4 +161,26 @@ fn rounded_distance(x: f32, y: f32, width: u32, height: u32, radius: u32) -> f32
     let inside = qx.max(qy).min(0.0);
 
     outside + inside - radius
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_radius_distance_uses_axis_aligned_geometry() {
+        let rect = Rect::new(0, 0, 10, 10);
+        assert_eq!(rect.distance(5, 5), -4.5);
+        assert_eq!(rect.distance(0, 5), -0.5);
+        assert_eq!(rect.distance(-1, 5), 0.5);
+        let corner = rect.distance(-1, -1);
+        assert!((corner - 2.0_f32.sqrt() / 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn clamped_zero_radius_uses_the_same_path() {
+        let thin = Rect::new(0, 0, 1, 10).with_radius(8);
+        assert_eq!(thin.distance(0, 5), -0.5);
+        assert_eq!(thin.distance(-1, 5), 0.5);
+    }
 }
