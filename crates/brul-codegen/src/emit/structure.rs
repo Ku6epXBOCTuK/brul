@@ -217,7 +217,7 @@ fn each_arm(
                 each_body(out, else_block, emit, arm)?;
                 out.line(format_args!("rows.push(brul::RowInfo {{"));
                 out.indented(|out| {
-                    out.line(format_args!("key: None,"));
+                    out.line(format_args!("key: brul::RowKey::Index(0),"));
                     out.line(format_args!(
                         "item: brul::Value::Array(std::rc::Rc::new(Vec::new())),"
                     ));
@@ -250,13 +250,13 @@ fn each_arm(
             out.line(format_args!("]);"));
             match &block.key {
                 Some(_) => out.line(format_args!(
-                    "let key = {name}_key(&mut component.borrow_mut()).ok();"
+                    "let key = {name}_key(&mut component.borrow_mut()).map(brul::RowKey::Explicit).unwrap_or(brul::RowKey::Index(position));"
                 )),
-                None => out.line(format_args!("let key = None;")),
+                None => out.line(format_args!("let key = brul::RowKey::Index(position);")),
             }
             out.line(format_args!("let start = children.len();"));
             out.line(format_args!(
-                "if let Some(other) = matcher.take(key.as_ref(), &item, position) {{"
+                "if let Some(other) = matcher.take(&key, &item, position) {{"
             ));
             out.indented(|out| {
                 out.line(format_args!(

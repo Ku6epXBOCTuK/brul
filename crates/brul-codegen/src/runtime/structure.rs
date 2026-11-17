@@ -27,9 +27,15 @@ pub struct Structure {
     pub rebuild: StructureRebuild,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum RowKey {
+    Explicit(Value),
+    Index(usize),
+}
+
 #[derive(Debug, Clone)]
 pub struct RowInfo {
-    pub key: Option<Value>,
+    pub key: RowKey,
     pub item: Value,
     pub start: usize,
     pub count: usize,

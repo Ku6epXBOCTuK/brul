@@ -265,7 +265,10 @@ fn structure_rebuild_rebuilds_rows() {
     let (rebuilt, rows) = (each.rebuild)(None, &mut build, &component, &[]).expect("rebuild");
     let rebuilt_structures = build.take_structures();
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].key, Some(Value::String("first".into())));
+    assert_eq!(
+        rows[0].key,
+        brul::RowKey::Explicit(Value::String("first".into()))
+    );
     assert_eq!(rows[0].count, 1);
     assert_nested_values(&rebuilt_structures);
     assert_eq!(rebuilt.widget.into_children().len(), 2);

@@ -734,9 +734,11 @@ window Demo (title: "demo") {
     assert!(module.contains(
         r#"brul::Variable { name: brul::VariableId::from_index(2), value: brul::Value::Number(position as f64) },"#
     ));
-    assert!(module.contains("let key = demo_each1_key(&mut component.borrow_mut()).ok();"));
+    assert!(module.contains(
+        "let key = demo_each1_key(&mut component.borrow_mut()).map(brul::RowKey::Explicit).unwrap_or(brul::RowKey::Index(position));"
+    ));
     assert!(module.contains("let mut matcher = brul::RowMatcher::new(old_rows);"));
-    assert!(module.contains("if let Some(other) = matcher.take(key.as_ref(), &item, position) {"));
+    assert!(module.contains("if let Some(other) = matcher.take(&key, &item, position) {"));
     assert!(module.contains("rows.push(brul::RowInfo { key, item, start, count, reuse: None });"));
     assert!(module.contains(
         "brul::register_structure(build, component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);"
@@ -768,7 +770,7 @@ window Demo (title: "demo") {
     );
     assert!(
         module.contains(
-            "        rows.push(brul::RowInfo {\n            key: None,\n            item: brul::Value::Array(std::rc::Rc::new(Vec::new())),\n            start: 0,\n            count: children.len(),\n            reuse: None,\n        });"
+            "        rows.push(brul::RowInfo {\n            key: brul::RowKey::Index(0),\n            item: brul::Value::Array(std::rc::Rc::new(Vec::new())),\n            start: 0,\n            count: children.len(),\n            reuse: None,\n        });"
         ),
         "{module}"
     );

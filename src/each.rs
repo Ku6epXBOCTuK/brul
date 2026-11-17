@@ -4,7 +4,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use brul_gui::{Widget, WidgetId, WidgetTree};
 use brul_script::Value;
 
-use crate::RowInfo;
+use crate::{RowInfo, RowKey};
 
 pub(crate) fn reconcile_each(
     tree: &mut WidgetTree,
@@ -49,11 +49,8 @@ impl<'a> RowMatcher<'a> {
     pub fn new(old: &'a [RowInfo]) -> Self {
         let mut keyed: HashMap<u64, Vec<usize>> = HashMap::new();
         for (index, row) in old.iter().enumerate() {
-            if let Some(key) = &row.key {
-                keyed
-                    .entry(fingerprint(key, &row.item))
-                    .or_default()
-                    .push(index);
+            if let RowKey::Explicit(key) = &row.key {
+                keyed.entry(fingerprint(key)).or_default().push(index);
             }
         }
         Self {
@@ -63,13 +60,13 @@ impl<'a> RowMatcher<'a> {
         }
     }
 
-    pub fn take(&mut self, key: Option<&Value>, item: &Value, index: usize) -> Option<usize> {
-        let Some(key) = key else {
+    pub fn take(&mut self, key: &RowKey, item: &Value, index: usize) -> Option<usize> {
+        let RowKey::Explicit(key) = key else {
             let same_place = !self.taken.get(index).copied().unwrap_or(true)
                 && self
                     .old
                     .get(index)
-                    .is_some_and(|old| old.key.is_none() && old.item == *item);
+                    .is_some_and(|old| matches!(old.key, RowKey::Index(_)) && old.item == *item);
             return same_place.then(|| {
                 self.taken[index] = true;
                 index
@@ -78,12 +75,12 @@ impl<'a> RowMatcher<'a> {
 
         let at = self
             .keyed
-            .get(&fingerprint(key, item))?
+            .get(&fingerprint(key))?
             .iter()
             .copied()
             .find(|&at| {
                 !self.taken[at]
-                    && self.old[at].key.as_ref() == Some(key)
+                    && matches!(&self.old[at].key, RowKey::Explicit(old) if old == key)
                     && self.old[at].item == *item
             })?;
         self.taken[at] = true;
@@ -91,10 +88,9 @@ impl<'a> RowMatcher<'a> {
     }
 }
 
-fn fingerprint(key: &Value, item: &Value) -> u64 {
+fn fingerprint(key: &Value) -> u64 {
     let mut hasher = DefaultHasher::new();
     hash_value(key, &mut hasher);
-    hash_value(item, &mut hasher);
     hasher.finish()
 }
 
@@ -131,7 +127,7 @@ mod tests {
 
     fn row(key: Option<Value>, item: &str, count: usize) -> RowInfo {
         RowInfo {
-            key,
+            key: key.map_or(RowKey::Index(0), RowKey::Explicit),
             item: Value::String(item.into()),
             start: 0,
             count,
@@ -144,7 +140,7 @@ mod tests {
         new.into_iter()
             .enumerate()
             .map(|(index, row)| RowInfo {
-                reuse: matcher.take(row.key.as_ref(), &row.item, index),
+                reuse: matcher.take(&row.key, &row.item, index),
                 ..row
             })
             .collect()
@@ -174,7 +170,7 @@ mod tests {
         let new_rows = matched(
             &old_rows,
             vec![RowInfo {
-                key: None,
+                key: RowKey::Index(0),
                 item: Value::Array(std::rc::Rc::new(Vec::new())),
                 start: 0,
                 count: 1,
@@ -297,7 +293,7 @@ mod tests {
         let parent = root.id();
         let mut tree = WidgetTree::new(root);
         let row = |key: f64, item: &str, start: usize| RowInfo {
-            key: Some(Value::Number(key)),
+            key: RowKey::Explicit(Value::Number(key)),
             item: Value::String(item.into()),
             start,
             count: 1,
@@ -319,11 +315,8 @@ mod tests {
     fn a_matcher_gives_a_keyed_row_the_same_place_after_a_move() {
         let old = [row(Some(Value::Number(1.0)), "a", 0)];
         let mut matcher = RowMatcher::new(&old);
-        let key = Some(Value::Number(1.0));
-        assert_eq!(
-            matcher.take(key.as_ref(), &Value::String("a".into()), 3),
-            Some(0)
-        );
+        let key = RowKey::Explicit(Value::Number(1.0));
+        assert_eq!(matcher.take(&key, &Value::String("a".into()), 3), Some(0));
     }
 
     #[test]
@@ -333,34 +326,34 @@ mod tests {
             row(Some(Value::Number(2.0)), "b", 1),
         ];
         let mut matcher = RowMatcher::new(&old);
-        let key = Some(Value::Number(2.0));
-        assert_eq!(
-            matcher.take(key.as_ref(), &Value::String("b".into()), 0),
-            Some(1)
-        );
-        assert_eq!(
-            matcher.take(key.as_ref(), &Value::String("b".into()), 1),
-            None
-        );
+        let key = RowKey::Explicit(Value::Number(2.0));
+        assert_eq!(matcher.take(&key, &Value::String("b".into()), 0), Some(1));
+        assert_eq!(matcher.take(&key, &Value::String("b".into()), 1), None);
     }
 
     #[test]
     fn a_matcher_needs_both_the_key_and_the_item_to_match() {
         let old = [row(Some(Value::Number(1.0)), "a", 0)];
         let mut matcher = RowMatcher::new(&old);
-        let key = Some(Value::Number(1.0));
-        assert_eq!(
-            matcher.take(key.as_ref(), &Value::String("b".into()), 0),
-            None
-        );
+        let key = RowKey::Explicit(Value::Number(1.0));
+        assert_eq!(matcher.take(&key, &Value::String("b".into()), 0), None);
     }
 
     #[test]
     fn a_matcher_keeps_unkeyed_rows_in_place() {
         let old = [row(None, "a", 0), row(None, "b", 1)];
         let mut matcher = RowMatcher::new(&old);
-        assert_eq!(matcher.take(None, &Value::String("b".into()), 1), Some(1));
-        assert_eq!(matcher.take(None, &Value::String("a".into()), 0), Some(0));
-        assert_eq!(matcher.take(None, &Value::String("a".into()), 0), None);
+        assert_eq!(
+            matcher.take(&RowKey::Index(1), &Value::String("b".into()), 1),
+            Some(1)
+        );
+        assert_eq!(
+            matcher.take(&RowKey::Index(0), &Value::String("a".into()), 0),
+            Some(0)
+        );
+        assert_eq!(
+            matcher.take(&RowKey::Index(0), &Value::String("a".into()), 0),
+            None
+        );
     }
 }

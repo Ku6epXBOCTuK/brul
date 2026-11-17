@@ -109,7 +109,7 @@ fn apply_row(c: &mut Criterion) {
 fn row_rows(count: usize) -> Vec<brul::RowInfo> {
     (0..count)
         .map(|at| brul::RowInfo {
-            key: Some(Value::Number(at as f64)),
+            key: brul::RowKey::Explicit(Value::Number(at as f64)),
             item: item(),
             start: at,
             count: 1,
@@ -123,12 +123,14 @@ fn row_match(c: &mut Criterion) {
     let item = item();
     for count in [100, 1000] {
         let old = row_rows(count);
-        let keys: Vec<Value> = (0..count).map(|at| Value::Number(at as f64)).collect();
+        let keys: Vec<brul::RowKey> = (0..count)
+            .map(|at| brul::RowKey::Explicit(Value::Number(at as f64)))
+            .collect();
         group.bench_function(format!("keyed_{count}"), |b| {
             b.iter(|| {
                 let mut matcher = brul::RowMatcher::new(&old);
                 for (at, key) in keys.iter().enumerate() {
-                    black_box(matcher.take(Some(key), &item, at));
+                    black_box(matcher.take(key, &item, at));
                 }
             });
         });
