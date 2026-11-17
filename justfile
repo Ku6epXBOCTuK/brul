@@ -5,18 +5,6 @@ target_dir := trim(`cargo metadata --format-version 1 --no-deps | ConvertFrom-Js
 generate-rules:
     cargo run -p brul-syntax --bin rules
 
-build-panel:
-    cargo build --release -p xboct-panel
-
-install-panel: build-panel
-    New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
-    Get-Process -Name 'xboct-panel' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 400
-    Copy-Item -Force "{{target_dir}}\release\xboct-panel.exe" "$HOME\bin\xboct-panel.exe"
-    Write-Output "installed: $HOME\bin\xboct-panel.exe"
-
-run-panel: install-panel
-    Start-Process -FilePath "$HOME\bin\xboct-panel.exe"
-
 check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings

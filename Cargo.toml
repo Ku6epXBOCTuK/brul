@@ -41,7 +41,7 @@ harness = false
 
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/*", "examples/*"]
+members = ["crates/*", "examples/*"]
 
 [workspace.lints.clippy]
 non_ascii_literal = "deny"
