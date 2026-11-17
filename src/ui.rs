@@ -17,6 +17,19 @@ use crate::{
 
 const EVENT_DEPTH: usize = 64;
 
+const BUILTINS: &[&str] = &[
+    "theme",
+    "set_theme",
+    "setAlwaysOnTop",
+    "openWindow",
+    "exit",
+    "closeWindow",
+    "dragWindow",
+    "showWindow",
+    "hideWindow",
+    "focusWindow",
+];
+
 pub struct Ui<T: Theme> {
     pub component: ComponentHandle,
     pub tree: Rc<RefCell<WidgetTree>>,
@@ -131,6 +144,14 @@ impl Host for CommandHost {
             Some(host) => host.every(interval_ms, function),
             None => Err(Error::Unsupported("every")),
         }
+    }
+
+    fn commands(&self) -> Vec<&'static str> {
+        let mut names = BUILTINS.to_vec();
+        if let Some(app) = &self.app {
+            names.extend(app.commands());
+        }
+        names
     }
 }
 
@@ -1042,6 +1063,18 @@ mod tests {
             Ok(Value::Null)
         );
         assert_eq!(*commands.borrow(), vec![WindowCommand::AlwaysOnTop(true)]);
+    }
+
+    #[test]
+    fn every_builtin_is_listed_by_name() {
+        let (mut host, _) = command_host(None);
+        assert_eq!(host.commands(), BUILTINS.to_vec());
+        for name in BUILTINS {
+            assert!(
+                !matches!(host.call(name, &[]), Err(Error::UnknownFunction(_))),
+                "{name} is dispatched but not listed"
+            );
+        }
     }
 
     #[test]

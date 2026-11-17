@@ -122,6 +122,21 @@ fn a_missing_field_names_the_field() {
 }
 
 #[test]
+fn the_generated_host_lists_its_commands() {
+    assert_eq!(TestHost { calls: 0 }.commands(), vec!["act"]);
+}
+
+#[test]
+fn a_script_call_to_the_command_resolves() {
+    let program =
+        brul::script::parse("let outcome = act(\"hide\", { name: \"garden\", port: 1 });")
+            .expect("script");
+
+    brul::script::validate(&program, &TestHost { calls: 0 }.commands())
+        .expect("the command is known");
+}
+
+#[test]
 fn a_short_argument_list_is_an_arity_error() {
     assert_eq!(
         call(&arguments(Value::from("hide"), None)[..2]),

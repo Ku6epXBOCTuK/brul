@@ -168,6 +168,13 @@ impl Component {
         self.functions.iter().any(|function| function.name == name)
     }
 
+    pub fn commands(&self) -> Vec<&'static str> {
+        match &self.host {
+            Some(host) => host.commands(),
+            None => Vec::new(),
+        }
+    }
+
     pub fn call_function(&mut self, name: &str, arguments: Vec<Value>) -> Result<Value, Error> {
         let Some(found) = self.functions.iter().find(|function| function.name == name) else {
             return Err(Error::UnknownFunction(name.to_owned()));

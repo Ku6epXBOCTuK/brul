@@ -2,7 +2,7 @@ use crate::ast::{Expr, ExprKind, Position, TemplatePart};
 use crate::error::Error;
 use crate::script::ast::{Program, Statement};
 
-const BUILTINS: [&str; 6] = ["String", "Number", "len", "set_theme", "exit", "every"];
+const BUILTINS: [&str; 4] = ["String", "Number", "len", "every"];
 
 pub fn validate(program: &Program, external: &[&str]) -> Result<(), Error> {
     let functions: Vec<&str> = program

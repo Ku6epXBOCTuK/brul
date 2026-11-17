@@ -34,7 +34,7 @@ fn names_from_every_source_resolve() {
            exit();\n\
          }\n\
          every(3000, refresh);\n",
-        &["loadBrowsers", "openWith", "reloadServices"],
+        &["loadBrowsers", "openWith", "reloadServices", "exit"],
     );
 }
 

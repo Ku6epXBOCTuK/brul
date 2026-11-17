@@ -184,6 +184,10 @@ impl Commands {
                         ),
                     }
                 }
+
+                fn commands(&self) -> ::std::vec::Vec<&'static str> {
+                    ::std::vec![#(#names),*]
+                }
             }
         }
     }

@@ -69,6 +69,9 @@ pub fn run_generated_with<T: Theme>(
         theme: Rc::clone(&shown),
     });
     let pending = std::mem::take(&mut *commands.borrow_mut());
+    if let Some(program) = script {
+        check(&component.borrow(), program)?;
+    }
     let runtime = Rc::new(RefCell::new(Runtime::new(
         windows, component, commands, theme, shown, pending,
     )));
@@ -96,6 +99,16 @@ pub fn run_generated_with<T: Theme>(
             }
         },
     )?;
+    Ok(())
+}
+
+fn check(
+    component: &Component,
+    program: &script::Program,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut external = component.commands();
+    external.extend_from_slice(component.names());
+    script::validate(program, &external)?;
     Ok(())
 }
 
@@ -820,6 +833,38 @@ mod tests {
 
         assert_eq!(commands, vec![WindowCommand::Close]);
         assert!(runtime.uis.contains_key(&WindowKey(0)));
+    }
+
+    fn checked(source: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let component = generated_component(NAMES, None, &[]).expect("component");
+        component.borrow_mut().set_host(CommandHost {
+            commands: Rc::new(RefCell::new(Vec::new())),
+            app: None,
+            windows: Rc::new(HashMap::new()),
+            theme: Rc::new(RefCell::new(None)),
+        });
+        let program = script::parse(source).expect("script");
+        check(&component.borrow(), &program)
+    }
+
+    #[test]
+    fn an_unknown_command_is_caught_before_the_loop() {
+        let error = checked("trayShow();").expect_err("the typo passes");
+
+        assert!(error.to_string().contains("trayShow"), "{error}");
+    }
+
+    #[test]
+    fn builtins_script_functions_and_seeds_pass_the_check() {
+        checked(
+            "function refresh() {\n\
+               name = \"live\";\n\
+             }\n\
+             let current = theme();\n\
+             refresh();\n\
+             exit();\n",
+        )
+        .expect("known names");
     }
 
     #[test]
