@@ -1,5 +1,5 @@
 use brul_script::Names;
-use brul_syntax::ast::{Expr, ExprKind, TemplatePart};
+use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Member, Prop};
 use brul_syntax::script::{Function, Program, Statement};
 
@@ -140,48 +140,12 @@ pub(super) fn expression<'a>(expr: &'a Expr, names: &mut Names<'a>) {
         ExprKind::Ident(name) => {
             names.intern(name);
         }
-        ExprKind::Field { target, .. } => expression(target, names),
-        ExprKind::Index { target, index } => {
-            expression(target, names);
-            expression(index, names);
-        }
         ExprKind::Call { target, args } => call(target, args, names),
-        ExprKind::Unary { operand, .. } => expression(operand, names),
-        ExprKind::Binary { left, right, .. } => {
-            expression(left, names);
-            expression(right, names);
-        }
-        ExprKind::Ternary {
-            condition,
-            then_branch,
-            else_branch,
-        } => {
-            expression(condition, names);
-            expression(then_branch, names);
-            expression(else_branch, names);
-        }
-        ExprKind::Assign { target, value, .. } => {
-            expression(target, names);
-            expression(value, names);
-        }
-        ExprKind::Array(items) => {
-            for item in items {
-                expression(item, names);
+        _ => {
+            for child in expr.kind.children() {
+                expression(child, names);
             }
         }
-        ExprKind::Object(fields) => {
-            for (_, value) in fields {
-                expression(value, names);
-            }
-        }
-        ExprKind::Template(parts) => {
-            for part in parts {
-                if let TemplatePart::Expr(expr) = part {
-                    expression(expr, names);
-                }
-            }
-        }
-        ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) | ExprKind::Null => {}
     }
 }
 

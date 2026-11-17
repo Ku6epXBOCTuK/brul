@@ -121,6 +121,39 @@ impl ExprKind {
             | Self::Ternary { .. } => "expression",
         }
     }
+
+    pub fn children(&self) -> impl Iterator<Item = &Expr> + '_ {
+        let fixed: [Option<&Expr>; 3] = match self {
+            Self::Field { target, .. }
+            | Self::Unary {
+                operand: target, ..
+            } => [Some(target), None, None],
+            Self::Index { target, index }
+            | Self::Binary {
+                left: target,
+                right: index,
+                ..
+            } => [Some(target), Some(index), None],
+            Self::Ternary {
+                condition,
+                then_branch,
+                else_branch,
+            } => [Some(condition), Some(then_branch), Some(else_branch)],
+            Self::Assign { target, value, .. } => [Some(target), Some(value), None],
+            Self::Call { target, .. } => [Some(target), None, None],
+            _ => [None, None, None],
+        };
+        let variable: Box<dyn Iterator<Item = &Expr> + '_> = match self {
+            Self::Call { args, .. } | Self::Array(args) => Box::new(args.iter()),
+            Self::Object(fields) => Box::new(fields.iter().map(|(_, value)| value)),
+            Self::Template(parts) => Box::new(parts.iter().filter_map(|part| match part {
+                TemplatePart::Expr(expr) => Some(expr.as_ref()),
+                TemplatePart::Text(_) => None,
+            })),
+            _ => Box::new(std::iter::empty()),
+        };
+        fixed.into_iter().flatten().chain(variable)
+    }
 }
 
 #[cfg(test)]
@@ -201,5 +234,91 @@ mod tests {
         for (kind, name) in named {
             assert_eq!(kind.name(), name);
         }
+    }
+
+    #[test]
+    fn expr_kind_children_returns_every_child() {
+        let ident = |name: &str| Expr::new(ExprKind::Ident(name.to_owned()), POSITION);
+        fn child_names(kind: &ExprKind) -> Vec<&str> {
+            kind.children()
+                .map(|child| match &child.kind {
+                    ExprKind::Ident(name) => name.as_str(),
+                    _ => panic!("expected identifier"),
+                })
+                .collect()
+        }
+
+        assert!(child_names(&ExprKind::Number(1.0)).is_empty());
+        assert!(child_names(&ExprKind::Ident("x".to_owned())).is_empty());
+        assert_eq!(
+            child_names(&ExprKind::Field {
+                target: Box::new(ident("a")),
+                name: "a".to_owned(),
+            }),
+            ["a"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Index {
+                target: Box::new(ident("a")),
+                index: Box::new(ident("b")),
+            }),
+            ["a", "b"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Call {
+                target: Box::new(ident("a")),
+                args: vec![ident("b"), ident("c")],
+            }),
+            ["a", "b", "c"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Unary {
+                op: UnaryOp::Not,
+                operand: Box::new(ident("a")),
+            }),
+            ["a"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Binary {
+                op: BinaryOp::Add,
+                left: Box::new(ident("a")),
+                right: Box::new(ident("b")),
+            }),
+            ["a", "b"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Ternary {
+                condition: Box::new(ident("a")),
+                then_branch: Box::new(ident("b")),
+                else_branch: Box::new(ident("c")),
+            }),
+            ["a", "b", "c"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Assign {
+                target: Box::new(ident("a")),
+                op: AssignOp::Set,
+                value: Box::new(ident("b")),
+            }),
+            ["a", "b"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Array(vec![ident("a"), ident("b")])),
+            ["a", "b"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Object(vec![
+                ("a".to_owned(), ident("a")),
+                ("b".to_owned(), ident("b")),
+            ])),
+            ["a", "b"]
+        );
+        assert_eq!(
+            child_names(&ExprKind::Template(vec![
+                TemplatePart::Text("x".to_owned()),
+                TemplatePart::Expr(Box::new(ident("a"))),
+            ])),
+            ["a"]
+        );
     }
 }

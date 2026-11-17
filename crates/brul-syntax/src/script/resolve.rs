@@ -1,4 +1,4 @@
-use crate::ast::{Expr, ExprKind, Position, TemplatePart};
+use crate::ast::{Expr, ExprKind, Position};
 use crate::error::Error;
 use crate::script::ast::{Program, Statement};
 
@@ -107,51 +107,12 @@ fn check_expression(expression: &Expr, names: &Names<'_>) -> Result<(), Error> {
         ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) | ExprKind::Null => Ok(()),
         ExprKind::Ident(name) => check_variable(name, expression.position, names),
         ExprKind::Call { target, args } => check_call(target, args, names),
-        _ => check_children(expression, names),
-    }
-}
-
-fn check_children(expression: &Expr, names: &Names<'_>) -> Result<(), Error> {
-    for child in children(&expression.kind) {
-        check_expression(child, names)?;
-    }
-    Ok(())
-}
-
-fn children(kind: &ExprKind) -> Vec<&Expr> {
-    match kind {
-        ExprKind::Number(_)
-        | ExprKind::String(_)
-        | ExprKind::Bool(_)
-        | ExprKind::Null
-        | ExprKind::Ident(_)
-        | ExprKind::Call { .. } => Vec::new(),
-        ExprKind::Field { target, .. }
-        | ExprKind::Unary {
-            operand: target, ..
-        } => vec![target],
-        ExprKind::Index { target, index }
-        | ExprKind::Binary {
-            left: target,
-            right: index,
-            ..
-        } => vec![target, index],
-        ExprKind::Ternary {
-            condition,
-            then_branch,
-            else_branch,
-        } => vec![condition, then_branch, else_branch],
-        ExprKind::Assign { target, value, .. } => vec![target, value],
-        ExprKind::Array(items) => items.iter().collect(),
-        ExprKind::Object(fields) => fields.iter().map(|(_, value)| value).collect(),
-        ExprKind::Template(parts) => parts.iter().filter_map(template_expression).collect(),
-    }
-}
-
-fn template_expression(part: &TemplatePart) -> Option<&Expr> {
-    match part {
-        TemplatePart::Expr(expression) => Some(expression),
-        TemplatePart::Text(_) => None,
+        _ => {
+            for child in expression.kind.children() {
+                check_expression(child, names)?;
+            }
+            Ok(())
+        }
     }
 }
 
