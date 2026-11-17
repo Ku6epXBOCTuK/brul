@@ -13,7 +13,7 @@
 </script>
 
 <use>
-    import Button from "./button.brul";
+    import Button from "brul:button";
 </use>
 
 <markup>

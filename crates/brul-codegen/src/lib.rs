@@ -3,6 +3,7 @@
 pub mod build;
 mod diagnostics;
 pub mod emit;
+mod kit;
 mod loader;
 pub mod runtime;
 mod source;

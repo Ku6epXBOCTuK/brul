@@ -1576,16 +1576,7 @@ fn emits_component_classes() {
 
 #[test]
 fn emits_the_kit_components() {
-    let kit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../kit");
     let dir = scratch("kit", &[]);
-    std::fs::create_dir_all(dir.join("kit")).unwrap();
-    for name in ["button", "card", "tooltip", "checkbox", "dialog"] {
-        std::fs::copy(
-            kit.join(format!("{name}.brul")),
-            dir.join("kit").join(format!("{name}.brul")),
-        )
-        .unwrap();
-    }
     std::fs::write(
         dir.join("window.brul"),
         r#"<script>
@@ -1615,11 +1606,11 @@ fn emits_the_kit_components() {
 </style>
 
 <use>
-    import Button from "./kit/button.brul";
-    import Card from "./kit/card.brul";
-    import Tooltip from "./kit/tooltip.brul";
-    import Checkbox from "./kit/checkbox.brul";
-    import Dialog from "./kit/dialog.brul";
+    import Button from "brul:button";
+    import Card from "brul:card";
+    import Tooltip from "brul:tooltip";
+    import Checkbox from "brul:checkbox";
+    import Dialog from "brul:dialog";
 </use>
 
 <markup>
@@ -1649,6 +1640,25 @@ window Demo (title: "demo") {
             "{name}: {module}"
         );
     }
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn an_unknown_kit_component_lists_the_kit() {
+    let dir = scratch(
+        "kit-unknown",
+        &[(
+            "window.brul",
+            "<use>\n    import Button from \"brul:buton\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column { Button (label: \"x\") { } }\n}\n</markup>\n",
+        )],
+    );
+    let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
+    assert!(
+        error.message.contains("unknown kit component 'buton'"),
+        "{}",
+        error.message
+    );
+    assert!(error.message.contains("button"), "{}", error.message);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

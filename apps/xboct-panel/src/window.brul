@@ -109,8 +109,8 @@
 </script>
 
 <use>
-    import Checkbox from "../../../kit/checkbox.brul";
-    import Dialog from "../../../kit/dialog.brul";
+    import Checkbox from "brul:checkbox";
+    import Dialog from "brul:dialog";
     import ServiceRow from "./service_row.brul";
 </use>
 

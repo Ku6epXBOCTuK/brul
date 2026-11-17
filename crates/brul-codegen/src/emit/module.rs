@@ -9,6 +9,7 @@ use brul_syntax::markup::{Element, Member, Window};
 
 use crate::Definition;
 use crate::error_at;
+use crate::kit;
 
 use super::Emit;
 use super::Out;
@@ -267,6 +268,7 @@ fn module_sources(registry: &crate::Registry, entry: Option<&Path>) -> Vec<PathB
     let mut sources: Vec<PathBuf> = registry
         .definitions
         .iter()
+        .filter(|definition| !kit::is_virtual(&definition.path))
         .map(|definition| definition.path.clone())
         .collect();
     if let Some(entry) = entry {

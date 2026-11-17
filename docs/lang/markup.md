@@ -388,8 +388,8 @@ window Demo (title: "demo") {
 
 - Всё в «Грамматике» выше + 6 встроенных виджетов + 3 параметра-состояния +
   `class`, `visible`/`x`/`y`, `focusable`, `modal`.
-- Импорт: `import Name from "./path";`; ресурс:
-  `resource Name from "./path.png";`.
+- Импорт: `import Name from "./path";` или кит через `brul:name`
+  ([use.md](use.md)); ресурс: `resource Name from "./path.png";`.
 
 ## Отложено (v3+)
 

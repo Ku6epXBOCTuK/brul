@@ -9,13 +9,16 @@
 
 ```brul
 <use>
-    import Button from "../../../kit/button.brul";
-    import Card from "../../../kit/card.brul";
-    import Tooltip from "../../../kit/tooltip.brul";
-    import Checkbox from "../../../kit/checkbox.brul";
-    import Dialog from "../../../kit/dialog.brul";
+    import Button from "brul:button";
+    import Card from "brul:card";
+    import Tooltip from "brul:tooltip";
+    import Checkbox from "brul:checkbox";
+    import Dialog from "brul:dialog";
 </use>
 ```
+
+`brul:` — имя файла кита, а не путь: исходник зашит в `brul-codegen` из каталога
+`kit/` этого репозитория.
 
 ```brul
 Button (label: "Открыть", variant: "primary", on clicked: open) { }

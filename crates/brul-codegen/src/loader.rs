@@ -12,7 +12,7 @@ use brul_syntax::style::{self, Override, Stylesheet, Theme};
 use brul_syntax::uses::{self, Block, Use};
 
 use crate::source::Script;
-use crate::{error_at, padded, sfc_error};
+use crate::{error_at, kit, padded, sfc_error};
 
 pub struct Definition {
     pub name: String,
@@ -114,8 +114,13 @@ impl Loader<'_> {
                     format!("import '{}' is defined twice", item.name),
                 ));
             }
-            let path = file_path(base, &item.path, origin)?;
-            let definition = self.file(&path, origin)?;
+            let definition = match item.path.strip_prefix(kit::PREFIX) {
+                Some(name) => self.kit(name, origin)?,
+                None => {
+                    let path = file_path(base, &item.path, origin)?;
+                    self.file(&path, origin)?
+                }
+            };
             imports.push(Import {
                 name: item.name.clone(),
                 definition,
@@ -168,6 +173,26 @@ impl Loader<'_> {
         Ok(resolved)
     }
 
+    fn kit(&mut self, name: &str, origin: Option<&Path>) -> Result<usize, Error> {
+        let Some(source) = kit::source(name) else {
+            return Err(at(
+                origin,
+                format!(
+                    "unknown kit component '{name}': the kit has {}",
+                    kit::names().join(", ")
+                ),
+            ));
+        };
+        let path = kit::path(name);
+        if let Some(index) = self.index.get(&path) {
+            return Ok(*index);
+        }
+        if self.stack.contains(&path) {
+            return Err(self.cycle(&path));
+        }
+        self.define(path, source.to_owned(), None)
+    }
+
     fn file(&mut self, path: &Path, origin: Option<&Path>) -> Result<usize, Error> {
         let path = fs::canonicalize(path)
             .map_err(|error| at(origin, format!("cannot read '{}': {error}", path.display())))?;
@@ -179,10 +204,20 @@ impl Loader<'_> {
         }
         let source = fs::read_to_string(&path)
             .map_err(|error| at(origin, format!("cannot read '{}': {error}", path.display())))?;
+        let base = path.parent().map(Path::to_path_buf);
+        self.define(path, source, base.as_deref())
+    }
+
+    fn define(
+        &mut self,
+        path: PathBuf,
+        source: String,
+        base: Option<&Path>,
+    ) -> Result<usize, Error> {
         self.stack.push(path.clone());
         let parsed = parse(&source, &path, self.palette)?;
-        let imports = self.imports(&parsed.uses.uses, path.parent(), Some(&path))?;
-        let resources = self.resources(&parsed.uses.resources, path.parent(), Some(&path))?;
+        let imports = self.imports(&parsed.uses.uses, base, Some(&path))?;
+        let resources = self.resources(&parsed.uses.resources, base, Some(&path))?;
         self.stack.pop();
         let index = self.definitions.len();
         self.definitions.push(Definition {
