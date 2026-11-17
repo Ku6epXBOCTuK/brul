@@ -20,8 +20,7 @@ impl Image {
         if bytes.starts_with(&PNG) {
             return Ok(Self::Raster(Rc::new(Texture::from_png(bytes)?)));
         }
-        let source =
-            std::str::from_utf8(bytes).map_err(|error| TextureError::Decode(error.to_string()))?;
+        let source = std::str::from_utf8(bytes)?;
         Ok(Self::Vector(Rc::new(Vector::from_svg(source)?)))
     }
 
@@ -138,8 +137,7 @@ impl Vector {
 }
 
 fn parse(source: &str) -> Result<usvg::Tree, TextureError> {
-    usvg::Tree::from_str(source, &usvg::Options::default())
-        .map_err(|error| TextureError::Decode(error.to_string()))
+    Ok(usvg::Tree::from_str(source, &usvg::Options::default())?)
 }
 
 fn pack(color: Color) -> u32 {
@@ -152,7 +150,9 @@ fn hex(color: Color) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Image, Vector};
+    use std::error::Error as _;
+
+    use super::{Image, TextureError, Vector};
 
     const ICON: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6">
         <rect width="12" height="6" fill="currentColor"/>
@@ -191,5 +191,21 @@ mod tests {
         let svg = Image::from_bytes(ICON.as_bytes()).expect("svg");
         assert!(matches!(svg, Image::Vector(_)));
         assert_eq!((svg.width(), svg.height()), (12, 6));
+    }
+
+    #[test]
+    fn invalid_utf8_keeps_its_source() {
+        let Err(error) = Image::from_bytes(&[0xff]) else {
+            panic!("invalid utf8 decoded");
+        };
+
+        assert!(matches!(error, TextureError::Utf8(_)));
+        assert!(
+            error
+                .source()
+                .expect("source")
+                .downcast_ref::<std::str::Utf8Error>()
+                .is_some()
+        );
     }
 }

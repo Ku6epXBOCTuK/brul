@@ -1,9 +1,15 @@
+use resvg::usvg;
+
 use crate::Color;
 
-#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum TextureError {
-    #[error("failed to decode an image: {0}")]
-    Decode(String),
+    #[error("failed to decode a PNG image")]
+    Png(#[from] image::ImageError),
+    #[error("image data is not valid UTF-8")]
+    Utf8(#[from] std::str::Utf8Error),
+    #[error("failed to parse an SVG image")]
+    Svg(#[from] usvg::Error),
     #[error("invalid RGBA data")]
     InvalidRgba,
 }
@@ -17,9 +23,7 @@ pub struct Texture {
 
 impl Texture {
     pub fn from_png(bytes: &[u8]) -> Result<Self, TextureError> {
-        let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
-            .map_err(|error| TextureError::Decode(error.to_string()))?
-            .to_rgba8();
+        let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)?.to_rgba8();
         let (width, height) = image.dimensions();
 
         Ok(Self {
@@ -107,13 +111,24 @@ impl Texture {
 
 #[cfg(test)]
 mod tests {
-    use super::TextureError;
+    use std::error::Error as _;
+
+    use super::{Texture, TextureError};
 
     #[test]
-    fn texture_error_message_keeps_the_decoder_error() {
-        let decode = TextureError::Decode("boom".to_owned()).to_string();
+    fn texture_error_keeps_the_decoder_source() {
+        let Err(error) = Texture::from_png(b"not a png") else {
+            panic!("invalid png decoded");
+        };
 
-        assert!(decode.contains("boom"));
-        assert_ne!(decode, TextureError::InvalidRgba.to_string());
+        assert!(matches!(error, TextureError::Png(_)));
+        assert!(
+            error
+                .source()
+                .expect("source")
+                .downcast_ref::<image::ImageError>()
+                .is_some()
+        );
+        assert_ne!(error.to_string(), TextureError::InvalidRgba.to_string());
     }
 }

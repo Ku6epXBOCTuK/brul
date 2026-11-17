@@ -41,7 +41,7 @@ fn tint_can_be_cleared() {
 fn invalid_png_is_rejected() {
     assert!(matches!(
         Texture::from_png(b"not a png"),
-        Err(TextureError::Decode(_))
+        Err(TextureError::Png(_))
     ));
 }
 
