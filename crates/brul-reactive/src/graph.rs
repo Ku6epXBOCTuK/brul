@@ -23,6 +23,7 @@ struct Node {
 struct Arena {
     nodes: Vec<Node>,
     free: Vec<u32>,
+    stack: Vec<u32>,
     queue: VecDeque<u32>,
     live: usize,
 }
@@ -130,10 +131,12 @@ pub(crate) fn untrack<R>(f: impl FnOnce() -> R) -> R {
 pub(crate) fn notify(id: u32) {
     ARENA.with(|arena| {
         let mut arena = arena.borrow_mut();
-        let mut stack = vec![id];
-        while let Some(current) = stack.pop() {
-            let subscribers = arena.nodes[current as usize].subscribers.clone();
-            for subscriber in subscribers {
+        arena.stack.clear();
+        arena.stack.push(id);
+        while let Some(current) = arena.stack.pop() {
+            let count = arena.nodes[current as usize].subscribers.len();
+            for at in 0..count {
+                let subscriber = arena.nodes[current as usize].subscribers[at];
                 let node = &mut arena.nodes[subscriber as usize];
                 if node.disposed {
                     continue;
@@ -152,7 +155,7 @@ pub(crate) fn notify(id: u32) {
                             continue;
                         }
                         node.dirty = true;
-                        stack.push(subscriber);
+                        arena.stack.push(subscriber);
                     }
                     Kind::Signal => {}
                 }
