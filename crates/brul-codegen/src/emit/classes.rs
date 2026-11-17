@@ -31,7 +31,7 @@ pub(super) fn statics(
         out.end();
         out.line(format_args!("#[allow(dead_code)]"));
         out.line(format_args!(
-            "static {}: [brul::gui::Class; {}] = [",
+            "static {}: std::sync::LazyLock<[brul::gui::Class; {}]> = std::sync::LazyLock::new(|| [",
             constant(prefix, theme),
             names.names.len()
         ));
@@ -49,7 +49,7 @@ pub(super) fn statics(
             }
             Ok(())
         })?;
-        out.line(format_args!("];"));
+        out.line(format_args!("]);"));
     }
     out.end();
     out.line(format_args!(
@@ -61,25 +61,25 @@ pub(super) fn statics(
             out.line(format_args!("match theme {{"));
             out.indented(|out| {
                 out.line(format_args!(
-                    "None | Some({:?}) => &{},",
+                    "None | Some({:?}) => &*{},",
                     first.name,
                     constant(prefix, Some(&first.name))
                 ));
                 for theme in &stylesheet.themes[1..] {
                     out.line(format_args!(
-                        "Some({:?}) => &{},",
+                        "Some({:?}) => &*{},",
                         theme.name,
                         constant(prefix, Some(&theme.name))
                     ));
                 }
                 out.line(format_args!(
-                    "Some(_) => &{},",
+                    "Some(_) => &*{},",
                     constant(prefix, Some(&first.name))
                 ));
             });
             out.line(format_args!("}}"));
         }
-        None => out.line(format_args!("&{}", constant(prefix, None))),
+        None => out.line(format_args!("&*{}", constant(prefix, None))),
     });
     out.line(format_args!("}}"));
     Ok(())

@@ -398,16 +398,32 @@ impl WidgetTree {
         let Some(&slot) = self.index.get(&id) else {
             return false;
         };
-        let class = class.copied().filter(|class| !class.is_empty());
+        let class = class.cloned().filter(|class| !class.is_empty());
         let node = &mut self.nodes[slot.index()];
         if node.class == class {
             return false;
         }
+        let old = node.class.clone();
         let layout = node.layout_style();
-        let text = node.class.map(|class| class.text).unwrap_or_default();
+        let old_text = old
+            .as_ref()
+            .map(|class| class.text.clone())
+            .unwrap_or_default();
+        let style = node.style();
         node.class = class;
+        let fresh = node.style();
         let relayout = node.layout_style() != layout
-            || node.class.map(|class| class.text).unwrap_or_default() != text;
+            || node
+                .class
+                .as_ref()
+                .map(|class| class.text.clone())
+                .unwrap_or_default()
+                != old_text
+            || style.border_radius != fresh.border_radius
+            || style.scroll != fresh.scroll
+            || style.shadow.x != fresh.shadow.x
+            || style.shadow.y != fresh.shadow.y
+            || style.shadow.blur != fresh.shadow.blur;
         if relayout {
             self.stale.insert(slot);
             self.texts.remove(&id);

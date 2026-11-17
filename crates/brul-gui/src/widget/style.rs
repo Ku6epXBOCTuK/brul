@@ -50,6 +50,11 @@ pub struct WidgetStylePatch {
     pub vertical_align: Option<VerticalAlign>,
     pub clip: Option<bool>,
     pub shadow: Option<Color>,
+    pub border_radius: Option<u32>,
+    pub scroll: Option<bool>,
+    pub shadow_x: Option<i32>,
+    pub shadow_y: Option<i32>,
+    pub shadow_blur: Option<u32>,
 }
 
 patch!(pub(crate) WidgetStylePatch {
@@ -61,6 +66,11 @@ patch!(pub(crate) WidgetStylePatch {
     vertical_align,
     clip,
     shadow,
+    border_radius,
+    scroll,
+    shadow_x,
+    shadow_y,
+    shadow_blur,
 });
 
 impl WidgetStyle {
@@ -74,6 +84,11 @@ impl WidgetStyle {
             vertical_align,
             clip,
             shadow,
+            border_radius,
+            scroll,
+            shadow_x,
+            shadow_y,
+            shadow_blur,
         } = *patch;
         set_if_some(&mut self.background, background);
         set_if_some(&mut self.border, border);
@@ -83,10 +98,15 @@ impl WidgetStyle {
         set_if_some(&mut self.vertical_align, vertical_align);
         set_if_some(&mut self.clip, clip);
         set_if_some(&mut self.shadow.color, shadow);
+        set_if_some(&mut self.border_radius, border_radius);
+        set_if_some(&mut self.scroll, scroll);
+        set_if_some(&mut self.shadow.x, shadow_x);
+        set_if_some(&mut self.shadow.y, shadow_y);
+        set_if_some(&mut self.shadow.blur, shadow_blur);
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Layers<P> {
     base: P,
     hovered: Option<P>,
@@ -96,7 +116,7 @@ pub struct Layers<P> {
     disabled: Option<P>,
 }
 
-impl<P: Copy> Layers<P> {
+impl<P> Layers<P> {
     pub const fn new(base: P) -> Self {
         Self {
             base,
@@ -108,17 +128,17 @@ impl<P: Copy> Layers<P> {
         }
     }
 
-    pub const fn with(mut self, state: StyleState, patch: P) -> Self {
+    pub fn with(mut self, state: StyleState, patch: P) -> Self {
         *self.slot_mut(state) = Some(patch);
         self
     }
 
-    pub fn base(&self) -> P {
-        self.base
+    pub fn base(&self) -> &P {
+        &self.base
     }
 
-    pub fn patch(&self, state: StyleState) -> Option<P> {
-        *self.slot(state)
+    pub fn patch(&self, state: StyleState) -> Option<&P> {
+        self.slot(state).as_ref()
     }
 
     const fn slot(&self, state: StyleState) -> &Option<P> {
@@ -142,7 +162,7 @@ impl<P: Copy> Layers<P> {
     }
 }
 
-impl<P: Copy + Default + PartialEq> Layers<P> {
+impl<P: Default + PartialEq> Layers<P> {
     pub fn is_empty(&self) -> bool {
         self.base == P::default()
             && StyleState::ALL
@@ -151,7 +171,7 @@ impl<P: Copy + Default + PartialEq> Layers<P> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Class {
     pub layout: LayoutPatch,
     pub style: Layers<WidgetStylePatch>,
@@ -299,10 +319,10 @@ impl StyleSet {
         layers: &Layers<WidgetStylePatch>,
         transitions: Transitions,
     ) {
-        self.base.apply(&layers.base());
+        self.base.apply(layers.base());
         for state in StyleState::ALL {
             if let Some(patch) = layers.patch(state) {
-                self.state_mut(state).get_or_insert_default().merge(&patch);
+                self.state_mut(state).get_or_insert_default().merge(patch);
             }
         }
         self.transitions.merge(&transitions);
@@ -422,31 +442,35 @@ fn tween_tint(from: Option<Color>, to: Option<Color>, progress: f32) -> Option<C
 
 #[cfg(test)]
 mod tests {
+    use std::sync::LazyLock;
+
     use super::*;
 
-    static LIGHT: [Class; 1] = [Class {
-        layout: LayoutPatch::DEFAULT,
-        style: Layers::new(WidgetStylePatch::DEFAULT).with(
-            StyleState::Hovered,
-            WidgetStylePatch {
-                opacity: Some(0.5),
-                ..WidgetStylePatch::DEFAULT
-            },
-        ),
-        text: Layers::new(TextStylePatch::DEFAULT),
-        transitions: Transitions::DEFAULT,
-    }];
+    static LIGHT: LazyLock<[Class; 1]> = LazyLock::new(|| {
+        [Class {
+            layout: LayoutPatch::DEFAULT,
+            style: Layers::new(WidgetStylePatch::DEFAULT).with(
+                StyleState::Hovered,
+                WidgetStylePatch {
+                    opacity: Some(0.5),
+                    ..WidgetStylePatch::DEFAULT
+                },
+            ),
+            text: Layers::new(TextStylePatch::DEFAULT),
+            transitions: Transitions::DEFAULT,
+        }]
+    });
 
     #[test]
     fn a_class_table_is_built_in_a_static() {
         assert_eq!(
             LIGHT[0].style.patch(StyleState::Hovered),
-            Some(WidgetStylePatch {
+            Some(&WidgetStylePatch {
                 opacity: Some(0.5),
                 ..WidgetStylePatch::DEFAULT
             })
         );
-        assert_eq!(LIGHT[0].style.base(), WidgetStylePatch::DEFAULT);
+        assert_eq!(LIGHT[0].style.base(), &WidgetStylePatch::DEFAULT);
         assert!(LIGHT[0].style.patch(StyleState::Pressed).is_none());
         assert!(LIGHT[0].text.is_empty());
     }

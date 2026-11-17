@@ -136,11 +136,18 @@ fn state_patch(snapshot: &Snapshot) -> Result<(WidgetStylePatch, TextStylePatch)
             Target::Style(StyleField::Opacity) => style.opacity = Some(value.number() as f32),
             Target::Style(StyleField::Clip) => style.clip = Some(value.flag()),
             Target::Style(StyleField::ShadowColor) => style.shadow = Some(value.color()),
+            Target::Style(StyleField::BorderRadius) => style.border_radius = Some(value.px()),
+            Target::Style(StyleField::Scroll) => style.scroll = Some(value.flag()),
+            Target::Style(StyleField::ShadowX) => style.shadow_x = Some(value.signed_px()),
+            Target::Style(StyleField::ShadowY) => style.shadow_y = Some(value.signed_px()),
+            Target::Style(StyleField::ShadowBlur) => style.shadow_blur = Some(value.px()),
             Target::Text(TextField::VerticalAlign) => {
                 style.vertical_align = Some(vertical_align(value.keyword()));
             }
             Target::Text(TextField::Align) => text.align = Some(text_align(value.keyword())),
             Target::Text(TextField::Weight) => text.weight = Some(value.number() as u16),
+            Target::Text(TextField::Size) => text.size = Some(value.px() as f32),
+            Target::Text(TextField::Family) => text.family = Some(value.text().to_owned()),
             _ => {}
         }
     }

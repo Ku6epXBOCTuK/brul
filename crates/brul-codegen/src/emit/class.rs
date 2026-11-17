@@ -8,7 +8,7 @@ use super::Out;
 
 macro_rules! fields {
     ($out:expr, $patch:expr, $type:ident, { $($field:ident $(=> $convert:path)?),+ $(,)? }) => {{
-        let brul_gui::$type { $($field),+ } = *$patch;
+        let brul_gui::$type { $($field),+ } = $patch;
         let _ = write!($out, concat!("brul::gui::", stringify!($type), " {{"));
         $(
             if let Some(value) = $field {
@@ -72,7 +72,7 @@ fn layout(patch: &LayoutPatch) -> String {
 fn style(out: &mut Out<'_>, layers: &Layers<WidgetStylePatch>) {
     out.push(format_args!(
         "brul::gui::Layers::new({})",
-        widget_patch(&layers.base())
+        widget_patch(layers.base())
     ));
     states(out, layers, widget_patch);
 }
@@ -80,19 +80,19 @@ fn style(out: &mut Out<'_>, layers: &Layers<WidgetStylePatch>) {
 fn text(out: &mut Out<'_>, layers: &Layers<TextStylePatch>) {
     out.push(format_args!(
         "brul::gui::Layers::new({})",
-        text_patch(&layers.base())
+        text_patch(layers.base())
     ));
     states(out, layers, text_patch);
 }
 
-fn states<T: Copy>(out: &mut Out<'_>, layers: &Layers<T>, patch_text: impl Fn(&T) -> String) {
+fn states<T>(out: &mut Out<'_>, layers: &Layers<T>, patch_text: impl Fn(&T) -> String) {
     for state in StyleState::ALL {
         if let Some(patch) = layers.patch(state) {
             out.end();
             out.indented(|out| {
                 out.start(format_args!(
                     ".with(brul::gui::StyleState::{state:?}, {})",
-                    patch_text(&patch)
+                    patch_text(patch)
                 ));
             });
         }
@@ -110,6 +110,11 @@ fn widget_patch(patch: &WidgetStylePatch) -> String {
         vertical_align => convert::vertical_align,
         clip,
         shadow => convert::color,
+        border_radius,
+        scroll,
+        shadow_x,
+        shadow_y,
+        shadow_blur,
     });
     out
 }
@@ -119,6 +124,8 @@ fn text_patch(patch: &TextStylePatch) -> String {
     fields!(out, patch, TextStylePatch, {
         weight,
         align => convert::text_align,
+        size => convert::float,
+        family => convert::family,
     });
     out
 }
@@ -143,14 +150,14 @@ mod convert {
         Align, Color, Dimension, Gradient, Justify, Padding, Paint, TextAlign, VerticalAlign,
     };
 
-    pub(super) fn padding(padding: Padding) -> String {
+    pub(super) fn padding(value: &Padding) -> String {
         format!(
             "brul::gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }}",
-            padding.left, padding.top, padding.right, padding.bottom
+            value.left, value.top, value.right, value.bottom
         )
     }
 
-    pub(super) fn dimension(value: Dimension) -> String {
+    pub(super) fn dimension(value: &Dimension) -> String {
         match value {
             Dimension::Auto => "brul::gui::Dimension::Auto".to_owned(),
             Dimension::Px(px) => format!("brul::gui::Dimension::Px({px})"),
@@ -158,23 +165,23 @@ mod convert {
         }
     }
 
-    pub(super) fn justify(value: Justify) -> String {
+    pub(super) fn justify(value: &Justify) -> String {
         format!("brul::gui::Justify::{value:?}")
     }
 
-    pub(super) fn align(value: Align) -> String {
+    pub(super) fn align(value: &Align) -> String {
         format!("brul::gui::Align::{value:?}")
     }
 
-    pub(super) fn vertical_align(value: VerticalAlign) -> String {
+    pub(super) fn vertical_align(value: &VerticalAlign) -> String {
         format!("brul::gui::VerticalAlign::{value:?}")
     }
 
-    pub(super) fn text_align(value: TextAlign) -> String {
+    pub(super) fn text_align(value: &TextAlign) -> String {
         format!("brul::gui::TextAlign::{value:?}")
     }
 
-    pub(super) fn paint(value: Paint) -> String {
+    pub(super) fn paint(value: &Paint) -> String {
         match value {
             Paint::Color(value) => format!("brul::gui::Paint::Color({})", color(value)),
             Paint::Gradient(Gradient::Linear { angle, from, to }) => format!(
@@ -185,22 +192,30 @@ mod convert {
         }
     }
 
-    pub(super) fn color(value: Color) -> String {
+    pub(super) fn color(value: &Color) -> String {
         format!(
             "brul::gui::Color {{ r: {}, g: {}, b: {}, a: {} }}",
             value.r, value.g, value.b, value.a
         )
     }
 
-    pub(super) fn decimal(value: u32) -> String {
+    pub(super) fn decimal(value: &u32) -> String {
         value.to_string()
     }
 
-    pub(super) fn debug<T: std::fmt::Debug>(value: T) -> String {
+    pub(super) fn float(value: &f32) -> String {
         format!("{value:?}")
     }
 
-    pub(super) fn millis(value: Duration) -> String {
+    pub(super) fn family(value: &String) -> String {
+        format!("String::from({value:?})")
+    }
+
+    pub(super) fn debug<T: std::fmt::Debug>(value: &T) -> String {
+        format!("{value:?}")
+    }
+
+    pub(super) fn millis(value: &Duration) -> String {
         format!("std::time::Duration::from_millis({})", value.as_millis())
     }
 }

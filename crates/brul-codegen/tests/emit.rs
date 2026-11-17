@@ -63,11 +63,11 @@ impl std::str::FromStr for ThemeId {
 }
 
 #[allow(dead_code)]
-static CLASSES_NONE: [brul::gui::Class; 0] = [
-];
+static CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
+]);
 
 fn classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
-    &CLASSES_NONE
+    &*CLASSES_NONE
 }
 
 #[allow(dead_code)]
@@ -236,7 +236,7 @@ impl std::str::FromStr for ThemeId {
 }
 
 #[allow(dead_code)]
-static CLASSES_DARK: [brul::gui::Class; 1] = [
+static CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(10)), ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 108, g: 140, b: 255, a: 255 })), ..brul::gui::WidgetStylePatch::DEFAULT })
@@ -244,10 +244,10 @@ static CLASSES_DARK: [brul::gui::Class; 1] = [
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
-];
+]);
 
 #[allow(dead_code)]
-static CLASSES_LIGHT: [brul::gui::Class; 1] = [
+static CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(10)), ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 17, g: 34, b: 51, a: 255 })), ..brul::gui::WidgetStylePatch::DEFAULT })
@@ -255,13 +255,13 @@ static CLASSES_LIGHT: [brul::gui::Class; 1] = [
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
-];
+]);
 
 fn classes(theme: Option<&str>) -> &'static [brul::gui::Class] {
     match theme {
-        None | Some("dark") => &CLASSES_DARK,
-        Some("light") => &CLASSES_LIGHT,
-        Some(_) => &CLASSES_DARK,
+        None | Some("dark") => &*CLASSES_DARK,
+        Some("light") => &*CLASSES_LIGHT,
+        Some(_) => &*CLASSES_DARK,
     }
 }
 
@@ -2107,6 +2107,39 @@ fn emits_scroll_only_when_it_is_set() {
     let plain = "<style>\n.list { border-radius: 4px; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View (list) { }\n}\n</markup>\n";
     let module = emit::module(plain).unwrap();
     assert!(!module.contains("s::Kind::Scroll"), "{module}");
+}
+
+#[test]
+fn emits_geometry_shadow_and_text_properties_in_a_static_class() {
+    let source = r#"<style>
+.a {
+    border-radius: 8px;
+    scroll: true;
+    box-shadow-offset-x: 2px;
+    box-shadow-offset-y: -3px;
+    box-shadow-blur: 4px;
+    font-size: 18px;
+    font-family: "Inter";
+}
+</style>
+
+<markup>
+window Styled (title: "styled") {
+    View (a) { }
+}
+</markup>
+"#;
+    let module = emit::module(source).unwrap();
+    assert!(module.contains("border_radius: Some(8)"), "{module}");
+    assert!(module.contains("scroll: Some(true)"), "{module}");
+    assert!(module.contains("shadow_x: Some(2)"), "{module}");
+    assert!(module.contains("shadow_y: Some(-3)"), "{module}");
+    assert!(module.contains("shadow_blur: Some(4)"), "{module}");
+    assert!(module.contains("size: Some(18.0)"), "{module}");
+    assert!(
+        module.contains("family: Some(String::from(\"Inter\"))"),
+        "{module}"
+    );
 }
 
 #[test]
