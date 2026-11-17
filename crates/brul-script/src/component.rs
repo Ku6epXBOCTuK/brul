@@ -15,7 +15,6 @@ use crate::names::VariableId;
 use crate::value::Value;
 
 struct Property {
-    id: VariableId,
     value: Signal<Value>,
 }
 
@@ -46,7 +45,7 @@ pub struct Component {
     names: &'static [&'static str],
     index: Index,
     environment: Environment,
-    properties: Vec<Property>,
+    properties: Vec<Option<Property>>,
     functions: Vec<Arc<Function>>,
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
@@ -87,6 +86,9 @@ impl Component {
             .map(|(position, name)| (*name, VariableId::from_index(position as u32)))
             .collect();
         self.environment.set_names(names);
+        if self.properties.len() < names.len() {
+            self.properties.resize_with(names.len(), || None);
+        }
     }
 
     pub fn names(&self) -> &'static [&'static str] {
@@ -212,8 +214,11 @@ impl Component {
         if self.property(id).is_some() {
             return Err(Error::Redeclared(self.name(id).to_owned()));
         }
-        self.properties.push(Property {
-            id,
+        let at = id.index() as usize;
+        if self.properties.len() <= at {
+            self.properties.resize_with(at + 1, || None);
+        }
+        self.properties[at] = Some(Property {
             value: Signal::new(value),
         });
         self.external_changed();
@@ -274,7 +279,9 @@ impl Component {
     }
 
     fn property(&self, id: VariableId) -> Option<&Property> {
-        self.properties.iter().find(|property| property.id == id)
+        self.properties
+            .get(id.index() as usize)
+            .and_then(Option::as_ref)
     }
 
     pub fn name(&self, id: VariableId) -> &'static str {
@@ -367,5 +374,22 @@ mod tests {
         handle.borrow().touch();
         flush();
         assert_eq!(runs.get(), 3);
+    }
+
+    #[test]
+    fn properties_are_addressed_by_variable_id() {
+        let mut component = Component::new();
+        component.set_names(&["a", "b", "c", "d", "e", "f"]);
+        let last = VariableId::from_index(5);
+        let first = VariableId::from_index(1);
+        component
+            .declare_property(last, Value::Bool(true))
+            .expect("declared");
+        component
+            .declare_property(first, Value::Number(7.0))
+            .expect("declared");
+        assert_eq!(component.read_id(last).unwrap(), Value::Bool(true));
+        assert_eq!(component.read_id(first).unwrap(), Value::Number(7.0));
+        assert!(component.declare_property(first, Value::Null).is_err());
     }
 }
