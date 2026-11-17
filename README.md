@@ -5,11 +5,15 @@
 Приложения в `apps/` — обкатка фреймворка, а не цель проекта; почему так —
 [docs/dev/product.md](docs/dev/product.md).
 
-## Посмотреть bropicker
+## Пример
 
 ```sh
-cargo bropicker
+cargo hello
 ```
 
-Пикер откроется на 488×800. Если `%APPDATA%\bropicker\config.toml` нет,
-показываются демо-браузеры.
+Минимальное приложение в рабочей копии: `examples/hello`, разбор — в его
+[README](examples/hello/README.md).
+
+bropicker живёт отдельным репозиторием —
+<https://github.com/Ku6epXBOCTuK/bropicker>: рабочая копия BRUL лежит рядом с
+ним, а зависимость идёт путём.

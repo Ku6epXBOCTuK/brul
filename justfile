@@ -5,13 +5,6 @@ target_dir := trim(`cargo metadata --format-version 1 --no-deps | ConvertFrom-Js
 generate-rules:
     cargo run -p brul-syntax --bin rules
 
-register-bropicker:
-    cargo build --release -p bropicker
-    powershell -NoProfile -ExecutionPolicy Bypass -File apps/bropicker/tools/register.ps1
-
-unregister-bropicker:
-    powershell -NoProfile -ExecutionPolicy Bypass -File apps/bropicker/tools/register.ps1 -Uninstall
-
 build-nobs:
     cargo build --release -p note-obs
 
