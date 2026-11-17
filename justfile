@@ -5,24 +5,6 @@ target_dir := trim(`cargo metadata --format-version 1 --no-deps | ConvertFrom-Js
 generate-rules:
     cargo run -p brul-syntax --bin rules
 
-build-nobs:
-    cargo build --release -p note-obs
-
-install-nobs: build-nobs
-    New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
-    Get-Process nobs -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 400
-    Copy-Item -Force "{{target_dir}}\release\nobs.exe" "$HOME\bin\nobs.exe"
-    Write-Output "installed: $HOME\bin\nobs.exe"
-
-uninstall-nobs:
-    Remove-Item -Force "$HOME\bin\nobs.exe" -ErrorAction SilentlyContinue; Write-Output "removed: $HOME\bin\nobs.exe"
-
-autostart-nobs:
-    $value = '"' + (Join-Path $HOME 'bin\nobs.exe') + '" --tray'; New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name nobs -Value $value -PropertyType String -Force | Out-Null; Write-Output "autostart: $value"
-
-unautostart-nobs:
-    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name nobs -ErrorAction SilentlyContinue; Write-Output "autostart removed"
-
 build-panel:
     cargo build --release -p xboct-panel
 
