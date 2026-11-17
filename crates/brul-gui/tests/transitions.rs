@@ -100,3 +100,52 @@ fn an_interrupted_transition_continues_from_where_it_is() {
     tree.advance(Duration::from_millis(150));
     assert_eq!(background(&mut tree, id), Paint::Color(Color::BLACK));
 }
+
+#[test]
+fn removing_an_animating_widget_stops_animation() {
+    let transitions = Transitions {
+        background: Some(Duration::from_millis(300)),
+        ..Transitions::default()
+    };
+    let child = Widget::column(vec![])
+        .with_layout(fixed(50, 50))
+        .with_styles(
+            StyleSet::new(style(Color::BLACK))
+                .with(
+                    StyleState::Hovered,
+                    brul_gui::WidgetStylePatch {
+                        background: Some(Paint::Color(Color::WHITE)),
+                        ..brul_gui::WidgetStylePatch::default()
+                    },
+                )
+                .with_transitions(transitions),
+        );
+    let root = Widget::column(vec![child]);
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 50,
+            height: 50,
+        },
+        1.0,
+    )
+    .expect("layout");
+    tree.pointer_moved(10, 10).expect("move");
+    assert!(tree.animating());
+
+    assert!(tree.replace_children(root_id, 0, 1, vec![]));
+    assert!(!tree.animating());
+}
+
+#[test]
+fn replacing_the_root_stops_animation() {
+    let (mut tree, _) = hover_tree();
+    tree.pointer_moved(10, 10).expect("move");
+    assert!(tree.animating());
+
+    tree.replace_root(Widget::column(vec![]));
+    assert!(!tree.animating());
+}

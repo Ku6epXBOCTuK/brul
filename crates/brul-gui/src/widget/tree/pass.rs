@@ -180,27 +180,29 @@ impl WidgetTree {
     }
 
     pub fn animating(&self) -> bool {
-        self.index
-            .values()
-            .any(|slot| self.nodes[slot.index()].transition.is_some())
+        self.active_transitions > 0
     }
 
     pub fn advance(&mut self, delta: Duration) -> bool {
         if delta.is_zero() {
             return self.animating();
         }
-        let slots: Vec<Slot> = self.index.values().copied().collect();
         let mut running = false;
-        for slot in slots {
-            let node = &mut self.nodes[slot.index()];
-            let Some(transition) = node.transition.as_mut() else {
-                continue;
+        for index in 0..self.nodes.len() {
+            let (id, active) = {
+                let node = &mut self.nodes[index];
+                let Some(transition) = node.transition.as_mut() else {
+                    continue;
+                };
+                let active = transition.advance(delta);
+                if !active {
+                    node.transition = None;
+                }
+                (node.id, active)
             };
-            let active = transition.advance(delta);
             if !active {
-                node.transition = None;
+                self.active_transitions -= 1;
             }
-            let id = node.id;
             running |= active;
             self.mark_dirty(id);
         }
@@ -209,22 +211,25 @@ impl WidgetTree {
 
     pub(super) fn retarget(&mut self, slot: Slot) {
         let styles = self.nodes[slot.index()].styles();
-        let node = &mut self.nodes[slot.index()];
+        let state = self.nodes[slot.index()].state;
         let durations = styles.transitions();
-        let target = styles.resolve(node.state);
-        let from = match node.transition.take() {
-            Some(transition) if transition.to != target => transition.style(),
+        let target = styles.resolve(state);
+        let from = match self.nodes[slot.index()].transition.take() {
+            Some(transition) if transition.to != target => {
+                self.active_transitions -= 1;
+                transition.style()
+            }
             Some(transition) => {
-                node.transition = Some(transition);
+                self.set_transition(slot, Some(transition));
                 return;
             }
-            None => node.shown,
+            None => self.nodes[slot.index()].shown,
         };
-        node.shown = target;
+        self.nodes[slot.index()].shown = target;
         if durations.is_empty() {
-            node.transition = None;
             return;
         }
-        node.transition = (from != target).then(|| Transition::new(from, target, durations));
+        let transition = (from != target).then(|| Transition::new(from, target, durations));
+        self.set_transition(slot, transition);
     }
 }

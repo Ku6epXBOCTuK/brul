@@ -85,6 +85,7 @@ pub struct WidgetTree {
     stale: HashSet<Slot>,
     full_dirty: bool,
     layout_dirty: bool,
+    active_transitions: usize,
     layouter: Layouter<Slot>,
 }
 
@@ -179,6 +180,7 @@ impl WidgetTree {
             stale: HashSet::new(),
             full_dirty: true,
             layout_dirty: true,
+            active_transitions: 0,
             layouter: Layouter::new(),
         };
         tree.root = tree.insert(root);
@@ -242,6 +244,7 @@ impl WidgetTree {
             .into_iter()
             .map(|child| self.extract(child))
             .collect();
+        self.release_transition(slot);
         let node = &mut self.nodes[slot.index()];
         // NOTE: the slot is freed and refilled by insert, so the placeholder never reaches a snapshot
         let data = std::mem::replace(
@@ -273,6 +276,7 @@ impl WidgetTree {
         for child in children {
             self.remove(child);
         }
+        self.release_transition(slot);
         self.index.remove(&self.nodes[slot.index()].id);
         self.free.push(slot);
     }
@@ -286,6 +290,23 @@ impl WidgetTree {
         Some(&mut self.nodes[slot.index()])
     }
 
+    fn set_transition(&mut self, slot: Slot, transition: Option<Transition>) {
+        let was_active = self.nodes[slot.index()].transition.is_some();
+        let is_active = transition.is_some();
+        match (was_active, is_active) {
+            (false, true) => self.active_transitions += 1,
+            (true, false) => self.active_transitions -= 1,
+            _ => {}
+        }
+        self.nodes[slot.index()].transition = transition;
+    }
+
+    fn release_transition(&mut self, slot: Slot) {
+        if self.nodes[slot.index()].transition.take().is_some() {
+            self.active_transitions -= 1;
+        }
+    }
+
     pub fn set_root_scroll(&mut self, scroll: bool) {
         self.root_scroll = scroll;
     }
@@ -295,6 +316,7 @@ impl WidgetTree {
         self.index.clear();
         self.free.clear();
         self.stale.clear();
+        self.active_transitions = 0;
         self.geometry = None;
         self.clear_interaction();
         self.root = self.insert(root);
