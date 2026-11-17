@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
 pub(crate) enum Kind {
@@ -12,6 +12,7 @@ pub(crate) enum Kind {
 struct Node {
     kind: Kind,
     subscribers: Vec<u32>,
+    subscriber_index: HashMap<u32, usize>,
     dependencies: Vec<u32>,
     dirty: bool,
     queued: bool,
@@ -40,6 +41,7 @@ pub(crate) fn create(kind: Kind, payload: Rc<dyn Any>) -> u32 {
         let node = Node {
             kind,
             subscribers: Vec::new(),
+            subscriber_index: HashMap::new(),
             dependencies: Vec::new(),
             dirty: false,
             queued: false,
@@ -92,12 +94,28 @@ fn subscribe(source: u32, tracker: u32) {
     ARENA.with(|arena| {
         let mut arena = arena.borrow_mut();
         let node = &mut arena.nodes[source as usize];
-        if node.subscribers.contains(&tracker) {
+        if node.subscriber_index.contains_key(&tracker) {
             return;
         }
+        node.subscriber_index
+            .insert(tracker, node.subscribers.len());
         node.subscribers.push(tracker);
         arena.nodes[tracker as usize].dependencies.push(source);
     });
+}
+
+fn remove_subscriber(node: &mut Node, tracker: u32) {
+    let Some(at) = node.subscriber_index.remove(&tracker) else {
+        return;
+    };
+    node.subscribers.remove(at);
+    for subscriber in &node.subscribers[at..] {
+        let index = node
+            .subscriber_index
+            .get_mut(subscriber)
+            .expect("subscriber index stays in sync");
+        *index -= 1;
+    }
 }
 
 pub(crate) fn with_tracker<R>(id: u32, f: impl FnOnce() -> R) -> R {
@@ -169,9 +187,7 @@ pub(crate) fn clear_dependencies(id: u32) {
         let mut arena = arena.borrow_mut();
         let mut dependencies = std::mem::take(&mut arena.nodes[id as usize].dependencies);
         for &dependency in &dependencies {
-            arena.nodes[dependency as usize]
-                .subscribers
-                .retain(|subscriber| *subscriber != id);
+            remove_subscriber(&mut arena.nodes[dependency as usize], id);
         }
         dependencies.clear();
         arena.nodes[id as usize].dependencies = dependencies;
@@ -233,11 +249,10 @@ pub(crate) fn dispose(id: u32) {
         node.queued = false;
         node.payload = None;
         node.subscribers.clear();
+        node.subscriber_index.clear();
         let dependencies = std::mem::take(&mut node.dependencies);
         for dependency in dependencies {
-            arena.nodes[dependency as usize]
-                .subscribers
-                .retain(|subscriber| *subscriber != id);
+            remove_subscriber(&mut arena.nodes[dependency as usize], id);
         }
         arena.live -= 1;
         arena.free.push(id);
@@ -276,5 +291,62 @@ mod tests {
             dispose(id);
         }
         assert_eq!(slots(), base + 1, "slots are reused instead of appended");
+    }
+
+    #[test]
+    fn subscriber_index_survives_removal_and_resubscription() {
+        let source = create(Kind::Signal, Rc::new(RefCell::new(0)));
+        let first = create(Kind::Effect, callback());
+        let second = create(Kind::Effect, callback());
+        let third = create(Kind::Effect, callback());
+
+        subscribe(source, first);
+        subscribe(source, second);
+        subscribe(source, third);
+        subscribe(source, second);
+
+        ARENA.with(|arena| {
+            let arena = arena.borrow();
+            let node = &arena.nodes[source as usize];
+            assert_eq!(node.subscribers, vec![first, second, third]);
+            assert_eq!(node.subscriber_index.get(&first), Some(&0));
+            assert_eq!(node.subscriber_index.get(&second), Some(&1));
+            assert_eq!(node.subscriber_index.get(&third), Some(&2));
+        });
+
+        clear_dependencies(second);
+
+        ARENA.with(|arena| {
+            let arena = arena.borrow();
+            let node = &arena.nodes[source as usize];
+            assert_eq!(node.subscribers, vec![first, third]);
+            assert_eq!(node.subscriber_index.get(&first), Some(&0));
+            assert_eq!(node.subscriber_index.get(&third), Some(&1));
+            assert!(!node.subscriber_index.contains_key(&second));
+        });
+
+        subscribe(source, second);
+
+        ARENA.with(|arena| {
+            let arena = arena.borrow();
+            let node = &arena.nodes[source as usize];
+            assert_eq!(node.subscribers, vec![first, third, second]);
+            assert_eq!(node.subscriber_index.get(&second), Some(&2));
+        });
+    }
+
+    #[test]
+    fn dispose_removes_the_subscriber_index() {
+        let source = create(Kind::Signal, Rc::new(RefCell::new(0)));
+        let effect = create(Kind::Effect, callback());
+        subscribe(source, effect);
+        dispose(effect);
+
+        ARENA.with(|arena| {
+            let arena = arena.borrow();
+            let node = &arena.nodes[source as usize];
+            assert!(node.subscribers.is_empty());
+            assert!(node.subscriber_index.is_empty());
+        });
     }
 }
