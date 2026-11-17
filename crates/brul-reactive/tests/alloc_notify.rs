@@ -1,7 +1,9 @@
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use brul_reactive::{Memo, Signal};
+use brul_reactive::{Effect, EffectScope, Memo, Signal, flush};
 
 struct Counting;
 
@@ -51,4 +53,25 @@ fn a_bump_allocates_nothing_once_the_buffers_are_warm() {
     }
     assert_eq!(allocations() - before, 0, "bump with a memo");
     assert_eq!(doubled.get(), 1998);
+
+    let scope = EffectScope::new();
+    let watched = Signal::new(0_u32);
+    let seen = Rc::new(Cell::new(0_u32));
+    {
+        let seen = Rc::clone(&seen);
+        scope.run(move || {
+            Effect::new(move || {
+                seen.set(watched.get());
+            });
+        });
+    }
+    watched.set(1);
+    flush();
+    let before = allocations();
+    for value in 0..1000 {
+        watched.set(value);
+        flush();
+    }
+    assert_eq!(allocations() - before, 0, "effect run");
+    assert_eq!(seen.get(), 999);
 }

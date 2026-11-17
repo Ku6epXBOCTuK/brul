@@ -167,12 +167,14 @@ pub(crate) fn notify(id: u32) {
 pub(crate) fn clear_dependencies(id: u32) {
     ARENA.with(|arena| {
         let mut arena = arena.borrow_mut();
-        let dependencies = std::mem::take(&mut arena.nodes[id as usize].dependencies);
-        for dependency in dependencies {
+        let mut dependencies = std::mem::take(&mut arena.nodes[id as usize].dependencies);
+        for &dependency in &dependencies {
             arena.nodes[dependency as usize]
                 .subscribers
                 .retain(|subscriber| *subscriber != id);
         }
+        dependencies.clear();
+        arena.nodes[id as usize].dependencies = dependencies;
     });
 }
 
