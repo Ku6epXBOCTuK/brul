@@ -23,10 +23,14 @@
                     Text (hint) { "off" }
                 }
             }
-            @each (items as item) {
-                Text (row) { item }
+            @each (items as item, idx (item.id)) {
+                Text (row) { item.label }
             }
-            Badge (label: "badge", active: kind != "", on clicked: toggle) { }
+            Badge (label: "badge", active: kind != "", on clicked: toggle) {
+                @slot(extra) {
+                    Text (badge-extra) { kind }
+                }
+            }
         }
     }
 </markup>
@@ -53,4 +57,5 @@
         vertical-align: center;
     }
     .row { padding-top: 2px; }
+    .badge-extra { font-size: 10px; }
 </style>

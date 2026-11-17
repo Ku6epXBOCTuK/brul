@@ -13,6 +13,7 @@
         Row (badge, on click: pick, selected: active) {
             Text (badge-label) { label }
             View (dot) { }
+            @slot(extra)
         }
     }
 </markup>
