@@ -28,8 +28,9 @@ impl<'a> Parser<'a> {
     }
 
     fn at(source: &'a str, offset: usize) -> Result<Self, Error> {
+        let end = expression_end(source, offset);
         let mut tokens =
-            lexer::tokenize(&source[offset..]).map_err(|error| rebase(source, offset, error))?;
+            lexer::tokenize(&source[offset..end]).map_err(|error| rebase(source, offset, error))?;
         for token in &mut tokens {
             token.span.start += offset;
             token.span.end += offset;
@@ -383,6 +384,92 @@ pub fn parse_expression_at(source: &str, offset: usize) -> Result<(Expr, usize),
     let expr = parser.parse_expression()?;
     let end = parser.tokens[parser.at - 1].span.end;
     Ok((expr, end))
+}
+
+fn expression_end(source: &str, offset: usize) -> usize {
+    let bytes = source.as_bytes();
+    let mut at = offset;
+    let mut depth = 0usize;
+    let mut quote = None;
+    let mut template = false;
+    let mut template_depth = 0usize;
+    while at < bytes.len() {
+        let ch = bytes[at];
+        if let Some(closed) = quote {
+            at += 1;
+            if ch == b'\\' {
+                at += 1;
+            } else if ch == closed {
+                quote = None;
+            }
+            continue;
+        }
+        if template {
+            match ch {
+                b'\\' => at += 2,
+                b'`' => {
+                    template = false;
+                    at += 1;
+                }
+                b'$' if bytes.get(at + 1) == Some(&b'{') => {
+                    template = false;
+                    template_depth += 1;
+                    depth += 1;
+                    at += 2;
+                }
+                _ => at += 1,
+            }
+            continue;
+        }
+        if template_depth > 0 {
+            match ch {
+                b'{' => {
+                    depth += 1;
+                    at += 1;
+                }
+                b'}' if depth == 1 => {
+                    depth -= 1;
+                    template = true;
+                    template_depth -= 1;
+                    at += 1;
+                }
+                b'}' => {
+                    depth -= 1;
+                    at += 1;
+                }
+                _ => at += 1,
+            }
+            continue;
+        }
+        match ch {
+            b'\'' | b'"' => {
+                quote = Some(ch);
+                at += 1;
+            }
+            b'`' => {
+                template = true;
+                at += 1;
+            }
+            b'/' if bytes.get(at + 1) == Some(&b'/') => {
+                at += 2;
+                while at < bytes.len() && bytes[at] != b'\n' {
+                    at += 1;
+                }
+            }
+            b'(' | b'[' | b'{' => {
+                depth += 1;
+                at += 1;
+            }
+            b')' | b']' | b'}' | b',' | b';' if depth == 0 => break,
+            b')' | b']' | b'}' => {
+                depth -= 1;
+                at += 1;
+            }
+            b'a' if depth == 0 && source[at..].starts_with("as ") => break,
+            _ => at += 1,
+        }
+    }
+    at
 }
 
 fn rebase(source: &str, offset: usize, error: lexer::Error) -> Error {
