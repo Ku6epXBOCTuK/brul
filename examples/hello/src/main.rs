@@ -39,8 +39,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         ("name", Value::String("world".into())),
         ("greeting", Value::String(String::new().into())),
     ];
+    let backend = match std::env::var("BRUL_EXAMPLE_BACKEND") {
+        Ok(value) => Some(value.parse::<brul::Backend>()?),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(error) => return Err(error.into()),
+    };
+    let mut windows = generated::windows();
+    if let Some(backend) = backend {
+        for window in &mut windows {
+            window.config.backend = backend;
+        }
+    }
     brul::run_generated(
-        generated::windows(),
+        windows,
         generated::script(),
         generated::names(),
         None,
