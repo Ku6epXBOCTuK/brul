@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use brul_gui::Frame;
+use brul_gui::{Atlas, Dirty, WidgetSnapshot};
 use winit::window::{Window, WindowLevel};
 
 use crate::gpu::Gpu;
@@ -62,7 +62,13 @@ impl Surface for Arc<dyn Window> {
 pub(crate) trait Renderer {
     fn resize(&mut self, width: u32, height: u32);
     fn clear(&mut self, surface: &dyn Surface) -> bool;
-    fn present(&mut self, surface: &dyn Surface, frame: &Frame) -> bool;
+    fn render(
+        &mut self,
+        surface: &dyn Surface,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
+    ) -> bool;
 }
 
 impl Renderer for Gpu {
@@ -74,8 +80,14 @@ impl Renderer for Gpu {
         self.clear_surface(surface)
     }
 
-    fn present(&mut self, surface: &dyn Surface, frame: &Frame) -> bool {
-        self.present_frame(surface, frame)
+    fn render(
+        &mut self,
+        surface: &dyn Surface,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
+    ) -> bool {
+        Gpu::render(self, surface, snapshot, atlas, dirty)
     }
 }
 
@@ -88,8 +100,14 @@ impl Renderer for SoftwareRenderer {
         self.clear_buffer()
     }
 
-    fn present(&mut self, surface: &dyn Surface, frame: &Frame) -> bool {
-        self.present(surface, frame)
+    fn render(
+        &mut self,
+        surface: &dyn Surface,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
+    ) -> bool {
+        SoftwareRenderer::render(self, surface, snapshot, atlas, dirty)
     }
 }
 
@@ -135,7 +153,13 @@ mod tests {
             true
         }
 
-        fn present(&mut self, _surface: &dyn Surface, _frame: &Frame) -> bool {
+        fn render(
+            &mut self,
+            _surface: &dyn Surface,
+            _snapshot: &WidgetSnapshot,
+            _atlas: &Atlas,
+            _dirty: &Dirty,
+        ) -> bool {
             true
         }
     }

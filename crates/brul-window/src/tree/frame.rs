@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
 
-use brul_gui::{Frame, Size, WidgetTree};
+use brul_gui::{Dirty, Size, WidgetTree};
 use tracing::{debug, info, trace};
 
 use crate::surface::Surface;
@@ -53,11 +53,6 @@ impl TreeApp {
         if let Err(error) = layout {
             return self.fail(error.into());
         }
-        if let Some(frame) = self.frame.as_mut() {
-            frame.resize(width, height);
-        } else {
-            self.frame = Some(Frame::new(width, height));
-        }
         self.presented = false;
         surface.redraw();
         Step::Continue
@@ -101,22 +96,19 @@ impl TreeApp {
         let Some(renderer) = self.renderer.as_mut() else {
             return Ok(());
         };
-        let Some(frame) = self.frame.as_mut() else {
-            return Ok(());
-        };
         let Some(engine) = self.engine.as_ref() else {
             return Ok(());
         };
 
-        let changed = rebuild || !dirty.is_empty();
-        if changed {
+        if rebuild || !dirty.is_empty() || !self.presented {
             let mut tree = self.tree.borrow_mut();
             let snapshot = tree.snapshot()?;
-            frame.paint(snapshot, engine.atlas(), &dirty);
-        }
-
-        if changed || !self.presented {
-            self.presented = renderer.present(surface, frame);
+            let paint = if dirty.is_empty() {
+                Dirty::all()
+            } else {
+                dirty
+            };
+            self.presented = renderer.render(surface, snapshot, engine.atlas(), &paint);
         }
         let (width, height) = surface.size();
         crate::perf::startup(self.config.backend, surface.scale_factor(), width, height);

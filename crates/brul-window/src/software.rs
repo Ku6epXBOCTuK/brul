@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-use brul_gui::Frame;
+use brul_gui::{Atlas, Dirty, Frame, WidgetSnapshot};
 use softbuffer::{Context, SoftBufferError, Surface as BufferSurface};
 use tracing::warn;
 use winit::window::Window;
@@ -13,6 +13,7 @@ pub(crate) struct SoftwareRenderer {
     _context: Context<Arc<dyn Window>>,
     surface: BufferSurface<Arc<dyn Window>, Arc<dyn Window>>,
     size: (u32, u32),
+    frame: Frame,
 }
 
 impl SoftwareRenderer {
@@ -23,6 +24,7 @@ impl SoftwareRenderer {
             _context: context,
             surface,
             size: (0, 0),
+            frame: Frame::new(1, 1),
         })
     }
 
@@ -51,15 +53,33 @@ impl SoftwareRenderer {
         buffer.present().is_ok()
     }
 
-    pub(crate) fn present(&mut self, _surface: &dyn Surface, frame: &Frame) -> bool {
-        self.resize(frame.width(), frame.height());
-        if self.size != (frame.width(), frame.height()) {
+    pub(crate) fn render(
+        &mut self,
+        surface: &dyn Surface,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
+    ) -> bool {
+        let (width, height) = surface.size();
+        self.frame.resize(width.max(1), height.max(1));
+        self.frame.paint(snapshot, atlas, dirty);
+        self.present()
+    }
+
+    fn present(&mut self) -> bool {
+        let width = self.frame.width();
+        let height = self.frame.height();
+        self.resize(width, height);
+        if self.size != (width, height) {
             return false;
         }
         let Ok(mut buffer) = self.surface.buffer_mut() else {
             return false;
         };
-        for (target, pixel) in buffer.iter_mut().zip(frame.pixels().as_chunks::<4>().0) {
+        for (target, pixel) in buffer
+            .iter_mut()
+            .zip(self.frame.pixels().as_chunks::<4>().0)
+        {
             *target = pack(pixel);
         }
         buffer.present().is_ok()

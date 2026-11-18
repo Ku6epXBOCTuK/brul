@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{CaretArea, Frame, Size, TextEngine, WidgetEvent, WidgetTree};
+use brul_gui::{CaretArea, Size, TextEngine, WidgetEvent, WidgetTree};
 use tracing::{error, info};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -49,7 +49,6 @@ pub(crate) struct TreeApp {
     window: Option<Arc<dyn Window>>,
     renderer: Option<Box<dyn Renderer>>,
     engine: Option<TextEngine>,
-    frame: Option<Frame>,
     error: Rc<Cell<Option<WindowError>>>,
     pub(crate) timers: Vec<Timer>,
     cursor: (i32, i32),
@@ -103,7 +102,6 @@ pub(crate) fn tree_app(
         window: None,
         renderer: None,
         engine: None,
-        frame: None,
         error,
         timers: Vec::new(),
         cursor: (0, 0),
@@ -170,7 +168,6 @@ impl TreeApp {
         self.window = Some(Arc::clone(&window));
         self.renderer = Some(renderer);
         self.engine = Some(engine);
-        self.frame = Some(Frame::new(size.width.max(1), size.height.max(1)));
         info!(title = %self.config.title, width = size.width, height = size.height, "window opened");
         let commands = std::mem::take(&mut self.initial);
         let step = self.run_commands(&window, commands);

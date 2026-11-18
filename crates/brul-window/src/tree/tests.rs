@@ -2,7 +2,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{Frame, Size, TextEngine, Widget, WidgetError, WidgetEvent, WidgetTree};
+use brul_gui::{
+    Atlas, Dirty, Size, TextEngine, Widget, WidgetError, WidgetEvent, WidgetSnapshot, WidgetTree,
+};
 use winit::event_loop::ControlFlow;
 
 use crate::input::Input;
@@ -95,8 +97,14 @@ impl Renderer for FakeRenderer {
         true
     }
 
-    fn present(&mut self, _surface: &dyn Surface, _frame: &Frame) -> bool {
-        self.calls.borrow_mut().push("present".to_owned());
+    fn render(
+        &mut self,
+        _surface: &dyn Surface,
+        _snapshot: &WidgetSnapshot,
+        _atlas: &Atlas,
+        _dirty: &Dirty,
+    ) -> bool {
+        self.calls.borrow_mut().push("render".to_owned());
         true
     }
 }
@@ -119,7 +127,6 @@ fn renderable_app() -> (TreeApp, FakeSurface, Rc<RefCell<Vec<String>>>) {
         )
         .expect("layout");
     app.engine = Some(engine);
-    app.frame = Some(Frame::new(8, 6));
     (app, surface, calls)
 }
 
@@ -348,16 +355,14 @@ fn a_size_of_zero_is_ignored() {
 
     assert_eq!(app.resize(&surface, 0, 10), Step::Continue);
     assert_eq!(surface.redraws.get(), 0);
-    assert!(app.frame.is_none());
 }
 
 #[test]
-fn a_resize_makes_the_frame_and_asks_for_a_redraw() {
+fn a_resize_asks_for_a_redraw() {
     let surface = FakeSurface::new(2.0);
     let mut app = tree_app(commands(Vec::new()));
 
     assert_eq!(app.resize(&surface, 4, 5), Step::Continue);
-    assert!(app.frame.is_some());
     assert_eq!(surface.redraws.get(), 1);
 }
 
@@ -483,7 +488,6 @@ fn the_first_frame_shows_the_window() {
     app.engine = Some(TextEngine::new());
     let (renderer, _) = FakeRenderer::new();
     app.renderer = Some(Box::new(renderer));
-    app.frame = Some(Frame::new(8, 6));
 
     assert_eq!(surface.visible.get(), None);
     assert!(app.render_frame(&surface).is_ok());
@@ -509,7 +513,6 @@ fn a_window_hidden_by_its_config_stays_hidden_after_the_first_frame() {
     app.engine = Some(TextEngine::new());
     let (renderer, _) = FakeRenderer::new();
     app.renderer = Some(Box::new(renderer));
-    app.frame = Some(Frame::new(8, 6));
 
     assert!(app.render_frame(&surface).is_ok());
     assert_eq!(surface.visible.get(), Some(false));
@@ -524,7 +527,7 @@ fn a_frame_without_a_renderer_is_skipped() {
 }
 
 #[test]
-fn a_frame_is_painted_and_presented() {
+fn a_frame_is_rendered() {
     let surface = FakeSurface::new(1.0);
     let mut app = tree_app(commands(Vec::new()));
     let (renderer, calls) = FakeRenderer::new();
@@ -542,10 +545,9 @@ fn a_frame_is_painted_and_presented() {
         )
         .expect("layout");
     app.engine = Some(engine);
-    app.frame = Some(Frame::new(8, 6));
 
     assert!(app.render_frame(&surface).is_ok());
-    assert_eq!(calls.borrow().as_slice(), ["present"]);
+    assert_eq!(calls.borrow().as_slice(), ["render"]);
 }
 
 #[test]
@@ -554,7 +556,7 @@ fn a_frame_without_changes_is_not_presented_twice() {
 
     assert!(app.render_frame(&surface).is_ok());
     assert!(app.render_frame(&surface).is_ok());
-    assert_eq!(calls.borrow().as_slice(), ["present"]);
+    assert_eq!(calls.borrow().as_slice(), ["render"]);
 }
 
 #[test]
@@ -564,7 +566,7 @@ fn a_surface_without_the_frame_presents_it_again() {
     assert!(app.render_frame(&surface).is_ok());
     app.presented = false;
     assert!(app.render_frame(&surface).is_ok());
-    assert_eq!(calls.borrow().as_slice(), ["present", "present"]);
+    assert_eq!(calls.borrow().as_slice(), ["render", "render"]);
 }
 
 #[test]

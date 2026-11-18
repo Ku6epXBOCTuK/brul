@@ -5,7 +5,7 @@ use std::task::{Context, Poll, Waker};
 
 use winit::window::Window;
 
-use brul_gui::Frame;
+use brul_gui::{Atlas, Dirty, Frame, WidgetSnapshot};
 
 use crate::window::WindowError;
 
@@ -52,6 +52,7 @@ pub(crate) struct Gpu {
     blit_pipeline: wgpu::RenderPipeline,
     blit_sampler: wgpu::Sampler,
     blit: Option<BlitTarget>,
+    frame: Frame,
 }
 
 struct BlitTarget {
@@ -166,6 +167,7 @@ impl Gpu {
             blit_pipeline,
             blit_sampler,
             blit: None,
+            frame: Frame::new(1, 1),
         })
     }
 
@@ -244,13 +246,22 @@ impl Gpu {
         ));
     }
 
-    pub(crate) fn present_frame(
+    pub(crate) fn render(
         &mut self,
         surface: &dyn crate::surface::Surface,
-        frame: &Frame,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
     ) -> bool {
-        let width = frame.width().max(1);
-        let height = frame.height().max(1);
+        let (width, height) = surface.size();
+        self.frame.resize(width.max(1), height.max(1));
+        self.frame.paint(snapshot, atlas, dirty);
+        self.present_frame(surface)
+    }
+
+    fn present_frame(&mut self, surface: &dyn crate::surface::Surface) -> bool {
+        let width = self.frame.width().max(1);
+        let height = self.frame.height().max(1);
         self.ensure_blit(width, height);
         let target = self.blit.as_ref().expect("blit target");
 
@@ -261,7 +272,7 @@ impl Gpu {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            frame.pixels(),
+            self.frame.pixels(),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(width * 4),
