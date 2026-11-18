@@ -86,7 +86,7 @@ fn text(out: &mut Out<'_>, layers: &Layers<TextStylePatch>) {
 }
 
 fn states<T>(out: &mut Out<'_>, layers: &Layers<T>, patch_text: impl Fn(&T) -> String) {
-    for state in StyleState::ALL {
+    for &state in StyleState::ALL {
         if let Some(patch) = layers.patch(state) {
             out.end();
             out.indented(|out| {

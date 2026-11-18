@@ -56,30 +56,26 @@ pub enum WidgetKind {
     Input,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct WidgetState {
-    pub hovered: bool,
-    pub pressed: bool,
-    pub checked: bool,
-    pub selected: bool,
-    pub disabled: bool,
-    pub focused: bool,
-    pub visible: bool,
+macro_rules! define_widget_state {
+    ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        pub struct WidgetState {
+            $(pub $field: bool,)+
+            pub visible: bool,
+        }
+
+        impl Default for WidgetState {
+            fn default() -> Self {
+                Self {
+                    $($field: false,)+
+                    visible: true,
+                }
+            }
+        }
+    };
 }
 
-impl Default for WidgetState {
-    fn default() -> Self {
-        Self {
-            hovered: false,
-            pressed: false,
-            checked: false,
-            selected: false,
-            disabled: false,
-            focused: false,
-            visible: true,
-        }
-    }
-}
+brul_style::states!(define_widget_state);
 
 pub struct Widget {
     id: WidgetId,

@@ -32,28 +32,26 @@ pub struct ClassRule {
     pub animations: Vec<Animation>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum State {
-    Hover,
-    Pressed,
-    Checked,
-    Selected,
-    Disabled,
-    Focus,
+macro_rules! define_states {
+    ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum State {
+            $($syntax),+
+        }
+
+        impl State {
+            pub const ALL: &'static [State] = &[$(State::$syntax),+];
+
+            pub fn name(self) -> &'static str {
+                match self {
+                    $(State::$syntax => $keyword),+
+                }
+            }
+        }
+    };
 }
 
-impl State {
-    pub fn name(self) -> &'static str {
-        match self {
-            State::Hover => "hover",
-            State::Pressed => "pressed",
-            State::Checked => "checked",
-            State::Selected => "selected",
-            State::Disabled => "disabled",
-            State::Focus => "focus",
-        }
-    }
-}
+crate::states!(define_states);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Property {
@@ -176,21 +174,12 @@ impl Color {
 mod tests {
     use super::State;
 
-    const ALL: [State; 6] = [
-        State::Hover,
-        State::Pressed,
-        State::Checked,
-        State::Selected,
-        State::Disabled,
-        State::Focus,
-    ];
-
     #[test]
     fn every_state_has_its_own_name() {
-        let mut names: Vec<&str> = ALL.iter().map(|state| state.name()).collect();
+        let mut names: Vec<&str> = State::ALL.iter().map(|state| state.name()).collect();
         assert!(names.iter().all(|name| !name.is_empty()));
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), ALL.len());
+        assert_eq!(names.len(), State::ALL.len());
     }
 }

@@ -58,7 +58,7 @@ pub fn resolve(
     let (layout, base_style, base_text) = base_styles(&base)?;
     let mut styles = StyleSet::new(base_style).with_transitions(transitions(&base)?);
     let mut text = TextStyleSet::new(base_text.clone());
-    for state in StyleState::ALL {
+    for &state in StyleState::ALL {
         let stated = stylesheet.stated(classes, syntax_state(state), theme)?;
         let (patch, text_patch) = state_patch(&stated)?;
         if patch != WidgetStylePatch::default() {
@@ -85,7 +85,7 @@ pub fn class(
     let (style_patch, text_patch) = state_patch(&base)?;
     let mut style = Layers::new(style_patch);
     let mut text = Layers::new(text_patch);
-    for state in StyleState::ALL {
+    for &state in StyleState::ALL {
         let stated = stylesheet.stated(&[name], syntax_state(state), theme)?;
         let (style_patch, text_patch) = state_patch(&stated)?;
         if style_patch != WidgetStylePatch::default() {
@@ -453,13 +453,14 @@ fn px(value: f64) -> u32 {
     value.max(0.0).round() as u32
 }
 
-fn syntax_state(state: StyleState) -> State {
-    match state {
-        StyleState::Hovered => State::Hover,
-        StyleState::Pressed => State::Pressed,
-        StyleState::Checked => State::Checked,
-        StyleState::Selected => State::Selected,
-        StyleState::Disabled => State::Disabled,
-        StyleState::Focused => State::Focus,
-    }
+macro_rules! syntax_states {
+    ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {
+        fn syntax_state(state: StyleState) -> State {
+            match state {
+                $(StyleState::$gui => State::$syntax,)+
+            }
+        }
+    };
 }
+
+brul_style::states!(syntax_states);

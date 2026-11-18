@@ -114,7 +114,7 @@ pub(super) fn measure_text(
         }
         let mut variants =
             TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
-        for state in StyleState::ALL {
+        for &state in StyleState::ALL {
             let style = styles.resolve(state.flags());
             if style == *styles.base() {
                 continue;

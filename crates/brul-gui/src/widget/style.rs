@@ -9,6 +9,21 @@ use crate::layout::LayoutPatch;
 use crate::rect::Shadow;
 use crate::text::VerticalAlign;
 
+macro_rules! resolve_layers {
+    ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {
+        pub fn resolve(&self, state: WidgetState) -> WidgetStyle {
+            let mut style = self.base;
+            let layers = [$( (state.$field, self.$field), )+];
+            for (active, patch) in layers {
+                if let (true, Some(patch)) = (active, patch) {
+                    style.apply(&patch);
+                }
+            }
+            style
+        }
+    };
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct Relayout {
     geometry: LayoutGeometry,
@@ -140,74 +155,60 @@ impl WidgetStyle {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Layers<P> {
-    base: P,
-    hovered: Option<P>,
-    pressed: Option<P>,
-    checked: Option<P>,
-    selected: Option<P>,
-    disabled: Option<P>,
-    focused: Option<P>,
+macro_rules! define_layers {
+    ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {
+        #[derive(Clone, Debug, Default, PartialEq)]
+        pub struct Layers<P> {
+            base: P,
+            $($field: Option<P>,)+
+        }
+
+        impl<P> Layers<P> {
+            pub const fn new(base: P) -> Self {
+                Self {
+                    base,
+                    $($field: None,)+
+                }
+            }
+
+            pub fn with(mut self, state: StyleState, patch: P) -> Self {
+                *self.slot_mut(state) = Some(patch);
+                self
+            }
+
+            pub fn base(&self) -> &P {
+                &self.base
+            }
+
+            pub fn patch(&self, state: StyleState) -> Option<&P> {
+                self.slot(state).as_ref()
+            }
+
+            const fn slot(&self, state: StyleState) -> &Option<P> {
+                match state {
+                    $(StyleState::$gui => &self.$field,)+
+                }
+            }
+
+            const fn slot_mut(&mut self, state: StyleState) -> &mut Option<P> {
+                match state {
+                    $(StyleState::$gui => &mut self.$field,)+
+                }
+            }
+        }
+
+        impl<P: Default + PartialEq> Layers<P> {
+            pub fn is_empty(&self) -> bool {
+                self.base == P::default()
+                    && StyleState::ALL
+                        .iter()
+                        .all(|state| self.slot(*state).is_none())
+            }
+        }
+    };
 }
 
-impl<P> Layers<P> {
-    pub const fn new(base: P) -> Self {
-        Self {
-            base,
-            hovered: None,
-            pressed: None,
-            checked: None,
-            selected: None,
-            disabled: None,
-            focused: None,
-        }
-    }
-
-    pub fn with(mut self, state: StyleState, patch: P) -> Self {
-        *self.slot_mut(state) = Some(patch);
-        self
-    }
-
-    pub fn base(&self) -> &P {
-        &self.base
-    }
-
-    pub fn patch(&self, state: StyleState) -> Option<&P> {
-        self.slot(state).as_ref()
-    }
-
-    const fn slot(&self, state: StyleState) -> &Option<P> {
-        match state {
-            StyleState::Hovered => &self.hovered,
-            StyleState::Pressed => &self.pressed,
-            StyleState::Checked => &self.checked,
-            StyleState::Selected => &self.selected,
-            StyleState::Disabled => &self.disabled,
-            StyleState::Focused => &self.focused,
-        }
-    }
-
-    const fn slot_mut(&mut self, state: StyleState) -> &mut Option<P> {
-        match state {
-            StyleState::Hovered => &mut self.hovered,
-            StyleState::Pressed => &mut self.pressed,
-            StyleState::Checked => &mut self.checked,
-            StyleState::Selected => &mut self.selected,
-            StyleState::Disabled => &mut self.disabled,
-            StyleState::Focused => &mut self.focused,
-        }
-    }
-}
-
-impl<P: Default + PartialEq> Layers<P> {
-    pub fn is_empty(&self) -> bool {
-        self.base == P::default()
-            && StyleState::ALL
-                .iter()
-                .all(|state| self.slot(*state).is_none())
-    }
-}
+brul_style::states!(define_layers);
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Class {
@@ -226,55 +227,29 @@ impl Class {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StyleState {
-    Hovered,
-    Pressed,
-    Checked,
-    Selected,
-    Disabled,
-    Focused,
-}
-
-impl StyleState {
-    pub const ALL: [StyleState; 6] = [
-        StyleState::Hovered,
-        StyleState::Pressed,
-        StyleState::Checked,
-        StyleState::Selected,
-        StyleState::Disabled,
-        StyleState::Focused,
-    ];
-
-    pub fn flags(self) -> WidgetState {
-        match self {
-            StyleState::Hovered => WidgetState {
-                hovered: true,
-                ..WidgetState::default()
-            },
-            StyleState::Pressed => WidgetState {
-                pressed: true,
-                ..WidgetState::default()
-            },
-            StyleState::Checked => WidgetState {
-                checked: true,
-                ..WidgetState::default()
-            },
-            StyleState::Selected => WidgetState {
-                selected: true,
-                ..WidgetState::default()
-            },
-            StyleState::Disabled => WidgetState {
-                disabled: true,
-                ..WidgetState::default()
-            },
-            StyleState::Focused => WidgetState {
-                focused: true,
-                ..WidgetState::default()
-            },
+macro_rules! define_style_state {
+    ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        pub enum StyleState {
+            $($gui,)+
         }
-    }
+
+        impl StyleState {
+            pub const ALL: &'static [StyleState] = &[$(StyleState::$gui),+];
+
+            pub fn flags(self) -> WidgetState {
+                match self {
+                    $(StyleState::$gui => WidgetState {
+                        $field: true,
+                        ..WidgetState::default()
+                    },)+
+                }
+            }
+        }
+    };
 }
+
+brul_style::states!(define_style_state);
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Transitions {
@@ -367,7 +342,7 @@ impl StyleSet {
         transitions: Transitions,
     ) {
         self.base.apply(layers.base());
-        for state in StyleState::ALL {
+        for &state in StyleState::ALL {
             if let Some(patch) = layers.patch(state) {
                 self.state_mut(state).get_or_insert_default().merge(patch);
             }
@@ -386,23 +361,7 @@ impl StyleSet {
         }
     }
 
-    pub fn resolve(&self, state: WidgetState) -> WidgetStyle {
-        let mut style = self.base;
-        let layers = [
-            (state.selected, self.selected),
-            (state.checked, self.checked),
-            (state.hovered, self.hovered),
-            (state.focused, self.focused),
-            (state.pressed, self.pressed),
-            (state.disabled, self.disabled),
-        ];
-        for (active, patch) in layers {
-            if let (true, Some(patch)) = (active, patch) {
-                style.apply(&patch);
-            }
-        }
-        style
-    }
+    brul_style::states!(resolve_layers);
 }
 
 pub(super) struct Transition {

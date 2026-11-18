@@ -187,15 +187,11 @@ impl Cursor<'_> {
         }
         let at = self.value_start();
         let name = self.ident()?;
-        let state = match name.as_str() {
-            "hover" => State::Hover,
-            "pressed" => State::Pressed,
-            "checked" => State::Checked,
-            "selected" => State::Selected,
-            "disabled" => State::Disabled,
-            "focus" => State::Focus,
-            _ => return Err(Error::at(self.source(), at, "unknown state")),
-        };
+        let state = State::ALL
+            .iter()
+            .find(|state| state.name() == name)
+            .copied()
+            .ok_or_else(|| Error::at(self.source(), at, "unknown state"))?;
         Ok(Some(state))
     }
 

@@ -1,5 +1,19 @@
 //! Модель стиля BRUL: имена свойств, значения, правила и каскад.
 
+#[macro_export]
+macro_rules! states {
+    ($callback:ident) => {
+        $callback! {
+            (Selected, Selected, selected, "selected"),
+            (Checked, Checked, checked, "checked"),
+            (Hover, Hovered, hovered, "hover"),
+            (Focus, Focused, focused, "focus"),
+            (Pressed, Pressed, pressed, "pressed"),
+            (Disabled, Disabled, disabled, "disabled"),
+        }
+    };
+}
+
 pub mod ast;
 mod color;
 pub mod properties;
