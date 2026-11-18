@@ -69,6 +69,9 @@ pub(crate) trait Renderer {
         atlas: &Atlas,
         dirty: &Dirty,
     ) -> bool;
+    fn capture(&mut self) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 impl Renderer for Gpu {
@@ -89,6 +92,10 @@ impl Renderer for Gpu {
     ) -> bool {
         Gpu::render(self, surface, snapshot, atlas, dirty)
     }
+
+    fn capture(&mut self) -> Option<Vec<u8>> {
+        Gpu::capture(self)
+    }
 }
 
 impl Renderer for SoftwareRenderer {
@@ -108,6 +115,10 @@ impl Renderer for SoftwareRenderer {
         dirty: &Dirty,
     ) -> bool {
         SoftwareRenderer::render(self, surface, snapshot, atlas, dirty)
+    }
+
+    fn capture(&mut self) -> Option<Vec<u8>> {
+        SoftwareRenderer::capture(self)
     }
 }
 

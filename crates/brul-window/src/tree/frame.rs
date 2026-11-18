@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use brul_gui::{Dirty, Size, WidgetTree};
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
 
 use crate::surface::Surface;
 use crate::window::ColorScheme;
@@ -100,7 +100,7 @@ impl TreeApp {
             return Ok(());
         };
 
-        if rebuild || !dirty.is_empty() || !self.presented {
+        if rebuild || !dirty.is_empty() || !self.presented || crate::perf::measuring() {
             let mut tree = self.tree.borrow_mut();
             let snapshot = tree.snapshot()?;
             let paint = if dirty.is_empty() {
@@ -108,7 +108,18 @@ impl TreeApp {
             } else {
                 dirty
             };
+            let started = Instant::now();
             self.presented = renderer.render(surface, snapshot, engine.atlas(), &paint);
+            crate::perf::raster(self.config.backend, started.elapsed());
+            if !self.dumped
+                && let Some(path) = crate::perf::dump_path()
+                && let Some(pixels) = renderer.capture()
+            {
+                self.dumped = true;
+                if let Err(error) = std::fs::write(path, pixels) {
+                    warn!(?error, "frame dump failed");
+                }
+            }
         }
         let (width, height) = surface.size();
         crate::perf::startup(self.config.backend, surface.scale_factor(), width, height);

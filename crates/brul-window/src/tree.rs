@@ -61,6 +61,7 @@ pub(crate) struct TreeApp {
     initial: Vec<WindowCommand>,
     revealed: bool,
     presented: bool,
+    dumped: bool,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -82,7 +83,7 @@ impl ApplicationHandler for TreeApp {
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         let step = self.pump(Instant::now());
         self.finish(event_loop, step);
-        event_loop.set_control_flow(wakeup_at(self.deadline()));
+        event_loop.set_control_flow(wakeup_at(self.deadline().or_else(crate::perf::next_frame)));
     }
 }
 
@@ -114,6 +115,7 @@ pub(crate) fn tree_app(
         initial: Vec::new(),
         revealed: false,
         presented: false,
+        dumped: false,
     };
     let (timers, initial) = timer::split_initial(initial);
     app.timers = timers;

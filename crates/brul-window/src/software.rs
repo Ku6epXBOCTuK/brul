@@ -17,6 +17,10 @@ pub(crate) struct SoftwareRenderer {
 }
 
 impl SoftwareRenderer {
+    pub(crate) fn capture(&mut self) -> Option<Vec<u8>> {
+        Some(self.frame.pixels().to_vec())
+    }
+
     pub(crate) fn new(window: &Arc<dyn Window>) -> Result<Self, SoftBufferError> {
         let context = Context::new(Arc::clone(window))?;
         let surface = BufferSurface::new(&context, Arc::clone(window))?;

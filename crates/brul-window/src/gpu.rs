@@ -3,6 +3,7 @@ use std::future::Future;
 use std::pin::pin;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll, Waker};
 
 use winit::window::Window;
@@ -47,6 +48,8 @@ pub(crate) struct Gpu {
     atlas: Option<AtlasTexture>,
     images: HashMap<usize, ImageTexture>,
     frame_index: u64,
+    capture: bool,
+    captured: Option<Vec<u8>>,
 }
 
 struct AtlasTexture {
@@ -66,6 +69,10 @@ struct ImageTexture {
 }
 
 impl Gpu {
+    pub(crate) fn capture(&mut self) -> Option<Vec<u8>> {
+        self.captured.take()
+    }
+
     pub(crate) fn new(window: &Arc<dyn Window>) -> Result<Self, WindowError> {
         // NOTE: the GL backend parks a hidden window on a thread that pumps no messages, and a
         // keyboard layout switch then waits for it forever (wgpu#10504)
@@ -92,6 +99,15 @@ impl Gpu {
             .ok_or(WindowError::NoSurfaceConfig)?;
         config.alpha_mode = alpha_mode(&capabilities);
         config.desired_maximum_frame_latency = 1;
+        let mut capture = crate::perf::dump_path().is_some();
+        if capture {
+            if capabilities.usages.contains(wgpu::TextureUsages::COPY_SRC) {
+                config.usage |= wgpu::TextureUsages::COPY_SRC;
+            } else {
+                tracing::warn!("surface cannot be read back, frame dump is disabled");
+                capture = false;
+            }
+        }
         surface.configure(&device, &config);
 
         let nearest_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -302,6 +318,8 @@ impl Gpu {
             atlas: None,
             images: HashMap::new(),
             frame_index: 0,
+            capture,
+            captured: None,
         })
     }
 
@@ -583,9 +601,69 @@ impl Gpu {
         }
 
         self.queue.submit(Some(encoder.finish()));
+        if self.capture && self.captured.is_none() {
+            self.captured = self.readback(&surface_frame.texture, width, height);
+        }
         surface.pre_present_notify();
         self.queue.present(surface_frame);
         true
+    }
+
+    fn readback(&self, texture: &wgpu::Texture, width: u32, height: u32) -> Option<Vec<u8>> {
+        let stride = (width * 4).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+            * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-frame-readback"),
+            size: u64::from(stride) * u64::from(height),
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("brul-frame-readback"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(stride),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit(Some(encoder.finish()));
+        let done = Arc::new(AtomicBool::new(false));
+        buffer.map_async(wgpu::MapMode::Read, 0..buffer.size(), {
+            let done = Arc::clone(&done);
+            move |_| done.store(true, Ordering::SeqCst)
+        });
+        while !done.load(Ordering::SeqCst) {
+            let _ = self.device.poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            });
+        }
+        let view = buffer.get_mapped_range(..).ok()?;
+        let mut pixels = Vec::with_capacity(width as usize * height as usize * 4);
+        for row in view.chunks(stride as usize).take(height as usize) {
+            pixels.extend_from_slice(&row[..width as usize * 4]);
+        }
+        drop(view);
+        buffer.unmap();
+        Some(pixels)
     }
 
     fn ensure_atlas(&mut self, atlas: &Atlas) -> &wgpu::BindGroup {
