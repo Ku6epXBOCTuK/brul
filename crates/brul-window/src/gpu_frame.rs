@@ -28,6 +28,12 @@ struct Node {
     slots: [Slot; 5],
 }
 
+pub(crate) struct Upload {
+    pub buffer: usize,
+    pub offset: usize,
+    pub bytes: Vec<u8>,
+}
+
 #[derive(Default)]
 pub(crate) struct FrameCache {
     buffers: [Vec<u8>; 5],
@@ -45,7 +51,13 @@ impl FrameCache {
         &self.images
     }
 
-    pub(crate) fn update(&mut self, snapshot: &WidgetSnapshot, atlas: &Atlas, dirty: &Dirty) {
+    pub(crate) fn update(
+        &mut self,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
+    ) -> Vec<Upload> {
+        let mut uploads = Vec::new();
         let mut ids: Vec<WidgetId> = if dirty.full {
             snapshot.nodes.iter().map(|node| node.id).collect()
         } else {
@@ -112,7 +124,7 @@ impl FrameCache {
             ];
             let mut next = current;
             for (buffer, bytes) in parts.iter().enumerate() {
-                let slot = self.write(buffer, current.slots[buffer], bytes);
+                let slot = self.write(buffer, current.slots[buffer], bytes, &mut uploads);
                 next.slots[buffer] = slot;
             }
             if let Some((_, texture)) = image {
@@ -135,7 +147,7 @@ impl FrameCache {
             };
             self.textures.remove(&id);
             for (buffer, slot) in node.slots.into_iter().enumerate() {
-                self.write(buffer, slot, &[]);
+                self.write(buffer, slot, &[], &mut uploads);
             }
         }
 
@@ -146,7 +158,7 @@ impl FrameCache {
                 let texture = self.textures.get(&id)?;
                 (node.slots[IMAGE].cap > 0).then(|| {
                     (
-                        node.slots[IMAGE].start as u32,
+                        node.slots[IMAGE].start as u32 / TEXTURE_INSTANCE_SIZE as u32,
                         node.slots[IMAGE].cap as u32,
                         Rc::clone(texture),
                     )
@@ -154,9 +166,16 @@ impl FrameCache {
             })
             .collect();
         self.images = images;
+        uploads
     }
 
-    fn write(&mut self, buffer: usize, slot: Slot, bytes: &[u8]) -> Slot {
+    fn write(
+        &mut self,
+        buffer: usize,
+        slot: Slot,
+        bytes: &[u8],
+        uploads: &mut Vec<Upload>,
+    ) -> Slot {
         if slot.cap == 0 && bytes.is_empty() {
             return slot;
         }
@@ -175,6 +194,11 @@ impl FrameCache {
             let mut padded = bytes.to_vec();
             padded.resize(slot.cap * size, 0);
             target[slot.start..slot.start + padded.len()].copy_from_slice(&padded);
+            uploads.push(Upload {
+                buffer,
+                offset: slot.start,
+                bytes: padded,
+            });
             slot
         } else {
             let cap = needed.max(slot.cap * 2).max(1);
@@ -183,9 +207,19 @@ impl FrameCache {
             let mut padded = bytes.to_vec();
             padded.resize(cap * size, 0);
             target[start..].copy_from_slice(&padded);
+            uploads.push(Upload {
+                buffer,
+                offset: start,
+                bytes: padded,
+            });
             if slot.cap > 0 {
                 let zeros = vec![0u8; slot.cap * size];
                 target[slot.start..slot.start + zeros.len()].copy_from_slice(&zeros);
+                uploads.push(Upload {
+                    buffer,
+                    offset: slot.start,
+                    bytes: zeros,
+                });
             }
             Slot { start, cap }
         }
@@ -315,5 +349,42 @@ mod tests {
         let neighbour_after = cache.nodes[&before.nodes[0].id].slots;
         assert_eq!(neighbour_after[SHAPE].start, neighbour[SHAPE].start);
         assert_eq!(neighbour_after[CLIP].start, clip.start);
+    }
+
+    #[test]
+    fn an_unchanged_frame_uploads_nothing() {
+        let snapshot = snapshot();
+        let engine = TextEngine::new();
+        let mut cache = FrameCache::default();
+        cache.update(&snapshot, engine.atlas(), &Dirty::all());
+
+        let uploads = cache.update(&snapshot, engine.atlas(), &Dirty::all());
+
+        assert!(uploads.is_empty());
+    }
+
+    #[test]
+    fn a_partial_update_uploads_only_the_changed_slot() {
+        let before = snapshot();
+        let mut after = before.clone();
+        after.nodes[1].style.background = Paint::Color(Color::rgb(0, 0, 255));
+        let engine = TextEngine::new();
+        let mut cache = FrameCache::default();
+        cache.update(&before, engine.atlas(), &Dirty::all());
+        let changed = cache.nodes[&after.nodes[1].id].slots[SHAPE].start;
+
+        let uploads = cache.update(
+            &after,
+            engine.atlas(),
+            &Dirty {
+                full: false,
+                ids: vec![after.nodes[1].id],
+            },
+        );
+
+        assert!(uploads.iter().any(|upload| upload.buffer == SHAPE
+            && upload.offset == changed
+            && !upload.bytes.is_empty()));
+        assert!(uploads.iter().all(|upload| upload.buffer != CLIP));
     }
 }

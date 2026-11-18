@@ -41,16 +41,6 @@ fn premultiplied_blend() -> wgpu::BlendState {
     }
 }
 
-struct FrameData {
-    clip: Vec<u8>,
-    instances: Vec<u8>,
-    quads: Vec<u8>,
-    shape_count: usize,
-    decor_count: usize,
-    glyph_count: usize,
-    image_ranges: Vec<(u32, u32, Rc<Texture>)>,
-}
-
 pub(crate) struct Gpu {
     clear_color: wgpu::Color,
     _instance: wgpu::Instance,
@@ -62,6 +52,7 @@ pub(crate) struct Gpu {
     shape_layout: wgpu::BindGroupLayout,
     shape_pipeline: wgpu::RenderPipeline,
     viewport_buffer: wgpu::Buffer,
+    viewport: Vec<u8>,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     clip_buffer: wgpu::Buffer,
@@ -341,6 +332,7 @@ impl Gpu {
             shape_layout,
             shape_pipeline,
             viewport_buffer,
+            viewport: vec![0; 8],
             instance_buffer,
             instance_capacity: 0,
             clip_buffer,
@@ -423,37 +415,98 @@ impl Gpu {
         dirty: &Dirty,
     ) -> bool {
         let (width, height) = surface.size();
-        self.frame.update(snapshot, atlas, dirty);
-        let frame = &self.frame;
-        let clip = frame.buffer(CLIP).to_vec();
-        let mut instances = frame.buffer(SHAPE).to_vec();
-        instances.extend_from_slice(frame.buffer(DECOR));
-        let glyph_bytes = frame.buffer(GLYPH).len();
-        let mut quads = frame.buffer(GLYPH).to_vec();
-        quads.extend_from_slice(frame.buffer(IMAGE));
-        let glyph_count = glyph_bytes / brul_gpu::TEXTURE_INSTANCE_SIZE as usize;
-        let image_ranges: Vec<_> = frame
+        let uploads = self.frame.update(snapshot, atlas, dirty);
+        let clip_len = self.frame.buffer(CLIP).len();
+        let shape_len = self.frame.buffer(SHAPE).len();
+        let decor_len = self.frame.buffer(DECOR).len();
+        let glyph_len = self.frame.buffer(GLYPH).len();
+        let image_len = self.frame.buffer(IMAGE).len();
+        let instance_len = shape_len + decor_len;
+        let quad_len = glyph_len + image_len;
+        let clip_grown = clip_len > self.clip_capacity;
+        let instance_grown = instance_len > self.instance_capacity;
+        let quad_grown = quad_len > self.quad_capacity;
+        if clip_grown {
+            self.clip_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("brul-clips"),
+                size: clip_len as u64,
+                usage: brul_gpu::instance_usage(),
+                mapped_at_creation: false,
+            });
+            self.clip_capacity = clip_len;
+            self.invalidate_bind_groups();
+        }
+        if instance_grown {
+            self.instance_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("brul-shape-instances"),
+                size: instance_len as u64,
+                usage: brul_gpu::instance_usage(),
+                mapped_at_creation: false,
+            });
+            self.instance_capacity = instance_len;
+        }
+        if quad_grown {
+            self.quad_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("brul-quad-instances"),
+                size: quad_len as u64,
+                usage: brul_gpu::instance_usage(),
+                mapped_at_creation: false,
+            });
+            self.quad_capacity = quad_len;
+            self.invalidate_bind_groups();
+        }
+        if clip_grown {
+            self.queue
+                .write_buffer(&self.clip_buffer, 0, self.frame.buffer(CLIP));
+        }
+        if instance_grown {
+            let mut bytes = self.frame.buffer(SHAPE).to_vec();
+            bytes.extend_from_slice(self.frame.buffer(DECOR));
+            self.queue.write_buffer(&self.instance_buffer, 0, &bytes);
+        }
+        if quad_grown {
+            let mut bytes = self.frame.buffer(GLYPH).to_vec();
+            bytes.extend_from_slice(self.frame.buffer(IMAGE));
+            self.queue.write_buffer(&self.quad_buffer, 0, &bytes);
+        }
+        for upload in uploads {
+            let (buffer, offset) = match upload.buffer {
+                CLIP if !clip_grown => (&self.clip_buffer, upload.offset),
+                SHAPE if !instance_grown => (&self.instance_buffer, upload.offset),
+                DECOR if !instance_grown => (&self.instance_buffer, shape_len + upload.offset),
+                GLYPH if !quad_grown => (&self.quad_buffer, upload.offset),
+                IMAGE if !quad_grown => (&self.quad_buffer, glyph_len + upload.offset),
+                _ => continue,
+            };
+            self.queue
+                .write_buffer(buffer, offset as u64, &upload.bytes);
+        }
+        let viewport = [
+            f32::to_ne_bytes(width as f32),
+            f32::to_ne_bytes(height as f32),
+        ]
+        .concat();
+        if self.viewport != viewport {
+            self.queue.write_buffer(&self.viewport_buffer, 0, &viewport);
+            self.viewport = viewport;
+        }
+        let shape_count = shape_len / brul_gpu::INSTANCE_SIZE as usize;
+        let decor_count = decor_len / brul_gpu::INSTANCE_SIZE as usize;
+        let glyph_count = glyph_len / brul_gpu::TEXTURE_INSTANCE_SIZE as usize;
+        let image_ranges: Vec<_> = self
+            .frame
             .images()
             .iter()
             .map(|(start, count, texture)| {
                 (*start + glyph_count as u32, *count, Rc::clone(texture))
             })
             .collect();
-        let shape_count = frame.buffer(SHAPE).len() / brul_gpu::INSTANCE_SIZE as usize;
-        let decor_count = frame.buffer(DECOR).len() / brul_gpu::INSTANCE_SIZE as usize;
         self.present_frame(
             surface,
             (width.max(1), height.max(1)),
             atlas,
-            FrameData {
-                clip,
-                instances,
-                quads,
-                shape_count,
-                decor_count,
-                glyph_count,
-                image_ranges,
-            },
+            (shape_count, decor_count, glyph_count),
+            image_ranges,
         )
     }
 
@@ -462,62 +515,9 @@ impl Gpu {
         surface: &dyn crate::surface::Surface,
         (width, height): (u32, u32),
         atlas: &Atlas,
-        data: FrameData,
+        (shape_count, decor_count, glyph_count): (usize, usize, usize),
+        image_ranges: Vec<(u32, u32, Rc<Texture>)>,
     ) -> bool {
-        let FrameData {
-            clip,
-            instances,
-            quads,
-            shape_count,
-            decor_count,
-            glyph_count,
-            image_ranges,
-        } = data;
-        if instances.len() > self.instance_capacity {
-            self.instance_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("brul-shape-instances"),
-                size: instances.len() as u64,
-                usage: brul_gpu::instance_usage(),
-                mapped_at_creation: false,
-            });
-            self.instance_capacity = instances.len();
-        }
-        if !clip.is_empty() {
-            if clip.len() > self.clip_capacity {
-                self.clip_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("brul-clips"),
-                    size: clip.len() as u64,
-                    usage: brul_gpu::instance_usage(),
-                    mapped_at_creation: false,
-                });
-                self.clip_capacity = clip.len();
-                if let Some(cache) = &mut self.atlas {
-                    cache.bind_group = None;
-                }
-                for cache in self.images.values_mut() {
-                    cache.bind_group = None;
-                }
-            }
-            self.queue.write_buffer(&self.clip_buffer, 0, &clip);
-        }
-        if !quads.is_empty() {
-            if quads.len() > self.quad_capacity {
-                self.quad_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("brul-quad-instances"),
-                    size: quads.len() as u64,
-                    usage: brul_gpu::instance_usage(),
-                    mapped_at_creation: false,
-                });
-                self.quad_capacity = quads.len();
-                if let Some(cache) = &mut self.atlas {
-                    cache.bind_group = None;
-                }
-                for cache in self.images.values_mut() {
-                    cache.bind_group = None;
-                }
-            }
-            self.queue.write_buffer(&self.quad_buffer, 0, &quads);
-        }
         self.frame_index += 1;
         self.images
             .retain(|_, cache| cache.last_frame + 120 >= self.frame_index);
@@ -538,16 +538,6 @@ impl Gpu {
             image_bind_groups.push(self.ensure_image(texture).clone());
         }
 
-        if !instances.is_empty() {
-            self.queue
-                .write_buffer(&self.instance_buffer, 0, &instances);
-        }
-        let viewport = [
-            f32::to_ne_bytes(width as f32),
-            f32::to_ne_bytes(height as f32),
-        ]
-        .concat();
-        self.queue.write_buffer(&self.viewport_buffer, 0, &viewport);
         let shape_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("brul-shape-bind-group"),
             layout: &self.shape_layout,
@@ -623,7 +613,7 @@ impl Gpu {
                 pass.set_bind_group(0, &shape_bind_group, &[]);
                 pass.draw(0..6, shape_count as u32..(shape_count + decor_count) as u32);
             }
-            if !quads.is_empty() {
+            if glyph_count > 0 || image_ranges.iter().any(|(_, count, _)| *count > 0) {
                 pass.set_pipeline(&self.quad_pipeline);
                 if let Some(group) = &glyph_bind_group {
                     pass.set_bind_group(0, group, &[]);
@@ -742,6 +732,15 @@ impl Gpu {
             ));
         }
         cache.bind_group.as_ref().expect("atlas bind group")
+    }
+
+    fn invalidate_bind_groups(&mut self) {
+        if let Some(cache) = &mut self.atlas {
+            cache.bind_group = None;
+        }
+        for cache in self.images.values_mut() {
+            cache.bind_group = None;
+        }
     }
 
     fn ensure_image(&mut self, source: &Rc<Texture>) -> &wgpu::BindGroup {
