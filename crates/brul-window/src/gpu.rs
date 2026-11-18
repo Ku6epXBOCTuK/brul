@@ -366,7 +366,7 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(crate::window::CLEAR),
+                        load: wgpu::LoadOp::Clear(crate::window::clear_linear()),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -573,7 +573,7 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(crate::window::CLEAR),
+                        load: wgpu::LoadOp::Clear(crate::window::clear_linear()),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
