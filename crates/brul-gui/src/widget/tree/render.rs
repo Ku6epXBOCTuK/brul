@@ -2,6 +2,7 @@ use super::*;
 use crate::layout::{self, Layouter, NodeShape};
 use crate::text::TextEngine;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 pub(super) struct Pass<'a> {
     pub(super) tree: &'a [Node],
@@ -113,20 +114,32 @@ pub(super) fn measure_text(
         if let Some(class) = &node.class {
             styles.apply_layers(&class.text);
         }
-        let mut variants =
-            TextVariants::new(engine.layout(content, styles.base(), max_width, scale)?);
+        let mut variants = TextVariants::new(Rc::new(engine.layout(
+            content,
+            styles.base(),
+            max_width,
+            scale,
+        )?));
         for &state in StyleState::ALL {
             let style = styles.resolve(state.flags());
             if style == *styles.base() {
                 continue;
             }
-            variants = variants.with(state, engine.layout(content, &style, max_width, scale)?);
+            variants = variants.with(
+                state,
+                Rc::new(engine.layout(content, &style, max_width, scale)?),
+            );
         }
         let preedit_text = preedit.to_owned();
         let preedit = if preedit_text.is_empty() {
             None
         } else {
-            Some(engine.layout(&preedit_text, styles.base(), None, scale)?)
+            Some(Rc::new(engine.layout(
+                &preedit_text,
+                styles.base(),
+                None,
+                scale,
+            )?))
         };
         texts.insert(
             node.id,

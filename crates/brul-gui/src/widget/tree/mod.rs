@@ -3,6 +3,7 @@ use super::*;
 use crate::layout::{Dimension, LayoutBox, Layouter, Offset, ScrollOffset, Size};
 use crate::text::TextLayout;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 mod caret;
 mod edit;
@@ -100,23 +101,23 @@ struct ShapedText {
     width: Option<u32>,
     scale: f32,
     variants: TextVariants,
-    preedit: Option<TextLayout>,
+    preedit: Option<Rc<TextLayout>>,
     preedit_text: String,
 }
 
 #[derive(Clone, Debug)]
 struct TextVariants {
-    base: TextLayout,
-    hovered: Option<TextLayout>,
-    pressed: Option<TextLayout>,
-    checked: Option<TextLayout>,
-    selected: Option<TextLayout>,
-    disabled: Option<TextLayout>,
-    focused: Option<TextLayout>,
+    base: Rc<TextLayout>,
+    hovered: Option<Rc<TextLayout>>,
+    pressed: Option<Rc<TextLayout>>,
+    checked: Option<Rc<TextLayout>>,
+    selected: Option<Rc<TextLayout>>,
+    disabled: Option<Rc<TextLayout>>,
+    focused: Option<Rc<TextLayout>>,
 }
 
 impl TextVariants {
-    fn new(base: TextLayout) -> Self {
+    fn new(base: Rc<TextLayout>) -> Self {
         Self {
             base,
             hovered: None,
@@ -128,7 +129,7 @@ impl TextVariants {
         }
     }
 
-    fn with(mut self, state: StyleState, layout: TextLayout) -> Self {
+    fn with(mut self, state: StyleState, layout: Rc<TextLayout>) -> Self {
         match state {
             StyleState::Hovered => self.hovered = Some(layout),
             StyleState::Pressed => self.pressed = Some(layout),
@@ -140,7 +141,7 @@ impl TextVariants {
         self
     }
 
-    fn resolve(&self, state: WidgetState) -> TextLayout {
+    fn resolve(&self, state: WidgetState) -> Rc<TextLayout> {
         let mut layout = &self.base;
         if state.selected {
             layout = self.selected.as_ref().unwrap_or(layout);
@@ -160,7 +161,7 @@ impl TextVariants {
         if state.disabled {
             layout = self.disabled.as_ref().unwrap_or(layout);
         }
-        layout.clone()
+        Rc::clone(layout)
     }
 }
 

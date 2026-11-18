@@ -4,6 +4,7 @@ use crate::layout::Size;
 use crate::rect::ClipRect;
 use crate::text::{CaretPosition, SelectionRect, TextLayout};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct WidgetSnapshot {
@@ -33,8 +34,8 @@ pub struct WidgetSnapshotNode {
     pub content_height: u32,
     pub state: WidgetState,
     pub style: WidgetStyle,
-    pub text: Option<TextLayout>,
-    pub preedit: Option<TextLayout>,
+    pub text: Option<Rc<TextLayout>>,
+    pub preedit: Option<Rc<TextLayout>>,
     pub caret: Option<CaretPosition>,
     pub selection: Vec<SelectionRect>,
     pub scroll: i32,
