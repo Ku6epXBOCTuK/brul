@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::pin;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
 use winit::window::Window;
 
-use brul_gui::{Atlas, Dirty, Frame, WidgetSnapshot};
+use brul_gui::{Atlas, Dirty, Frame, Texture, WidgetSnapshot};
 
 use crate::window::WindowError;
 
@@ -65,13 +67,20 @@ pub(crate) struct Gpu {
     pub(crate) config: wgpu::SurfaceConfiguration,
     blit_layout: wgpu::BindGroupLayout,
     blit_pipeline: wgpu::RenderPipeline,
-    blit_sampler: wgpu::Sampler,
+    nearest_sampler: wgpu::Sampler,
     blit: Option<BlitTarget>,
     shape_layout: wgpu::BindGroupLayout,
     shape_pipeline: wgpu::RenderPipeline,
     viewport_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
+    quad_layout: wgpu::BindGroupLayout,
+    quad_pipeline: wgpu::RenderPipeline,
+    quad_buffer: wgpu::Buffer,
+    quad_capacity: usize,
+    atlas: Option<AtlasTexture>,
+    images: HashMap<usize, ImageTexture>,
+    frame_index: u64,
     frame: Frame,
 }
 
@@ -80,6 +89,22 @@ struct BlitTarget {
     bind_group: wgpu::BindGroup,
     width: u32,
     height: u32,
+}
+
+struct AtlasTexture {
+    texture: wgpu::Texture,
+    width: u32,
+    height: u32,
+    revision: u64,
+    bind_group: Option<wgpu::BindGroup>,
+}
+
+struct ImageTexture {
+    source: Rc<Texture>,
+    texture: wgpu::Texture,
+    bind_group: Option<wgpu::BindGroup>,
+    uploaded: bool,
+    last_frame: u64,
 }
 
 impl Gpu {
@@ -166,8 +191,8 @@ impl Gpu {
             multiview_mask: None,
             cache: None,
         });
-        let blit_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("brul-blit-sampler"),
+        let nearest_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("brul-nearest-sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -237,6 +262,77 @@ impl Gpu {
             multiview_mask: None,
             cache: None,
         });
+        let quad_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("brul-quad-layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let quad_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("brul-quad-pipeline-layout"),
+            bind_group_layouts: &[Some(&quad_layout)],
+            immediate_size: 0,
+        });
+        let quad_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("brul-quad-pipeline"),
+            layout: Some(&quad_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shape_shader,
+                entry_point: Some("vs_quad"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shape_shader,
+                entry_point: Some("fs_quad"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(premultiplied_blend()),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
         let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("brul-shape-viewport"),
             size: 8,
@@ -249,6 +345,12 @@ impl Gpu {
             usage: brul_gpu::instance_usage(),
             mapped_at_creation: false,
         });
+        let quad_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-quad-instances"),
+            size: brul_gpu::TEXTURE_INSTANCE_SIZE,
+            usage: brul_gpu::instance_usage(),
+            mapped_at_creation: false,
+        });
 
         Ok(Self {
             _instance: instance,
@@ -258,13 +360,20 @@ impl Gpu {
             config,
             blit_layout,
             blit_pipeline,
-            blit_sampler,
+            nearest_sampler,
+            blit: None,
             shape_layout,
             shape_pipeline,
             viewport_buffer,
             instance_buffer,
             instance_capacity: 0,
-            blit: None,
+            quad_layout,
+            quad_pipeline,
+            quad_buffer,
+            quad_capacity: brul_gpu::TEXTURE_INSTANCE_SIZE as usize,
+            atlas: None,
+            images: HashMap::new(),
+            frame_index: 0,
             frame: Frame::new(1, 1),
         })
     }
@@ -338,7 +447,7 @@ impl Gpu {
         self.blit = Some(BlitTarget::new(
             &self.device,
             &self.blit_layout,
-            &self.blit_sampler,
+            &self.nearest_sampler,
             width,
             height,
         ));
@@ -355,13 +464,16 @@ impl Gpu {
         self.frame.resize(width.max(1), height.max(1));
         self.frame.paint_content(snapshot, atlas, dirty);
         let shapes = brul_gpu::shape_instances(snapshot);
-        self.present_frame(surface, &shapes)
+        let textures = brul_gpu::texture_instances(snapshot, atlas);
+        self.present_frame(surface, atlas, &shapes, &textures)
     }
 
     fn present_frame(
         &mut self,
         surface: &dyn crate::surface::Surface,
+        atlas: &Atlas,
         shapes: &[brul_gpu::ShapeInstance],
+        textures: &brul_gpu::TextureBatches,
     ) -> bool {
         let width = self.frame.width().max(1);
         let height = self.frame.height().max(1);
@@ -375,6 +487,65 @@ impl Gpu {
             });
             self.instance_capacity = shapes.len();
         }
+        let mut quads = Vec::with_capacity(
+            textures.glyphs.len()
+                + textures
+                    .images
+                    .iter()
+                    .map(|batch| batch.instances.len())
+                    .sum::<usize>(),
+        );
+        quads.extend_from_slice(&textures.glyphs);
+        let mut image_ranges = Vec::with_capacity(textures.images.len());
+        for batch in &textures.images {
+            let start = quads.len() as u32;
+            quads.extend_from_slice(&batch.instances);
+            image_ranges.push((
+                start,
+                batch.instances.len() as u32,
+                Rc::clone(&batch.texture),
+            ));
+        }
+        if !quads.is_empty() {
+            let bytes = brul_gpu::texture_instance_bytes(&quads);
+            if bytes.len() > self.quad_capacity {
+                self.quad_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("brul-quad-instances"),
+                    size: bytes.len() as u64,
+                    usage: brul_gpu::instance_usage(),
+                    mapped_at_creation: false,
+                });
+                self.quad_capacity = bytes.len();
+                if let Some(cache) = &mut self.atlas {
+                    cache.bind_group = None;
+                }
+                for cache in self.images.values_mut() {
+                    cache.bind_group = None;
+                }
+            }
+            self.queue.write_buffer(&self.quad_buffer, 0, &bytes);
+        }
+        self.frame_index += 1;
+        self.images
+            .retain(|_, cache| cache.last_frame + 120 >= self.frame_index);
+        if self.images.len() > 256 {
+            let mut oldest: Vec<_> = self
+                .images
+                .iter()
+                .map(|(&key, cache)| (cache.last_frame, key))
+                .collect();
+            oldest.sort_unstable();
+            for (_, key) in oldest.into_iter().take(self.images.len() - 256) {
+                self.images.remove(&key);
+            }
+        }
+        let glyph_bind_group =
+            (!textures.glyphs.is_empty()).then(|| self.ensure_atlas(atlas).clone());
+        let mut image_bind_groups = Vec::with_capacity(image_ranges.len());
+        for (_, _, texture) in &image_ranges {
+            image_bind_groups.push(self.ensure_image(texture).clone());
+        }
+
         let target = self.blit.as_ref().expect("blit target");
         if !shapes.is_empty() {
             self.queue
@@ -408,7 +579,6 @@ impl Gpu {
                 },
             ],
         });
-
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &target.texture,
@@ -428,6 +598,7 @@ impl Gpu {
                 depth_or_array_layers: 1,
             },
         );
+        let blit_bind_group = target.bind_group.clone();
 
         let surface_frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
@@ -470,8 +641,22 @@ impl Gpu {
                 pass.draw(0..6, 0..shapes.len() as u32);
             }
             pass.set_pipeline(&self.blit_pipeline);
-            pass.set_bind_group(0, &target.bind_group, &[]);
+            pass.set_bind_group(0, &blit_bind_group, &[]);
             pass.draw(0..3, 0..1);
+            if !quads.is_empty() {
+                pass.set_pipeline(&self.quad_pipeline);
+                if let Some(group) = &glyph_bind_group {
+                    pass.set_bind_group(0, group, &[]);
+                    pass.draw(0..6, 0..textures.glyphs.len() as u32);
+                }
+                for ((start, count, _), group) in image_ranges.iter().zip(&image_bind_groups) {
+                    if *count == 0 {
+                        continue;
+                    }
+                    pass.set_bind_group(0, group, &[]);
+                    pass.draw(0..6, *start..*start + *count);
+                }
+            }
         }
 
         self.queue.submit(Some(encoder.finish()));
@@ -479,6 +664,172 @@ impl Gpu {
         self.queue.present(surface_frame);
         true
     }
+
+    fn ensure_atlas(&mut self, atlas: &Atlas) -> &wgpu::BindGroup {
+        if self
+            .atlas
+            .as_ref()
+            .is_none_or(|cache| cache.width != atlas.width() || cache.height != atlas.height())
+        {
+            self.atlas = Some(AtlasTexture {
+                texture: create_texture(&self.device, atlas.width(), atlas.height()),
+                width: atlas.width(),
+                height: atlas.height(),
+                revision: u64::MAX,
+                bind_group: None,
+            });
+        }
+        let cache = self.atlas.as_mut().expect("atlas texture");
+        if cache.revision != atlas.revision() {
+            upload_texture(
+                &self.queue,
+                &cache.texture,
+                cache.width,
+                cache.height,
+                atlas.pixels(),
+            );
+            cache.revision = atlas.revision();
+        }
+        if cache.bind_group.is_none() {
+            cache.bind_group = Some(quad_bind_group(
+                &self.device,
+                &self.quad_layout,
+                &self.viewport_buffer,
+                &self.quad_buffer,
+                &self.nearest_sampler,
+                &cache.texture,
+            ));
+        }
+        cache.bind_group.as_ref().expect("atlas bind group")
+    }
+
+    fn ensure_image(&mut self, source: &Rc<Texture>) -> &wgpu::BindGroup {
+        let key = Rc::as_ptr(source) as usize;
+        let frame = self.frame_index;
+        if !self.images.contains_key(&key) {
+            let texture = create_texture(&self.device, source.width(), source.height());
+            self.images.insert(
+                key,
+                ImageTexture {
+                    source: Rc::clone(source),
+                    texture,
+                    bind_group: None,
+                    uploaded: false,
+                    last_frame: frame,
+                },
+            );
+        }
+        let cache = self.images.get_mut(&key).expect("image texture");
+        if !cache.uploaded {
+            let source = &cache.source;
+            upload_texture(
+                &self.queue,
+                &cache.texture,
+                source.width(),
+                source.height(),
+                source.pixels(),
+            );
+            cache.uploaded = true;
+        }
+        cache.last_frame = frame;
+        if cache.bind_group.is_none() {
+            cache.bind_group = Some(quad_bind_group(
+                &self.device,
+                &self.quad_layout,
+                &self.viewport_buffer,
+                &self.quad_buffer,
+                &self.nearest_sampler,
+                &cache.texture,
+            ));
+        }
+        cache.bind_group.as_ref().expect("image bind group")
+    }
+}
+
+fn create_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("brul-quad-texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    })
+}
+
+fn upload_texture(
+    queue: &wgpu::Queue,
+    texture: &wgpu::Texture,
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+) {
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        pixels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(width * 4),
+            rows_per_image: Some(height),
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+}
+
+fn quad_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    viewport: &wgpu::Buffer,
+    instances: &wgpu::Buffer,
+    sampler: &wgpu::Sampler,
+    texture: &wgpu::Texture,
+) -> wgpu::BindGroup {
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("brul-quad-bind-group"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: viewport,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: instances,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: wgpu::BindingResource::Sampler(sampler),
+            },
+        ],
+    })
 }
 
 impl BlitTarget {

@@ -47,11 +47,11 @@ impl Frame {
     }
 
     pub fn paint(&mut self, snapshot: &WidgetSnapshot, atlas: &Atlas, dirty: &Dirty) {
-        self.paint_impl(snapshot, atlas, dirty, true);
+        self.paint_impl(snapshot, atlas, dirty, true, true);
     }
 
     pub fn paint_content(&mut self, snapshot: &WidgetSnapshot, atlas: &Atlas, dirty: &Dirty) {
-        self.paint_impl(snapshot, atlas, dirty, false);
+        self.paint_impl(snapshot, atlas, dirty, false, false);
     }
 
     fn paint_impl(
@@ -60,6 +60,7 @@ impl Frame {
         atlas: &Atlas,
         dirty: &Dirty,
         shapes: bool,
+        content: bool,
     ) {
         if self.width == 0 || self.height == 0 {
             return;
@@ -86,12 +87,19 @@ impl Frame {
 
         for node in &snapshot.nodes {
             if paint_clip(node, clip).is_some() {
-                self.paint_node(node, atlas, clip, shapes);
+                self.paint_node(node, atlas, clip, shapes, content);
             }
         }
     }
 
-    fn paint_node(&mut self, node: &WidgetSnapshotNode, atlas: &Atlas, clip: Clip, shapes: bool) {
+    fn paint_node(
+        &mut self,
+        node: &WidgetSnapshotNode,
+        atlas: &Atlas,
+        clip: Clip,
+        shapes: bool,
+        content: bool,
+    ) {
         let opacity = opacity(node.style.opacity);
         if shapes {
             let rect = Rect::new(node.x, node.y, node.width, node.height)
@@ -104,24 +112,27 @@ impl Frame {
 
         match node.kind {
             crate::WidgetKind::Text => {
-                if let Some(text) = &node.text {
+                if content && let Some(text) = &node.text {
                     self.paint_text(node, text, atlas, opacity, clip);
                 }
             }
             crate::WidgetKind::Image => {
-                if let Some(image) = &node.image {
+                if content && let Some(image) = &node.image {
                     self.paint_image(node, image, opacity, clip);
                 }
             }
             crate::WidgetKind::Input => {
                 self.paint_selection(node, &node.selection, opacity, clip);
-                if let Some(text) = &node.text {
+                if content && let Some(text) = &node.text {
                     self.paint_text(node, text, atlas, opacity, clip);
                 }
                 if let Some(preedit) = &node.preedit
                     && let Some(caret) = node.caret
                 {
-                    self.paint_preedit(node, preedit, caret, atlas, opacity, clip);
+                    if content {
+                        self.paint_preedit(node, preedit, caret, atlas, opacity, clip);
+                    }
+                    self.paint_preedit_underline(node, preedit, caret, opacity, clip);
                 }
                 if let Some(caret) = node.caret {
                     self.paint_caret(node, caret, opacity, clip);
@@ -298,6 +309,17 @@ impl Frame {
     ) {
         let shift = caret.x.saturating_sub(preedit.size.width as i32);
         self.paint_glyphs(node, preedit, shift, atlas, opacity, clip);
+    }
+
+    fn paint_preedit_underline(
+        &mut self,
+        node: &WidgetSnapshotNode,
+        preedit: &crate::TextLayout,
+        caret: crate::CaretPosition,
+        opacity: f32,
+        clip: Clip,
+    ) {
+        let shift = caret.x.saturating_sub(preedit.size.width as i32);
         let Some(clip) = node_clip(node, clip) else {
             return;
         };

@@ -56,7 +56,7 @@ pub enum VerticalAlign {
 }
 
 impl VerticalAlign {
-    pub(crate) fn offset(self, container: u32, content: u32) -> u32 {
+    pub fn offset(self, container: u32, content: u32) -> u32 {
         let free = container.saturating_sub(content);
         match self {
             Self::Top => 0,

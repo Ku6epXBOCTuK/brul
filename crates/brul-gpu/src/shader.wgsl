@@ -13,8 +13,18 @@ struct Instance {
     padding: vec4<f32>,
 }
 
+struct QuadInstance {
+    bounds: vec4<f32>,
+    uv: vec4<f32>,
+    tint: vec4<f32>,
+    params: vec4<f32>,
+}
+
 @group(0) @binding(0) var<uniform> viewport: Viewport;
 @group(0) @binding(1) var<storage, read> instances: array<Instance>;
+@group(0) @binding(4) var<storage, read> quads: array<QuadInstance>;
+@group(0) @binding(5) var quad_texture: texture_2d<f32>;
+@group(0) @binding(6) var quad_sampler: sampler;
 
 struct Varyings {
     @builtin(position) position: vec4<f32>,
@@ -101,4 +111,47 @@ fn fs(in: Varyings) -> @location(0) vec4<f32> {
         discard;
     }
     return vec4<f32>(premultiplied * opacity, alpha);
+}
+
+struct QuadVaryings {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) @interpolate(flat) tint: vec4<f32>,
+    @location(2) @interpolate(flat) params: vec4<f32>,
+}
+
+@vertex
+fn vs_quad(
+    @builtin(vertex_index) vertex: u32,
+    @builtin(instance_index) instance: u32,
+) -> QuadVaryings {
+    let quad = quads[instance];
+    let corner = CORNERS[vertex];
+    let pixel = quad.bounds.xy + corner * quad.bounds.zw;
+    let clip = vec2<f32>(
+        pixel.x / viewport.size.x * 2.0 - 1.0,
+        1.0 - pixel.y / viewport.size.y * 2.0,
+    );
+    var out: QuadVaryings;
+    out.position = vec4<f32>(clip, 0.0, 1.0);
+    out.uv = mix(quad.uv.xy, quad.uv.zw, corner);
+    out.tint = quad.tint;
+    out.params = quad.params;
+    return out;
+}
+
+@fragment
+fn fs_quad(in: QuadVaryings) -> @location(0) vec4<f32> {
+    let sampled = textureSample(quad_texture, quad_sampler, in.uv);
+    var rgb: vec3<f32>;
+    if in.params.x < 0.5 {
+        rgb = in.tint.rgb;
+    } else {
+        rgb = sampled.rgb * in.tint.rgb;
+    }
+    let alpha = sampled.a * in.tint.a * in.params.y;
+    if alpha <= 0.0 {
+        discard;
+    }
+    return vec4<f32>(rgb * alpha, alpha);
 }

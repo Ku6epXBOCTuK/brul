@@ -104,6 +104,38 @@ fn paints_text_ink() {
 }
 
 #[test]
+fn paint_content_leaves_text_and_images_to_the_gpu() {
+    let texture = Texture::from_rgba(1, 1, &[255, 255, 255, 255]).expect("texture");
+    let root = Widget::column(vec![
+        Widget::text("A").with_styles(StyleSet::new(WidgetStyle {
+            text: Color::rgb(255, 0, 0),
+            ..WidgetStyle::default()
+        })),
+        Widget::image(texture).with_styles(StyleSet::new(WidgetStyle {
+            tint: Some(Color::rgb(255, 128, 0)),
+            ..WidgetStyle::default()
+        })),
+    ]);
+    let mut engine = TextEngine::new();
+    let mut tree = WidgetTree::new(root);
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 64,
+            height: 64,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let mut frame = Frame::new(64, 64);
+
+    frame.paint_content(snapshot, engine.atlas(), &Dirty::all());
+
+    assert!(frame.pixels().iter().all(|byte| *byte == 0));
+}
+
+#[test]
 fn paints_tinted_image() {
     let texture = Texture::from_rgba(1, 1, &[255, 255, 255, 255]).expect("texture");
     let image = Widget::image(texture).with_styles(StyleSet::new(WidgetStyle {
