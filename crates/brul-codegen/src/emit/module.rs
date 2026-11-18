@@ -5,11 +5,11 @@ use std::path::{Path, PathBuf};
 
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Element, Member, Window};
+use brul_syntax::markup::{Arg, Element, Member, Window};
 
-use crate::Definition;
 use crate::error_at;
 use crate::kit;
+use crate::{Definition, Resource};
 
 use super::Emit;
 use super::EmitOutputs;
@@ -90,6 +90,7 @@ fn module_at(
     let mut head = String::new();
     let mut head_functions = String::new();
     let mut configs = Vec::new();
+    let mut icons = Vec::new();
 
     alloc::include(&mut head);
     head.push_str(HEADER);
@@ -97,6 +98,7 @@ fn module_at(
     let mut class_names = ClassNames::default();
     for (index, window) in parsed.windows.iter().enumerate() {
         let (config, window_handlers) = crate::arguments(window)?;
+        icons.push(icon_resource(window, &registry.resources)?);
         let window_handlers = events::window(&window_handlers, parsed.program.as_ref())?;
         let root = crate::root(window)?;
         if index > 0 {
@@ -216,7 +218,7 @@ fn module_at(
 
     let mut tail = String::new();
     for (index, config) in configs.iter().enumerate() {
-        window_config(&mut tail, &window_bases[index], config);
+        window_config(&mut tail, &window_bases[index], config, icons[index]);
     }
     tail.push('\n');
     window_table(&mut tail, &parsed.windows, &window_bases);
@@ -365,12 +367,36 @@ fn definition_root(definition: &Definition) -> Result<&Element, Error> {
     Ok(root)
 }
 
-fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfig) {
+fn icon_resource<'a>(window: &'a Window, resources: &[Resource]) -> Result<Option<&'a str>, Error> {
+    let Some(value) = window.args.iter().find_map(|arg| match arg {
+        Arg::Named { name, value } if name == "icon" => Some(value),
+        _ => None,
+    }) else {
+        return Ok(None);
+    };
+    super::resource(value, resources).map(Some).ok_or_else(|| {
+        error_at(
+            value.position,
+            "window 'icon' must name a declared resource",
+        )
+    })
+}
+
+fn window_config(
+    out: &mut String,
+    base: &str,
+    config: &brul_window::WindowConfig,
+    icon: Option<&str>,
+) {
     let position = match config.position {
         Some(position) => format!(
             "Some(brul::WindowPosition {{ x: {:?}, y: {:?} }})",
             position.x, position.y
         ),
+        None => String::from("None"),
+    };
+    let icon = match icon {
+        Some(name) => format!("Some(resource_{name}().into())"),
         None => String::from("None"),
     };
     let _ = write!(
@@ -386,6 +412,7 @@ fn window_config(out: &mut String, base: &str, config: &brul_window::WindowConfi
         centered: {},
         scroll: {},
         position: {position},
+        icon: {icon},
         ..brul::WindowConfig::default()
     }}
 }}

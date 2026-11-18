@@ -104,6 +104,7 @@ pub fn demo_window() -> brul::WindowConfig {
         centered: false,
         scroll: true,
         position: None,
+        icon: None,
         ..brul::WindowConfig::default()
     }
 }
@@ -324,6 +325,7 @@ pub fn styled_window() -> brul::WindowConfig {
         centered: false,
         scroll: true,
         position: None,
+        icon: None,
         ..brul::WindowConfig::default()
     }
 }
@@ -909,7 +911,7 @@ window Demo (title: "demo", width: 488, height: 800, frameless: true, transparen
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        visible: true,\n        centered: false,\n        scroll: true,\n        position: None,\n        ..brul::WindowConfig::default()\n    }\n}"
+        "pub fn demo_window() -> brul::WindowConfig {\n    brul::WindowConfig {\n        title: \"demo\".to_owned(),\n        width: 488,\n        height: 800,\n        frameless: true,\n        transparent: true,\n        visible: true,\n        centered: false,\n        scroll: true,\n        position: None,\n        icon: None,\n        ..brul::WindowConfig::default()\n    }\n}"
     ));
 }
 
@@ -1292,6 +1294,24 @@ fn an_image_prop_accepts_a_resource_at_the_call_site() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(
         module.contains("ty: brul::PropType::Image, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { Ok(brul::Value::image_bytes(resource_check())) }"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_window_icon_resource_reaches_the_window_config() {
+    let dir = scratch(
+        "window-icon",
+        &[(
+            "window.brul",
+            "<use>\n    resource check from \"./check.png\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\", icon: check) {\n    View { }\n}\n</markup>\n",
+        )],
+    );
+    std::fs::write(dir.join("check.png"), PNG_SIGNATURE).unwrap();
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(
+        module.contains("icon: Some(resource_check().into())"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();

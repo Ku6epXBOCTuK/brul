@@ -93,6 +93,14 @@ fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Erro
         "visible" => config.visible = flag(value, "visible")?,
         "centered" => config.centered = flag(value, "centered")?,
         "scroll" => config.scroll = flag(value, "scroll")?,
+        "icon" => {
+            if !matches!(value.kind, ExprKind::Ident(_)) {
+                return Err(error_at(
+                    value.position,
+                    "window argument 'icon' must be a resource name",
+                ));
+            }
+        }
         _ => {
             return Err(error_at(
                 value.position,

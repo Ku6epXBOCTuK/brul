@@ -11,9 +11,10 @@ use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
+use winit::icon::{Icon, RgbaIcon};
 use winit::window::{Window, WindowAttributes, WindowId};
 
-use brul_gui::{WidgetEvent, WidgetTree};
+use brul_gui::{Color, Image, WidgetEvent, WidgetTree};
 
 use crate::input::{Input, event_input, window_input};
 use crate::surface::{Renderer, create_renderer};
@@ -75,6 +76,7 @@ pub struct WindowConfig {
     pub centered: bool,
     pub position: Option<WindowPosition>,
     pub scroll: bool,
+    pub icon: Option<Arc<[u8]>>,
     pub backend: Backend,
 }
 
@@ -91,6 +93,7 @@ impl Default for WindowConfig {
             centered: false,
             position: None,
             scroll: true,
+            icon: None,
             backend: Backend::Software,
         }
     }
@@ -366,6 +369,16 @@ fn winit_transparent(config: &WindowConfig) -> bool {
     }
 }
 
+fn window_icon(bytes: &[u8]) -> Option<Icon> {
+    let texture = match Image::from_bytes(bytes).ok()? {
+        Image::Raster(texture) => texture,
+        Image::Vector(vector) => vector.raster(32, 32, Color::WHITE)?,
+    };
+    RgbaIcon::new(texture.pixels().to_vec(), texture.width(), texture.height())
+        .ok()
+        .map(Icon::from)
+}
+
 pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
     let size = LogicalSize::new(f64::from(config.width), f64::from(config.height));
     let mut attributes = WindowAttributes::default()
@@ -374,7 +387,8 @@ pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
         .with_resizable(!config.frameless)
         .with_decorations(!config.frameless)
         .with_transparent(winit_transparent(config))
-        .with_visible(false);
+        .with_visible(false)
+        .with_window_icon(config.icon.as_deref().and_then(window_icon));
     if config.frameless {
         attributes = attributes
             .with_min_surface_size(size)
@@ -477,6 +491,8 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::{Backend, WindowConfig, WindowError, WindowKey, WindowPosition};
 
     #[test]
@@ -624,6 +640,17 @@ mod tests {
 
         assert!(!super::attributes(&config).visible);
         assert!(!super::attributes(&WindowConfig::default()).visible);
+    }
+
+    #[test]
+    fn a_configured_icon_reaches_the_window_attributes() {
+        let png = include_bytes!("../../brul-gui/tests/fixtures/tint.png");
+        let config = WindowConfig {
+            icon: Some(Arc::from(&png[..])),
+            ..WindowConfig::default()
+        };
+
+        assert!(super::attributes(&config).window_icon.is_some());
     }
 
     #[test]
