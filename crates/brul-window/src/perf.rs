@@ -21,7 +21,7 @@ pub(crate) fn start() {
     START.get_or_init(Instant::now);
 }
 
-pub(crate) fn startup(scale: f64, width: u32, height: u32) {
+pub(crate) fn startup(backend: crate::window::Backend, scale: f64, width: u32, height: u32) {
     if !wanted() || LOGGED.swap(true, Ordering::Relaxed) {
         return;
     }
@@ -31,7 +31,7 @@ pub(crate) fn startup(scale: f64, width: u32, height: u32) {
     let millis = start.elapsed().as_secs_f64() * 1000.0;
     tracing::info!(
         target: "brul",
-        "brul startup: first frame in {millis:.1} ms, scale {scale:.2}, surface {width}x{height}"
+        "brul startup: first frame in {millis:.1} ms, backend {backend}, scale {scale:.2}, surface {width}x{height}"
     );
 }
 

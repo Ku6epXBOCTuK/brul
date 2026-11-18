@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::fmt;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::PoisonError;
@@ -49,6 +50,15 @@ impl FromStr for Backend {
             "software" => Ok(Self::Software),
             "gpu" => Ok(Self::Gpu),
             other => Err(UnknownBackend(other.to_owned())),
+        }
+    }
+}
+
+impl fmt::Display for Backend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Software => f.write_str("software"),
+            Self::Gpu => f.write_str("gpu"),
         }
     }
 }
