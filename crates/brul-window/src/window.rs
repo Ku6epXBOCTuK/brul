@@ -14,8 +14,8 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 use brul_gui::{WidgetEvent, WidgetTree};
 
-use crate::gpu::Gpu;
 use crate::input::{Input, event_input, window_input};
+use crate::surface::{Renderer, create_renderer};
 
 pub(crate) const CLEAR: wgpu::Color = wgpu::Color {
     r: 0.08,
@@ -219,7 +219,7 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
     let app = App {
         config,
         window: None,
-        gpu: None,
+        renderer: None,
         error: Rc::clone(&error),
         revealed: false,
     };
@@ -365,7 +365,7 @@ pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
 struct App {
     config: WindowConfig,
     window: Option<Arc<dyn Window>>,
-    gpu: Option<Gpu>,
+    renderer: Option<Box<dyn Renderer>>,
     error: Rc<Cell<Option<WindowError>>>,
     revealed: bool,
 }
@@ -380,13 +380,13 @@ impl ApplicationHandler for App {
             Ok(window) => window,
             Err(error) => return self.fail(event_loop, error),
         };
-        let gpu = match Gpu::new(&window) {
-            Ok(gpu) => gpu,
+        let renderer = match create_renderer(self.config.backend, &window) {
+            Ok(renderer) => renderer,
             Err(error) => return self.fail(event_loop, error),
         };
 
         self.window = Some(Arc::clone(&window));
-        self.gpu = Some(gpu);
+        self.renderer = Some(renderer);
         self.render(&window);
     }
 
@@ -430,57 +430,22 @@ impl App {
     }
 
     fn resize(&mut self, width: u32, height: u32) {
-        let Some(gpu) = self.gpu.as_mut() else {
+        let Some(renderer) = self.renderer.as_mut() else {
             return;
         };
-        gpu.resize(width, height);
+        renderer.resize(width, height);
     }
 
     fn render(&mut self, window: &Arc<dyn Window>) {
-        let Some(gpu) = self.gpu.as_mut() else {
+        let Some(renderer) = self.renderer.as_mut() else {
             return;
         };
-        let frame = match gpu.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                gpu.surface.configure(&gpu.device, &gpu.config);
-                window.request_redraw();
-                return;
-            }
-            _ => return,
-        };
-
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = gpu
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("brul-window"),
-            });
-        {
-            let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("brul-clear"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(CLEAR),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+        let size = window.surface_size();
+        renderer.resize(size.width, size.height);
+        if !renderer.clear(window) {
+            window.request_redraw();
+            return;
         }
-
-        gpu.queue.submit(Some(encoder.finish()));
-        window.pre_present_notify();
-        gpu.queue.present(frame);
         if !self.revealed {
             self.revealed = true;
             window.set_visible(self.config.visible);

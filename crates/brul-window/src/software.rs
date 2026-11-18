@@ -40,6 +40,17 @@ impl SoftwareRenderer {
         self.size = (width.get(), height.get());
     }
 
+    pub(crate) fn clear_buffer(&mut self) -> bool {
+        let Ok(mut buffer) = self.surface.buffer_mut() else {
+            return false;
+        };
+        let background = pack(&[0, 0, 0, 0]);
+        for pixel in buffer.iter_mut() {
+            *pixel = background;
+        }
+        buffer.present().is_ok()
+    }
+
     pub(crate) fn present(&mut self, _surface: &dyn Surface, frame: &Frame) -> bool {
         self.resize(frame.width(), frame.height());
         if self.size != (frame.width(), frame.height()) {

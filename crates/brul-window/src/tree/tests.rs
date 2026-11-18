@@ -90,6 +90,11 @@ impl Renderer for FakeRenderer {
             .push(format!("resize {width}x{height}"));
     }
 
+    fn clear(&mut self, _surface: &dyn Surface) -> bool {
+        self.calls.borrow_mut().push("clear".to_owned());
+        true
+    }
+
     fn present(&mut self, _surface: &dyn Surface, _frame: &Frame) -> bool {
         self.calls.borrow_mut().push("present".to_owned());
         true

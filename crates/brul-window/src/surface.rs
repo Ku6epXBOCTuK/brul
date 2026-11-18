@@ -61,12 +61,17 @@ impl Surface for Arc<dyn Window> {
 
 pub(crate) trait Renderer {
     fn resize(&mut self, width: u32, height: u32);
+    fn clear(&mut self, surface: &dyn Surface) -> bool;
     fn present(&mut self, surface: &dyn Surface, frame: &Frame) -> bool;
 }
 
 impl Renderer for Gpu {
     fn resize(&mut self, width: u32, height: u32) {
         Gpu::resize(self, width, height);
+    }
+
+    fn clear(&mut self, surface: &dyn Surface) -> bool {
+        self.clear_surface(surface)
     }
 
     fn present(&mut self, surface: &dyn Surface, frame: &Frame) -> bool {
@@ -77,6 +82,10 @@ impl Renderer for Gpu {
 impl Renderer for SoftwareRenderer {
     fn resize(&mut self, width: u32, height: u32) {
         SoftwareRenderer::resize(self, width, height);
+    }
+
+    fn clear(&mut self, _surface: &dyn Surface) -> bool {
+        self.clear_buffer()
     }
 
     fn present(&mut self, surface: &dyn Surface, frame: &Frame) -> bool {
@@ -121,6 +130,10 @@ mod tests {
 
     impl Renderer for Stub {
         fn resize(&mut self, _width: u32, _height: u32) {}
+
+        fn clear(&mut self, _surface: &dyn Surface) -> bool {
+            true
+        }
 
         fn present(&mut self, _surface: &dyn Surface, _frame: &Frame) -> bool {
             true
