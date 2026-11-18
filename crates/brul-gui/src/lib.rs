@@ -5,18 +5,19 @@
 //! Прямоугольник — [`Rect`]: целые физические координаты, ширина и высота,
 //! радиус, заливка и граница. Граница лежит внутри (border-box), радиус
 //! ограничен половиной меньшей стороны. [`Rect::sample`] берёт центр пикселя и
-//! говорит, что в нём: заливка, граница или пусто; это эталон геометрии, пока
-//! отрисовщика нет.
+//! возвращает дробное покрытие заливки и границы: углы сглаживаются, прямые
+//! стороны остаются резкими.
 //!
 //! ```
-//! use brul_gui::{Color, Paint, Rect, RectSample};
+//! use brul_gui::{Color, Paint, Rect};
 //!
 //! let accent = Color::rgb(59, 130, 246);
 //! let rect = Rect::new(8, 8, 32, 24)
 //!     .with_radius(6)
 //!     .with_fill(Paint::Color(accent));
-//! assert_eq!(rect.sample(20, 20), RectSample::Fill(accent));
-//! assert_eq!(rect.sample(8, 8), RectSample::Outside);
+//! assert_eq!(rect.sample(20, 20).fill_coverage, 1.0);
+//! assert_eq!(rect.sample(8, 8).fill_coverage, 0.0);
+//! assert!(rect.sample(9, 9).fill_coverage > 0.0);
 //! ```
 //!
 //! Картинка — [`Texture`]: PNG декодируется в RGBA8; [`Texture::color_at`] отдаёт

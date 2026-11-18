@@ -1,5 +1,5 @@
 use crate::atlas::{Atlas, AtlasFormat};
-use crate::rect::{ClipRect, Rect, RectSample};
+use crate::rect::{ClipRect, Rect};
 use crate::widget::Dirty;
 use crate::{Color, Image, WidgetSnapshot, WidgetSnapshotNode};
 
@@ -154,11 +154,19 @@ impl Frame {
                 if !visible(clips, x as i32, y as i32) {
                     continue;
                 }
-                let color = match rect.sample(x as i32, y as i32) {
-                    RectSample::Outside => continue,
-                    RectSample::Fill(color) | RectSample::Border(color) => color,
-                };
-                self.blend(x as i32, y as i32, color, opacity);
+                let sample = rect.sample(x as i32, y as i32);
+                if sample.border_coverage > 0.0 {
+                    self.blend(
+                        x as i32,
+                        y as i32,
+                        rect.border_color,
+                        opacity * sample.border_coverage,
+                    );
+                }
+                if sample.fill_coverage > 0.0 {
+                    let color = rect.fill.at(rect, x as i32, y as i32);
+                    self.blend(x as i32, y as i32, color, opacity * sample.fill_coverage);
+                }
             }
         }
     }

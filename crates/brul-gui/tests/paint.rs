@@ -68,6 +68,8 @@ fn paints_background_and_rounds_corners() {
 
     assert_eq!(pixel(&frame, 8, 8), [255, 0, 0, 255]);
     assert_eq!(pixel(&frame, 0, 0), [0, 0, 0, 0]);
+    let corner = pixel(&frame, 2, 2);
+    assert!(corner[3] > 0 && corner[3] < 255);
 }
 
 #[test]

@@ -12,11 +12,10 @@ pub struct Rect {
     pub border_color: Color,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RectSample {
-    Outside,
-    Fill(Color),
-    Border(Color),
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RectSample {
+    pub fill_coverage: f32,
+    pub border_coverage: f32,
 }
 
 impl Rect {
@@ -51,16 +50,22 @@ impl Rect {
 
     pub fn sample(&self, x: i32, y: i32) -> RectSample {
         if self.width == 0 || self.height == 0 {
-            return RectSample::Outside;
+            return RectSample::default();
         }
 
         let distance = self.distance(x, y);
-        if distance > 0.0 {
-            RectSample::Outside
-        } else if self.border_width > 0 && distance > -(self.border_width as f32) {
-            RectSample::Border(self.border_color)
-        } else {
-            RectSample::Fill(self.fill.at(self, x, y))
+        let outer = (0.5 - distance).clamp(0.0, 1.0);
+        if self.border_width == 0 {
+            return RectSample {
+                fill_coverage: outer,
+                border_coverage: 0.0,
+            };
+        }
+
+        let inner = (0.5 - (distance + self.border_width as f32)).clamp(0.0, 1.0);
+        RectSample {
+            fill_coverage: inner,
+            border_coverage: outer - inner,
         }
     }
 
