@@ -61,6 +61,7 @@ impl Pass<'_> {
                 children: &keys,
                 transparent,
                 layer: node.layer,
+                constrained: node.style().clip || node.style().scroll,
             },
         );
         if self.stale.contains(&slot) {

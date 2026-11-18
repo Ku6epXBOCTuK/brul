@@ -271,6 +271,7 @@ pub struct NodeShape<'a, C> {
     pub children: &'a [u32],
     pub transparent: bool,
     pub layer: bool,
+    pub constrained: bool,
 }
 
 struct Entry<C> {
@@ -284,6 +285,7 @@ struct Entry<C> {
     content: C,
     children: Vec<u32>,
     layer: bool,
+    constrained: bool,
 }
 
 pub struct Layouter<C> {
@@ -352,6 +354,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
         if let Some(entry) = entries.get_mut(&key) {
             entry.scroll = shape.scroll;
             entry.layer = shape.layer;
+            entry.constrained = shape.constrained;
             if entry.children.as_slice() != shape.children {
                 entry.children.clear();
                 entry.children.extend_from_slice(shape.children);
@@ -362,6 +365,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
                 entry.layout = *shape.style;
                 entry.direction = shape.direction;
                 entry.offset = shape.offset;
+                entry.constrained = shape.constrained;
                 entry.content = shape.content;
                 return;
             };
@@ -374,7 +378,12 @@ impl<C: PartialEq + Clone> Layouter<C> {
             return;
         }
 
-        let taffy = taffy_style(shape.style, shape.direction, shape.offset);
+        let taffy = taffy_style(
+            shape.style,
+            shape.direction,
+            shape.offset,
+            shape.constrained,
+        );
         let content = shape.content;
         entries.insert(
             key,
@@ -397,6 +406,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
                 content,
                 children: shape.children.to_vec(),
                 layer: shape.layer,
+                constrained: shape.constrained,
             },
         );
     }
@@ -440,13 +450,20 @@ fn update_style<C>(
     if entry.layout != *shape.style
         || entry.direction != shape.direction
         || entry.offset != shape.offset
+        || entry.constrained != shape.constrained
     {
-        let taffy = taffy_style(shape.style, shape.direction, shape.offset);
+        let taffy = taffy_style(
+            shape.style,
+            shape.direction,
+            shape.offset,
+            shape.constrained,
+        );
         entry.style = taffy.clone();
         tree.set_style(node, taffy).expect("layout tree");
         entry.layout = *shape.style;
         entry.direction = shape.direction;
         entry.offset = shape.offset;
+        entry.constrained = shape.constrained;
     }
 }
 
@@ -639,7 +656,7 @@ fn build(tree: &mut TaffyTree<Size>, node: &LayoutNode) -> Result<NodeId, Layout
 
     let id = match node {
         LayoutNode::Leaf { size, offset, .. } => {
-            let taffy = taffy_style(style, Direction::Row, *offset);
+            let taffy = taffy_style(style, Direction::Row, *offset, false);
             tree.new_leaf_with_context(taffy, *size)
                 .expect("layout tree")
         }
@@ -653,7 +670,7 @@ fn build(tree: &mut TaffyTree<Size>, node: &LayoutNode) -> Result<NodeId, Layout
                 .iter()
                 .map(|child| build(tree, child))
                 .collect::<Result<Vec<_>, LayoutError>>()?;
-            let taffy = taffy_style(style, *direction, *offset);
+            let taffy = taffy_style(style, *direction, *offset, false);
             tree.new_with_children(taffy, &ids).expect("layout tree")
         }
     };
@@ -687,7 +704,12 @@ fn compute(tree: &mut TaffyTree<Size>, root: NodeId, viewport: Size) {
     .expect("layout tree");
 }
 
-fn taffy_style(style: &LayoutStyle, direction: Direction, offset: Option<Offset>) -> TaffyStyle {
+fn taffy_style(
+    style: &LayoutStyle,
+    direction: Direction,
+    offset: Option<Offset>,
+    constrained: bool,
+) -> TaffyStyle {
     let length = |value: u32| LengthPercentage::length(value as f32);
     let mut output = TaffyStyle {
         box_sizing: BoxSizing::BorderBox,
@@ -741,6 +763,15 @@ fn taffy_style(style: &LayoutStyle, direction: Direction, offset: Option<Offset>
             top: LengthPercentageAuto::length(offset.y as f32),
             bottom: LengthPercentageAuto::AUTO,
         };
+    }
+    if constrained {
+        match direction {
+            Direction::Column => output.min_size.height = length(0).into(),
+            Direction::Row => output.min_size.width = length(0).into(),
+        }
+        if style.flex_grow > 0.0 {
+            output.flex_shrink = 1.0;
+        }
     }
 
     output
@@ -932,6 +963,7 @@ mod tests {
                         children,
                         transparent: false,
                         layer: false,
+                        constrained: false,
                     },
                 );
             }
@@ -996,6 +1028,7 @@ mod tests {
                     children: &[],
                     transparent: false,
                     layer: false,
+                    constrained: false,
                 },
             );
             layouter.node(
@@ -1012,6 +1045,7 @@ mod tests {
                     children: &[1],
                     transparent: false,
                     layer: false,
+                    constrained: false,
                 },
             );
             layouter.finish();

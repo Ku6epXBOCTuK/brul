@@ -526,6 +526,53 @@ fn clips_children_to_a_rounded_parent() {
 }
 
 #[test]
+fn clip_keeps_a_growing_text_child_inside_its_box() {
+    let text = Widget::text("x".repeat(20) + "\n" + &"x".repeat(20)).with_styles(StyleSet::new(
+        WidgetStyle {
+            text: Color::rgb(255, 0, 0),
+            ..WidgetStyle::default()
+        },
+    ));
+    let body = Widget::column(vec![text])
+        .with_layout(LayoutStyle {
+            width: Dimension::Px(100),
+            flex_grow: 1.0,
+            ..LayoutStyle::default()
+        })
+        .with_styles(StyleSet::new(WidgetStyle {
+            clip: true,
+            ..WidgetStyle::default()
+        }));
+    let root = Widget::column(vec![body]).with_layout(LayoutStyle {
+        width: Dimension::Px(100),
+        height: Dimension::Px(40),
+        ..LayoutStyle::default()
+    });
+    let mut engine = TextEngine::new();
+    let mut tree = WidgetTree::new(root);
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 100,
+            height: 80,
+        },
+        1.0,
+    )
+    .expect("layout");
+    let mut frame = Frame::new(100, 80);
+    frame.paint(
+        tree.snapshot().expect("snapshot"),
+        engine.atlas(),
+        &Dirty::all(),
+    );
+
+    let ink = (0..80).any(|y| pixel(&frame, 4, y)[3] > 0);
+    assert!(ink, "the text should be drawn inside the clip box");
+    let outside = (44..80).any(|y| (0..100).any(|x| pixel(&frame, x, y)[3] > 0));
+    assert!(!outside, "ink must not escape the 40px clip box");
+}
+
+#[test]
 fn layer_paints_above_content_declared_after_it() {
     let layer = Widget::layer(Vec::new()).with_styles(StyleSet::new(WidgetStyle {
         background: Paint::Color(Color::rgb(0, 0, 255)),
