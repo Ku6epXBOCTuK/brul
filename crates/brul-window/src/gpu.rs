@@ -10,6 +10,7 @@ use winit::window::Window;
 
 use brul_gui::{Atlas, Dirty, Texture, WidgetSnapshot};
 
+use crate::gpu_frame::{CLIP, DECOR, FrameCache, GLYPH, IMAGE, SHAPE};
 use crate::window::WindowError;
 
 fn clear_color(transparent: bool) -> wgpu::Color {
@@ -40,6 +41,16 @@ fn premultiplied_blend() -> wgpu::BlendState {
     }
 }
 
+struct FrameData {
+    clip: Vec<u8>,
+    instances: Vec<u8>,
+    quads: Vec<u8>,
+    shape_count: usize,
+    decor_count: usize,
+    glyph_count: usize,
+    image_ranges: Vec<(u32, u32, Rc<Texture>)>,
+}
+
 pub(crate) struct Gpu {
     clear_color: wgpu::Color,
     _instance: wgpu::Instance,
@@ -61,6 +72,7 @@ pub(crate) struct Gpu {
     quad_capacity: usize,
     atlas: Option<AtlasTexture>,
     images: HashMap<usize, ImageTexture>,
+    frame: FrameCache,
     frame_index: u64,
     capture: bool,
     captured: Option<Vec<u8>>,
@@ -339,6 +351,7 @@ impl Gpu {
             quad_capacity: brul_gpu::TEXTURE_INSTANCE_SIZE as usize,
             atlas: None,
             images: HashMap::new(),
+            frame: FrameCache::default(),
             frame_index: 0,
             capture,
             captured: None,
@@ -407,24 +420,40 @@ impl Gpu {
         surface: &dyn crate::surface::Surface,
         snapshot: &WidgetSnapshot,
         atlas: &Atlas,
-        _dirty: &Dirty,
+        dirty: &Dirty,
     ) -> bool {
         let (width, height) = surface.size();
-        let all = Dirty::all();
-        let clips = brul_gpu::clip_set(snapshot, &all);
-        let shapes = brul_gpu::shape_instances(snapshot, &clips, &all);
-        let decorations = brul_gpu::decoration_instances(snapshot, &clips, &all);
-        let textures = brul_gpu::texture_instances(snapshot, atlas, &clips, &all);
-        let mut instances = Vec::with_capacity(shapes.len() + decorations.len());
-        instances.extend_from_slice(&shapes);
-        instances.extend_from_slice(&decorations);
+        self.frame.update(snapshot, atlas, dirty);
+        let frame = &self.frame;
+        let clip = frame.buffer(CLIP).to_vec();
+        let mut instances = frame.buffer(SHAPE).to_vec();
+        instances.extend_from_slice(frame.buffer(DECOR));
+        let glyph_bytes = frame.buffer(GLYPH).len();
+        let mut quads = frame.buffer(GLYPH).to_vec();
+        quads.extend_from_slice(frame.buffer(IMAGE));
+        let glyph_count = glyph_bytes / brul_gpu::TEXTURE_INSTANCE_SIZE as usize;
+        let image_ranges: Vec<_> = frame
+            .images()
+            .iter()
+            .map(|(start, count, texture)| {
+                (*start + glyph_count as u32, *count, Rc::clone(texture))
+            })
+            .collect();
+        let shape_count = frame.buffer(SHAPE).len() / brul_gpu::INSTANCE_SIZE as usize;
+        let decor_count = frame.buffer(DECOR).len() / brul_gpu::INSTANCE_SIZE as usize;
         self.present_frame(
             surface,
             (width.max(1), height.max(1)),
             atlas,
-            &instances,
-            &textures,
-            &clips,
+            FrameData {
+                clip,
+                instances,
+                quads,
+                shape_count,
+                decor_count,
+                glyph_count,
+                image_ranges,
+            },
         )
     }
 
@@ -433,29 +462,35 @@ impl Gpu {
         surface: &dyn crate::surface::Surface,
         (width, height): (u32, u32),
         atlas: &Atlas,
-        instances: &[brul_gpu::ShapeInstance],
-        textures: &brul_gpu::TextureBatches,
-        clips: &brul_gpu::ClipSet,
+        data: FrameData,
     ) -> bool {
+        let FrameData {
+            clip,
+            instances,
+            quads,
+            shape_count,
+            decor_count,
+            glyph_count,
+            image_ranges,
+        } = data;
         if instances.len() > self.instance_capacity {
             self.instance_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("brul-shape-instances"),
-                size: instances.len() as u64 * brul_gpu::INSTANCE_SIZE,
+                size: instances.len() as u64,
                 usage: brul_gpu::instance_usage(),
                 mapped_at_creation: false,
             });
             self.instance_capacity = instances.len();
         }
-        if !clips.clips.is_empty() {
-            let bytes = brul_gpu::clip_bytes(&clips.clips);
-            if bytes.len() > self.clip_capacity {
+        if !clip.is_empty() {
+            if clip.len() > self.clip_capacity {
                 self.clip_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("brul-clips"),
-                    size: bytes.len() as u64,
+                    size: clip.len() as u64,
                     usage: brul_gpu::instance_usage(),
                     mapped_at_creation: false,
                 });
-                self.clip_capacity = bytes.len();
+                self.clip_capacity = clip.len();
                 if let Some(cache) = &mut self.atlas {
                     cache.bind_group = None;
                 }
@@ -463,37 +498,17 @@ impl Gpu {
                     cache.bind_group = None;
                 }
             }
-            self.queue.write_buffer(&self.clip_buffer, 0, &bytes);
-        }
-        let mut quads = Vec::with_capacity(
-            textures.glyphs.len()
-                + textures
-                    .images
-                    .iter()
-                    .map(|batch| batch.instances.len())
-                    .sum::<usize>(),
-        );
-        quads.extend_from_slice(&textures.glyphs);
-        let mut image_ranges = Vec::with_capacity(textures.images.len());
-        for batch in &textures.images {
-            let start = quads.len() as u32;
-            quads.extend_from_slice(&batch.instances);
-            image_ranges.push((
-                start,
-                batch.instances.len() as u32,
-                Rc::clone(&batch.texture),
-            ));
+            self.queue.write_buffer(&self.clip_buffer, 0, &clip);
         }
         if !quads.is_empty() {
-            let bytes = brul_gpu::texture_instance_bytes(&quads);
-            if bytes.len() > self.quad_capacity {
+            if quads.len() > self.quad_capacity {
                 self.quad_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("brul-quad-instances"),
-                    size: bytes.len() as u64,
+                    size: quads.len() as u64,
                     usage: brul_gpu::instance_usage(),
                     mapped_at_creation: false,
                 });
-                self.quad_capacity = bytes.len();
+                self.quad_capacity = quads.len();
                 if let Some(cache) = &mut self.atlas {
                     cache.bind_group = None;
                 }
@@ -501,7 +516,7 @@ impl Gpu {
                     cache.bind_group = None;
                 }
             }
-            self.queue.write_buffer(&self.quad_buffer, 0, &bytes);
+            self.queue.write_buffer(&self.quad_buffer, 0, &quads);
         }
         self.frame_index += 1;
         self.images
@@ -517,19 +532,15 @@ impl Gpu {
                 self.images.remove(&key);
             }
         }
-        let glyph_bind_group =
-            (!textures.glyphs.is_empty()).then(|| self.ensure_atlas(atlas).clone());
+        let glyph_bind_group = (glyph_count > 0).then(|| self.ensure_atlas(atlas).clone());
         let mut image_bind_groups = Vec::with_capacity(image_ranges.len());
         for (_, _, texture) in &image_ranges {
             image_bind_groups.push(self.ensure_image(texture).clone());
         }
 
         if !instances.is_empty() {
-            self.queue.write_buffer(
-                &self.instance_buffer,
-                0,
-                &brul_gpu::instance_bytes(instances),
-            );
+            self.queue
+                .write_buffer(&self.instance_buffer, 0, &instances);
         }
         let viewport = [
             f32::to_ne_bytes(width as f32),
@@ -602,16 +613,21 @@ impl Gpu {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            if !instances.is_empty() {
+            if shape_count > 0 {
                 pass.set_pipeline(&self.shape_pipeline);
                 pass.set_bind_group(0, &shape_bind_group, &[]);
-                pass.draw(0..6, 0..instances.len() as u32);
+                pass.draw(0..6, 0..shape_count as u32);
+            }
+            if decor_count > 0 {
+                pass.set_pipeline(&self.shape_pipeline);
+                pass.set_bind_group(0, &shape_bind_group, &[]);
+                pass.draw(0..6, shape_count as u32..(shape_count + decor_count) as u32);
             }
             if !quads.is_empty() {
                 pass.set_pipeline(&self.quad_pipeline);
                 if let Some(group) = &glyph_bind_group {
                     pass.set_bind_group(0, group, &[]);
-                    pass.draw(0..6, 0..textures.glyphs.len() as u32);
+                    pass.draw(0..6, 0..glyph_count as u32);
                 }
                 for ((start, count, _), group) in image_ranges.iter().zip(&image_bind_groups) {
                     if *count == 0 {

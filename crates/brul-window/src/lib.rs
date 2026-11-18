@@ -18,6 +18,7 @@
 //! ```
 
 mod gpu;
+mod gpu_frame;
 mod input;
 #[cfg(windows)]
 mod layered;
