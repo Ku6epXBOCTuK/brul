@@ -41,3 +41,14 @@ pub struct WidgetSnapshotNode {
     pub image: Option<Image>,
     pub clips: Vec<ClipRect>,
 }
+
+impl WidgetSnapshotNode {
+    pub(crate) fn same_child_clip(&self, fresh: &Self) -> bool {
+        self.x == fresh.x
+            && self.y == fresh.y
+            && self.width == fresh.width
+            && self.height == fresh.height
+            && self.style.clip == fresh.style.clip
+            && self.style.border_radius == fresh.style.border_radius
+    }
+}

@@ -961,6 +961,49 @@ fn a_style_patch_rewrites_the_snapshot_in_place() {
 }
 
 #[test]
+fn a_clip_change_rebuilds_the_child_clip_rects() {
+    let child = Widget::text("line").with_layout(fixed(40, 20));
+    let child_id = child.id();
+    let root = Widget::column(vec![child])
+        .with_layout(fixed(60, 40))
+        .with_styles(StyleSet::new(WidgetStyle {
+            border_radius: 8,
+            ..WidgetStyle::default()
+        }));
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 60,
+        height: 40,
+    };
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    assert!(
+        tree.snapshot()
+            .expect("snapshot")
+            .node(child_id)
+            .expect("child")
+            .clips
+            .is_empty()
+    );
+
+    let class = Class {
+        style: Layers::new(WidgetStylePatch {
+            clip: Some(true),
+            ..WidgetStylePatch::default()
+        }),
+        ..Class::default()
+    };
+    assert!(tree.apply_class(root_id, Some(&class)));
+    assert!(!tree.layout_dirty(), "clip does not relayout");
+
+    let snapshot = tree.snapshot().expect("snapshot");
+    let clips = &snapshot.node(child_id).expect("child").clips;
+    assert_eq!(clips.len(), 1);
+    assert_eq!(clips[0].radius, 8);
+}
+
+#[test]
 fn a_class_carrying_a_layout_relayouts_the_widget() {
     let view = Widget::column(Vec::new()).with_layout(fixed(50, 50));
     let id = view.id();

@@ -148,13 +148,7 @@ impl WidgetTree {
                 self.focused,
             );
             let old = &snapshot.nodes[at];
-            let reshapes = old.x != fresh.x
-                || old.y != fresh.y
-                || old.width != fresh.width
-                || old.height != fresh.height
-                || old.style.clip != fresh.style.clip
-                || old.style.border_radius != fresh.style.border_radius;
-            if reshapes {
+            if !old.same_child_clip(&fresh) {
                 return false;
             }
             snapshot.nodes[at] = fresh;
