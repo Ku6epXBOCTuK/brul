@@ -33,6 +33,8 @@ impl Surface for Arc<dyn Window> {
 
     fn set_visible(&self, visible: bool) {
         self.as_ref().set_visible(visible);
+        #[cfg(windows)]
+        crate::layered::restore_layered_style(self);
     }
 
     fn focus(&self) {
@@ -57,6 +59,12 @@ impl Surface for Arc<dyn Window> {
         };
         self.as_ref().set_window_level(level);
     }
+}
+
+pub(crate) trait Presenter {
+    fn resize(&mut self, width: u32, height: u32);
+    fn clear(&mut self) -> bool;
+    fn present(&mut self, pixels: &[u8]) -> bool;
 }
 
 pub(crate) trait Renderer {
@@ -125,16 +133,13 @@ impl Renderer for SoftwareRenderer {
 pub(crate) fn create_renderer(
     backend: Backend,
     window: &Arc<dyn Window>,
+    transparent: bool,
 ) -> Result<Box<dyn Renderer>, WindowError> {
     let window = Arc::clone(window);
     create_renderer_with(
         backend,
         || Ok(Box::new(Gpu::new(&window)?)),
-        || {
-            Ok(Box::new(
-                SoftwareRenderer::new(&window).map_err(WindowError::window)?,
-            ))
-        },
+        || Ok(Box::new(SoftwareRenderer::new(&window, transparent)?)),
     )
 }
 

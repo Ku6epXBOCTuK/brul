@@ -19,6 +19,8 @@
 
 mod gpu;
 mod input;
+#[cfg(windows)]
+mod layered;
 pub mod perf;
 mod software;
 mod surface;

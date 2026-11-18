@@ -310,6 +310,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "wgpu",
+ "windows",
  "winit",
 ]
 
@@ -2580,6 +2581,13 @@ dependencies = [
  "thread_local",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "transparency"
+version = "0.1.0"
+dependencies = [
+ "brul",
 ]
 
 [[package]]

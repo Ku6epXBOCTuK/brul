@@ -355,6 +355,17 @@ fn centered_position(
     PhysicalPosition::new(x, y)
 }
 
+fn winit_transparent(config: &WindowConfig) -> bool {
+    #[cfg(windows)]
+    {
+        config.transparent && config.backend != Backend::Software
+    }
+    #[cfg(not(windows))]
+    {
+        config.transparent
+    }
+}
+
 pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
     let size = LogicalSize::new(f64::from(config.width), f64::from(config.height));
     let mut attributes = WindowAttributes::default()
@@ -362,7 +373,7 @@ pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
         .with_surface_size(size)
         .with_resizable(!config.frameless)
         .with_decorations(!config.frameless)
-        .with_transparent(config.transparent)
+        .with_transparent(winit_transparent(config))
         .with_visible(false);
     if config.frameless {
         attributes = attributes
@@ -390,7 +401,8 @@ impl ApplicationHandler for App {
             Ok(window) => window,
             Err(error) => return self.fail(event_loop, error),
         };
-        let renderer = match create_renderer(self.config.backend, &window) {
+        let renderer = match create_renderer(self.config.backend, &window, self.config.transparent)
+        {
             Ok(renderer) => renderer,
             Err(error) => return self.fail(event_loop, error),
         };
@@ -583,9 +595,24 @@ mod tests {
 
         assert!(!attributes.decorations);
         assert!(!attributes.resizable);
+        #[cfg(windows)]
+        assert!(!attributes.transparent);
+        #[cfg(not(windows))]
         assert!(attributes.transparent);
         assert!(attributes.min_surface_size.is_some());
         assert!(attributes.max_surface_size.is_some());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_gpu_window_keeps_winit_transparency() {
+        let config = WindowConfig {
+            transparent: true,
+            backend: Backend::Gpu,
+            ..WindowConfig::default()
+        };
+
+        assert!(super::attributes(&config).transparent);
     }
 
     #[test]

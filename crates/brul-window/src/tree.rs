@@ -139,7 +139,8 @@ impl TreeApp {
             Ok(window) => window,
             Err(error) => return self.fail(error),
         };
-        let renderer = match create_renderer(self.config.backend, &window) {
+        let renderer = match create_renderer(self.config.backend, &window, self.config.transparent)
+        {
             Ok(renderer) => renderer,
             Err(error) => return self.fail(error),
         };

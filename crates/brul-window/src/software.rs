@@ -2,17 +2,18 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use brul_gui::{Atlas, Dirty, Frame, WidgetSnapshot};
-use softbuffer::{Context, SoftBufferError, Surface as BufferSurface};
+use softbuffer::{Context, Surface as BufferSurface};
 use tracing::warn;
 use winit::window::Window;
 
-use crate::surface::Surface;
-use crate::window::CLEAR;
+use crate::surface::{Presenter, Surface};
+use crate::window::{CLEAR, WindowError};
+
+#[cfg(windows)]
+use crate::layered::LayeredSurface;
 
 pub(crate) struct SoftwareRenderer {
-    _context: Context<Arc<dyn Window>>,
-    surface: BufferSurface<Arc<dyn Window>, Arc<dyn Window>>,
-    size: (u32, u32),
+    presenter: Box<dyn Presenter>,
     frame: Frame,
 }
 
@@ -21,18 +22,58 @@ impl SoftwareRenderer {
         Some(self.frame.pixels().to_vec())
     }
 
-    pub(crate) fn new(window: &Arc<dyn Window>) -> Result<Self, SoftBufferError> {
-        let context = Context::new(Arc::clone(window))?;
-        let surface = BufferSurface::new(&context, Arc::clone(window))?;
+    pub(crate) fn new(window: &Arc<dyn Window>, transparent: bool) -> Result<Self, WindowError> {
+        let presenter = make_presenter(window, transparent)?;
         Ok(Self {
-            _context: context,
-            surface,
-            size: (0, 0),
+            presenter,
             frame: Frame::new(1, 1),
         })
     }
 
     pub(crate) fn resize(&mut self, width: u32, height: u32) {
+        self.presenter.resize(width, height);
+    }
+
+    pub(crate) fn clear_buffer(&mut self) -> bool {
+        self.presenter.clear()
+    }
+
+    pub(crate) fn render(
+        &mut self,
+        surface: &dyn Surface,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
+    ) -> bool {
+        let (width, height) = surface.size();
+        self.frame.resize(width.max(1), height.max(1));
+        self.presenter.resize(width, height);
+        self.frame.paint(snapshot, atlas, dirty);
+        self.presenter.present(self.frame.pixels())
+    }
+}
+
+struct SoftbufferPresenter {
+    _context: Context<Arc<dyn Window>>,
+    surface: BufferSurface<Arc<dyn Window>, Arc<dyn Window>>,
+    size: (u32, u32),
+}
+
+impl SoftbufferPresenter {
+    fn new(window: &Arc<dyn Window>) -> Result<Self, WindowError> {
+        let context = Context::new(Arc::clone(window)).map_err(WindowError::window)?;
+        let surface =
+            BufferSurface::new(&context, Arc::clone(window)).map_err(WindowError::window)?;
+        Ok(Self {
+            _context: context,
+            surface,
+            size: (0, 0),
+        })
+    }
+}
+
+impl Presenter for SoftbufferPresenter {
+    fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 || self.size == (width, height) {
             return;
         }
@@ -46,7 +87,7 @@ impl SoftwareRenderer {
         self.size = (width.get(), height.get());
     }
 
-    pub(crate) fn clear_buffer(&mut self) -> bool {
+    fn clear(&mut self) -> bool {
         let Ok(mut buffer) = self.surface.buffer_mut() else {
             return false;
         };
@@ -57,37 +98,34 @@ impl SoftwareRenderer {
         buffer.present().is_ok()
     }
 
-    pub(crate) fn render(
-        &mut self,
-        surface: &dyn Surface,
-        snapshot: &WidgetSnapshot,
-        atlas: &Atlas,
-        dirty: &Dirty,
-    ) -> bool {
-        let (width, height) = surface.size();
-        self.frame.resize(width.max(1), height.max(1));
-        self.frame.paint(snapshot, atlas, dirty);
-        self.present()
-    }
-
-    fn present(&mut self) -> bool {
-        let width = self.frame.width();
-        let height = self.frame.height();
-        self.resize(width, height);
-        if self.size != (width, height) {
-            return false;
-        }
+    fn present(&mut self, pixels: &[u8]) -> bool {
         let Ok(mut buffer) = self.surface.buffer_mut() else {
             return false;
         };
-        for (target, pixel) in buffer
-            .iter_mut()
-            .zip(self.frame.pixels().as_chunks::<4>().0)
-        {
+        for (target, pixel) in buffer.iter_mut().zip(pixels.as_chunks::<4>().0) {
             *target = pack(pixel);
         }
         buffer.present().is_ok()
     }
+}
+
+#[cfg(windows)]
+fn make_presenter(
+    window: &Arc<dyn Window>,
+    transparent: bool,
+) -> Result<Box<dyn Presenter>, WindowError> {
+    if transparent {
+        return Ok(Box::new(LayeredSurface::new(window)?));
+    }
+    Ok(Box::new(SoftbufferPresenter::new(window)?))
+}
+
+#[cfg(not(windows))]
+fn make_presenter(
+    window: &Arc<dyn Window>,
+    _transparent: bool,
+) -> Result<Box<dyn Presenter>, WindowError> {
+    Ok(Box::new(SoftbufferPresenter::new(window)?))
 }
 
 fn pack(pixel: &[u8; 4]) -> u32 {
