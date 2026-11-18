@@ -20,7 +20,6 @@
 mod gpu;
 mod input;
 pub mod perf;
-#[allow(dead_code)]
 mod software;
 mod surface;
 mod tree;

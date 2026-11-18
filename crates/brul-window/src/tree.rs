@@ -10,9 +10,8 @@ use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
 
-use crate::gpu::Gpu;
 use crate::input::system_scheme;
-use crate::surface::{Renderer, Surface};
+use crate::surface::{Renderer, Surface, create_renderer};
 use crate::window::{
     ColorScheme, WindowCommand, WindowConfig, WindowError, WindowKey, create_window,
 };
@@ -138,8 +137,8 @@ impl TreeApp {
             Ok(window) => window,
             Err(error) => return self.fail(error),
         };
-        let gpu = match Gpu::new(&window) {
-            Ok(gpu) => gpu,
+        let renderer = match create_renderer(self.config.backend, &window) {
+            Ok(renderer) => renderer,
             Err(error) => return self.fail(error),
         };
         self.tree = match tree {
@@ -169,7 +168,7 @@ impl TreeApp {
         }
 
         self.window = Some(Arc::clone(&window));
-        self.renderer = Some(Box::new(gpu));
+        self.renderer = Some(renderer);
         self.engine = Some(engine);
         self.frame = Some(Frame::new(size.width.max(1), size.height.max(1)));
         info!(title = %self.config.title, width = size.width, height = size.height, "window opened");
