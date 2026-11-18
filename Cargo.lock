@@ -303,6 +303,7 @@ dependencies = [
 name = "brul-window"
 version = "0.1.0"
 dependencies = [
+ "brul-gpu",
  "brul-gui",
  "brul-reactive",
  "softbuffer",

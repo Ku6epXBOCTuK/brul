@@ -47,6 +47,20 @@ impl Frame {
     }
 
     pub fn paint(&mut self, snapshot: &WidgetSnapshot, atlas: &Atlas, dirty: &Dirty) {
+        self.paint_impl(snapshot, atlas, dirty, true);
+    }
+
+    pub fn paint_content(&mut self, snapshot: &WidgetSnapshot, atlas: &Atlas, dirty: &Dirty) {
+        self.paint_impl(snapshot, atlas, dirty, false);
+    }
+
+    fn paint_impl(
+        &mut self,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
+        shapes: bool,
+    ) {
         if self.width == 0 || self.height == 0 {
             return;
         }
@@ -72,19 +86,21 @@ impl Frame {
 
         for node in &snapshot.nodes {
             if paint_clip(node, clip).is_some() {
-                self.paint_node(node, atlas, clip);
+                self.paint_node(node, atlas, clip, shapes);
             }
         }
     }
 
-    fn paint_node(&mut self, node: &WidgetSnapshotNode, atlas: &Atlas, clip: Clip) {
+    fn paint_node(&mut self, node: &WidgetSnapshotNode, atlas: &Atlas, clip: Clip, shapes: bool) {
         let opacity = opacity(node.style.opacity);
-        let rect = Rect::new(node.x, node.y, node.width, node.height)
-            .with_radius(node.style.border_radius)
-            .with_fill(node.style.background)
-            .with_border(node.border_width, node.style.border);
-        self.paint_shadow(node, &rect, opacity, clip);
-        self.paint_rect(&rect, opacity, clip, &node.clips);
+        if shapes {
+            let rect = Rect::new(node.x, node.y, node.width, node.height)
+                .with_radius(node.style.border_radius)
+                .with_fill(node.style.background)
+                .with_border(node.border_width, node.style.border);
+            self.paint_shadow(node, &rect, opacity, clip);
+            self.paint_rect(&rect, opacity, clip, &node.clips);
+        }
 
         match node.kind {
             crate::WidgetKind::Text => {

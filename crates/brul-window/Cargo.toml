@@ -7,6 +7,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+brul-gpu = { workspace = true }
 brul-gui = { workspace = true }
 brul-reactive = { workspace = true }
 tracing = { workspace = true }

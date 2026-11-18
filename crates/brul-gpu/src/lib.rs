@@ -88,6 +88,27 @@ pub fn shape_instances(snapshot: &WidgetSnapshot) -> Vec<ShapeInstance> {
     shapes
 }
 
+pub fn instance_bytes(instances: &[ShapeInstance]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(instances.len() * INSTANCE_SIZE as usize);
+    for shape in instances {
+        for field in [
+            shape.bounds,
+            shape.params,
+            shape.fill,
+            shape.border,
+            shape.from,
+            shape.to,
+            shape.extra,
+            shape.padding,
+        ] {
+            for value in field {
+                bytes.extend_from_slice(&value.to_ne_bytes());
+            }
+        }
+    }
+    bytes
+}
+
 fn rgba(color: Color) -> [f32; 4] {
     [
         f32::from(color.r) / 255.0,

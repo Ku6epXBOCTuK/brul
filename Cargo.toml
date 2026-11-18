@@ -58,6 +58,7 @@ debug = false
 
 [workspace.dependencies]
 brul-codegen = { path = 'crates\brul-codegen' }
+brul-gpu = { path = 'crates\brul-gpu' }
 brul-gui = { path = 'crates\brul-gui' }
 brul-layout = { path = 'crates\brul-layout' }
 brul-macros = { path = 'crates\brul-macros' }

@@ -9,6 +9,21 @@ use brul_gui::{Atlas, Dirty, Frame, WidgetSnapshot};
 
 use crate::window::WindowError;
 
+fn premultiplied_blend() -> wgpu::BlendState {
+    wgpu::BlendState {
+        color: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+            operation: wgpu::BlendOperation::Add,
+        },
+        alpha: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+            operation: wgpu::BlendOperation::Add,
+        },
+    }
+}
+
 const BLIT_SHADER: &str = r#"
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -52,6 +67,11 @@ pub(crate) struct Gpu {
     blit_pipeline: wgpu::RenderPipeline,
     blit_sampler: wgpu::Sampler,
     blit: Option<BlitTarget>,
+    shape_layout: wgpu::BindGroupLayout,
+    shape_pipeline: wgpu::RenderPipeline,
+    viewport_buffer: wgpu::Buffer,
+    instance_buffer: wgpu::Buffer,
+    instance_capacity: usize,
     frame: Frame,
 }
 
@@ -136,7 +156,7 @@ impl Gpu {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(premultiplied_blend()),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -157,6 +177,79 @@ impl Gpu {
             ..Default::default()
         });
 
+        let shape_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("brul-shape-layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+        let shape_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("brul-shape-pipeline-layout"),
+                bind_group_layouts: &[Some(&shape_layout)],
+                immediate_size: 0,
+            });
+        let shape_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("brul-shape-shader"),
+            source: wgpu::ShaderSource::Wgsl(brul_gpu::SHADER.into()),
+        });
+        let shape_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("brul-shape-pipeline"),
+            layout: Some(&shape_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shape_shader,
+                entry_point: Some("vs"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shape_shader,
+                entry_point: Some("fs"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(premultiplied_blend()),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-shape-viewport"),
+            size: 8,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-shape-instances"),
+            size: brul_gpu::INSTANCE_SIZE,
+            usage: brul_gpu::instance_usage(),
+            mapped_at_creation: false,
+        });
+
         Ok(Self {
             _instance: instance,
             surface,
@@ -166,6 +259,11 @@ impl Gpu {
             blit_layout,
             blit_pipeline,
             blit_sampler,
+            shape_layout,
+            shape_pipeline,
+            viewport_buffer,
+            instance_buffer,
+            instance_capacity: 0,
             blit: None,
             frame: Frame::new(1, 1),
         })
@@ -255,15 +353,61 @@ impl Gpu {
     ) -> bool {
         let (width, height) = surface.size();
         self.frame.resize(width.max(1), height.max(1));
-        self.frame.paint(snapshot, atlas, dirty);
-        self.present_frame(surface)
+        self.frame.paint_content(snapshot, atlas, dirty);
+        let shapes = brul_gpu::shape_instances(snapshot);
+        self.present_frame(surface, &shapes)
     }
 
-    fn present_frame(&mut self, surface: &dyn crate::surface::Surface) -> bool {
+    fn present_frame(
+        &mut self,
+        surface: &dyn crate::surface::Surface,
+        shapes: &[brul_gpu::ShapeInstance],
+    ) -> bool {
         let width = self.frame.width().max(1);
         let height = self.frame.height().max(1);
         self.ensure_blit(width, height);
+        if shapes.len() > self.instance_capacity {
+            self.instance_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("brul-shape-instances"),
+                size: shapes.len() as u64 * brul_gpu::INSTANCE_SIZE,
+                usage: brul_gpu::instance_usage(),
+                mapped_at_creation: false,
+            });
+            self.instance_capacity = shapes.len();
+        }
         let target = self.blit.as_ref().expect("blit target");
+        if !shapes.is_empty() {
+            self.queue
+                .write_buffer(&self.instance_buffer, 0, &brul_gpu::instance_bytes(shapes));
+        }
+        let viewport = [
+            f32::to_ne_bytes(width as f32),
+            f32::to_ne_bytes(height as f32),
+        ]
+        .concat();
+        self.queue.write_buffer(&self.viewport_buffer, 0, &viewport);
+        let shape_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("brul-shape-bind-group"),
+            layout: &self.shape_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.viewport_buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.instance_buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+            ],
+        });
 
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -311,7 +455,7 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        load: wgpu::LoadOp::Clear(crate::window::CLEAR),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -320,6 +464,11 @@ impl Gpu {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            if !shapes.is_empty() {
+                pass.set_pipeline(&self.shape_pipeline);
+                pass.set_bind_group(0, &shape_bind_group, &[]);
+                pass.draw(0..6, 0..shapes.len() as u32);
+            }
             pass.set_pipeline(&self.blit_pipeline);
             pass.set_bind_group(0, &target.bind_group, &[]);
             pass.draw(0..3, 0..1);
