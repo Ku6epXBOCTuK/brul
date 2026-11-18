@@ -36,6 +36,22 @@ impl WidgetTree {
                 self.focus_next()
             };
         }
+        if matches!(code, "Enter" | " ")
+            && let Some(slot) = self.focused.filter(|slot| {
+                let node = &self.nodes[slot.index()];
+                node.focusable
+                    && node.state.visible
+                    && !node.state.disabled
+                    && !matches!(node.data, Content::Input { .. })
+            })
+        {
+            return self
+                .path_to(slot)
+                .into_iter()
+                .rev()
+                .map(|slot| WidgetEvent::Click(self.nodes[slot.index()].id))
+                .collect();
+        }
         let Some(slot) = self
             .focused
             .filter(|slot| matches!(self.nodes[slot.index()].data, Content::Input { .. }))

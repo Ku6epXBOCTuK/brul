@@ -80,6 +80,17 @@ fn backspace_and_delete_remove_whole_characters() {
 }
 
 #[test]
+fn space_inserts_a_space_and_enter_submits_instead_of_clicking() {
+    let (mut tree, id) = focused_field("a");
+
+    assert_eq!(
+        tree.press_key(" "),
+        vec![WidgetEvent::Input(id, "a ".to_owned(), 2)]
+    );
+    assert_eq!(tree.press_key("Enter"), vec![WidgetEvent::Submit(id)]);
+}
+
+#[test]
 fn enter_submits_and_escape_and_tab_leave_the_field() {
     let (first, second) = (field("a"), field("b"));
     let (first_id, second_id) = (first.id(), second.id());

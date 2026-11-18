@@ -132,6 +132,23 @@ fn tab_walks_the_focusable_widgets_and_keeps_other_keys_for_the_window() {
 }
 
 #[test]
+fn enter_and_space_click_the_focused_widget_and_its_ancestors() {
+    let button = field();
+    let button_id = button.id();
+    let root = Widget::column(vec![button]).with_layout(fixed(100, 100));
+    let root_id = root.id();
+    let mut tree = laid_out(root);
+
+    assert_eq!(tree.press_key("Tab"), vec![WidgetEvent::Focus(button_id)]);
+    for key in ["Enter", " "] {
+        assert_eq!(
+            tree.press_key(key),
+            vec![WidgetEvent::Click(button_id), WidgetEvent::Click(root_id),]
+        );
+    }
+}
+
+#[test]
 fn a_disabled_widget_is_not_focusable() {
     let (first, second, third) = (field(), field(), field());
     let (first_id, third_id) = (first.id(), third.id());

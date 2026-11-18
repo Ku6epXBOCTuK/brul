@@ -33,6 +33,26 @@ impl WidgetTree {
         self.focus_events(Some(target))
     }
 
+    pub(super) fn path_to(&self, target: Slot) -> Vec<Slot> {
+        let mut path = Vec::new();
+        self.collect_path(self.root, target, &mut path);
+        path
+    }
+
+    fn collect_path(&self, slot: Slot, target: Slot, path: &mut Vec<Slot>) -> bool {
+        path.push(slot);
+        if slot == target {
+            return true;
+        }
+        for &child in &self.nodes[slot.index()].children {
+            if self.collect_path(child, target, path) {
+                return true;
+            }
+        }
+        path.pop();
+        false
+    }
+
     pub(super) fn focusable_slots(&self) -> Vec<Slot> {
         let mut slots: Vec<Slot> = self
             .index
