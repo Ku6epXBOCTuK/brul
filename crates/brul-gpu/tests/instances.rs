@@ -1,7 +1,7 @@
-use brul_gpu::shape_instances;
+use brul_gpu::{clip_set, decoration_instances, shape_instances};
 use brul_gui::{
-    Color, Dimension, Gradient, LayoutStyle, Paint, Shadow, Size, StyleSet, TextEngine, Widget,
-    WidgetStyle, WidgetTree,
+    CaretPosition, ClipRect, Color, Dimension, Gradient, LayoutStyle, Paint, SelectionRect, Shadow,
+    Size, StyleSet, TextEngine, Widget, WidgetKind, WidgetStyle, WidgetTree,
 };
 
 fn snapshot(style: WidgetStyle, border_width: u32) -> brul_gui::WidgetSnapshot {
@@ -51,7 +51,7 @@ fn a_solid_node_becomes_one_shape_with_border_coverage() {
         2,
     );
 
-    let shapes = shape_instances(&snapshot);
+    let shapes = shape_instances(&snapshot, &brul_gpu::ClipSet::default());
     assert_eq!(shapes.len(), 1);
     assert_eq!(shapes[0].bounds, [0.0, 0.0, 20.0, 20.0]);
     assert_eq!(shapes[0].params, [4.0, 2.0, 0.0, 0.5]);
@@ -76,12 +76,81 @@ fn a_shadow_adds_a_separate_padded_instance() {
         0,
     );
 
-    let shapes = shape_instances(&snapshot);
+    let shapes = shape_instances(&snapshot, &brul_gpu::ClipSet::default());
     assert_eq!(shapes.len(), 2);
     assert_eq!(shapes[0].extra, [0.0, 2.0, 3.0, 2.0]);
     assert_eq!(shapes[0].padding[0], 7.0);
     assert_eq!(shapes[0].params[2], 6.0);
     assert_eq!(shapes[1].extra[3], 0.0);
+}
+
+#[test]
+fn clip_ranges_are_flattened_and_encoded_into_shapes() {
+    let mut first = snapshot(
+        WidgetStyle {
+            background: Paint::Color(Color::rgb(255, 0, 0)),
+            ..WidgetStyle::default()
+        },
+        0,
+    );
+    first.nodes.push(first.nodes[0].clone());
+    first.nodes[1].clips = vec![
+        ClipRect::new(1, 2, 30, 40, 5),
+        ClipRect::new(3, 4, 10, 20, 0),
+    ];
+
+    let clips = clip_set(&first);
+    assert_eq!(clips.clips.len(), 2);
+    assert_eq!(clips.clips[0].bounds, [1.0, 2.0, 30.0, 40.0]);
+    assert_eq!(clips.clips[0].radius[0], 5.0);
+    assert_eq!(clips.clips[1].bounds, [3.0, 4.0, 10.0, 20.0]);
+    assert_eq!(
+        clips.ranges[0],
+        brul_gpu::ClipRange {
+            offset: 0,
+            count: 0
+        }
+    );
+    assert_eq!(
+        clips.ranges[1],
+        brul_gpu::ClipRange {
+            offset: 0,
+            count: 2
+        }
+    );
+
+    let shapes = shape_instances(&first, &clips);
+    assert_eq!(shapes.len(), 2);
+    assert_eq!(shapes[0].padding, [1.0, 0.0, 0.0, 0.0]);
+    assert_eq!(shapes[1].padding, [1.0, 0.0, 2.0, 0.0]);
+}
+
+#[test]
+fn input_decorations_become_unfilled_shapes() {
+    let mut snapshot = snapshot(WidgetStyle::default(), 0);
+    let node = &mut snapshot.nodes[0];
+    node.kind = WidgetKind::Input;
+    node.selection = vec![SelectionRect {
+        x: 1,
+        y: 2,
+        width: 5,
+        height: 3,
+    }];
+    node.caret = Some(CaretPosition {
+        x: 3,
+        y: 4,
+        height: 7,
+    });
+    let clips = clip_set(&snapshot);
+
+    let shapes = decoration_instances(&snapshot, &clips);
+    assert_eq!(shapes.len(), 2);
+    assert_eq!(shapes[0].bounds, [1.0, 2.0, 5.0, 3.0]);
+    assert_eq!(shapes[0].fill[3], 60.0 / 255.0);
+    assert_eq!(shapes[1].bounds, [3.0, 4.0, 1.0, 7.0]);
+    assert_eq!(shapes[1].fill[3], 1.0);
+    assert_eq!(shapes[1].params[1], 0.0);
+    assert_eq!(shapes[1].padding[0], 0.0);
 }
 
 #[test]
@@ -98,7 +167,7 @@ fn a_gradient_sets_the_angle_and_end_colors() {
         0,
     );
 
-    let shapes = shape_instances(&snapshot);
+    let shapes = shape_instances(&snapshot, &brul_gpu::ClipSet::default());
     assert_eq!(shapes.len(), 1);
     assert_eq!(shapes[0].extra[0], 90.0);
     assert_eq!(shapes[0].from[0], 10.0 / 255.0);

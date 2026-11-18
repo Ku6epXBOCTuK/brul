@@ -74,6 +74,8 @@ pub(crate) struct Gpu {
     viewport_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
+    clip_buffer: wgpu::Buffer,
+    clip_capacity: usize,
     quad_layout: wgpu::BindGroupLayout,
     quad_pipeline: wgpu::RenderPipeline,
     quad_buffer: wgpu::Buffer,
@@ -225,6 +227,16 @@ impl Gpu {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
         let shape_pipeline_layout =
@@ -270,6 +282,16 @@ impl Gpu {
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -345,6 +367,12 @@ impl Gpu {
             usage: brul_gpu::instance_usage(),
             mapped_at_creation: false,
         });
+        let clip_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-clips"),
+            size: brul_gpu::CLIP_INSTANCE_SIZE,
+            usage: brul_gpu::instance_usage(),
+            mapped_at_creation: false,
+        });
         let quad_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("brul-quad-instances"),
             size: brul_gpu::TEXTURE_INSTANCE_SIZE,
@@ -367,6 +395,8 @@ impl Gpu {
             viewport_buffer,
             instance_buffer,
             instance_capacity: 0,
+            clip_buffer,
+            clip_capacity: brul_gpu::CLIP_INSTANCE_SIZE as usize,
             quad_layout,
             quad_pipeline,
             quad_buffer,
@@ -463,9 +493,10 @@ impl Gpu {
         let (width, height) = surface.size();
         self.frame.resize(width.max(1), height.max(1));
         self.frame.paint_content(snapshot, atlas, dirty);
-        let shapes = brul_gpu::shape_instances(snapshot);
-        let textures = brul_gpu::texture_instances(snapshot, atlas);
-        self.present_frame(surface, atlas, &shapes, &textures)
+        let clips = brul_gpu::clip_set(snapshot);
+        let shapes = brul_gpu::shape_instances(snapshot, &clips);
+        let textures = brul_gpu::texture_instances(snapshot, atlas, &clips);
+        self.present_frame(surface, atlas, &shapes, &textures, &clips)
     }
 
     fn present_frame(
@@ -474,6 +505,7 @@ impl Gpu {
         atlas: &Atlas,
         shapes: &[brul_gpu::ShapeInstance],
         textures: &brul_gpu::TextureBatches,
+        clips: &brul_gpu::ClipSet,
     ) -> bool {
         let width = self.frame.width().max(1);
         let height = self.frame.height().max(1);
@@ -486,6 +518,25 @@ impl Gpu {
                 mapped_at_creation: false,
             });
             self.instance_capacity = shapes.len();
+        }
+        if !clips.clips.is_empty() {
+            let bytes = brul_gpu::clip_bytes(&clips.clips);
+            if bytes.len() > self.clip_capacity {
+                self.clip_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("brul-clips"),
+                    size: bytes.len() as u64,
+                    usage: brul_gpu::instance_usage(),
+                    mapped_at_creation: false,
+                });
+                self.clip_capacity = bytes.len();
+                if let Some(cache) = &mut self.atlas {
+                    cache.bind_group = None;
+                }
+                for cache in self.images.values_mut() {
+                    cache.bind_group = None;
+                }
+            }
+            self.queue.write_buffer(&self.clip_buffer, 0, &bytes);
         }
         let mut quads = Vec::with_capacity(
             textures.glyphs.len()
@@ -573,6 +624,14 @@ impl Gpu {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: &self.instance_buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.clip_buffer,
                         offset: 0,
                         size: None,
                     }),
@@ -695,6 +754,7 @@ impl Gpu {
                 &self.device,
                 &self.quad_layout,
                 &self.viewport_buffer,
+                &self.clip_buffer,
                 &self.quad_buffer,
                 &self.nearest_sampler,
                 &cache.texture,
@@ -737,6 +797,7 @@ impl Gpu {
                 &self.device,
                 &self.quad_layout,
                 &self.viewport_buffer,
+                &self.clip_buffer,
                 &self.quad_buffer,
                 &self.nearest_sampler,
                 &cache.texture,
@@ -795,6 +856,7 @@ fn quad_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     viewport: &wgpu::Buffer,
+    clips: &wgpu::Buffer,
     instances: &wgpu::Buffer,
     sampler: &wgpu::Sampler,
     texture: &wgpu::Texture,
@@ -808,6 +870,14 @@ fn quad_bind_group(
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: viewport,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: clips,
                     offset: 0,
                     size: None,
                 }),

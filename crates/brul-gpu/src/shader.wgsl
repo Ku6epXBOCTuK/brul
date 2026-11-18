@@ -20,8 +20,14 @@ struct QuadInstance {
     params: vec4<f32>,
 }
 
+struct ClipInstance {
+    bounds: vec4<f32>,
+    radius: vec4<f32>,
+}
+
 @group(0) @binding(0) var<uniform> viewport: Viewport;
 @group(0) @binding(1) var<storage, read> instances: array<Instance>;
+@group(0) @binding(2) var<storage, read> clips: array<ClipInstance>;
 @group(0) @binding(4) var<storage, read> quads: array<QuadInstance>;
 @group(0) @binding(5) var quad_texture: texture_2d<f32>;
 @group(0) @binding(6) var quad_sampler: sampler;
@@ -61,6 +67,23 @@ fn rounded_distance(local: vec2<f32>, size: vec2<f32>, radius: f32, offset: vec2
     let half = size * 0.5;
     let q = abs(local - offset - half) - (half - vec2<f32>(r));
     return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
+}
+
+fn clip_coverage(pixel: vec2<f32>, range: vec2<f32>) -> f32 {
+    var coverage = 1.0;
+    let start = u32(range.x);
+    let count = u32(range.y);
+    for (var i = 0u; i < count; i = i + 1u) {
+        let clip = clips[start + i];
+        let d = rounded_distance(
+            pixel - clip.bounds.xy,
+            clip.bounds.zw,
+            clip.radius.x,
+            vec2<f32>(0.0),
+        );
+        coverage = coverage * clamp(0.5 - d, 0.0, 1.0);
+    }
+    return coverage;
 }
 
 fn shadow_coverage(d: f32, blur: f32) -> f32 {
@@ -106,11 +129,12 @@ fn fs(in: Varyings) -> @location(0) vec4<f32> {
         alpha = inner + alpha * (1.0 - inner);
     }
 
-    alpha *= opacity;
+    let clip = clip_coverage(in.position.xy, shape.padding.yz);
+    alpha *= opacity * clip;
     if alpha <= 0.0 {
         discard;
     }
-    return vec4<f32>(premultiplied * opacity, alpha);
+    return vec4<f32>(premultiplied * opacity * clip, alpha);
 }
 
 struct QuadVaryings {
@@ -149,7 +173,10 @@ fn fs_quad(in: QuadVaryings) -> @location(0) vec4<f32> {
     } else {
         rgb = sampled.rgb * in.tint.rgb;
     }
-    let alpha = sampled.a * in.tint.a * in.params.y;
+    let alpha = sampled.a
+        * in.tint.a
+        * in.params.y
+        * clip_coverage(in.position.xy, in.params.zw);
     if alpha <= 0.0 {
         discard;
     }

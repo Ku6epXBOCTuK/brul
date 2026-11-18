@@ -8,6 +8,7 @@ use brul_gui::{
 pub const SHADER: &str = include_str!("shader.wgsl");
 pub const INSTANCE_SIZE: u64 = size_of::<ShapeInstance>() as u64;
 pub const TEXTURE_INSTANCE_SIZE: u64 = size_of::<TextureInstance>() as u64;
+pub const CLIP_INSTANCE_SIZE: u64 = size_of::<ClipInstance>() as u64;
 pub fn instance_usage() -> wgpu::BufferUsages {
     wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST
 }
@@ -44,9 +45,61 @@ pub struct TextureBatches {
     pub images: Vec<TextureBatch>,
 }
 
-pub fn shape_instances(snapshot: &WidgetSnapshot) -> Vec<ShapeInstance> {
-    let mut shapes = Vec::new();
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+pub struct ClipInstance {
+    pub bounds: [f32; 4],
+    pub radius: [f32; 4],
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ClipRange {
+    pub offset: u32,
+    pub count: u32,
+}
+
+#[derive(Debug, Default)]
+pub struct ClipSet {
+    pub clips: Vec<ClipInstance>,
+    pub ranges: Vec<ClipRange>,
+}
+
+pub fn clip_set(snapshot: &WidgetSnapshot) -> ClipSet {
+    let mut set = ClipSet::default();
     for node in &snapshot.nodes {
+        let offset = set.clips.len() as u32;
+        for clip in &node.clips {
+            set.clips.push(ClipInstance {
+                bounds: [
+                    clip.x as f32,
+                    clip.y as f32,
+                    clip.width as f32,
+                    clip.height as f32,
+                ],
+                radius: [clip.radius as f32, 0.0, 0.0, 0.0],
+            });
+        }
+        let count = set.clips.len() as u32 - offset;
+        set.ranges.push(ClipRange { offset, count });
+    }
+    set
+}
+
+pub fn clip_bytes(clips: &[ClipInstance]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(clips.len() * CLIP_INSTANCE_SIZE as usize);
+    for clip in clips {
+        for field in [clip.bounds, clip.radius] {
+            for value in field {
+                bytes.extend_from_slice(&value.to_ne_bytes());
+            }
+        }
+    }
+    bytes
+}
+
+pub fn shape_instances(snapshot: &WidgetSnapshot, clips: &ClipSet) -> Vec<ShapeInstance> {
+    let mut shapes = Vec::new();
+    for (index, node) in snapshot.nodes.iter().enumerate() {
         if node.width == 0 || node.height == 0 {
             continue;
         }
@@ -60,6 +113,7 @@ pub fn shape_instances(snapshot: &WidgetSnapshot) -> Vec<ShapeInstance> {
             node.width as f32,
             node.height as f32,
         ];
+        let clip = clip_range(clips, index);
         let shadow = node.style.shadow;
         if shadow.color.a > 0 {
             shapes.push(ShapeInstance {
@@ -75,7 +129,12 @@ pub fn shape_instances(snapshot: &WidgetSnapshot) -> Vec<ShapeInstance> {
                 from: [0.0; 4],
                 to: [0.0; 4],
                 extra: [0.0, shadow.x as f32, shadow.y as f32, 2.0],
-                padding: [shadow.blur as f32 + 1.0, 0.0, 0.0, 0.0],
+                padding: [
+                    shadow.blur as f32 + 1.0,
+                    clip.offset as f32,
+                    clip.count as f32,
+                    0.0,
+                ],
             });
         }
 
@@ -101,43 +160,48 @@ pub fn shape_instances(snapshot: &WidgetSnapshot) -> Vec<ShapeInstance> {
                 from,
                 to,
                 extra: [angle, 0.0, 0.0, 0.0],
-                padding: [1.0, 0.0, 0.0, 0.0],
+                padding: [1.0, clip.offset as f32, clip.count as f32, 0.0],
             });
         }
     }
     shapes
 }
 
-pub fn texture_instances(snapshot: &WidgetSnapshot, atlas: &Atlas) -> TextureBatches {
+pub fn texture_instances(
+    snapshot: &WidgetSnapshot,
+    atlas: &Atlas,
+    clips: &ClipSet,
+) -> TextureBatches {
     let mut glyphs = Vec::new();
     let mut images = Vec::new();
-    for node in &snapshot.nodes {
+    for (index, node) in snapshot.nodes.iter().enumerate() {
         if node.width == 0 || node.height == 0 {
             continue;
         }
         let Some(opacity) = node_opacity(node) else {
             continue;
         };
+        let clip = clip_range(clips, index);
         match node.kind {
             WidgetKind::Text => {
                 if let Some(text) = &node.text {
-                    push_glyphs(node, text, 0, atlas, opacity, &mut glyphs);
+                    push_glyphs(node, text, 0, atlas, opacity, clip, &mut glyphs);
                 }
             }
             WidgetKind::Input => {
                 if let Some(text) = &node.text {
-                    push_glyphs(node, text, 0, atlas, opacity, &mut glyphs);
+                    push_glyphs(node, text, 0, atlas, opacity, clip, &mut glyphs);
                 }
                 if let Some(preedit) = &node.preedit {
                     let shift = node
                         .caret
                         .map_or(0, |caret| caret.x.saturating_sub(preedit.size.width as i32));
-                    push_glyphs(node, preedit, shift, atlas, opacity, &mut glyphs);
+                    push_glyphs(node, preedit, shift, atlas, opacity, clip, &mut glyphs);
                 }
             }
             WidgetKind::Image => {
                 if let Some(image) = &node.image {
-                    push_image(node, image, opacity, &mut images);
+                    push_image(node, image, opacity, clip, &mut images);
                 }
             }
             WidgetKind::View | WidgetKind::Structure => {}
@@ -152,6 +216,7 @@ fn push_glyphs(
     shift: i32,
     atlas: &Atlas,
     opacity: f32,
+    clip: ClipRange,
     out: &mut Vec<TextureInstance>,
 ) {
     let offset = node
@@ -182,12 +247,18 @@ fn push_glyphs(
                 (slot.y + slot.height) as f32 / atlas.height() as f32,
             ],
             tint,
-            params: [mode, opacity, 0.0, 0.0],
+            params: [mode, opacity, clip.offset as f32, clip.count as f32],
         });
     }
 }
 
-fn push_image(node: &WidgetSnapshotNode, image: &Image, opacity: f32, out: &mut Vec<TextureBatch>) {
+fn push_image(
+    node: &WidgetSnapshotNode,
+    image: &Image,
+    opacity: f32,
+    clip: ClipRange,
+    out: &mut Vec<TextureBatch>,
+) {
     if node.content_width == 0 || node.content_height == 0 {
         return;
     }
@@ -232,7 +303,117 @@ fn push_image(node: &WidgetSnapshotNode, image: &Image, opacity: f32, out: &mut 
         ],
         uv: [0.0, 0.0, 1.0, 1.0],
         tint: tint.map(rgba).unwrap_or([1.0; 4]),
-        params: [1.0, opacity, 0.0, 0.0],
+        params: [1.0, opacity, clip.offset as f32, clip.count as f32],
+    });
+}
+
+pub fn decoration_instances(snapshot: &WidgetSnapshot, clips: &ClipSet) -> Vec<ShapeInstance> {
+    let mut shapes = Vec::new();
+    for (index, node) in snapshot.nodes.iter().enumerate() {
+        if node.kind != WidgetKind::Input {
+            continue;
+        }
+        let Some(opacity) = node_opacity(node) else {
+            continue;
+        };
+        let clip = clip_range(clips, index);
+        let selection_offset = node.style.vertical_align.offset(
+            node.content_height,
+            node.text.as_ref().map_or(0, |text| text.size.height),
+        ) as i32
+            - node.scroll;
+        for rect in &node.selection {
+            push_decoration(
+                &mut shapes,
+                [
+                    node.content_x.saturating_add(rect.x),
+                    node.content_y
+                        .saturating_add(rect.y)
+                        .saturating_add(selection_offset),
+                    rect.width,
+                    rect.height,
+                ],
+                node.style.text.with_alpha(60),
+                opacity,
+                clip,
+            );
+        }
+        let Some(caret) = node.caret else {
+            continue;
+        };
+        let caret_height = node
+            .text
+            .as_ref()
+            .map_or(caret.y.max(0), |text| text.size.height as i32)
+            .max(0) as u32;
+        let caret_offset = node
+            .style
+            .vertical_align
+            .offset(node.content_height, caret_height) as i32
+            - node.scroll;
+        if let Some(preedit) = &node.preedit {
+            let shift = caret.x.saturating_sub(preedit.size.width as i32);
+            let top = node
+                .content_y
+                .saturating_add(caret.y)
+                .saturating_add(caret_offset)
+                .saturating_add(preedit.size.height as i32)
+                .saturating_sub(1);
+            push_decoration(
+                &mut shapes,
+                [
+                    node.content_x.saturating_add(shift),
+                    top,
+                    preedit.size.width as i32,
+                    1,
+                ],
+                node.style.text,
+                opacity,
+                clip,
+            );
+        }
+        push_decoration(
+            &mut shapes,
+            [
+                node.content_x.saturating_add(caret.x),
+                node.content_y
+                    .saturating_add(caret.y)
+                    .saturating_add(caret_offset),
+                1,
+                caret.height,
+            ],
+            node.style.text,
+            opacity,
+            clip,
+        );
+    }
+    shapes
+}
+
+fn push_decoration(
+    out: &mut Vec<ShapeInstance>,
+    rect: [i32; 4],
+    color: Color,
+    opacity: f32,
+    clip: ClipRange,
+) {
+    if rect[2] <= 0 || rect[3] <= 0 {
+        return;
+    }
+    out.push(ShapeInstance {
+        bounds: [
+            rect[0] as f32,
+            rect[1] as f32,
+            rect[2] as f32,
+            rect[3] as f32,
+        ],
+        params: [0.0, 0.0, 0.0, opacity],
+        fill: rgba(color),
+        border: [0.0; 4],
+        from: [0.0; 4],
+        to: [0.0; 4],
+        extra: [0.0; 4],
+        padding: [0.0, clip.offset as f32, clip.count as f32, 0.0],
     });
 }
 
@@ -267,6 +448,10 @@ pub fn texture_instance_bytes(instances: &[TextureInstance]) -> Vec<u8> {
         }
     }
     bytes
+}
+
+fn clip_range(clips: &ClipSet, index: usize) -> ClipRange {
+    clips.ranges.get(index).copied().unwrap_or_default()
 }
 
 fn node_opacity(node: &WidgetSnapshotNode) -> Option<f32> {
