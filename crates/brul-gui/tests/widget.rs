@@ -946,6 +946,7 @@ fn a_style_patch_rewrites_the_snapshot_in_place() {
         ..Class::default()
     };
     assert!(tree.apply_class(id, Some(&class)));
+    assert!(!tree.layout_dirty(), "color does not relayout");
     assert!(
         tree.snapshot_dirty(),
         "the stale snapshot waits for a patch"
@@ -1001,6 +1002,33 @@ fn a_clip_change_rebuilds_the_child_clip_rects() {
     let clips = &snapshot.node(child_id).expect("child").clips;
     assert_eq!(clips.len(), 1);
     assert_eq!(clips[0].radius, 8);
+}
+
+#[test]
+fn a_style_geometry_change_relayouts_the_widget() {
+    let view = Widget::column(Vec::new()).with_layout(fixed(50, 50));
+    let id = view.id();
+    let mut tree = WidgetTree::new(view);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 50,
+            height: 50,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    let class = Class {
+        style: Layers::new(WidgetStylePatch {
+            border_radius: Some(8),
+            ..WidgetStylePatch::default()
+        }),
+        ..Class::default()
+    };
+    assert!(tree.apply_class(id, Some(&class)));
+    assert!(tree.layout_dirty(), "geometry relayouts");
 }
 
 #[test]

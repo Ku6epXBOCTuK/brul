@@ -9,6 +9,27 @@ use crate::layout::LayoutPatch;
 use crate::rect::Shadow;
 use crate::text::VerticalAlign;
 
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct Relayout {
+    geometry: LayoutGeometry,
+    clip: bool,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct LayoutGeometry {
+    border_radius: u32,
+    scroll: bool,
+    shadow_x: i32,
+    shadow_y: i32,
+    shadow_blur: u32,
+}
+
+impl Relayout {
+    pub(crate) fn same_layout(&self, other: &Self) -> bool {
+        self.geometry == other.geometry
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WidgetStyle {
     pub background: Paint,
@@ -103,6 +124,19 @@ impl WidgetStyle {
         set_if_some(&mut self.shadow.x, shadow_x);
         set_if_some(&mut self.shadow.y, shadow_y);
         set_if_some(&mut self.shadow.blur, shadow_blur);
+    }
+
+    pub(crate) fn relayout(&self) -> Relayout {
+        Relayout {
+            geometry: LayoutGeometry {
+                border_radius: self.border_radius,
+                scroll: self.scroll,
+                shadow_x: self.shadow.x,
+                shadow_y: self.shadow.y,
+                shadow_blur: self.shadow.blur,
+            },
+            clip: self.clip,
+        }
     }
 }
 

@@ -441,11 +441,7 @@ impl WidgetTree {
                 .map(|class| class.text.clone())
                 .unwrap_or_default()
                 != old_text
-            || style.border_radius != fresh.border_radius
-            || style.scroll != fresh.scroll
-            || style.shadow.x != fresh.shadow.x
-            || style.shadow.y != fresh.shadow.y
-            || style.shadow.blur != fresh.shadow.blur;
+            || !style.relayout().same_layout(&fresh.relayout());
         if relayout {
             self.stale.insert(slot);
             self.texts.remove(&id);

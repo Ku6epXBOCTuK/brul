@@ -48,7 +48,6 @@ impl WidgetSnapshotNode {
             && self.y == fresh.y
             && self.width == fresh.width
             && self.height == fresh.height
-            && self.style.clip == fresh.style.clip
-            && self.style.border_radius == fresh.style.border_radius
+            && self.style.relayout() == fresh.style.relayout()
     }
 }
