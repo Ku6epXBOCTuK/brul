@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use brul_syntax::ast::Position;
 use brul_syntax::style::Stylesheet;
 
@@ -9,16 +11,17 @@ use super::Out;
 #[derive(Default)]
 pub(super) struct ClassNames {
     names: Vec<String>,
+    indices: HashMap<String, usize>,
 }
 
 pub(super) fn index(names: &mut ClassNames, name: &str) -> usize {
-    match names.names.iter().position(|item| item == name) {
-        Some(index) => index,
-        None => {
-            names.names.push(name.to_owned());
-            names.names.len() - 1
-        }
+    if let Some(&index) = names.indices.get(name) {
+        return index;
     }
+    let index = names.names.len();
+    names.names.push(name.to_owned());
+    names.indices.insert(name.to_owned(), index);
+    index
 }
 
 pub(super) fn statics(
@@ -167,4 +170,18 @@ pub(super) fn tables(out: &mut Out<'_>, prefix: &str, stylesheet: &Stylesheet) {
     ));
     out.indented(|out| out.line(format_args!("{body}")));
     out.line(format_args!("}}"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn class_index_reuses_an_existing_entry() {
+        let mut names = ClassNames::default();
+        assert_eq!(index(&mut names, "first"), 0);
+        assert_eq!(index(&mut names, "second"), 1);
+        assert_eq!(index(&mut names, "first"), 0);
+        assert_eq!(names.names, ["first", "second"]);
+    }
 }
