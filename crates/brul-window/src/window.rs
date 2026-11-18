@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::PoisonError;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -29,6 +30,29 @@ pub struct WindowPosition {
     pub y: f64,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Backend {
+    #[default]
+    Software,
+    Gpu,
+}
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[error("unknown backend: {0}")]
+pub struct UnknownBackend(pub String);
+
+impl FromStr for Backend {
+    type Err = UnknownBackend;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "software" => Ok(Self::Software),
+            "gpu" => Ok(Self::Gpu),
+            other => Err(UnknownBackend(other.to_owned())),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct WindowConfig {
     pub title: String,
@@ -41,6 +65,7 @@ pub struct WindowConfig {
     pub centered: bool,
     pub position: Option<WindowPosition>,
     pub scroll: bool,
+    pub backend: Backend,
 }
 
 impl Default for WindowConfig {
@@ -56,6 +81,7 @@ impl Default for WindowConfig {
             centered: false,
             position: None,
             scroll: true,
+            backend: Backend::Software,
         }
     }
 }
@@ -464,11 +490,23 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::{WindowConfig, WindowError, WindowKey, WindowPosition};
+    use super::{Backend, WindowConfig, WindowError, WindowKey, WindowPosition};
 
     #[test]
     fn default_config_is_valid() {
         assert!(WindowConfig::default().validate().is_ok());
+    }
+
+    #[test]
+    fn the_default_backend_starts_without_a_gpu() {
+        assert_eq!(WindowConfig::default().backend, Backend::Software);
+    }
+
+    #[test]
+    fn a_backend_parses_from_its_name() {
+        assert_eq!("software".parse(), Ok(Backend::Software));
+        assert_eq!("gpu".parse(), Ok(Backend::Gpu));
+        assert!("other".parse::<Backend>().is_err());
     }
 
     #[test]
