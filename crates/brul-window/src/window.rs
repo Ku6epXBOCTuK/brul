@@ -17,7 +17,7 @@ use brul_gui::{WidgetEvent, WidgetTree};
 use crate::gpu::Gpu;
 use crate::input::{Input, event_input, window_input};
 
-const CLEAR: wgpu::Color = wgpu::Color {
+pub(crate) const CLEAR: wgpu::Color = wgpu::Color {
     r: 0.08,
     g: 0.09,
     b: 0.11,

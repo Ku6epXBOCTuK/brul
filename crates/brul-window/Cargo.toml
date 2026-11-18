@@ -13,3 +13,4 @@ tracing = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 thiserror = { workspace = true }
+softbuffer = { workspace = true }
