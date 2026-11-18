@@ -78,8 +78,8 @@ pub struct WidgetTree {
     texts: HashMap<WidgetId, ShapedText>,
     hovered: Vec<Slot>,
     pressed: Vec<Slot>,
-    focused: Option<Slot>,
-    modal_focus: Option<Slot>,
+    focused: Option<WidgetId>,
+    modal_focus: Option<WidgetId>,
     modifiers: KeyModifiers,
     dirty: HashSet<WidgetId>,
     stale: HashSet<Slot>,
@@ -278,6 +278,13 @@ impl WidgetTree {
     }
 
     fn remove(&mut self, slot: Slot) {
+        let id = self.nodes[slot.index()].id;
+        if self.focused == Some(id) {
+            self.focused = None;
+        }
+        if self.modal_focus == Some(id) {
+            self.modal_focus = None;
+        }
         let children = std::mem::take(&mut self.nodes[slot.index()].children);
         for child in children {
             self.remove(child);
@@ -285,6 +292,10 @@ impl WidgetTree {
         self.release_transition(slot);
         self.index.remove(&self.nodes[slot.index()].id);
         self.free.push(slot);
+    }
+
+    fn focused_slot(&self) -> Option<Slot> {
+        self.focused.and_then(|id| self.index.get(&id).copied())
     }
 
     fn node(&self, id: WidgetId) -> Option<&Node> {

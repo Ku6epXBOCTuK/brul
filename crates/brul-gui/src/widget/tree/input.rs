@@ -9,7 +9,7 @@ impl WidgetTree {
     }
 
     pub fn focused(&self) -> Option<WidgetId> {
-        self.focused.map(|slot| self.nodes[slot.index()].id)
+        self.focused
     }
 
     pub fn set_modifiers(&mut self, modifiers: KeyModifiers) {
@@ -37,7 +37,7 @@ impl WidgetTree {
             };
         }
         if matches!(code, "Enter" | " ")
-            && let Some(slot) = self.focused.filter(|slot| {
+            && let Some(slot) = self.focused_slot().filter(|slot| {
                 let node = &self.nodes[slot.index()];
                 node.focusable
                     && node.state.visible
@@ -53,7 +53,7 @@ impl WidgetTree {
                 .collect();
         }
         let Some(slot) = self
-            .focused
+            .focused_slot()
             .filter(|slot| matches!(self.nodes[slot.index()].data, Content::Input { .. }))
         else {
             return vec![self.key_event(code)];

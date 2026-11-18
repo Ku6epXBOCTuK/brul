@@ -214,3 +214,27 @@ fn a_widget_without_focusable_takes_no_focus() {
     assert!(tree.press_key("Tab").is_empty());
     assert_eq!(tree.focused(), None);
 }
+
+#[test]
+fn replacing_the_same_children_keeps_the_focus_on_its_widget() {
+    let (first, second) = (field(), field());
+    let (first_id, second_id) = (first.id(), second.id());
+    let root = Widget::column(vec![first, second]).with_layout(fixed(100, 100));
+    let root_id = root.id();
+    let mut tree = laid_out(root);
+
+    assert_eq!(tree.press_key("Tab"), vec![WidgetEvent::Focus(first_id)]);
+    let children = tree.take_children(root_id).expect("children");
+    assert!(tree.replace_all_children(root_id, children));
+
+    assert_eq!(tree.focused(), Some(first_id));
+    {
+        let snapshot = tree.snapshot().expect("snapshot");
+        assert!(snapshot.node(first_id).expect("first").state.focused);
+        assert!(!snapshot.node(second_id).expect("second").state.focused);
+    }
+    assert_eq!(
+        tree.press_key("Tab"),
+        vec![WidgetEvent::Blur(first_id), WidgetEvent::Focus(second_id)]
+    );
+}

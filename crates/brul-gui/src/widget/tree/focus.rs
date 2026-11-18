@@ -8,7 +8,7 @@ impl WidgetTree {
             return self.focus_events(None);
         };
         let target = match self
-            .focused
+            .focused_slot()
             .and_then(|current| slots.iter().position(|slot| *slot == current))
         {
             Some(index) => slots[(index + 1) % slots.len()],
@@ -24,7 +24,7 @@ impl WidgetTree {
             return self.focus_events(None);
         }
         let target = match self
-            .focused
+            .focused_slot()
             .and_then(|current| slots.iter().position(|slot| *slot == current))
         {
             Some(index) => slots[(index + slots.len() - 1) % slots.len()],
@@ -79,14 +79,17 @@ impl WidgetTree {
             let Some(previous) = self.modal_focus.take() else {
                 return;
             };
-            let node = &self.nodes[previous.index()];
+            let Some(slot) = self.index.get(&previous).copied() else {
+                return;
+            };
+            let node = &self.nodes[slot.index()];
             let restore = node.focusable && node.state.visible && !node.state.disabled;
-            let target = restore.then_some(previous);
+            let target = restore.then_some(slot);
             self.set_focused(target);
             return;
         };
         if self
-            .focused
+            .focused_slot()
             .is_some_and(|focused| self.within_scope(scope, focused))
         {
             return;
@@ -103,7 +106,7 @@ impl WidgetTree {
             return;
         };
         let outside = !self
-            .focused
+            .focused_slot()
             .is_some_and(|focused| self.within_scope(scope, focused));
         if outside && self.modal_focus.is_none() {
             self.modal_focus = self.focused;
@@ -167,12 +170,12 @@ impl WidgetTree {
     }
 
     pub(super) fn focus_events(&mut self, slot: Option<Slot>) -> Vec<WidgetEvent> {
-        if self.focused == slot {
+        if self.focused_slot() == slot {
             return Vec::new();
         }
         let mut events = Vec::with_capacity(2);
         if let Some(previous) = self.focused {
-            events.push(WidgetEvent::Blur(self.nodes[previous.index()].id));
+            events.push(WidgetEvent::Blur(previous));
         }
         if let Some(next) = slot {
             events.push(WidgetEvent::Focus(self.nodes[next.index()].id));
@@ -182,16 +185,16 @@ impl WidgetTree {
     }
 
     fn set_focused(&mut self, slot: Option<Slot>) {
-        if self.focused == slot {
+        if self.focused_slot() == slot {
             return;
         }
-        if let Some(previous) = self.focused {
+        if let Some(previous) = self.focused_slot() {
             self.nodes[previous.index()].state.focused = false;
         }
         if let Some(next) = slot {
             self.nodes[next.index()].state.focused = true;
         }
-        self.focused = slot;
+        self.focused = slot.map(|slot| self.nodes[slot.index()].id);
         self.invalidate_snapshot();
     }
 }

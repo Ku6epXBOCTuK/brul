@@ -97,8 +97,8 @@ impl WidgetTree {
     }
 
     pub(super) fn focused_input(&self) -> Option<Slot> {
-        self.focused
-            .filter(|slot| matches!(self.nodes[slot.index()].data, Content::Input { .. }))
+        let slot = self.focused_slot()?;
+        matches!(self.nodes[slot.index()].data, Content::Input { .. }).then_some(slot)
     }
 
     pub(super) fn field_text(&self, slot: Slot, text: &str) -> String {

@@ -111,8 +111,13 @@ impl WidgetTree {
     pub fn snapshot(&mut self) -> Result<&WidgetSnapshot, WidgetError> {
         if self.snapshot.is_none() || (self.snapshot_stale && !self.patch_snapshot()) {
             let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
-            let snapshot =
-                build_snapshot(&self.nodes, self.root, geometry, &self.texts, self.focused);
+            let snapshot = build_snapshot(
+                &self.nodes,
+                self.root,
+                geometry,
+                &self.texts,
+                self.focused_slot(),
+            );
             self.snapshot = Some(snapshot);
         }
         self.snapshot_stale = false;
@@ -124,6 +129,7 @@ impl WidgetTree {
         let Some(geometry) = self.geometry.as_ref() else {
             return false;
         };
+        let focused = self.focused_slot();
         let Some(snapshot) = self.snapshot.as_mut() else {
             return false;
         };
@@ -145,7 +151,7 @@ impl WidgetTree {
                 &geometry.boxes[slot.index()],
                 &self.texts,
                 &clips,
-                self.focused,
+                focused,
             );
             let old = &snapshot.nodes[at];
             if !old.same_child_clip(&fresh) {
