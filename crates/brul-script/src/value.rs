@@ -11,6 +11,7 @@ pub enum Value {
     Array(Arc<Vec<Value>>),
     Object(Arc<Vec<(String, Value)>>),
     Image(Arc<str>),
+    ImageBytes(Arc<[u8]>),
 }
 
 impl Value {
@@ -22,8 +23,12 @@ impl Value {
             Value::Null => "Null",
             Value::Array(_) => "Array",
             Value::Object(_) => "Object",
-            Value::Image(_) => "Image",
+            Value::Image(_) | Value::ImageBytes(_) => "Image",
         }
+    }
+
+    pub fn image_bytes(bytes: &[u8]) -> Self {
+        Self::ImageBytes(Arc::from(bytes))
     }
 
     fn as_number(&self) -> Option<f64> {

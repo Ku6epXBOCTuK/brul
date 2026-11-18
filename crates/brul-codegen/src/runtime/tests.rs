@@ -538,6 +538,10 @@ fn an_image_prop_accepts_a_path_and_null() {
         &Value::String("a.png".into()),
         PropType::Image
     ));
+    assert!(accepts_prop(
+        &Value::image_bytes(&[1, 2, 3]),
+        PropType::Image
+    ));
 }
 
 fn image_binding(path: Value) -> (Binding, Textures) {
@@ -568,6 +572,22 @@ fn an_image_binding_loads_the_file_once() {
     assert!(first.ptr_eq(&second));
     assert!(first.width() > 1);
     assert_eq!(textures.borrow().loaded.len(), 1);
+}
+
+#[test]
+fn an_image_binding_decodes_an_embedded_resource() {
+    let bytes = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../brul-gui/tests/fixtures/tint.png"
+    ))
+    .unwrap();
+    let (binding, textures) = image_binding(Value::image_bytes(&bytes));
+
+    let Write::Image(Some(image)) = evaluate(&binding, &textures) else {
+        panic!("the fixture must decode");
+    };
+    assert!(image.width() > 1);
+    assert!(textures.borrow().loaded.is_empty());
 }
 
 #[test]

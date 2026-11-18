@@ -1,4 +1,5 @@
 use brul_script::Names;
+use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
 
@@ -27,6 +28,16 @@ pub use alloc::allocations;
 pub use expression::{expression, operation};
 pub use module::{GeneratedFile, Module, module, module_file, split_module_file};
 pub(super) use out::Out;
+
+pub(super) fn resource<'a>(expression: &'a Expr, resources: &[Resource]) -> Option<&'a str> {
+    let ExprKind::Ident(name) = &expression.kind else {
+        return None;
+    };
+    resources
+        .iter()
+        .any(|resource| &resource.name == name)
+        .then_some(name.as_str())
+}
 
 pub fn identifiers(expression: &brul_syntax::ast::Expr) -> Names<'_> {
     let mut names = Names::new();

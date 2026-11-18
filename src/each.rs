@@ -114,6 +114,7 @@ fn hash_value(value: &Value, hasher: &mut DefaultHasher) {
             }
         }
         Value::Image(path) => (6u8, path.as_ref()).hash(hasher),
+        Value::ImageBytes(bytes) => (7u8, bytes.as_ref()).hash(hasher),
     }
 }
 

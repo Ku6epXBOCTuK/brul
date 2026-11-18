@@ -32,6 +32,13 @@ pub(crate) fn texture(
     };
     match &value {
         Value::Image(path) => load_texture(Path::new(path.as_ref()), textures),
+        Value::ImageBytes(bytes) => match Image::from_bytes(bytes) {
+            Ok(image) => Some(image),
+            Err(error) => {
+                error!(%error, "cannot decode embedded image");
+                None
+            }
+        },
         Value::Null => Some(Image::Raster(Rc::new(Texture::empty()))),
         _ => None,
     }

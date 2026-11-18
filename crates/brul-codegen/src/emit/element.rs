@@ -105,19 +105,9 @@ fn content_needed(element: &Element, emit: &Emit<'_>) -> bool {
     };
     match element.widget {
         Some(Widget::Text | Widget::TextInput) => !matches!(expression.kind, ExprKind::String(_)),
-        Some(Widget::Image) => resource(expression, emit).is_none(),
+        Some(Widget::Image) => super::resource(expression, emit.resources).is_none(),
         Some(Widget::View | Widget::Row | Widget::Column | Widget::Layer) | None => false,
     }
-}
-
-fn resource<'a>(expression: &'a Expr, emit: &Emit<'_>) -> Option<&'a str> {
-    let ExprKind::Ident(name) = &expression.kind else {
-        return None;
-    };
-    emit.resources
-        .iter()
-        .any(|resource| &resource.name == name)
-        .then_some(name.as_str())
 }
 
 fn classes(element: &Element) -> Vec<&str> {
@@ -454,7 +444,7 @@ fn image_widget(
             "Image requires a single content expression",
         ));
     };
-    if let Some(name) = resource(expression, emit) {
+    if let Some(name) = super::resource(expression, emit.resources) {
         out.push(format_args!(
             "brul::gui::Widget::image(brul::gui::Image::from_bytes({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
             emit.resource_prefix

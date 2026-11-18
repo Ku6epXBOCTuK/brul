@@ -3,6 +3,7 @@ use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Event, Member, Prop, PropType};
 
+use crate::Resource;
 use crate::error_at;
 use crate::loader::Definition;
 
@@ -379,6 +380,7 @@ fn write(
     let bases = emit.bases;
     let names = emit.names;
     let prefix = emit.resource_prefix;
+    let resources = emit.resources;
     let dynamic_classes = &mut *emit.dynamic_classes;
     let base = bases[index].as_str();
     let Call {
@@ -403,8 +405,8 @@ fn write(
             out.line(format_args!("script: {base}_script(),"));
             out.line(format_args!("name: {name:?},"));
             out.line(format_args!("names: names(),"));
-            arguments(out, "props", &props, names);
-            arguments(out, "defaults", &defaults, names);
+            arguments(out, "props", &props, names, resources, prefix);
+            arguments(out, "defaults", &defaults, names, resources, prefix);
             out.line(format_args!("events: &["));
             out.indented(|out| {
                 for (event, handler, params) in &events {
@@ -471,6 +473,8 @@ fn arguments(
     field: &str,
     arguments: &[(&str, PropType, &Expr)],
     names: &Names<'_>,
+    resources: &[Resource],
+    prefix: &str,
 ) {
     out.line(format_args!("{field}: &["));
     out.indented(|out| {
@@ -479,9 +483,14 @@ fn arguments(
                 .get(name)
                 .expect("prop is collected into the name table")
                 .index();
+            let expression = match super::resource(value, resources) {
+                Some(resource) if *ty == PropType::Image => format!(
+                    "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }}"
+                ),
+                _ => expression::closure(value, names),
+            };
             out.line(format_args!(
-                "brul::PropArgument {{ name: brul::VariableId::from_index({id}), ty: brul::PropType::{ty:?}, expression: {} }},",
-                expression::closure(value, names)
+                "brul::PropArgument {{ name: brul::VariableId::from_index({id}), ty: brul::PropType::{ty:?}, expression: {expression} }},"
             ));
         }
     });

@@ -174,7 +174,7 @@ pub fn accepts_prop(value: &Value, ty: PropType) -> bool {
         PropType::Bool => matches!(value, Value::Bool(_)),
         PropType::Number => matches!(value, Value::Number(_)),
         PropType::String => matches!(value, Value::String(_)),
-        PropType::Image => matches!(value, Value::Null | Value::Image(_)),
+        PropType::Image => matches!(value, Value::Null | Value::Image(_) | Value::ImageBytes(_)),
     }
 }
 

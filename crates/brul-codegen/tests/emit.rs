@@ -1274,6 +1274,30 @@ fn emits_component_properties() {
 }
 
 #[test]
+fn an_image_prop_accepts_a_resource_at_the_call_site() {
+    let dir = scratch(
+        "resource-prop",
+        &[
+            (
+                "icon.brul",
+                "<markup>\ncomponent Icon {\n    prop icon: Image = null;\n    Image { icon }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import Icon from \"./icon.brul\";\n    resource check from \"./check.png\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Icon (icon: check) { }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    std::fs::write(dir.join("check.png"), PNG_SIGNATURE).unwrap();
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(
+        module.contains("ty: brul::PropType::Image, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { Ok(brul::Value::image_bytes(resource_check())) }"),
+        "{module}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn rejects_component_properties() {
     let cases = [
         (
