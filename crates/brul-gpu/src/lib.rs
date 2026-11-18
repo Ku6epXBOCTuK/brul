@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use brul_gui::{
-    Atlas, AtlasFormat, Color, Image, Paint, Texture, WidgetKind, WidgetSnapshot,
+    Atlas, AtlasFormat, Color, Dirty, Image, Paint, Texture, WidgetId, WidgetKind, WidgetSnapshot,
     WidgetSnapshotNode,
 };
 
@@ -64,9 +64,15 @@ pub struct ClipSet {
     pub ranges: Vec<ClipRange>,
 }
 
-pub fn clip_set(snapshot: &WidgetSnapshot) -> ClipSet {
-    let mut set = ClipSet::default();
-    for node in &snapshot.nodes {
+pub fn clip_set(snapshot: &WidgetSnapshot, dirty: &Dirty) -> ClipSet {
+    let mut set = ClipSet {
+        ranges: vec![ClipRange::default(); snapshot.nodes.len()],
+        ..ClipSet::default()
+    };
+    for (index, node) in snapshot.nodes.iter().enumerate() {
+        if !node_is_dirty(dirty, node.id) {
+            continue;
+        }
         let offset = set.clips.len() as u32;
         for clip in &node.clips {
             set.clips.push(ClipInstance {
@@ -80,7 +86,7 @@ pub fn clip_set(snapshot: &WidgetSnapshot) -> ClipSet {
             });
         }
         let count = set.clips.len() as u32 - offset;
-        set.ranges.push(ClipRange { offset, count });
+        set.ranges[index] = ClipRange { offset, count };
     }
     set
 }
@@ -97,9 +103,16 @@ pub fn clip_bytes(clips: &[ClipInstance]) -> Vec<u8> {
     bytes
 }
 
-pub fn shape_instances(snapshot: &WidgetSnapshot, clips: &ClipSet) -> Vec<ShapeInstance> {
+pub fn shape_instances(
+    snapshot: &WidgetSnapshot,
+    clips: &ClipSet,
+    dirty: &Dirty,
+) -> Vec<ShapeInstance> {
     let mut shapes = Vec::new();
     for (index, node) in snapshot.nodes.iter().enumerate() {
+        if !node_is_dirty(dirty, node.id) {
+            continue;
+        }
         if node.width == 0 || node.height == 0 {
             continue;
         }
@@ -171,10 +184,14 @@ pub fn texture_instances(
     snapshot: &WidgetSnapshot,
     atlas: &Atlas,
     clips: &ClipSet,
+    dirty: &Dirty,
 ) -> TextureBatches {
     let mut glyphs = Vec::new();
     let mut images = Vec::new();
     for (index, node) in snapshot.nodes.iter().enumerate() {
+        if !node_is_dirty(dirty, node.id) {
+            continue;
+        }
         if node.width == 0 || node.height == 0 {
             continue;
         }
@@ -307,9 +324,16 @@ fn push_image(
     });
 }
 
-pub fn decoration_instances(snapshot: &WidgetSnapshot, clips: &ClipSet) -> Vec<ShapeInstance> {
+pub fn decoration_instances(
+    snapshot: &WidgetSnapshot,
+    clips: &ClipSet,
+    dirty: &Dirty,
+) -> Vec<ShapeInstance> {
     let mut shapes = Vec::new();
     for (index, node) in snapshot.nodes.iter().enumerate() {
+        if !node_is_dirty(dirty, node.id) {
+            continue;
+        }
         if node.kind != WidgetKind::Input {
             continue;
         }
@@ -452,6 +476,10 @@ pub fn texture_instance_bytes(instances: &[TextureInstance]) -> Vec<u8> {
 
 fn clip_range(clips: &ClipSet, index: usize) -> ClipRange {
     clips.ranges.get(index).copied().unwrap_or_default()
+}
+
+fn node_is_dirty(dirty: &Dirty, id: WidgetId) -> bool {
+    dirty.full || dirty.ids.contains(&id)
 }
 
 fn node_opacity(node: &WidgetSnapshotNode) -> Option<f32> {

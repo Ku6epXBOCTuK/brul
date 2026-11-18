@@ -410,10 +410,11 @@ impl Gpu {
         _dirty: &Dirty,
     ) -> bool {
         let (width, height) = surface.size();
-        let clips = brul_gpu::clip_set(snapshot);
-        let shapes = brul_gpu::shape_instances(snapshot, &clips);
-        let decorations = brul_gpu::decoration_instances(snapshot, &clips);
-        let textures = brul_gpu::texture_instances(snapshot, atlas, &clips);
+        let all = Dirty::all();
+        let clips = brul_gpu::clip_set(snapshot, &all);
+        let shapes = brul_gpu::shape_instances(snapshot, &clips, &all);
+        let decorations = brul_gpu::decoration_instances(snapshot, &clips, &all);
+        let textures = brul_gpu::texture_instances(snapshot, atlas, &clips, &all);
         let mut instances = Vec::with_capacity(shapes.len() + decorations.len());
         instances.extend_from_slice(&shapes);
         instances.extend_from_slice(&decorations);
