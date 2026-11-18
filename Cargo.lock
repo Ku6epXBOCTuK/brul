@@ -226,6 +226,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "brul-gpu"
+version = "0.1.0"
+dependencies = [
+ "brul-gui",
+ "naga",
+ "wgpu",
+]
+
+[[package]]
 name = "brul-gui"
 version = "0.1.0"
 dependencies = [

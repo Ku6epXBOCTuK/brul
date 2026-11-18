@@ -1,0 +1,14 @@
+[package]
+name = "brul-gpu"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+brul-gui = { workspace = true }
+wgpu = { workspace = true }
+
+[dev-dependencies]
+naga = { workspace = true, features = ["wgsl-in"] }
