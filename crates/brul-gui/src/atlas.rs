@@ -35,6 +35,7 @@ pub struct Atlas {
     pixels: Vec<u8>,
     shelves: Vec<Shelf>,
     entries: HashMap<CacheKey, AtlasSlot>,
+    revision: u64,
 }
 
 impl Atlas {
@@ -45,7 +46,12 @@ impl Atlas {
             pixels: vec![0; (WIDTH * HEIGHT * 4) as usize],
             shelves: Vec::new(),
             entries: HashMap::new(),
+            revision: 0,
         }
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     pub fn width(&self) -> u32 {
@@ -98,6 +104,7 @@ impl Atlas {
 
         let (x, y) = self.allocate(width, height)?;
         self.copy_pixels(x, y, image);
+        self.revision = self.revision.wrapping_add(1);
         let slot = AtlasSlot {
             x,
             y,

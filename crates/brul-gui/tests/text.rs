@@ -18,6 +18,32 @@ fn slot_has_ink(atlas: &Atlas, slot: AtlasSlot) -> bool {
 }
 
 #[test]
+fn atlas_revision_changes_only_when_new_glyphs_are_rasterized() {
+    let mut engine = TextEngine::new();
+    engine.layout("A", &style(), None, 1.0).expect("layout A");
+    let first = engine.atlas().revision();
+    assert!(
+        first > 0,
+        "a rasterized glyph must invalidate the GPU texture"
+    );
+
+    engine
+        .layout("A", &style(), None, 1.0)
+        .expect("layout A again");
+    assert_eq!(
+        engine.atlas().revision(),
+        first,
+        "cached glyphs must not re-upload the atlas"
+    );
+
+    engine.layout("B", &style(), None, 1.0).expect("layout B");
+    assert!(
+        engine.atlas().revision() > first,
+        "a new glyph must invalidate the GPU texture"
+    );
+}
+
+#[test]
 #[allow(clippy::non_ascii_literal)]
 fn cyrillic_text_is_shaped_and_rasterized() {
     let mut engine = TextEngine::new();
