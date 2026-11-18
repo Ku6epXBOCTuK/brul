@@ -11,7 +11,7 @@
         prop disabled: Bool = false;
         event clicked();
 
-        View (button, class: variant, disabled: disabled, on click: press) {
+        View (button, class: variant, focusable: true, disabled: disabled, on click: press) {
             @slot(icon)
             Text (button-label) { label }
         }
@@ -29,9 +29,17 @@
         border: 1px transparent;
         border-radius: 10px;
         background: theme.surface;
+        box-shadow-offset-x: 0px;
+        box-shadow-offset-y: 0px;
+        box-shadow-blur: 4px;
+        box-shadow-color: transparent;
         animate background: 200ms;
     }
     .button:hover { background: theme.surface-hover; }
+    .button:focus {
+        border-color: theme.accent;
+        box-shadow-color: theme.accent;
+    }
     .button:disabled { opacity: 0.45; }
     .secondary { background: theme.surface; border-color: theme.border; }
     .secondary:hover { background: theme.surface-hover; }

@@ -148,6 +148,7 @@ pub struct Layers<P> {
     checked: Option<P>,
     selected: Option<P>,
     disabled: Option<P>,
+    focused: Option<P>,
 }
 
 impl<P> Layers<P> {
@@ -159,6 +160,7 @@ impl<P> Layers<P> {
             checked: None,
             selected: None,
             disabled: None,
+            focused: None,
         }
     }
 
@@ -182,6 +184,7 @@ impl<P> Layers<P> {
             StyleState::Checked => &self.checked,
             StyleState::Selected => &self.selected,
             StyleState::Disabled => &self.disabled,
+            StyleState::Focused => &self.focused,
         }
     }
 
@@ -192,6 +195,7 @@ impl<P> Layers<P> {
             StyleState::Checked => &mut self.checked,
             StyleState::Selected => &mut self.selected,
             StyleState::Disabled => &mut self.disabled,
+            StyleState::Focused => &mut self.focused,
         }
     }
 }
@@ -229,15 +233,17 @@ pub enum StyleState {
     Checked,
     Selected,
     Disabled,
+    Focused,
 }
 
 impl StyleState {
-    pub const ALL: [StyleState; 5] = [
+    pub const ALL: [StyleState; 6] = [
         StyleState::Hovered,
         StyleState::Pressed,
         StyleState::Checked,
         StyleState::Selected,
         StyleState::Disabled,
+        StyleState::Focused,
     ];
 
     pub fn flags(self) -> WidgetState {
@@ -260,6 +266,10 @@ impl StyleState {
             },
             StyleState::Disabled => WidgetState {
                 disabled: true,
+                ..WidgetState::default()
+            },
+            StyleState::Focused => WidgetState {
+                focused: true,
                 ..WidgetState::default()
             },
         }
@@ -300,6 +310,7 @@ pub struct StyleSet {
     checked: Option<WidgetStylePatch>,
     selected: Option<WidgetStylePatch>,
     disabled: Option<WidgetStylePatch>,
+    focused: Option<WidgetStylePatch>,
 }
 
 impl StyleSet {
@@ -322,6 +333,7 @@ impl StyleSet {
             StyleState::Checked => self.checked = Some(patch),
             StyleState::Selected => self.selected = Some(patch),
             StyleState::Disabled => self.disabled = Some(patch),
+            StyleState::Focused => self.focused = Some(patch),
         }
         self
     }
@@ -337,6 +349,7 @@ impl StyleSet {
             StyleState::Checked => self.checked.as_ref(),
             StyleState::Selected => self.selected.as_ref(),
             StyleState::Disabled => self.disabled.as_ref(),
+            StyleState::Focused => self.focused.as_ref(),
         }
     }
 
@@ -369,6 +382,7 @@ impl StyleSet {
             StyleState::Checked => &mut self.checked,
             StyleState::Selected => &mut self.selected,
             StyleState::Disabled => &mut self.disabled,
+            StyleState::Focused => &mut self.focused,
         }
     }
 
@@ -378,6 +392,7 @@ impl StyleSet {
             (state.selected, self.selected),
             (state.checked, self.checked),
             (state.hovered, self.hovered),
+            (state.focused, self.focused),
             (state.pressed, self.pressed),
             (state.disabled, self.disabled),
         ];

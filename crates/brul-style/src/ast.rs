@@ -39,6 +39,7 @@ pub enum State {
     Checked,
     Selected,
     Disabled,
+    Focus,
 }
 
 impl State {
@@ -49,6 +50,7 @@ impl State {
             State::Checked => "checked",
             State::Selected => "selected",
             State::Disabled => "disabled",
+            State::Focus => "focus",
         }
     }
 }
@@ -174,12 +176,13 @@ impl Color {
 mod tests {
     use super::State;
 
-    const ALL: [State; 5] = [
+    const ALL: [State; 6] = [
         State::Hover,
         State::Pressed,
         State::Checked,
         State::Selected,
         State::Disabled,
+        State::Focus,
     ];
 
     #[test]

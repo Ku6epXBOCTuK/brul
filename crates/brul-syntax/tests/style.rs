@@ -525,6 +525,8 @@ fn class_states_parse() {
 .d:selected { }
 .e { }
 .e:disabled { }
+.f { }
+.f:focus { }
 ";
     assert_eq!(
         parse_file(source).unwrap(),
@@ -539,6 +541,8 @@ fn class_states_parse() {
             state_rule("d", State::Selected),
             rule("e", Vec::new()),
             state_rule("e", State::Disabled),
+            rule("f", Vec::new()),
+            state_rule("f", State::Focus),
         ])
     );
 }

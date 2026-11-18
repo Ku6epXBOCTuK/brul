@@ -48,6 +48,7 @@ pub struct TextStyleSet {
     checked: Option<TextStylePatch>,
     selected: Option<TextStylePatch>,
     disabled: Option<TextStylePatch>,
+    focused: Option<TextStylePatch>,
 }
 
 impl TextStyleSet {
@@ -65,6 +66,7 @@ impl TextStyleSet {
             StyleState::Checked => self.checked = Some(patch),
             StyleState::Selected => self.selected = Some(patch),
             StyleState::Disabled => self.disabled = Some(patch),
+            StyleState::Focused => self.focused = Some(patch),
         }
         self
     }
@@ -80,6 +82,7 @@ impl TextStyleSet {
             StyleState::Checked => self.checked.as_ref(),
             StyleState::Selected => self.selected.as_ref(),
             StyleState::Disabled => self.disabled.as_ref(),
+            StyleState::Focused => self.focused.as_ref(),
         }
     }
 
@@ -108,6 +111,7 @@ impl TextStyleSet {
             StyleState::Checked => &mut self.checked,
             StyleState::Selected => &mut self.selected,
             StyleState::Disabled => &mut self.disabled,
+            StyleState::Focused => &mut self.focused,
         }
     }
 
@@ -117,6 +121,7 @@ impl TextStyleSet {
             (state.selected, self.selected.as_ref()),
             (state.checked, self.checked.as_ref()),
             (state.hovered, self.hovered.as_ref()),
+            (state.focused, self.focused.as_ref()),
             (state.pressed, self.pressed.as_ref()),
             (state.disabled, self.disabled.as_ref()),
         ];

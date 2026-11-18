@@ -63,6 +63,7 @@ pub struct WidgetState {
     pub checked: bool,
     pub selected: bool,
     pub disabled: bool,
+    pub focused: bool,
     pub visible: bool,
 }
 
@@ -74,6 +75,7 @@ impl Default for WidgetState {
             checked: false,
             selected: false,
             disabled: false,
+            focused: false,
             visible: true,
         }
     }

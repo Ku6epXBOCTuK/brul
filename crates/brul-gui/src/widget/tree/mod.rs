@@ -112,6 +112,7 @@ struct TextVariants {
     checked: Option<TextLayout>,
     selected: Option<TextLayout>,
     disabled: Option<TextLayout>,
+    focused: Option<TextLayout>,
 }
 
 impl TextVariants {
@@ -123,6 +124,7 @@ impl TextVariants {
             checked: None,
             selected: None,
             disabled: None,
+            focused: None,
         }
     }
 
@@ -133,6 +135,7 @@ impl TextVariants {
             StyleState::Checked => self.checked = Some(layout),
             StyleState::Selected => self.selected = Some(layout),
             StyleState::Disabled => self.disabled = Some(layout),
+            StyleState::Focused => self.focused = Some(layout),
         }
         self
     }
@@ -147,6 +150,9 @@ impl TextVariants {
         }
         if state.hovered {
             layout = self.hovered.as_ref().unwrap_or(layout);
+        }
+        if state.focused {
+            layout = self.focused.as_ref().unwrap_or(layout);
         }
         if state.pressed {
             layout = self.pressed.as_ref().unwrap_or(layout);

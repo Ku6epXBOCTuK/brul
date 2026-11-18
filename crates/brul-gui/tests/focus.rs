@@ -1,6 +1,6 @@
 use brul_gui::{
-    Dimension, Direction, KeyModifiers, LayoutStyle, Size, TextEngine, Widget, WidgetEvent,
-    WidgetTree,
+    Color, Dimension, Direction, KeyModifiers, LayoutStyle, Paint, Size, StyleSet, StyleState,
+    TextEngine, Widget, WidgetEvent, WidgetStyle, WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -63,6 +63,44 @@ fn a_click_focuses_the_nearest_focusable_widget_and_background_blurs_it() {
         vec![WidgetEvent::Blur(second_id)]
     );
     assert_eq!(tree.focused(), None);
+}
+
+#[test]
+fn focus_applies_the_focused_style_and_blur_removes_it() {
+    let base = Paint::Color(Color::rgb(1, 2, 3));
+    let focused = Paint::Color(Color::rgb(4, 5, 6));
+    let field = field().with_styles(
+        StyleSet::new(WidgetStyle {
+            background: base,
+            ..WidgetStyle::default()
+        })
+        .with(
+            StyleState::Focused,
+            WidgetStylePatch {
+                background: Some(focused),
+                ..WidgetStylePatch::default()
+            },
+        ),
+    );
+    let id = field.id();
+    let mut tree = laid_out(Widget::column(vec![field]).with_layout(fixed(100, 100)));
+
+    assert_eq!(
+        focus_events(tree.press_key("Tab")),
+        vec![WidgetEvent::Focus(id)]
+    );
+    {
+        let snapshot = tree.snapshot().expect("snapshot");
+        let node = snapshot.node(id).expect("field");
+        assert!(node.state.focused);
+        assert_eq!(node.style.background, focused);
+    }
+
+    focus_events(tree.pointer_down(80, 80).expect("down"));
+    let snapshot = tree.snapshot().expect("snapshot after blur");
+    let node = snapshot.node(id).expect("field after blur");
+    assert!(!node.state.focused);
+    assert_eq!(node.style.background, base);
 }
 
 #[test]

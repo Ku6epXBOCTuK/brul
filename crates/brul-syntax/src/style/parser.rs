@@ -193,6 +193,7 @@ impl Cursor<'_> {
             "checked" => State::Checked,
             "selected" => State::Selected,
             "disabled" => State::Disabled,
+            "focus" => State::Focus,
             _ => return Err(Error::at(self.source(), at, "unknown state")),
         };
         Ok(Some(state))

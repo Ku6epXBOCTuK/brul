@@ -460,5 +460,6 @@ fn syntax_state(state: StyleState) -> State {
         StyleState::Checked => State::Checked,
         StyleState::Selected => State::Selected,
         StyleState::Disabled => State::Disabled,
+        StyleState::Focused => State::Focus,
     }
 }

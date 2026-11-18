@@ -62,10 +62,7 @@ impl WidgetTree {
             let node = &self.nodes[previous.index()];
             let restore = node.focusable && node.state.visible && !node.state.disabled;
             let target = restore.then_some(previous);
-            if self.focused != target {
-                self.focused = target;
-                self.invalidate_snapshot();
-            }
+            self.set_focused(target);
             return;
         };
         if self
@@ -78,10 +75,7 @@ impl WidgetTree {
             self.modal_focus = self.focused;
         }
         let target = self.scope_focusable(scope).first().copied();
-        if self.focused != target {
-            self.focused = target;
-            self.invalidate_snapshot();
-        }
+        self.set_focused(target);
     }
 
     fn enter_modal_scope(&mut self) {
@@ -163,8 +157,21 @@ impl WidgetTree {
         if let Some(next) = slot {
             events.push(WidgetEvent::Focus(self.nodes[next.index()].id));
         }
+        self.set_focused(slot);
+        events
+    }
+
+    fn set_focused(&mut self, slot: Option<Slot>) {
+        if self.focused == slot {
+            return;
+        }
+        if let Some(previous) = self.focused {
+            self.nodes[previous.index()].state.focused = false;
+        }
+        if let Some(next) = slot {
+            self.nodes[next.index()].state.focused = true;
+        }
         self.focused = slot;
         self.invalidate_snapshot();
-        events
     }
 }
