@@ -231,7 +231,7 @@ impl TreeApp {
         debug!(?events, "widget events");
         let commands = (self.handler)(&events);
         debug!(?commands, "window commands");
-        let step = self.run_commands(surface, commands);
+        let step = self.run_commands(surface, &commands);
         brul_reactive::flush();
         if self.tree.borrow().snapshot_dirty() {
             surface.redraw();

@@ -209,7 +209,7 @@ fn a_window_deadline_is_its_next_timer() {
     app.timers.push(Timer {
         next: now,
         interval: Duration::from_secs(1),
-        function: "tick".to_owned(),
+        function: "tick".into(),
     });
 
     assert_eq!(app.deadline(), Some(now));

@@ -218,7 +218,7 @@ where
 
     fn pump(&mut self, event_loop: &dyn ActiveEventLoop, now: Instant) {
         let commands = self.waker.take_commands();
-        if !commands.is_empty() && !self.run_steps(event_loop, |app| app.apply(commands.clone())) {
+        if !commands.is_empty() && !self.run_steps(event_loop, |app| app.apply(&commands)) {
             return;
         }
         if !self.run_steps(event_loop, |app| app.pump(now)) {

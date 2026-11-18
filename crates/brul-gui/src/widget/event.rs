@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::WidgetId;
 use crate::layout::LayoutError;
 use crate::text::TextError;
@@ -31,7 +33,7 @@ pub enum WidgetEvent {
         modifiers: KeyModifiers,
     },
     Close,
-    Timer(String),
+    Timer(Arc<str>),
     Focus(WidgetId),
     Blur(WidgetId),
     Input(WidgetId, String, usize),

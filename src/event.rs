@@ -142,6 +142,6 @@ mod tests {
         );
         let id = Widget::text("x").id();
         assert_eq!(handler_target(&WidgetEvent::Drag(id)), None);
-        assert_eq!(handler_target(&WidgetEvent::Timer("tick".to_owned())), None);
+        assert_eq!(handler_target(&WidgetEvent::Timer("tick".into())), None);
     }
 }

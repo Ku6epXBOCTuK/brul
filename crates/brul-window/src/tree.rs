@@ -175,7 +175,7 @@ impl TreeApp {
         self.engine = Some(engine);
         info!(title = %self.config.title, width = size.width, height = size.height, "window opened");
         let commands = std::mem::take(&mut self.initial);
-        let step = self.run_commands(&window, commands);
+        let step = self.run_commands(&window, &commands);
         if !matches!(step, Step::Continue) {
             return step;
         }
@@ -227,7 +227,7 @@ impl TreeApp {
         self.window.as_ref().map(|window| window.id())
     }
 
-    pub(crate) fn apply(&mut self, commands: Vec<WindowCommand>) -> Step {
+    pub(crate) fn apply(&mut self, commands: &[WindowCommand]) -> Step {
         match self.window.clone() {
             Some(window) => self.run_commands(&window, commands),
             None => Step::Continue,

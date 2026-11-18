@@ -7,13 +7,13 @@ impl TreeApp {
     pub(super) fn run_commands(
         &mut self,
         surface: &dyn Surface,
-        commands: Vec<WindowCommand>,
+        commands: &[WindowCommand],
     ) -> Step {
         for command in commands {
             match command {
                 WindowCommand::Exit => return Step::Exit,
                 WindowCommand::Close => return Step::Close,
-                WindowCommand::Open(key) => return Step::Open(key),
+                WindowCommand::Open(key) => return Step::Open(*key),
                 WindowCommand::Drag => surface.drag(),
                 WindowCommand::Show => {
                     self.revealed = true;
@@ -25,10 +25,11 @@ impl TreeApp {
                 }
                 WindowCommand::Focus => surface.focus(),
                 WindowCommand::Every { interval, function } => {
-                    self.timers.push(Timer::new(interval, function));
+                    self.timers
+                        .push(Timer::new(*interval, function.as_str().into()));
                 }
                 WindowCommand::SetTheme(_) => {}
-                WindowCommand::AlwaysOnTop(on_top) => surface.set_always_on_top(on_top),
+                WindowCommand::AlwaysOnTop(on_top) => surface.set_always_on_top(*on_top),
             }
         }
         Step::Continue

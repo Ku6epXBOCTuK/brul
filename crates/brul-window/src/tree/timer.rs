@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use brul_gui::WidgetEvent;
@@ -8,11 +9,11 @@ use crate::window::WindowCommand;
 pub(crate) struct Timer {
     pub(super) next: Instant,
     pub(super) interval: Duration,
-    pub(super) function: String,
+    pub(super) function: Arc<str>,
 }
 
 impl Timer {
-    pub(super) fn new(interval: Duration, function: String) -> Self {
+    pub(super) fn new(interval: Duration, function: Arc<str>) -> Self {
         Self {
             next: Instant::now() + interval,
             interval,
@@ -27,7 +28,7 @@ pub(crate) fn due(timers: &mut [Timer], now: Instant) -> Vec<WidgetEvent> {
         if timer.next > now {
             continue;
         }
-        events.push(WidgetEvent::Timer(timer.function.clone()));
+        events.push(WidgetEvent::Timer(Arc::clone(&timer.function)));
         while timer.next <= now {
             timer.next += timer.interval;
         }
@@ -61,7 +62,7 @@ pub(super) fn split_initial(commands: Vec<WindowCommand>) -> (Vec<Timer>, Vec<Wi
     for command in commands {
         match command {
             WindowCommand::Every { interval, function } => {
-                timers.push(Timer::new(interval, function));
+                timers.push(Timer::new(interval, function.into()));
             }
             command => rest.push(command),
         }
@@ -71,6 +72,7 @@ pub(super) fn split_initial(commands: Vec<WindowCommand>) -> (Vec<Timer>, Vec<Wi
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     use brul_gui::WidgetEvent;
@@ -80,7 +82,7 @@ mod tests {
 
     #[test]
     fn a_new_timer_waits_for_its_interval() {
-        let timer = Timer::new(Duration::from_secs(5), "later".to_owned());
+        let timer = Timer::new(Duration::from_secs(5), "later".into());
         assert!(timer.next > Instant::now());
         assert_eq!(timer.interval, Duration::from_secs(5));
     }
@@ -91,15 +93,31 @@ mod tests {
         let mut timers = vec![Timer {
             next: now,
             interval: Duration::from_millis(10),
-            function: "tick".to_owned(),
+            function: "tick".into(),
         }];
 
         let events = due(&mut timers, now);
 
         assert_eq!(events.len(), 1);
-        assert!(matches!(&events[0], WidgetEvent::Timer(name) if name == "tick"));
+        assert!(matches!(&events[0], WidgetEvent::Timer(name) if name.as_ref() == "tick"));
         assert!(timers[0].next > now);
         assert!(due(&mut timers, now).is_empty());
+    }
+
+    #[test]
+    fn a_due_timer_reuses_the_function_allocation() {
+        let now = Instant::now();
+        let mut timers = vec![Timer {
+            next: now,
+            interval: Duration::from_millis(10),
+            function: "tick".into(),
+        }];
+
+        let events = due(&mut timers, now);
+
+        assert!(
+            matches!(&events[0], WidgetEvent::Timer(name) if Arc::ptr_eq(name, &timers[0].function))
+        );
     }
 
     #[test]
@@ -108,7 +126,7 @@ mod tests {
         let mut timers = vec![Timer {
             next: now + Duration::from_secs(1),
             interval: Duration::from_secs(1),
-            function: "late".to_owned(),
+            function: "late".into(),
         }];
         assert!(due(&mut timers, now).is_empty());
     }
@@ -122,12 +140,12 @@ mod tests {
             Timer {
                 next: now + Duration::from_secs(2),
                 interval: Duration::from_secs(1),
-                function: "far".to_owned(),
+                function: "far".into(),
             },
             Timer {
                 next: now + Duration::from_secs(1),
                 interval: Duration::from_secs(1),
-                function: "near".to_owned(),
+                function: "near".into(),
             },
         ];
         assert_eq!(
@@ -149,7 +167,7 @@ mod tests {
         let timers = vec![Timer {
             next: now + Duration::from_secs(1),
             interval: Duration::from_secs(1),
-            function: "late".to_owned(),
+            function: "late".into(),
         }];
 
         assert_eq!(wakeup(&timers, Some(frame)), ControlFlow::WaitUntil(frame));

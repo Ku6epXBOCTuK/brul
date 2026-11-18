@@ -1502,7 +1502,7 @@ mod tests {
             &["ran"],
         );
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
-        ui.dispatch(&[WidgetEvent::Timer("tick".to_owned())]);
+        ui.dispatch(&[WidgetEvent::Timer("tick".into())]);
         assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
     }
 
