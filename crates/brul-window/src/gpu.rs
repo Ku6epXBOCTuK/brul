@@ -12,6 +12,19 @@ use brul_gui::{Atlas, Dirty, Texture, WidgetSnapshot};
 
 use crate::window::WindowError;
 
+fn clear_color(transparent: bool) -> wgpu::Color {
+    if transparent {
+        wgpu::Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 0.0,
+        }
+    } else {
+        crate::window::CLEAR
+    }
+}
+
 fn premultiplied_blend() -> wgpu::BlendState {
     wgpu::BlendState {
         color: wgpu::BlendComponent {
@@ -28,6 +41,7 @@ fn premultiplied_blend() -> wgpu::BlendState {
 }
 
 pub(crate) struct Gpu {
+    clear_color: wgpu::Color,
     _instance: wgpu::Instance,
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) device: wgpu::Device,
@@ -73,7 +87,7 @@ impl Gpu {
         self.captured.take()
     }
 
-    pub(crate) fn new(window: &Arc<dyn Window>) -> Result<Self, WindowError> {
+    pub(crate) fn new(window: &Arc<dyn Window>, transparent: bool) -> Result<Self, WindowError> {
         // NOTE: the GL backend parks a hidden window on a thread that pumps no messages, and a
         // keyboard layout switch then waits for it forever (wgpu#10504)
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
@@ -305,6 +319,7 @@ impl Gpu {
         });
 
         Ok(Self {
+            clear_color: clear_color(transparent),
             _instance: instance,
             surface,
             device,
@@ -370,7 +385,7 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(crate::window::CLEAR),
+                        load: wgpu::LoadOp::Clear(self.clear_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -577,7 +592,7 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(crate::window::CLEAR),
+                        load: wgpu::LoadOp::Clear(self.clear_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -911,6 +926,24 @@ mod tests {
             alpha_modes,
             usages: TextureUsages::RENDER_ATTACHMENT,
         }
+    }
+
+    #[test]
+    fn a_transparent_window_clears_to_transparent_black() {
+        assert_eq!(
+            clear_color(true),
+            wgpu::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            }
+        );
+    }
+
+    #[test]
+    fn an_opaque_window_keeps_the_regular_clear_color() {
+        assert_eq!(clear_color(false), crate::window::CLEAR);
     }
 
     #[test]

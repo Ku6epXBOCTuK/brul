@@ -138,7 +138,7 @@ pub(crate) fn create_renderer(
     let window = Arc::clone(window);
     create_renderer_with(
         backend,
-        || Ok(Box::new(Gpu::new(&window)?)),
+        || Ok(Box::new(Gpu::new(&window, transparent)?)),
         || Ok(Box::new(SoftwareRenderer::new(&window, transparent)?)),
     )
 }

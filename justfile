@@ -5,6 +5,14 @@ target_dir := trim(`cargo metadata --format-version 1 --no-deps | ConvertFrom-Js
 generate-rules:
     cargo run -p brul-syntax --bin rules
 
+transparent: transparent-software
+
+transparent-software:
+    $env:BRUL_EXAMPLE_BACKEND = 'software'; cargo run -p transparency
+
+transparent-gpu:
+    $env:BRUL_EXAMPLE_BACKEND = 'gpu'; cargo run -p transparency
+
 check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings

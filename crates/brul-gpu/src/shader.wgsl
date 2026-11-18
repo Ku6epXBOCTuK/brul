@@ -110,18 +110,18 @@ fn fs(in: Varyings) -> @location(0) vec4<f32> {
 
     if shape.extra.w >= 1.5 {
         let d = rounded_distance(in.local, size, shape.params.x, shape.extra.yz);
-        let coverage = shadow_coverage(d, shape.params.z);
+        let coverage = shadow_coverage(d, shape.params.z) * shape.fill.a;
         premultiplied = shape.fill.rgb * coverage;
         alpha = coverage;
     } else {
         let d = rounded_distance(in.local, size, shape.params.x, vec2<f32>(0.0));
         let outer = clamp(0.5 - d, 0.0, 1.0);
         let inner = clamp(0.5 - (d + shape.params.y), 0.0, 1.0);
-        let border = outer - inner;
+        let border = (outer - inner) * shape.border.a;
         premultiplied = shape.border.rgb * border;
         alpha = border;
 
-        var fill = shape.fill.rgb;
+        var fill = shape.fill;
         if shape.extra.x > 0.5 {
             let angle = radians(shape.extra.x);
             let sine = sin(angle);
@@ -129,10 +129,11 @@ fn fs(in: Varyings) -> @location(0) vec4<f32> {
             let span = max(abs(size.x * sine) + abs(size.y * cosine), 0.0001);
             let center = in.local - size * 0.5;
             let t = clamp((center.x * sine - center.y * cosine) / span + 0.5, 0.0, 1.0);
-            fill = mix(shape.start.rgb, shape.end.rgb, t);
+            fill = mix(shape.start, shape.end, t);
         }
-        premultiplied = fill * inner + premultiplied * (1.0 - inner);
-        alpha = inner + alpha * (1.0 - inner);
+        let coverage = inner * fill.a;
+        premultiplied = fill.rgb * coverage + premultiplied * (1.0 - coverage);
+        alpha = coverage + alpha * (1.0 - coverage);
     }
 
     let clip = clip_coverage(in.position.xy, shape.padding.yz);
