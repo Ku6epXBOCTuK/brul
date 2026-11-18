@@ -86,12 +86,6 @@ fn clip_coverage(pixel: vec2<f32>, range: vec2<f32>) -> f32 {
     return coverage;
 }
 
-fn linear_from_srgb(c: vec3<f32>) -> vec3<f32> {
-    let low = c / 12.92;
-    let high = pow(max((c + vec3<f32>(0.055)) / 1.055, vec3<f32>(0.0)), vec3<f32>(2.4));
-    return select(high, low, c <= vec3<f32>(0.04045));
-}
-
 fn srgb_from_linear(c: vec3<f32>) -> vec3<f32> {
     let low = c * 12.92;
     let high = 1.055 * pow(max(c, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055);
@@ -146,7 +140,7 @@ fn fs(in: Varyings) -> @location(0) vec4<f32> {
     if alpha <= 0.0 {
         discard;
     }
-    return vec4<f32>(linear_from_srgb(premultiplied * opacity * clip), alpha);
+    return vec4<f32>(premultiplied * opacity * clip, alpha);
 }
 
 struct QuadVaryings {
@@ -192,5 +186,5 @@ fn fs_quad(in: QuadVaryings) -> @location(0) vec4<f32> {
     if alpha <= 0.0 {
         discard;
     }
-    return vec4<f32>(linear_from_srgb(rgb * alpha), alpha);
+    return vec4<f32>(rgb * alpha, alpha);
 }

@@ -111,7 +111,9 @@ impl TreeApp {
             let started = Instant::now();
             self.presented = renderer.render(surface, snapshot, engine.atlas(), &paint);
             crate::perf::raster(self.config.backend, started.elapsed());
+            self.frames += 1;
             if !self.dumped
+                && self.frames >= 60
                 && let Some(path) = crate::perf::dump_path()
                 && let Some(pixels) = renderer.capture()
             {

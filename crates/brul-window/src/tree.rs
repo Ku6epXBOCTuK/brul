@@ -62,6 +62,7 @@ pub(crate) struct TreeApp {
     revealed: bool,
     presented: bool,
     dumped: bool,
+    frames: u32,
 }
 
 impl ApplicationHandler for TreeApp {
@@ -116,6 +117,7 @@ pub(crate) fn tree_app(
         revealed: false,
         presented: false,
         dumped: false,
+        frames: 0,
     };
     let (timers, initial) = timer::split_initial(initial);
     app.timers = timers;

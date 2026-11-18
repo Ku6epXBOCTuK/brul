@@ -25,22 +25,6 @@ pub(crate) const CLEAR: wgpu::Color = wgpu::Color {
     a: 0.85,
 };
 
-pub(crate) fn clear_linear() -> wgpu::Color {
-    fn channel(value: f64) -> f64 {
-        if value <= 0.04045 {
-            value / 12.92
-        } else {
-            ((value + 0.055) / 1.055).powf(2.4)
-        }
-    }
-    wgpu::Color {
-        r: channel(CLEAR.r),
-        g: channel(CLEAR.g),
-        b: channel(CLEAR.b),
-        a: CLEAR.a,
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WindowPosition {
     pub x: f64,

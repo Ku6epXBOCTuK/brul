@@ -98,6 +98,10 @@ impl Gpu {
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .ok_or(WindowError::NoSurfaceConfig)?;
         config.alpha_mode = alpha_mode(&capabilities);
+        let unorm = unorm_format(config.format);
+        if capabilities.formats.contains(&unorm) {
+            config.format = unorm;
+        }
         config.desired_maximum_frame_latency = 1;
         let mut capture = crate::perf::dump_path().is_some();
         if capture {
@@ -366,7 +370,7 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(crate::window::clear_linear()),
+                        load: wgpu::LoadOp::Clear(crate::window::CLEAR),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -573,7 +577,7 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(crate::window::clear_linear()),
+                        load: wgpu::LoadOp::Clear(crate::window::CLEAR),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -854,6 +858,14 @@ fn size_change(current: (u32, u32), width: u32, height: u32) -> Option<(u32, u32
     (current != (width, height)).then_some((width, height))
 }
 
+fn unorm_format(format: wgpu::TextureFormat) -> wgpu::TextureFormat {
+    match format {
+        wgpu::TextureFormat::Rgba8UnormSrgb => wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Bgra8UnormSrgb => wgpu::TextureFormat::Bgra8Unorm,
+        other => other,
+    }
+}
+
 fn alpha_mode(capabilities: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
     for mode in [
         wgpu::CompositeAlphaMode::PreMultiplied,
@@ -899,6 +911,22 @@ mod tests {
             alpha_modes,
             usages: TextureUsages::RENDER_ATTACHMENT,
         }
+    }
+
+    #[test]
+    fn an_srgb_surface_format_becomes_its_unorm_pair() {
+        assert_eq!(
+            unorm_format(wgpu::TextureFormat::Bgra8UnormSrgb),
+            wgpu::TextureFormat::Bgra8Unorm
+        );
+        assert_eq!(
+            unorm_format(wgpu::TextureFormat::Rgba8UnormSrgb),
+            wgpu::TextureFormat::Rgba8Unorm
+        );
+        assert_eq!(
+            unorm_format(wgpu::TextureFormat::Rgba16Float),
+            wgpu::TextureFormat::Rgba16Float
+        );
     }
 
     #[test]
