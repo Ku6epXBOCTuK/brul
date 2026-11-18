@@ -109,6 +109,9 @@ impl Gpu {
             }
         }
         surface.configure(&device, &config);
+        if capture {
+            tracing::info!("brul capture: surface format {:?}", config.format);
+        }
 
         let nearest_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("brul-nearest-sampler"),

@@ -204,6 +204,12 @@ impl TreeApp {
         step
     }
 
+    pub(crate) fn redraw(&self) {
+        if let Some(window) = &self.window {
+            window.redraw();
+        }
+    }
+
     pub(crate) fn deadline(&self) -> Option<Instant> {
         let timer = self.timers.iter().map(|timer| timer.next).min();
         let frame = if self.tree.borrow().animating() {

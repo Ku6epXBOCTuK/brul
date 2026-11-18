@@ -225,11 +225,17 @@ where
             return;
         }
 
+        if crate::perf::measuring() {
+            for (_, app) in &self.windows {
+                app.redraw();
+            }
+        }
         let deadline = self
             .windows
             .iter()
             .filter_map(|(_, app)| app.deadline())
-            .min();
+            .min()
+            .or_else(crate::perf::next_frame);
         event_loop.set_control_flow(wakeup_at(deadline));
     }
 }
