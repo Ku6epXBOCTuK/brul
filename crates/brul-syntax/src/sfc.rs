@@ -2,6 +2,8 @@ use pest::Parser;
 use pest::error::LineColLocation;
 use pest_derive::Parser;
 
+use crate::ast::Position;
+
 #[derive(Parser)]
 #[grammar = "sfc.pest"]
 struct SfcParser;
@@ -20,34 +22,17 @@ pub struct Sfc<'a> {
     pub script: Option<Block<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
-    #[error("line {}, column {}: {}", .line, .column, .message)]
-    Syntax {
-        message: String,
-        line: usize,
-        column: usize,
-    },
-    #[error("line {}, column {}: duplicate <{}> block", .line, .column, .name)]
-    Duplicate {
-        name: &'static str,
-        line: usize,
-        column: usize,
-    },
-    #[error("missing <markup> block")]
-    MissingMarkup,
-}
+pub use crate::error::Error;
 
 pub fn parse(source: &str) -> Result<Sfc<'_>, Error> {
     let pairs = SfcParser::parse(Rule::file, source).map_err(|error| {
         let (line, column) = match error.line_col {
             LineColLocation::Pos(pos) | LineColLocation::Span(pos, _) => pos,
         };
-        Error::Syntax {
-            message: error.variant.message().to_string(),
-            line,
-            column,
-        }
+        Error::at_position(
+            Position { line, column },
+            Error::custom(error.variant.message()),
+        )
     })?;
 
     let mut uses = None;
@@ -71,13 +56,18 @@ pub fn parse(source: &str) -> Result<Sfc<'_>, Error> {
             _ => &mut script,
         };
         if slot.replace(block(pair, source)).is_some() {
-            return Err(Error::Duplicate { name, line, column });
+            return Err(Error::at_position(
+                Position { line, column },
+                Error::DuplicateBlock(name),
+            ));
         }
     }
 
     Ok(Sfc {
         uses,
-        markup: markup.ok_or(Error::MissingMarkup)?,
+        markup: markup.ok_or_else(|| {
+            Error::at_position(Position { line: 1, column: 1 }, Error::MissingMarkup)
+        })?,
         style,
         script,
     })

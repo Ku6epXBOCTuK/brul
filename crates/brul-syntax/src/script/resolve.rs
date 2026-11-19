@@ -171,9 +171,5 @@ fn check_function(name: &str, position: Position, names: &Names<'_>) -> Result<(
 }
 
 fn undefined(what: &str, name: &str, position: Position) -> Error {
-    Error {
-        message: format!("{what} '{name}' is not defined"),
-        line: position.line,
-        column: position.column,
-    }
+    Error::at_position(position, Error::Undefined(what.to_owned(), name.to_owned()))
 }

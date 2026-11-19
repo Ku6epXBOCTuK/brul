@@ -4,7 +4,7 @@ use crate::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    #[error("line {}, column {}: {}", .0.line, .0.column, .1)]
+    #[error("{0}: {1}")]
     At(Position, #[source] Box<Error>),
     #[error("variable '{0}' is not defined")]
     Undefined(String),

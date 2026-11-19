@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
-pub use crate::error::Error;
+pub use crate::error::{Error, Expected};
 use crate::lexer::{self, Punct, Span, TokenKind, TokenStream};
 
 pub struct Parser<'s, 'a> {
@@ -37,7 +37,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         if token.kind == TokenKind::Eof {
             Ok(())
         } else {
-            Err(self.error(span, "expected end of expression"))
+            Err(self.error(span, Expected::Word("end of expression")))
         }
     }
 
@@ -70,10 +70,10 @@ impl<'s, 'a> Parser<'s, 'a> {
             TokenKind::Punct(Punct::LParen) => {
                 self.at += 1;
                 let expr = self.parse_expression()?;
-                self.expect_punct(Punct::RParen, "expected ')'")?;
+                self.expect_punct(Punct::RParen, Punct::RParen)?;
                 Ok(expr)
             }
-            _ => Err(self.error(span, "expected expression")),
+            _ => Err(self.error(span, Expected::Word("expression"))),
         }
     }
 
@@ -92,7 +92,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             }
             self.at += 1;
         }
-        self.expect_punct(Punct::RBracket, "expected ']'")?;
+        self.expect_punct(Punct::RBracket, Punct::RBracket)?;
         Ok(self.located(ExprKind::Array(items), span))
     }
 
@@ -106,14 +106,14 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
         loop {
             let name = self.expect_ident()?;
-            self.expect_punct(Punct::Colon, "expected ':'")?;
+            self.expect_punct(Punct::Colon, Punct::Colon)?;
             fields.push((name, self.parse_expression()?));
             if self.token()?.kind != TokenKind::Punct(Punct::Comma) {
                 break;
             }
             self.at += 1;
         }
-        self.expect_punct(Punct::RBrace, "expected '}'")?;
+        self.expect_punct(Punct::RBrace, Punct::RBrace)?;
         Ok(self.located(ExprKind::Object(fields), span))
     }
 
@@ -132,7 +132,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     let expr = self.parse_expression()?;
                     if self.token()?.kind != TokenKind::TemplateInterpEnd {
                         let span = self.token()?.span;
-                        return Err(self.error(span, "expected '}'"));
+                        return Err(self.error(span, Expected::Punct(Punct::RBrace)));
                     }
                     self.at += 1;
                     parts.push(TemplatePart::Expr(Box::new(expr)));
@@ -143,7 +143,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                 }
                 _ => {
                     let span = self.token()?.span;
-                    return Err(self.error(span, "expected end of template"));
+                    return Err(self.error(span, Expected::Word("end of template")));
                 }
             }
         }
@@ -178,7 +178,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
         self.at += 1;
         let then_branch = self.parse_expression()?;
-        self.expect_punct(Punct::Colon, "expected ':'")?;
+        self.expect_punct(Punct::Colon, Punct::Colon)?;
         let else_branch = self.ternary()?;
         let position = condition.position;
         Ok(Expr::new(
@@ -306,7 +306,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                 Punct::LBracket => {
                     self.at += 1;
                     let index = self.parse_expression()?;
-                    self.expect_punct(Punct::RBracket, "expected ']'")?;
+                    self.expect_punct(Punct::RBracket, Punct::RBracket)?;
                     let position = expr.position;
                     expr = Expr::new(
                         ExprKind::Index {
@@ -319,7 +319,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                 Punct::LParen => {
                     self.at += 1;
                     let args = self.arg_list()?;
-                    self.expect_punct(Punct::RParen, "expected ')'")?;
+                    self.expect_punct(Punct::RParen, Punct::RParen)?;
                     let position = expr.position;
                     expr = Expr::new(
                         ExprKind::Call {
@@ -351,7 +351,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn expect_ident(&mut self) -> Result<String, Error> {
-        self.ident("expected field name")
+        self.ident(Expected::Word("field name"))
     }
 
     fn located(&self, kind: ExprKind, span: Span) -> Expr {

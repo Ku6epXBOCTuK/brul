@@ -1,6 +1,6 @@
 use crate::ast::Position;
 use crate::cursor::Cursor;
-use crate::error::Error;
+use crate::error::{Error, Expected};
 use crate::lexer::Span;
 use crate::markup::ast::{
     Arg, Block, BlockItem, Branch, Component, Declaration, EachBlock, Element, Event, EventParam,
@@ -38,7 +38,7 @@ impl Cursor<'_> {
         match keyword.as_str() {
             "component" => self.component(),
             "window" => self.window(),
-            _ => Err(self.error_at(start, "expected 'component' or 'window'")),
+            _ => Err(self.error_at(start, Expected::OneOf("'component' or 'window'"))),
         }
     }
 
@@ -70,11 +70,11 @@ impl Cursor<'_> {
         let start = self.pos();
         if self.eat('@') {
             let name = self.ident()?;
-            let message = match name.as_str() {
-                "slot" => "slot is not allowed at the component root: wrap it in a container",
-                _ => return Err(self.error_at(start, format!("unexpected directive '@{name}'"))),
+            let reason = match name.as_str() {
+                "slot" => Error::SlotAtRoot,
+                _ => return Err(self.error_at(start, Error::UnexpectedDirective(name.clone()))),
             };
-            return Err(self.error_at(start, message));
+            return Err(self.error_at(start, reason));
         }
         let name = self.ident()?;
         match name.as_str() {
@@ -112,9 +112,7 @@ impl Cursor<'_> {
         self.set_pos(end);
         self.skip_trivia();
         if self.peek() == Some('{') {
-            return Err(self.error(format!(
-                "{name} is a leaf widget: nested elements are not allowed"
-            )));
+            return Err(self.error(Error::LeafWidget(name.to_owned())));
         }
         self.expect('}')?;
         Ok(Block {
@@ -136,7 +134,7 @@ impl Cursor<'_> {
                     self.bump();
                     return Ok(args);
                 }
-                _ => return Err(self.error("expected ',' or ')'")),
+                _ => return Err(self.error(Expected::OneOf("',' or ')'"))),
             }
         }
     }
@@ -174,15 +172,12 @@ impl Cursor<'_> {
                 "if" => self.if_block().map(BlockItem::If),
                 "each" => self.each_block().map(BlockItem::Each),
                 "slot" => self.slot(start),
-                _ => Err(self.error_at(start, format!("unexpected directive '@{name}'"))),
+                _ => Err(self.error_at(start, Error::UnexpectedDirective(name.clone()))),
             };
         }
         let name = self.ident()?;
         if matches!(name.as_str(), "if" | "each" | "else" | "slot") {
-            return Err(self.error_at(
-                start,
-                format!("expected '@{name}': block constructs start with '@'"),
-            ));
+            return Err(self.error_at(start, Error::ExpectedAtDirective(name.clone())));
         }
         self.element(name, start).map(BlockItem::Element)
     }
@@ -231,7 +226,7 @@ impl Cursor<'_> {
         self.skip_trivia();
         let start = self.pos();
         if self.ident()? != "as" {
-            return Err(self.error_at(start, "expected 'as'"));
+            return Err(self.error_at(start, Expected::Keyword("as")));
         }
         let item = self.ident()?;
         self.skip_trivia();
@@ -333,7 +328,7 @@ impl Cursor<'_> {
                             self.bump();
                             break;
                         }
-                        _ => return Err(self.error("expected ',' or ')'")),
+                        _ => return Err(self.error(Expected::OneOf("',' or ')'"))),
                     }
                 }
             }
@@ -351,7 +346,7 @@ impl Cursor<'_> {
             "Number" => Ok(PropType::Number),
             "String" => Ok(PropType::String),
             "Image" => Ok(PropType::Image),
-            _ => Err(self.error_at(start, "expected property type")),
+            _ => Err(self.error_at(start, Expected::Word("property type"))),
         }
     }
 }

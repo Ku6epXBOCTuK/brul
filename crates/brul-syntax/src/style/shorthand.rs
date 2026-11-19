@@ -75,7 +75,10 @@ fn box_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
             break;
         }
         if values.len() == 4 {
-            return Err(cursor.error(format!("expected at most 4 values for '{name}'")));
+            return Err(cursor.error(Error::AtMost {
+                max: 4,
+                name: name.to_owned(),
+            }));
         }
         values.push(value::value(cursor, true, Type::Px, name)?);
     }

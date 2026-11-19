@@ -2,7 +2,7 @@ mod rule;
 
 use std::ops::{Deref, DerefMut};
 
-use crate::error::Error;
+use crate::error::{Error, Expected};
 use crate::lexer::{self, Punct, TokenStream};
 
 pub use rule::Rule;
@@ -62,19 +62,19 @@ impl DerefMut for Parser<'_> {
 impl Parser<'_> {
     fn use_item(&mut self) -> Result<Use, Error> {
         self.expect_keyword("import")?;
-        let name = self.ident("expected import name")?;
+        let name = self.ident(Expected::Word("import name"))?;
         self.expect_keyword("from")?;
-        let path = self.string("expected import path")?;
-        self.expect_punct(Punct::Semicolon, "expected ';'")?;
+        let path = self.string(Expected::Word("import path"))?;
+        self.expect_punct(Punct::Semicolon, Punct::Semicolon)?;
         Ok(Use { name, path })
     }
 
     fn resource_item(&mut self) -> Result<Resource, Error> {
         self.expect_keyword("resource")?;
-        let name = self.ident("expected resource name")?;
+        let name = self.ident(Expected::Word("resource name"))?;
         self.expect_keyword("from")?;
-        let path = self.string("expected resource path")?;
-        self.expect_punct(Punct::Semicolon, "expected ';'")?;
+        let path = self.string(Expected::Word("resource path"))?;
+        self.expect_punct(Punct::Semicolon, Punct::Semicolon)?;
         Ok(Resource { name, path })
     }
 }

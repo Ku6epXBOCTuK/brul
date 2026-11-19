@@ -1,4 +1,5 @@
-use crate::error::Error;
+use crate::error::{Error, Expected};
+use crate::lexer::Punct;
 
 pub struct Cursor<'a> {
     source: &'a str,
@@ -48,7 +49,7 @@ impl<'a> Cursor<'a> {
             self.bump();
             Ok(())
         } else {
-            Err(self.error(format!("expected '{ch}'")))
+            Err(self.error(Expected::Char(ch)))
         }
     }
 
@@ -75,7 +76,7 @@ impl<'a> Cursor<'a> {
                     self.bump();
                     return Ok(items);
                 }
-                None => return Err(self.error("expected '}'")),
+                None => return Err(self.error(Expected::Punct(Punct::RBrace))),
                 _ => items.push(parse(self)?),
             }
         }
@@ -86,7 +87,7 @@ impl<'a> Cursor<'a> {
         let start = self.pos;
         match self.peek() {
             Some(ch) if ch.is_ascii_alphabetic() => self.bump(),
-            _ => return Err(self.error("expected name")),
+            _ => return Err(self.error(Expected::Word("name"))),
         }
         while self.peek().is_some_and(is_ident_char) {
             self.bump();
@@ -98,7 +99,7 @@ impl<'a> Cursor<'a> {
         self.skip_trivia();
         let start = self.pos;
         if !self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
-            return Err(self.error("expected number"));
+            return Err(self.error(Expected::Word("number")));
         }
         while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
             self.bump();
@@ -149,12 +150,12 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn error(&self, message: impl Into<String>) -> Error {
-        self.error_at(self.pos, message)
+    pub fn error(&self, reason: impl Into<Error>) -> Error {
+        self.error_at(self.pos, reason)
     }
 
-    pub fn error_at(&self, pos: usize, message: impl Into<String>) -> Error {
-        Error::at(self.source, pos, message)
+    pub fn error_at(&self, pos: usize, reason: impl Into<Error>) -> Error {
+        Error::at(self.source, pos, reason)
     }
 
     fn is_ident_char(&self, offset: usize) -> bool {

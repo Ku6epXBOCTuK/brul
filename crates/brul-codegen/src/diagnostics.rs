@@ -12,31 +12,9 @@ pub fn padded(source: &str, block: sfc::Block<'_>) -> String {
 }
 
 pub fn sfc_error(error: sfc::Error) -> Error {
-    match error {
-        sfc::Error::Syntax {
-            message,
-            line,
-            column,
-        } => Error {
-            message,
-            line,
-            column,
-        },
-        sfc::Error::Duplicate { name, line, column } => Error {
-            message: format!("duplicate <{name}> block"),
-            line,
-            column,
-        },
-        sfc::Error::MissingMarkup => {
-            error_at(Position { line: 1, column: 1 }, "missing <markup> block")
-        }
-    }
+    error
 }
 
 pub fn error_at(position: Position, message: impl Into<String>) -> Error {
-    Error {
-        message: message.into(),
-        line: position.line,
-        column: position.column,
-    }
+    Error::at_position(position, Error::custom(message))
 }

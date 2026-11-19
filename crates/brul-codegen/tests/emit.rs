@@ -497,7 +497,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let error = emit::module(source).expect_err("error");
-    assert_eq!(error.message, "parameter 'hovered' is not supported yet");
+    assert_eq!(error.message(), "parameter 'hovered' is not supported yet");
 }
 
 #[test]
@@ -553,7 +553,7 @@ window Demo (title: "demo") {
 "#;
     let error = emit::module(source).expect_err("error");
     assert_eq!(
-        error.message,
+        error.message(),
         "function 'edited' expects 1 arguments, got 2"
     );
 }
@@ -571,7 +571,10 @@ window Demo (title: "demo", on key: quit) {
 </markup>
 "#;
     let error = emit::module(source).expect_err("error");
-    assert_eq!(error.message, "function 'quit' expects 1 arguments, got 0");
+    assert_eq!(
+        error.message(),
+        "function 'quit' expects 1 arguments, got 0"
+    );
 }
 
 #[test]
@@ -596,7 +599,7 @@ window Demo (title: "demo") {
 "#;
     let error = emit::module(source).expect_err("error");
     assert_eq!(
-        error.message,
+        error.message(),
         "parameter 'multiline' must be a boolean literal"
     );
 }
@@ -611,7 +614,7 @@ window Demo (title: "demo") {
 "#;
     let error = emit::module(source).expect_err("error");
     assert_eq!(
-        error.message,
+        error.message(),
         "parameter 'focusable' must be a boolean literal"
     );
 }
@@ -848,7 +851,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     assert_eq!(
-        emit::module(unknown).expect_err("error").message,
+        emit::module(unknown).expect_err("error").message(),
         "event 'hovered' is not supported yet"
     );
 
@@ -859,7 +862,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     assert_eq!(
-        emit::module(missing).expect_err("error").message,
+        emit::module(missing).expect_err("error").message(),
         "function 'toggle' is not defined"
     );
 
@@ -870,7 +873,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     assert_eq!(
-        emit::module(key).expect_err("error").message,
+        emit::module(key).expect_err("error").message(),
         "key events are only supported on the window"
     );
 
@@ -881,7 +884,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     assert_eq!(
-        emit::module(close).expect_err("error").message,
+        emit::module(close).expect_err("error").message(),
         "close events are only supported on the window"
     );
 
@@ -892,7 +895,7 @@ window Demo (title: "demo", on click: quit) {
 </markup>
 "#;
     assert_eq!(
-        emit::module(window).expect_err("error").message,
+        emit::module(window).expect_err("error").message(),
         "window event 'click' is not supported yet"
     );
 }
@@ -948,7 +951,7 @@ window Picker (title: "two") {
 </markup>
 "#;
     assert_eq!(
-        emit::module(source).expect_err("error").message,
+        emit::module(source).expect_err("error").message(),
         "duplicate window 'Picker'"
     );
 }
@@ -1290,7 +1293,7 @@ fn rejects_component_properties() {
             ],
         );
         let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
-        assert_eq!(error.message, expected);
+        assert_eq!(error.message(), expected);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
@@ -1346,7 +1349,7 @@ fn rejects_component_events() {
             ],
         );
         let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
-        assert_eq!(error.message, expected);
+        assert_eq!(error.message(), expected);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
@@ -1367,7 +1370,10 @@ fn rejects_component_children() {
         ],
     );
     let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
-    assert_eq!(error.message, "component 'Badge' does not accept children");
+    assert_eq!(
+        error.message(),
+        "component 'Badge' does not accept children"
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -1465,7 +1471,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let error = emit::module(source).unwrap_err();
-    assert_eq!(error.message, "slot is only allowed inside a component");
+    assert_eq!(error.message(), "slot is only allowed inside a component");
 }
 
 #[test]
@@ -1541,7 +1547,7 @@ fn rejects_malformed_slot_fills() {
             ],
         );
         let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
-        assert_eq!(error.message, expected);
+        assert_eq!(error.message(), expected);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
@@ -1653,11 +1659,11 @@ fn an_unknown_kit_component_lists_the_kit() {
     );
     let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
     assert!(
-        error.message.contains("unknown kit component 'buton'"),
+        error.message().contains("unknown kit component 'buton'"),
         "{}",
-        error.message
+        error.message()
     );
-    assert!(error.message.contains("button"), "{}", error.message);
+    assert!(error.message().contains("button"), "{}", error.message());
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -1705,13 +1711,13 @@ fn an_unknown_theme_key_in_an_imported_component_names_the_file() {
         ],
     );
     let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
-    assert!(error.message.contains("chip.brul"), "{}", error.message);
+    assert!(error.message().contains("chip.brul"), "{}", error.message());
     assert!(
-        error.message.contains("unknown theme key 'danger'"),
+        error.message().contains("unknown theme key 'danger'"),
         "{}",
-        error.message
+        error.message()
     );
-    assert_eq!(error.line, 8);
+    assert_eq!(error.line(), 8);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -1731,13 +1737,13 @@ fn an_imported_component_cannot_declare_a_theme() {
         ],
     );
     let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
-    assert!(error.message.contains("chip.brul"), "{}", error.message);
+    assert!(error.message().contains("chip.brul"), "{}", error.message());
     assert!(
         error
-            .message
+            .message()
             .contains("a theme can only be declared in the root <style>"),
         "{}",
-        error.message
+        error.message()
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -1781,12 +1787,12 @@ fn an_override_of_a_component_that_is_not_imported_is_an_error() {
     let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
     assert!(
         error
-            .message
+            .message()
             .contains("override names 'Chip', which is not imported"),
         "{}",
-        error.message
+        error.message()
     );
-    assert_eq!(error.line, 2);
+    assert_eq!(error.line(), 2);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -1808,12 +1814,12 @@ fn an_override_of_an_unknown_class_is_an_error() {
     let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
     assert!(
         error
-            .message
+            .message()
             .contains("component 'Chip' has no class '.chip-label'"),
         "{}",
-        error.message
+        error.message()
     );
-    assert_eq!(error.line, 3);
+    assert_eq!(error.line(), 3);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -2049,9 +2055,9 @@ fn rejects_broken_resources() {
         }
         let error = emit::module_file(&dir.join("window.brul")).unwrap_err();
         assert!(
-            error.message.contains(expected),
+            error.message().contains(expected),
             "{name}: {}",
-            error.message
+            error.message()
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -2136,10 +2142,10 @@ fn resource_without_a_file_path_is_rejected() {
     let error = emit::module(source).unwrap_err();
     assert!(
         error
-            .message
+            .message()
             .contains("cannot resolve resource './check.png': source has no file path"),
         "{}",
-        error.message
+        error.message()
     );
 }
 
@@ -2176,9 +2182,9 @@ fn themes_that_share_a_variant_are_an_error() {
     let source = "<style>\ntheme dark { accent: #6c8cff; }\ntheme Dark { accent: #ffffff; }\n</style>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    View { }\n}\n</markup>\n";
     let error = emit::module(source).unwrap_err();
     assert!(
-        error.message.contains("share the variant ThemeId::Dark"),
+        error.message().contains("share the variant ThemeId::Dark"),
         "{}",
-        error.message
+        error.message()
     );
 }
 

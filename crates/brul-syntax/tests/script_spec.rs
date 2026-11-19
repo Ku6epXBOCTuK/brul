@@ -47,9 +47,9 @@ fn malformed_examples_are_rejected() {
     for (source, message) in sources {
         let error = parse(source).unwrap_err();
         assert!(
-            error.message.contains(message),
+            error.message().contains(message),
             "{source}: expected message containing {message}, got {}",
-            error.message
+            error.message()
         );
     }
 }

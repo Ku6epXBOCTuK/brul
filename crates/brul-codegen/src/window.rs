@@ -208,7 +208,7 @@ mod tests {
         let error = arguments(&window(vec![number_arg("x", 10.0)]))
             .err()
             .expect("error");
-        assert_eq!(error.message, "window position needs both 'x' and 'y'");
+        assert_eq!(error.message(), "window position needs both 'x' and 'y'");
     }
 
     #[test]
@@ -219,7 +219,7 @@ mod tests {
             number_arg("y", 0.0),
         ];
         let error = arguments(&window(args)).err().expect("error");
-        assert_eq!(error.message, "'centered' conflicts with 'x' and 'y'");
+        assert_eq!(error.message(), "'centered' conflicts with 'x' and 'y'");
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
         let mut config = WindowConfig::default();
         let value = Expr::new(ExprKind::Number(1.0), Position { line: 1, column: 1 });
         let error = apply(&mut config, "bogus", &value).unwrap_err();
-        assert_eq!(error.message, "unknown window argument 'bogus'");
-        assert_eq!((error.line, error.column), (1, 1));
+        assert_eq!(error.message(), "unknown window argument 'bogus'");
+        assert_eq!((error.line(), error.column()), (1, 1));
     }
 }

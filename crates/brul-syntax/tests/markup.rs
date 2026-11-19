@@ -94,12 +94,12 @@ fn element_args_parse_handlers_and_expressions() {
 #[test]
 fn arg_errors_point_at_the_source() {
     let error = parse_file("component A { Button (on: x) { } }").unwrap_err();
-    assert_eq!(error.message, "expected name");
-    assert_eq!((error.line, error.column), (1, 25));
+    assert_eq!(error.message(), "expected name");
+    assert_eq!((error.line(), error.column()), (1, 25));
 
     let error = parse_file("component A { Button (root title) { } }").unwrap_err();
-    assert_eq!(error.message, "expected ',' or ')'");
-    assert_eq!((error.line, error.column), (1, 28));
+    assert_eq!(error.message(), "expected ',' or ')'");
+    assert_eq!((error.line(), error.column()), (1, 28));
 }
 
 #[test]
@@ -219,24 +219,24 @@ fn empty_input_is_an_empty_file() {
 #[test]
 fn declaration_errors_point_at_the_source() {
     let error = parse_file("view X { }").unwrap_err();
-    assert_eq!(error.message, "expected 'component' or 'window'");
-    assert_eq!((error.line, error.column), (1, 1));
+    assert_eq!(error.message(), "expected 'component' or 'window'");
+    assert_eq!((error.line(), error.column()), (1, 1));
 
     let error = parse_file("component { }").unwrap_err();
-    assert_eq!(error.message, "expected name");
-    assert_eq!((error.line, error.column), (1, 11));
+    assert_eq!(error.message(), "expected name");
+    assert_eq!((error.line(), error.column()), (1, 11));
 
     let error = parse_file("component A").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
-    assert_eq!((error.line, error.column), (1, 12));
+    assert_eq!(error.message(), "expected '{'");
+    assert_eq!((error.line(), error.column()), (1, 12));
 
     let error = parse_file("component A { x }").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
-    assert_eq!((error.line, error.column), (1, 17));
+    assert_eq!(error.message(), "expected '{'");
+    assert_eq!((error.line(), error.column()), (1, 17));
 
     let error = parse_file("window Picker () { }").unwrap_err();
-    assert_eq!(error.message, "expected name");
-    assert_eq!((error.line, error.column), (1, 16));
+    assert_eq!(error.message(), "expected name");
+    assert_eq!((error.line(), error.column()), (1, 16));
 }
 
 #[test]
@@ -289,42 +289,42 @@ fn nested_elements_parse() {
 #[test]
 fn element_errors_point_at_the_source() {
     let error = parse_file("component A { View }").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
-    assert_eq!((error.line, error.column), (1, 20));
+    assert_eq!(error.message(), "expected '{'");
+    assert_eq!((error.line(), error.column()), (1, 20));
 
     let error = parse_file("component A { View {").unwrap_err();
-    assert_eq!(error.message, "expected '}'");
-    assert_eq!((error.line, error.column), (1, 21));
+    assert_eq!(error.message(), "expected '}'");
+    assert_eq!((error.line(), error.column()), (1, 21));
 }
 
 #[test]
 fn member_errors_point_at_the_source() {
     let error = parse_file("component A { prop x: Text = 0; }").unwrap_err();
-    assert_eq!(error.message, "expected property type");
-    assert_eq!((error.line, error.column), (1, 23));
+    assert_eq!(error.message(), "expected property type");
+    assert_eq!((error.line(), error.column()), (1, 23));
 
     let error = parse_file("component A { prop x Bool; }").unwrap_err();
-    assert_eq!(error.message, "expected ':'");
-    assert_eq!((error.line, error.column), (1, 22));
+    assert_eq!(error.message(), "expected ':'");
+    assert_eq!((error.line(), error.column()), (1, 22));
 
     let error = parse_file("component A { event clicked(i); }").unwrap_err();
-    assert_eq!(error.message, "expected ':'");
-    assert_eq!((error.line, error.column), (1, 30));
+    assert_eq!(error.message(), "expected ':'");
+    assert_eq!((error.line(), error.column()), (1, 30));
 
     let error = parse_file("component A { event clicked(i: Number j: Number); }").unwrap_err();
-    assert_eq!(error.message, "expected ',' or ')'");
+    assert_eq!(error.message(), "expected ',' or ')'");
 
     let error = parse_file("component A { prop x: Bool = ; }").unwrap_err();
-    assert_eq!(error.message, "expected expression");
-    assert_eq!((error.line, error.column), (1, 30));
+    assert_eq!(error.message(), "expected expression");
+    assert_eq!((error.line(), error.column()), (1, 30));
 
     let error = parse_file("component A { prop x: Bool }").unwrap_err();
-    assert_eq!(error.message, "expected ';'");
-    assert_eq!((error.line, error.column), (1, 28));
+    assert_eq!(error.message(), "expected ';'");
+    assert_eq!((error.line(), error.column()), (1, 28));
 
     let error = parse_file("component A { event clicked }").unwrap_err();
-    assert_eq!(error.message, "expected ';'");
-    assert_eq!((error.line, error.column), (1, 29));
+    assert_eq!(error.message(), "expected ';'");
+    assert_eq!((error.line(), error.column()), (1, 29));
 }
 
 #[test]
@@ -400,15 +400,15 @@ fn if_else_blocks_parse() {
 #[test]
 fn if_errors_point_at_the_source() {
     let error = parse_file("component A { Row { @if x { } } }").unwrap_err();
-    assert_eq!(error.message, "expected '('");
-    assert_eq!((error.line, error.column), (1, 25));
+    assert_eq!(error.message(), "expected '('");
+    assert_eq!((error.line(), error.column()), (1, 25));
 
     let error = parse_file("component A { Row { @if (x) } } }").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
+    assert_eq!(error.message(), "expected '{'");
 
     let error = parse_file("component A { Row { @if (x) { } else View { } } }").unwrap_err();
     assert_eq!(
-        error.message,
+        error.message(),
         "expected '@else': block constructs start with '@'"
     );
 }
@@ -417,21 +417,21 @@ fn if_errors_point_at_the_source() {
 fn block_constructs_require_the_at_marker() {
     let error = parse_file("component A { Row { if (x) { } } }").unwrap_err();
     assert_eq!(
-        error.message,
+        error.message(),
         "expected '@if': block constructs start with '@'"
     );
-    assert_eq!((error.line, error.column), (1, 21));
+    assert_eq!((error.line(), error.column()), (1, 21));
 
     let error = parse_file("component A { Row { each (items as item) { } } }").unwrap_err();
     assert_eq!(
-        error.message,
+        error.message(),
         "expected '@each': block constructs start with '@'"
     );
-    assert_eq!((error.line, error.column), (1, 21));
+    assert_eq!((error.line(), error.column()), (1, 21));
 
     let error = parse_file("component A { Row { slot } }").unwrap_err();
     assert_eq!(
-        error.message,
+        error.message(),
         "expected '@slot': block constructs start with '@'"
     );
 }
@@ -482,20 +482,20 @@ fn slots_parse() {
 #[test]
 fn nested_errors_point_at_the_source() {
     let error = parse_file("component A { Row { View } }").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
-    assert_eq!((error.line, error.column), (1, 26));
+    assert_eq!(error.message(), "expected '{'");
+    assert_eq!((error.line(), error.column()), (1, 26));
 
     let error = parse_file("component A { Row { View { } }").unwrap_err();
-    assert_eq!(error.message, "expected '}'");
-    assert_eq!((error.line, error.column), (1, 31));
+    assert_eq!(error.message(), "expected '}'");
+    assert_eq!((error.line(), error.column()), (1, 31));
 
     let error = parse_file("component A { Row { Text { } } }").unwrap_err();
-    assert_eq!(error.message, "expected expression");
-    assert_eq!((error.line, error.column), (1, 28));
+    assert_eq!(error.message(), "expected expression");
+    assert_eq!((error.line(), error.column()), (1, 28));
 
     let error = parse_file("component A { Row { Button (on: x) { } } }").unwrap_err();
-    assert_eq!(error.message, "expected name");
-    assert_eq!((error.line, error.column), (1, 31));
+    assert_eq!(error.message(), "expected name");
+    assert_eq!((error.line(), error.column()), (1, 31));
 }
 
 #[test]
@@ -566,31 +566,31 @@ fn leaf_blocks_hold_one_expression() {
 #[test]
 fn leaf_block_errors_point_at_the_source() {
     let error = parse_file("component A { Text { } }").unwrap_err();
-    assert_eq!(error.message, "expected expression");
+    assert_eq!(error.message(), "expected expression");
 
     let error = parse_file("component A { Text { \"a\" \"b\" } }").unwrap_err();
-    assert_eq!(error.message, "expected '}'");
+    assert_eq!(error.message(), "expected '}'");
 
     let error = parse_file("component A { Text { View { } } }").unwrap_err();
     assert_eq!(
-        error.message,
+        error.message(),
         "Text is a leaf widget: nested elements are not allowed"
     );
-    assert_eq!((error.line, error.column), (1, 27));
+    assert_eq!((error.line(), error.column()), (1, 27));
 
     let error = parse_file("component A { Image { Row (item-image) { } } }").unwrap_err();
     assert_eq!(
-        error.message,
+        error.message(),
         "Image is a leaf widget: nested elements are not allowed"
     );
-    assert_eq!((error.line, error.column), (1, 40));
+    assert_eq!((error.line(), error.column()), (1, 40));
 
     let error = parse_file("component A { Row { Text { Button { } } } }").unwrap_err();
     assert_eq!(
-        error.message,
+        error.message(),
         "Text is a leaf widget: nested elements are not allowed"
     );
-    assert_eq!((error.line, error.column), (1, 35));
+    assert_eq!((error.line(), error.column()), (1, 35));
 }
 
 #[test]
@@ -696,19 +696,19 @@ fn each_blocks_parse() {
 #[test]
 fn each_errors_point_at_the_source() {
     let error = parse_file("component A { Row { @each items as item { } } }").unwrap_err();
-    assert_eq!(error.message, "expected '('");
-    assert_eq!((error.line, error.column), (1, 27));
+    assert_eq!(error.message(), "expected '('");
+    assert_eq!((error.line(), error.column()), (1, 27));
 
     let error = parse_file("component A { Row { @each (items item) { } } }").unwrap_err();
-    assert_eq!(error.message, "expected 'as'");
+    assert_eq!(error.message(), "expected 'as'");
 
     let error = parse_file("component A { Row { @each (items as item, ) { } } }").unwrap_err();
-    assert_eq!(error.message, "expected name");
+    assert_eq!(error.message(), "expected name");
 
     let error =
         parse_file("component A { Row { @each (items as item (item.id { } } }").unwrap_err();
-    assert_eq!(error.message, "expected ')'");
+    assert_eq!(error.message(), "expected ')'");
 
     let error = parse_file("component A { Row { @each (items as item) } }").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
+    assert_eq!(error.message(), "expected '{'");
 }

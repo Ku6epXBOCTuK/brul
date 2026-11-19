@@ -1,7 +1,7 @@
 use brul_style::{Color, ColorExpr, ColorValue, Gradient, Type, Value};
 
 use crate::cursor::Cursor;
-use crate::error::Error;
+use crate::error::{Error, Unterminated};
 
 const NESTING: usize = 8;
 
@@ -23,12 +23,19 @@ fn parse(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<Value
         Type::Keywords(names) => keyword(cursor, name, names),
         Type::NumberRange(min, max) => number_in(
             cursor,
-            format!("expected number from {min} to {max} for '{name}'"),
+            Error::NumberRange {
+                min,
+                max,
+                name: name.to_owned(),
+            },
             |value| (min..=max).contains(&value),
         ),
         Type::NumberIn(values) => number_in(
             cursor,
-            format!("expected one of {} for '{name}'", list(values)),
+            Error::OneOf {
+                options: format!("one of {}", list(values)),
+                name: name.to_owned(),
+            },
             |value| values.contains(&value),
         ),
     }
@@ -54,20 +61,23 @@ fn paint_value(ty: Type, cursor: &mut Cursor, theme: bool, name: &str) -> Result
 
 fn number_in(
     cursor: &mut Cursor,
-    message: String,
+    reason: Error,
     accept: impl Fn(f64) -> bool,
 ) -> Result<Value, Error> {
     let at = cursor.value_start();
-    let value = number(cursor, &message)?;
+    let value = number(cursor, &reason)?;
     if accept(value) {
         Ok(Value::Number(value))
     } else {
-        Err(Error::at(cursor.source(), at, &message))
+        Err(Error::at(cursor.source(), at, reason))
     }
 }
 
-fn expected(name: &str, what: &str) -> String {
-    format!("expected {what} for '{name}'")
+fn expected(name: &str, what: &'static str) -> Error {
+    Error::ExpectedFor {
+        expected: what,
+        name: name.to_owned(),
+    }
 }
 
 fn boolean(cursor: &mut Cursor, name: &str) -> Result<bool, Error> {
@@ -85,11 +95,11 @@ fn boolean(cursor: &mut Cursor, name: &str) -> Result<bool, Error> {
     }
 }
 
-fn number(cursor: &mut Cursor, message: &str) -> Result<f64, Error> {
+fn number(cursor: &mut Cursor, reason: &Error) -> Result<f64, Error> {
     let at = cursor.value_start();
     cursor
         .number_literal()
-        .map_err(|_| Error::at(cursor.source(), at, message))
+        .map_err(|_| Error::at(cursor.source(), at, reason.clone()))
 }
 
 fn px(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
@@ -106,12 +116,15 @@ fn px(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
 }
 
 pub fn duration(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
-    let message = format!("expected ms for 'animate {name}'");
-    let value = number(cursor, &message)?;
+    let reason = Error::ExpectedFor {
+        expected: "ms",
+        name: format!("animate {name}"),
+    };
+    let value = number(cursor, &reason)?;
     if cursor.eat_unit("ms") {
         Ok(value)
     } else {
-        Err(Error::at(cursor.source(), cursor.pos(), message))
+        Err(Error::at(cursor.source(), cursor.pos(), reason))
     }
 }
 
@@ -160,11 +173,7 @@ fn color_value(
 ) -> Result<ColorValue, Error> {
     let at = cursor.value_start();
     if depth > NESTING {
-        return Err(Error::at(
-            cursor.source(),
-            at,
-            format!("color expression is nested deeper than {NESTING}"),
-        ));
+        return Err(Error::at(cursor.source(), at, Error::NestingDepth(NESTING)));
     }
     if cursor.eat_keyword("alpha") {
         let color = first_argument(cursor, theme, name, depth)?;
@@ -217,19 +226,19 @@ fn expr(expr: ColorExpr) -> ColorValue {
 
 fn percent(cursor: &mut Cursor, name: &str) -> Result<f64, Error> {
     let at = cursor.value_start();
-    let message = format!("expected percent from 0 to 100 for '{name}'");
+    let reason = Error::PercentRange(name.to_owned());
     let value = cursor
         .number_literal()
-        .map_err(|_| Error::at(cursor.source(), at, message.clone()))?;
+        .map_err(|_| Error::at(cursor.source(), at, reason.clone()))?;
     if cursor.eat_unit("%") && (0.0..=100.0).contains(&value) {
         Ok(value)
     } else {
-        Err(Error::at(cursor.source(), at, message))
+        Err(Error::at(cursor.source(), at, reason))
     }
 }
 
 fn literal(cursor: &mut Cursor, name: &str, at: usize) -> Result<Color, Error> {
-    let message = expected(name, "color");
+    let reason = expected(name, "color");
     match cursor.peek() {
         Some('#') => hex_color(cursor),
         Some(ch) if ch.is_ascii_alphabetic() => {
@@ -239,9 +248,9 @@ fn literal(cursor: &mut Cursor, name: &str, at: usize) -> Result<Color, Error> {
             if cursor.eat_keyword("white") {
                 return Ok(Color::WHITE);
             }
-            Err(Error::at(cursor.source(), at, message))
+            Err(Error::at(cursor.source(), at, reason))
         }
-        _ => Err(Error::at(cursor.source(), at, message)),
+        _ => Err(Error::at(cursor.source(), at, reason)),
     }
 }
 
@@ -276,11 +285,7 @@ fn hex_color(cursor: &mut Cursor) -> Result<Color, Error> {
                 ))
             }
         }
-        _ => Err(Error::at(
-            cursor.source(),
-            start,
-            "expected 3, 6 or 8 hex digits",
-        )),
+        _ => Err(Error::at(cursor.source(), start, Error::HexDigits)),
     }
 }
 
@@ -312,7 +317,11 @@ fn string(cursor: &mut Cursor, name: &str) -> Result<String, Error> {
                 return Ok(value);
             }
             Some('\n') | None => {
-                return Err(Error::at(cursor.source(), start, "unterminated string"));
+                return Err(Error::at(
+                    cursor.source(),
+                    start,
+                    Error::Unterminated(Unterminated::String),
+                ));
             }
             Some(_) => cursor.bump(),
         }
@@ -326,14 +335,17 @@ fn keyword(cursor: &mut Cursor, name: &str, names: &[&str]) -> Result<Value, Err
         .map(|option| format!("'{option}'"))
         .collect::<Vec<_>>()
         .join(", ");
-    let message = format!("expected {options} for '{name}'");
+    let reason = Error::OneOf {
+        options,
+        name: name.to_owned(),
+    };
     let word = cursor
         .ident()
-        .map_err(|_| Error::at(cursor.source(), at, message.as_str()))?;
+        .map_err(|_| Error::at(cursor.source(), at, reason.clone()))?;
     if names.contains(&word.as_str()) {
         Ok(Value::Keyword(word))
     } else {
-        Err(Error::at(cursor.source(), at, message))
+        Err(Error::at(cursor.source(), at, reason))
     }
 }
 
@@ -355,7 +367,7 @@ fn theme_key(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
         return Err(Error::at(
             cursor.source(),
             at,
-            format!("theme key '{name}' cannot alias another key; use it in an expression"),
+            Error::ThemeAlias(name.to_owned()),
         ));
     }
     if cursor.peek().is_some_and(|ch| ch.is_ascii_digit()) {
@@ -369,7 +381,7 @@ fn theme_key(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
     Err(Error::at(
         cursor.source(),
         at,
-        format!("expected color or px for theme key '{name}'"),
+        Error::ExpectedThemeKey(name.to_owned()),
     ))
 }
 

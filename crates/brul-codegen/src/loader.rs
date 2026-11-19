@@ -73,7 +73,7 @@ pub fn apply_overrides(
                 Error::at(
                     source,
                     over.component_at,
-                    format!("override names '{}', which is not imported", over.component),
+                    Error::OverrideNotImported(over.component.clone()),
                 )
             })?;
         let stylesheet = Rc::make_mut(&mut registry.definitions[definition].stylesheet);
@@ -83,7 +83,7 @@ pub fn apply_overrides(
             &over.rules,
             &over.positions,
         )
-        .map_err(|error| Error::at(source, error.at, error.message))?;
+        .map_err(|error| Error::at(source, error.at, Error::custom(error.message)))?;
         stylesheet.rules.extend(over.rules.iter().cloned());
     }
     Ok(())
@@ -340,9 +340,8 @@ fn at(origin: Option<&Path>, message: impl Into<String>) -> Error {
     }
 }
 
-fn named(path: &Path, mut error: Error) -> Error {
-    error.message = format!("{}: {}", short(path), error.message);
-    error
+fn named(path: &Path, error: Error) -> Error {
+    error.named(short(path))
 }
 
 fn short(path: &Path) -> String {
@@ -361,15 +360,15 @@ mod tests {
     #[test]
     fn at_names_the_file_it_came_from() {
         let error = at(Some(Path::new("views/app.brul")), MESSAGE);
-        assert!(error.message.contains("app.brul"));
-        assert!(error.message.contains(MESSAGE));
+        assert!(error.message().contains("app.brul"));
+        assert!(error.message().contains(MESSAGE));
     }
 
     #[test]
     fn at_without_a_file_keeps_the_message_alone() {
         let error = at(None, MESSAGE);
-        assert_eq!(error.message, MESSAGE);
-        assert_eq!((error.line, error.column), (1, 1));
+        assert_eq!(error.message(), MESSAGE);
+        assert_eq!((error.line(), error.column()), (1, 1));
     }
 
     #[test]
@@ -385,11 +384,13 @@ window Picker (title: "x") {
             .err()
             .expect("a file without a component must not parse");
         assert!(
-            error.message.contains("file has no component declaration"),
+            error
+                .message()
+                .contains("file has no component declaration"),
             "{}",
-            error.message
+            error.message()
         );
-        assert!(error.message.contains("window.brul"));
+        assert!(error.message().contains("window.brul"));
     }
 
     #[test]

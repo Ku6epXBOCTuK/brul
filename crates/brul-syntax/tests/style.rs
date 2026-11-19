@@ -149,7 +149,7 @@ fn padding_takes_one_to_four_values_in_css_order() {
 #[test]
 fn padding_rejects_a_fifth_value() {
     let error = parse_file(".a { padding: 1px 2px 3px 4px 5px; }").unwrap_err();
-    assert_eq!(error.message, "expected at most 4 values for 'padding'");
+    assert_eq!(error.message(), "expected at most 4 values for 'padding'");
 }
 
 #[test]
@@ -307,9 +307,9 @@ fn theme_key_errors_name_the_problem() {
     for (source, message) in sources {
         let error = parse_file(source).unwrap_err();
         assert!(
-            error.message.contains(message),
+            error.message().contains(message),
             "{source}: expected message containing {message}, got {}",
-            error.message
+            error.message()
         );
     }
 }
@@ -338,18 +338,18 @@ fn an_imported_stylesheet_cannot_declare_a_theme() {
     let palette = parse_file("theme dark { accent: #fff; }").unwrap().themes;
     let error = parse_file_in("theme dark { accent: #000; }", &palette).unwrap_err();
     assert_eq!(
-        error.message,
+        error.message(),
         "a theme can only be declared in the root <style>"
     );
-    assert_eq!((error.line, error.column), (1, 6));
+    assert_eq!((error.line(), error.column()), (1, 6));
 }
 
 #[test]
 fn an_imported_stylesheet_checks_refs_against_the_palette() {
     let palette = parse_file("theme dark { accent: #fff; }").unwrap().themes;
     let error = parse_file_in(".a { color: theme.muted; }", &palette).unwrap_err();
-    assert_eq!(error.message, "unknown theme key 'muted'");
-    assert_eq!(error.line, 1);
+    assert_eq!(error.message(), "unknown theme key 'muted'");
+    assert_eq!(error.line(), 1);
 }
 
 #[test]
@@ -480,7 +480,7 @@ fn box_shadow_geometry_in_a_state_is_rejected() {
     .expect_err("box-shadow in a state");
 
     assert_eq!(
-        error.message,
+        error.message(),
         "property 'box-shadow-offset-x' cannot change in a state"
     );
 }
@@ -495,10 +495,10 @@ fn box_shadow_color_in_a_state_is_allowed() {
 #[test]
 fn box_shadow_needs_a_color_and_a_non_negative_blur() {
     let missing_color = parse_file(".a { box-shadow: 0px 10px 15px; }").unwrap_err();
-    assert_eq!(missing_color.message, "expected color for 'box-shadow'");
+    assert_eq!(missing_color.message(), "expected color for 'box-shadow'");
 
     let negative_blur = parse_file(".a { box-shadow: 0px 10px -3px #fff; }").unwrap_err();
-    assert_eq!(negative_blur.message, "expected px for 'box-shadow'");
+    assert_eq!(negative_blur.message(), "expected px for 'box-shadow'");
 }
 
 #[test]
@@ -507,7 +507,7 @@ fn border_in_a_state_is_rejected_through_its_width() {
         .expect_err("border in a state");
 
     assert_eq!(
-        error.message,
+        error.message(),
         "property 'border-width' cannot change in a state"
     );
 }
@@ -782,12 +782,12 @@ fn errors_point_at_the_source() {
     for (source, message, line, column) in sources {
         let error = parse_file(source).unwrap_err();
         assert!(
-            error.message.contains(message),
+            error.message().contains(message),
             "{source}: expected message containing {message}, got {}",
-            error.message
+            error.message()
         );
         assert_eq!(
-            (error.line, error.column),
+            (error.line(), error.column()),
             (line, column),
             "{source}: unexpected position"
         );
@@ -831,10 +831,10 @@ fn an_override_is_rejected_outside_the_root_stylesheet() {
         parse_file_in("override Card { .card { } }", &[]).unwrap_err(),
     ] {
         assert_eq!(
-            error.message,
+            error.message(),
             "an override can only be declared in the root <style>"
         );
-        assert_eq!((error.line, error.column), (1, 9));
+        assert_eq!((error.line(), error.column()), (1, 9));
     }
 }
 
@@ -845,8 +845,8 @@ theme dark { surface: #1e293b; }
 override Card { .card { background: theme.muted; } }
 ";
     let error = parse_root(source).unwrap_err();
-    assert_eq!(error.message, "unknown theme key 'muted'");
-    assert_eq!(error.line, 2);
+    assert_eq!(error.message(), "unknown theme key 'muted'");
+    assert_eq!(error.line(), 2);
 }
 
 #[test]
@@ -893,9 +893,9 @@ fn wrong_animations_are_rejected() {
     for (source, message) in sources {
         let error = parse_file(source).unwrap_err();
         assert!(
-            error.message.contains(message),
+            error.message().contains(message),
             "{source}: expected message containing {message}, got {}",
-            error.message
+            error.message()
         );
     }
 }
@@ -986,9 +986,9 @@ fn color_expression_errors_name_the_problem() {
     for (source, message) in sources {
         let error = parse_file(&source).unwrap_err();
         assert!(
-            error.message.contains(message),
+            error.message().contains(message),
             "{source}: expected message containing {message}, got {}",
-            error.message
+            error.message()
         );
     }
 }

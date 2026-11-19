@@ -1,4 +1,5 @@
-﻿use brul_syntax::sfc::{Error, parse};
+use brul_syntax::ast::Position;
+use brul_syntax::sfc::{Error, parse};
 
 const PICKER: &str = include_str!("fixtures/picker.brul");
 
@@ -47,7 +48,8 @@ fn empty_markup_is_allowed() {
 #[test]
 fn missing_markup_is_reported() {
     let error = parse("<script>let a = 1;</script>").unwrap_err();
-    assert_eq!(error, Error::MissingMarkup);
+    assert_eq!(error.message(), "missing <markup> block");
+    assert_eq!((error.line(), error.column()), (1, 1));
 }
 
 #[test]
@@ -55,9 +57,9 @@ fn duplicate_block_is_reported() {
     let source = "<markup></markup>\n<style></style>\n<style></style>";
     let error = parse(source).unwrap_err();
     match error {
-        Error::Duplicate { name, line, .. } => {
-            assert_eq!(name, "style");
-            assert_eq!(line, 3);
+        Error::At(position, reason) => {
+            assert_eq!(*reason, Error::DuplicateBlock("style"));
+            assert_eq!(position.line, 3);
         }
         other => panic!("expected Duplicate, got {other:?}"),
     }
@@ -68,9 +70,9 @@ fn duplicate_use_block_is_reported() {
     let source = "<use></use>\n<markup></markup>\n<use></use>";
     let error = parse(source).unwrap_err();
     match error {
-        Error::Duplicate { name, line, .. } => {
-            assert_eq!(name, "use");
-            assert_eq!(line, 3);
+        Error::At(position, reason) => {
+            assert_eq!(*reason, Error::DuplicateBlock("use"));
+            assert_eq!(position.line, 3);
         }
         other => panic!("expected Duplicate, got {other:?}"),
     }
@@ -80,7 +82,7 @@ fn duplicate_use_block_is_reported() {
 fn unclosed_block_is_syntax_error() {
     let error = parse("<markup>\ncomponent A { }\n").unwrap_err();
     match error {
-        Error::Syntax { line, .. } => assert_eq!(line, 3),
+        Error::At(position, _) => assert_eq!(position.line, 3),
         other => panic!("expected Syntax, got {other:?}"),
     }
 }
@@ -88,22 +90,20 @@ fn unclosed_block_is_syntax_error() {
 #[test]
 fn text_outside_blocks_is_syntax_error() {
     let error = parse("<markup></markup>\nstray\n").unwrap_err();
-    assert!(matches!(error, Error::Syntax { line: 2, .. }), "{error:?}");
+    assert!(
+        matches!(&error, Error::At(position, _) if position.line == 2),
+        "{error:?}"
+    );
 }
 
 #[test]
 fn errors_render_distinct_messages() {
     let errors = [
-        Error::Syntax {
-            message: String::from("unexpected"),
-            line: 2,
-            column: 3,
-        },
-        Error::Duplicate {
-            name: "style",
-            line: 2,
-            column: 3,
-        },
+        Error::at_position(Position { line: 2, column: 3 }, Error::custom("unexpected")),
+        Error::at_position(
+            Position { line: 2, column: 3 },
+            Error::DuplicateBlock("style"),
+        ),
         Error::MissingMarkup,
     ];
 

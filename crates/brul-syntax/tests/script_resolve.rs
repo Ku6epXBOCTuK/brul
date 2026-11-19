@@ -1,3 +1,4 @@
+use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::script::{Program, parse, validate};
 
@@ -14,11 +15,15 @@ fn failure(source: &str, external: &[&str]) -> Error {
 }
 
 fn at(message: &str, line: usize, column: usize) -> Error {
-    Error {
-        message: message.to_owned(),
-        line,
-        column,
-    }
+    let (what, rest) = message.split_once(' ').unwrap();
+    let name = rest
+        .trim_end_matches(" is not defined")
+        .trim_matches('\'')
+        .to_owned();
+    Error::at_position(
+        Position { line, column },
+        Error::Undefined(what.to_owned(), name),
+    )
 }
 
 #[test]
@@ -154,7 +159,8 @@ fn every_expression_kind_visits_its_children() {
     ] {
         let error = failure(source, &[]);
         assert_eq!(
-            error.message, "variable 'missing' is not defined",
+            error.message(),
+            "variable 'missing' is not defined",
             "{source}"
         );
     }

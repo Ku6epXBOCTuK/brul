@@ -160,14 +160,14 @@ fn a_gradient_stop_with_a_bad_theme_key_is_rejected() {
         "theme light { from: #111111; }\n.a { background: linear-gradient(90, theme.accent, #222222); }",
     )
     .unwrap_err();
-    assert_eq!(unknown.message, "unknown theme key 'accent'");
+    assert_eq!(unknown.message(), "unknown theme key 'accent'");
 
     let not_a_color = parse_file(
         "theme light { radius: 4px; }\n.a { background: linear-gradient(90, theme.radius, #222222); }",
     )
     .unwrap_err();
     assert_eq!(
-        not_a_color.message,
+        not_a_color.message(),
         "theme key 'radius' is a px length, but 'background' expects a color"
     );
 }
@@ -193,7 +193,7 @@ fn border_theme_ref_to_a_non_color_is_rejected_at_parse_time() {
         parse_file("theme light { radius: 4px; }\n.a { border: 2px theme.radius; }").unwrap_err();
 
     assert_eq!(
-        error.message,
+        error.message(),
         "theme key 'radius' is a px length, but 'border-color' expects a color"
     );
 }

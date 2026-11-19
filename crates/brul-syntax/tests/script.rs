@@ -90,8 +90,8 @@ fn const_parses_name_and_value() {
 #[test]
 fn const_without_value_is_rejected() {
     let error = parse("const limit;").unwrap_err();
-    assert_eq!(error.message, "const requires an initializer");
-    assert_eq!((error.line, error.column), (1, 12));
+    assert_eq!(error.message(), "const requires an initializer");
+    assert_eq!((error.line(), error.column()), (1, 12));
 }
 
 #[test]
@@ -141,29 +141,29 @@ fn empty_braces_at_statement_position_are_a_block() {
 #[test]
 fn object_literal_at_statement_position_is_rejected() {
     let error = parse(r#"{ "a": 1 };"#).unwrap_err();
-    assert_eq!(error.message, "expected ';'");
-    assert_eq!((error.line, error.column), (1, 6));
+    assert_eq!(error.message(), "expected ';'");
+    assert_eq!((error.line(), error.column()), (1, 6));
 }
 
 #[test]
 fn let_without_semicolon_points_at_the_end() {
     let error = parse("let a = 1").unwrap_err();
-    assert_eq!(error.message, "expected ';'");
-    assert_eq!((error.line, error.column), (1, 10));
+    assert_eq!(error.message(), "expected ';'");
+    assert_eq!((error.line(), error.column()), (1, 10));
 }
 
 #[test]
 fn let_without_name_is_rejected() {
     let error = parse("let = 1;").unwrap_err();
-    assert_eq!(error.message, "expected variable name");
-    assert_eq!((error.line, error.column), (1, 5));
+    assert_eq!(error.message(), "expected variable name");
+    assert_eq!((error.line(), error.column()), (1, 5));
 }
 
 #[test]
 fn unterminated_block_points_at_the_end() {
     let error = parse("{ let a = 1;").unwrap_err();
-    assert_eq!(error.message, "expected '}'");
-    assert_eq!((error.line, error.column), (1, 13));
+    assert_eq!(error.message(), "expected '}'");
+    assert_eq!((error.line(), error.column()), (1, 13));
 }
 
 #[test]
@@ -228,15 +228,15 @@ fn else_if_becomes_a_nested_if() {
 #[test]
 fn if_without_parentheses_is_rejected() {
     let error = parse("if ready { }").unwrap_err();
-    assert_eq!(error.message, "expected '('");
-    assert_eq!((error.line, error.column), (1, 4));
+    assert_eq!(error.message(), "expected '('");
+    assert_eq!((error.line(), error.column()), (1, 4));
 }
 
 #[test]
 fn if_without_block_is_rejected() {
     let error = parse("if (ready) launch();").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
-    assert_eq!((error.line, error.column), (1, 12));
+    assert_eq!(error.message(), "expected '{'");
+    assert_eq!((error.line(), error.column()), (1, 12));
 }
 
 #[test]
@@ -278,29 +278,32 @@ fn function_parses_several_params() {
 #[test]
 fn function_without_name_is_rejected() {
     let error = parse("function () { }").unwrap_err();
-    assert_eq!(error.message, "expected function name");
-    assert_eq!((error.line, error.column), (1, 10));
+    assert_eq!(error.message(), "expected function name");
+    assert_eq!((error.line(), error.column()), (1, 10));
 }
 
 #[test]
 fn function_without_body_is_rejected() {
     let error = parse("function f() launch();").unwrap_err();
-    assert_eq!(error.message, "expected '{'");
-    assert_eq!((error.line, error.column), (1, 14));
+    assert_eq!(error.message(), "expected '{'");
+    assert_eq!((error.line(), error.column()), (1, 14));
 }
 
 #[test]
 fn function_param_with_trailing_comma_is_rejected() {
     let error = parse("function f(a,) { }").unwrap_err();
-    assert_eq!(error.message, "expected parameter name");
-    assert_eq!((error.line, error.column), (1, 14));
+    assert_eq!(error.message(), "expected parameter name");
+    assert_eq!((error.line(), error.column()), (1, 14));
 }
 
 #[test]
 fn nested_function_is_rejected() {
     let error = parse("function f() { function g() { } }").unwrap_err();
-    assert_eq!(error.message, "functions are only allowed at the top level");
-    assert_eq!((error.line, error.column), (1, 16));
+    assert_eq!(
+        error.message(),
+        "functions are only allowed at the top level"
+    );
+    assert_eq!((error.line(), error.column()), (1, 16));
 }
 
 #[test]

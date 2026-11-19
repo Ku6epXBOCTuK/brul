@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use crate::ast::Expr;
-use crate::error::Error;
+use crate::error::{Error, Expected};
 use crate::lexer::{self, Punct, TokenKind, TokenStream};
 use crate::script::ast::{Function, Program, Statement};
 
@@ -56,31 +56,28 @@ impl Parser<'_> {
             return self.if_statement();
         }
         if self.at_keyword("function") {
-            return Err(self.error(
-                self.tokens[self.at].span,
-                "functions are only allowed at the top level",
-            ));
+            return Err(self.error(self.tokens[self.at].span, Error::FunctionNotTopLevel));
         }
         if self.tokens[self.at].kind == TokenKind::Punct(Punct::LBrace) {
             return self.block();
         }
         let expr = self.expression()?;
-        self.expect_punct(Punct::Semicolon, "expected ';'")?;
+        self.expect_punct(Punct::Semicolon, Punct::Semicolon)?;
         Ok(Statement::Expr(expr))
     }
 
     fn let_statement(&mut self, constant: bool) -> Result<Statement, Error> {
         self.at += 1;
-        let name = self.ident("expected variable name")?;
+        let name = self.ident(Expected::Word("variable name"))?;
         let value = if self.tokens[self.at].kind == TokenKind::Punct(Punct::Assign) {
             self.at += 1;
             Some(self.expression()?)
         } else if constant {
-            return Err(self.error(self.tokens[self.at].span, "const requires an initializer"));
+            return Err(self.error(self.tokens[self.at].span, Error::ConstNoInitializer));
         } else {
             None
         };
-        self.expect_punct(Punct::Semicolon, "expected ';'")?;
+        self.expect_punct(Punct::Semicolon, Punct::Semicolon)?;
         Ok(Statement::Let {
             constant,
             name,
@@ -90,28 +87,28 @@ impl Parser<'_> {
 
     fn function(&mut self) -> Result<Function, Error> {
         self.expect_keyword("function")?;
-        let name = self.ident("expected function name")?;
-        self.expect_punct(Punct::LParen, "expected '('")?;
+        let name = self.ident(Expected::Word("function name"))?;
+        self.expect_punct(Punct::LParen, Punct::LParen)?;
         let mut params = Vec::new();
         if self.tokens[self.at].kind != TokenKind::Punct(Punct::RParen) {
             loop {
-                params.push(self.ident("expected parameter name")?);
+                params.push(self.ident(Expected::Word("parameter name"))?);
                 if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
                     break;
                 }
                 self.at += 1;
             }
         }
-        self.expect_punct(Punct::RParen, "expected ')'")?;
+        self.expect_punct(Punct::RParen, Punct::RParen)?;
         let body = self.block_statements()?;
         Ok(Function { name, params, body })
     }
 
     fn if_statement(&mut self) -> Result<Statement, Error> {
         self.expect_keyword("if")?;
-        self.expect_punct(Punct::LParen, "expected '('")?;
+        self.expect_punct(Punct::LParen, Punct::LParen)?;
         let condition = self.expression()?;
-        self.expect_punct(Punct::RParen, "expected ')'")?;
+        self.expect_punct(Punct::RParen, Punct::RParen)?;
         let then_branch = self.block_statements()?;
         let else_branch = if self.at_keyword("else") {
             self.at += 1;
@@ -135,7 +132,7 @@ impl Parser<'_> {
     }
 
     fn block_statements(&mut self) -> Result<Vec<Statement>, Error> {
-        self.expect_punct(Punct::LBrace, "expected '{'")?;
+        self.expect_punct(Punct::LBrace, Punct::LBrace)?;
         let mut statements = Vec::new();
         loop {
             let token = &self.tokens[self.at];
@@ -144,7 +141,9 @@ impl Parser<'_> {
                     self.at += 1;
                     break;
                 }
-                TokenKind::Eof => return Err(self.error(token.span, "expected '}'")),
+                TokenKind::Eof => {
+                    return Err(self.error(token.span, Expected::Punct(Punct::RBrace)));
+                }
                 _ => statements.push(self.statement()?),
             }
         }

@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
+use std::fmt;
 
-use crate::error::Error as ParseError;
+use crate::ast::Position;
+use crate::error::{Error as ParseError, Expected, Unterminated};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -20,6 +22,11 @@ impl Span {
             .count()
             + 1;
         (line, column)
+    }
+
+    pub fn position(self, source: &str) -> Position {
+        let (line, column) = self.line_col(source);
+        Position { line, column }
     }
 }
 
@@ -54,6 +61,43 @@ pub enum Punct {
     RBracket,
     LBrace,
     RBrace,
+}
+
+impl fmt::Display for Punct {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let text = match self {
+            Self::Assign => "=",
+            Self::PlusAssign => "+=",
+            Self::MinusAssign => "-=",
+            Self::Question => "?",
+            Self::Colon => ":",
+            Self::Or => "||",
+            Self::And => "&&",
+            Self::Eq => "==",
+            Self::NotEq => "!=",
+            Self::Lt => "<",
+            Self::Gt => ">",
+            Self::Le => "<=",
+            Self::Ge => ">=",
+            Self::Plus => "+",
+            Self::Minus => "-",
+            Self::Star => "*",
+            Self::Slash => "/",
+            Self::Percent => "%",
+            Self::Bang => "!",
+            Self::Dot => ".",
+            Self::Comma => ",",
+            Self::Semicolon => ";",
+            Self::At => "@",
+            Self::LParen => "(",
+            Self::RParen => ")",
+            Self::LBracket => "[",
+            Self::RBracket => "]",
+            Self::LBrace => "{",
+            Self::RBrace => "}",
+        };
+        f.write_str(text)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,7 +153,7 @@ impl<'a> TokenStream<'a> {
             };
             match lexer.next() {
                 Some(Ok(token)) => self.tokens.push(token),
-                Some(Err(error)) => return Err(error.into()),
+                Some(Err(error)) => return Err(error),
                 None => break,
             }
         }
@@ -124,7 +168,7 @@ impl<'a> TokenStream<'a> {
         matches!(&self.tokens[self.at].kind, TokenKind::Ident(name) if name == keyword)
     }
 
-    pub fn expect_keyword(&mut self, keyword: &str) -> Result<(), ParseError> {
+    pub fn expect_keyword(&mut self, keyword: &'static str) -> Result<(), ParseError> {
         let token = self.token()?;
         let span = token.span;
         let matches = matches!(&token.kind, TokenKind::Ident(name) if name == keyword);
@@ -132,11 +176,11 @@ impl<'a> TokenStream<'a> {
             self.at += 1;
             Ok(())
         } else {
-            Err(self.error(span, format!("expected '{keyword}'")))
+            Err(self.error(span, Expected::Keyword(keyword)))
         }
     }
 
-    pub fn ident(&mut self, message: &str) -> Result<String, ParseError> {
+    pub fn ident(&mut self, expected: impl Into<Expected>) -> Result<String, ParseError> {
         let token = self.token()?;
         let span = token.span;
         match token.kind.clone() {
@@ -144,11 +188,11 @@ impl<'a> TokenStream<'a> {
                 self.at += 1;
                 Ok(name)
             }
-            _ => Err(self.error(span, message)),
+            _ => Err(self.error(span, expected.into())),
         }
     }
 
-    pub fn string(&mut self, message: &str) -> Result<String, ParseError> {
+    pub fn string(&mut self, expected: impl Into<Expected>) -> Result<String, ParseError> {
         let token = self.token()?;
         let span = token.span;
         match token.kind.clone() {
@@ -156,11 +200,15 @@ impl<'a> TokenStream<'a> {
                 self.at += 1;
                 Ok(value)
             }
-            _ => Err(self.error(span, message)),
+            _ => Err(self.error(span, expected.into())),
         }
     }
 
-    pub fn expect_punct(&mut self, punct: Punct, message: &str) -> Result<(), ParseError> {
+    pub fn expect_punct(
+        &mut self,
+        punct: Punct,
+        expected: impl Into<Expected>,
+    ) -> Result<(), ParseError> {
         let token = self.token()?;
         let span = token.span;
         let matches = token.kind == TokenKind::Punct(punct);
@@ -168,21 +216,13 @@ impl<'a> TokenStream<'a> {
             self.at += 1;
             Ok(())
         } else {
-            Err(self.error(span, message))
+            Err(self.error(span, expected.into()))
         }
     }
 
-    pub fn error(&self, span: Span, message: impl Into<String>) -> ParseError {
-        ParseError::at_span(self.source, span, message)
+    pub fn error(&self, span: Span, reason: impl Into<ParseError>) -> ParseError {
+        ParseError::at_span(self.source, span, reason)
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("line {}, column {}: {}", .line, .column, .message)]
-pub struct Error {
-    pub message: String,
-    pub line: usize,
-    pub column: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -213,7 +253,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn step(&mut self) -> Result<(), Error> {
+    fn step(&mut self) -> Result<(), ParseError> {
         while !self.finished && self.pending.is_empty() {
             if self.pos >= self.source.len() {
                 self.finish()?;
@@ -235,13 +275,13 @@ impl<'a> Lexer<'a> {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<(), Error> {
+    fn finish(&mut self) -> Result<(), ParseError> {
         self.finished = true;
         if let Some(start) = self.frames.iter().find_map(|frame| match frame {
             Frame::Template { start } => Some(*start),
             Frame::Code { .. } => None,
         }) {
-            return Err(error(self.source, start, "unterminated template"));
+            return Err(error(self.source, start, Unterminated::Template));
         }
         self.pending.push_back(Token {
             kind: TokenKind::Eof,
@@ -255,7 +295,7 @@ impl<'a> Lexer<'a> {
 }
 
 impl Iterator for Lexer<'_> {
-    type Item = Result<Token, Error>;
+    type Item = Result<Token, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(token) = self.pending.pop_front() {
@@ -274,7 +314,7 @@ impl Iterator for Lexer<'_> {
     }
 }
 
-pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
+pub fn tokenize(source: &str) -> Result<Vec<Token>, ParseError> {
     Lexer::new(source, 0).collect()
 }
 
@@ -284,7 +324,7 @@ fn template_pos(
     start: usize,
     tokens: &mut VecDeque<Token>,
     frames: &mut Vec<Frame>,
-) -> Result<usize, Error> {
+) -> Result<usize, ParseError> {
     match template_step(source, pos, start)? {
         TemplateStep::Interpolation {
             chunk_end,
@@ -333,7 +373,7 @@ fn code_pos(
     pos: usize,
     tokens: &mut VecDeque<Token>,
     frames: &mut Vec<Frame>,
-) -> Result<usize, Error> {
+) -> Result<usize, ParseError> {
     let ch = source[pos..]
         .chars()
         .next()
@@ -397,7 +437,11 @@ fn number_end(source: &str, start: usize) -> usize {
     }
 }
 
-fn string_pos(source: &str, start: usize, tokens: &mut VecDeque<Token>) -> Result<usize, Error> {
+fn string_pos(
+    source: &str,
+    start: usize,
+    tokens: &mut VecDeque<Token>,
+) -> Result<usize, ParseError> {
     let rest = &source[start + 1..];
     let quote = rest.find('"');
     let newline = rest.find('\n');
@@ -413,7 +457,7 @@ fn string_pos(source: &str, start: usize, tokens: &mut VecDeque<Token>) -> Resul
             });
             Ok(value_end + 1)
         }
-        _ => Err(error(source, start, "unterminated string")),
+        _ => Err(error(source, start, Unterminated::String)),
     }
 }
 
@@ -423,7 +467,7 @@ fn punct_pos(
     ch: char,
     tokens: &mut VecDeque<Token>,
     frames: &mut Vec<Frame>,
-) -> Result<usize, Error> {
+) -> Result<usize, ParseError> {
     let (kind, len) = match ch {
         '`' => {
             tokens.push_back(Token {
@@ -451,7 +495,7 @@ fn punct_pos(
         }
         _ => {
             let (punct, len) = punct_token(ch, source[start..].chars().nth(1))
-                .ok_or_else(|| error(source, start, &format!("unknown character {ch:?}")))?;
+                .ok_or_else(|| error(source, start, ParseError::UnknownCharacter(ch)))?;
             (TokenKind::Punct(punct), len)
         }
     };
@@ -484,7 +528,7 @@ enum TemplateStep {
     End(usize),
 }
 
-fn template_step(source: &str, pos: usize, start: usize) -> Result<TemplateStep, Error> {
+fn template_step(source: &str, pos: usize, start: usize) -> Result<TemplateStep, ParseError> {
     let rest = &source[pos..];
     let tick = rest.find('`');
     let interpolation = rest.find("${");
@@ -494,12 +538,12 @@ fn template_step(source: &str, pos: usize, start: usize) -> Result<TemplateStep,
         (None, Some(interp)) => interpolation_step(source, pos, interp),
         (None, None) => {
             check_chunk(source, pos, rest)?;
-            Err(error(source, start, "unterminated template"))
+            Err(error(source, start, Unterminated::Template))
         }
     }
 }
 
-fn interpolation_step(source: &str, pos: usize, offset: usize) -> Result<TemplateStep, Error> {
+fn interpolation_step(source: &str, pos: usize, offset: usize) -> Result<TemplateStep, ParseError> {
     check_chunk(source, pos, &source[pos..pos + offset])?;
     Ok(TemplateStep::Interpolation {
         chunk_end: pos + offset,
@@ -507,29 +551,27 @@ fn interpolation_step(source: &str, pos: usize, offset: usize) -> Result<Templat
     })
 }
 
-fn end_step(source: &str, pos: usize, offset: usize) -> Result<TemplateStep, Error> {
+fn end_step(source: &str, pos: usize, offset: usize) -> Result<TemplateStep, ParseError> {
     check_chunk(source, pos, &source[pos..pos + offset])?;
     Ok(TemplateStep::End(pos + offset))
 }
 
-fn check_chunk(source: &str, start: usize, chunk: &str) -> Result<(), Error> {
+fn check_chunk(source: &str, start: usize, chunk: &str) -> Result<(), ParseError> {
     match chunk.find('$') {
-        Some(offset) => Err(error(source, start + offset, "expected '{' after '$'")),
+        Some(offset) => Err(error(source, start + offset, ParseError::DollarBrace)),
         None => Ok(()),
     }
 }
 
-fn error(source: &str, start: usize, message: &str) -> Error {
-    let (line, column) = Span {
-        start,
-        end: start + 1,
-    }
-    .line_col(source);
-    Error {
-        message: message.to_owned(),
-        line,
-        column,
-    }
+fn error(source: &str, start: usize, reason: impl Into<ParseError>) -> ParseError {
+    ParseError::at_span(
+        source,
+        Span {
+            start,
+            end: start + 1,
+        },
+        reason,
+    )
 }
 
 fn digits_end(source: &str, mut pos: usize) -> usize {

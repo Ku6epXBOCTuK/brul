@@ -68,14 +68,14 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
         }
         if cursor.eat_keyword("theme") {
             if scope.palette().is_some() {
-                return Err(cursor.error("a theme can only be declared in the root <style>"));
+                return Err(cursor.error(Error::ThemeNotRoot));
             }
             let (theme, position) = cursor.theme()?;
             themes.push(theme);
             theme_positions.push(position);
         } else if cursor.eat_keyword("override") {
             if !scope.allows_overrides() {
-                return Err(cursor.error("an override can only be declared in the root <style>"));
+                return Err(cursor.error(Error::OverrideNotRoot));
             }
             overrides.push(cursor.override_block()?);
         } else {
@@ -84,7 +84,9 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
             positions.push(position);
         }
     }
-    let report = |error: brul_style::ValidationError| Error::at(source, error.at, error.message);
+    let report = |error: brul_style::ValidationError| {
+        Error::at(source, error.at, Error::custom(error.message))
+    };
     let declared = match scope.palette() {
         Some(palette) => palette,
         None => {
@@ -167,12 +169,12 @@ impl Cursor<'_> {
         let at = self.value_start();
         let name = self.ident()?;
         let property = Kind::from_name(&name)
-            .ok_or_else(|| Error::at(self.source(), at, format!("unknown property '{name}'")))?;
+            .ok_or_else(|| Error::at(self.source(), at, Error::UnknownProperty(name.clone())))?;
         if !property.animatable() {
             return Err(Error::at(
                 self.source(),
                 at,
-                format!("property '{name}' cannot be animated"),
+                Error::NotAnimatable(name.clone()),
             ));
         }
         self.expect(':')?;
@@ -191,7 +193,7 @@ impl Cursor<'_> {
             .iter()
             .find(|state| state.name() == name)
             .copied()
-            .ok_or_else(|| Error::at(self.source(), at, "unknown state"))?;
+            .ok_or_else(|| Error::at(self.source(), at, Error::UnknownState))?;
         Ok(Some(state))
     }
 
@@ -229,7 +231,7 @@ impl Cursor<'_> {
                 .collect());
         }
         let kind = Kind::from_name(&name)
-            .ok_or_else(|| Error::at(self.source(), at, format!("unknown property '{name}'")))?;
+            .ok_or_else(|| Error::at(self.source(), at, Error::UnknownProperty(name.clone())))?;
         let spec = kind.spec();
         self.expect(':')?;
         let value = value::value(&mut *self, spec.theme_type().is_some(), spec.ty, &name)?;
