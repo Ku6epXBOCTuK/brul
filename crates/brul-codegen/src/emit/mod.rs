@@ -25,7 +25,7 @@ mod theme;
 mod view;
 
 pub use alloc::allocations;
-pub use expression::{expression, operation};
+pub use expression::operation;
 pub use module::{GeneratedFile, Module, module, module_file, split_module_file};
 pub(super) use out::Out;
 
