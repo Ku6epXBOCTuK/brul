@@ -36,8 +36,12 @@ pub(super) fn structure_if(
     let name = emit.structures.next(emit.base, "if");
     for (index, branch) in block.branches.iter().enumerate() {
         let function = format!("{name}_value{index}");
-        emit.functions
-            .push(value_function(&function, &branch.condition, emit.names)?);
+        emit.functions.push(value_function(
+            &function,
+            &branch.condition,
+            emit.names,
+            emit.state,
+        )?);
     }
     let arm = rebuild_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
@@ -57,10 +61,15 @@ pub(super) fn structure_each(
         &format!("{name}_value"),
         &block.collection,
         emit.names,
+        emit.state,
     )?);
     if let Some(key) = &block.key {
-        emit.functions
-            .push(value_function(&format!("{name}_key"), key, emit.names)?);
+        emit.functions.push(value_function(
+            &format!("{name}_key"),
+            key,
+            emit.names,
+            emit.state,
+        )?);
     }
     let arm = each_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
@@ -72,6 +81,7 @@ fn value_function(
     name: &str,
     value: &brul_syntax::ast::Expr,
     names: &Names<'_>,
+    state: &super::state::State,
 ) -> Result<String, Error> {
     let mut text = String::new();
     let mut out = Out::new(&mut text);
@@ -79,7 +89,10 @@ fn value_function(
         "fn {name}(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{"
     ));
     out.indented(|out| -> Result<(), Error> {
-        out.line(format_args!("let value = {};", operation(value, names)?));
+        out.line(format_args!(
+            "let value = {};",
+            operation(value, names, state)?
+        ));
         out.line(format_args!("Ok(value)"));
         Ok(())
     })?;

@@ -19,11 +19,14 @@ mod names;
 mod out;
 mod resources;
 mod script;
+mod state;
 mod statement;
 mod structure;
 mod style;
 mod theme;
 mod view;
+
+pub use state::State;
 
 pub use alloc::allocations;
 pub use expression::operation;
@@ -56,6 +59,7 @@ pub(super) struct Emit<'a> {
     resource_prefix: &'a str,
     stylesheet: &'a Stylesheet,
     names: &'a Names<'a>,
+    state: &'a State,
     program: Option<&'a Program>,
     functions: &'a mut Vec<String>,
     bases: &'a [String],
@@ -71,6 +75,7 @@ struct EmitSources<'a> {
     resources: &'a [Resource],
     stylesheet: &'a Stylesheet,
     names: &'a Names<'a>,
+    state: &'a State,
     program: Option<&'a Program>,
     base: &'a str,
     resource_prefix: &'a str,
@@ -102,6 +107,7 @@ impl<'a> Emit<'a> {
             resource_prefix: sources.resource_prefix,
             stylesheet: sources.stylesheet,
             names: sources.names,
+            state: sources.state,
             program: sources.program,
             functions: outputs.functions,
             bases: outputs.bases,

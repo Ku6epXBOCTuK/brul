@@ -19,6 +19,7 @@ pub use brul_codegen::runtime::{
 pub use brul_gui as gui;
 pub use brul_gui::{Theme, UnknownTheme};
 pub use brul_macros::{command, host};
+pub use brul_reactive::Signal;
 pub use brul_script::eval;
 pub use brul_script::{Component, Error, Fields, Host, Script, Value, Variable, VariableId};
 pub use brul_style as style;

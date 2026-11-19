@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
@@ -44,6 +45,7 @@ pub struct Component {
     environment: Environment,
     properties: Vec<Option<Property>>,
     dispatch: Option<crate::ScriptDispatch>,
+    state: Option<Box<dyn Any>>,
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
     build_scopes: Vec<Rc<[Variable]>>,
@@ -61,6 +63,7 @@ impl Default for Component {
             environment: Environment::default(),
             properties: Vec::new(),
             dispatch: None,
+            state: None,
             host: None,
             pending_every: Vec::new(),
             build_scopes: Vec::new(),
@@ -102,6 +105,17 @@ impl Component {
 
     pub fn has_dispatch(&self) -> bool {
         self.dispatch.is_some()
+    }
+
+    pub fn set_state<T: 'static>(&mut self, state: T) {
+        self.state = Some(Box::new(state));
+    }
+
+    pub fn state<T: 'static>(&mut self) -> &mut T {
+        self.state
+            .as_mut()
+            .and_then(|state| state.downcast_mut())
+            .expect("script state type mismatch")
     }
 
     pub fn push_frame(&mut self) {

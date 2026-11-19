@@ -4,6 +4,7 @@ use brul_script::Names;
 use brul_syntax::error::Error;
 use brul_syntax::script::Program;
 
+use super::state::State;
 use super::statement::{block, top_level};
 
 const RESERVED: &[&str] = &[
@@ -18,8 +19,9 @@ pub(super) fn module(
     name: &str,
     program: Option<&Program>,
     names: &Names<'_>,
+    state: &State,
 ) -> Result<String, Error> {
-    let mut out = String::new();
+    let mut out = state.definition(&format!("{name}_state_init"));
     let _ = writeln!(out, "\npub fn {name}() -> Option<brul::Script> {{");
     let Some(program) = program else {
         out.push_str("    None\n}\n");
@@ -33,7 +35,8 @@ pub(super) fn module(
         out,
         "#[allow(unused_variables)]\nfn {name}_init(component: &mut brul::Component) -> Result<(), brul::Error> {{"
     );
-    top_level(&program.statements, names, &mut out)?;
+    top_level(&program.statements, names, state, &mut out)?;
+    out.push_str(&state.init_call(&format!("{name}_state_init")));
     out.push_str("    Ok(())\n}\n");
     for function in &program.functions {
         let function_name = format!("{name}_fn_{}", ident(&snake(&function.name)));
@@ -48,7 +51,7 @@ pub(super) fn module(
                 parameter.name
             );
         }
-        block(&function.body, names, &mut out)?;
+        block(&function.body, names, state, &mut out)?;
         out.push_str("    Ok(brul::Value::Null)\n}\n");
     }
     let _ = writeln!(
@@ -119,7 +122,7 @@ pub(super) fn handle(program: Option<&Program>) -> String {
     out
 }
 
-fn snake(name: &str) -> String {
+pub(super) fn snake(name: &str) -> String {
     let mut output = String::with_capacity(name.len());
     for (index, character) in name.chars().enumerate() {
         if character.is_uppercase() {
@@ -134,7 +137,7 @@ fn snake(name: &str) -> String {
     output
 }
 
-fn ident(name: &str) -> String {
+pub(super) fn ident(name: &str) -> String {
     if RESERVED.contains(&name) {
         format!("r#{name}")
     } else {

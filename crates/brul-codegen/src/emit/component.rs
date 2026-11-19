@@ -384,6 +384,7 @@ fn write(
 ) -> Result<(), Error> {
     let bases = emit.bases;
     let names = emit.names;
+    let state = emit.state;
     let prefix = emit.resource_prefix;
     let resources = emit.resources;
     let dynamic_classes = &mut *emit.dynamic_classes;
@@ -410,8 +411,8 @@ fn write(
             out.line(format_args!("script: {base}_script(),"));
             out.line(format_args!("name: {name:?},"));
             out.line(format_args!("names: names(),"));
-            arguments(out, "props", &props, names, resources, prefix)?;
-            arguments(out, "defaults", &defaults, names, resources, prefix)?;
+            arguments(out, "props", &props, names, emit.state, resources, prefix)?;
+            arguments(out, "defaults", &defaults, names, emit.state, resources, prefix)?;
             out.line(format_args!("events: &["));
             out.indented(|out| {
                 for (event, handler, params) in &events {
@@ -466,7 +467,7 @@ fn write(
             *dynamic_classes = true;
             out.line(format_args!(
                 "bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {} }}));",
-                expression::closure(value, names)?
+                expression::closure(value, names, state)?
             ));
         }
         out.line(format_args!("{widget}"));
@@ -481,6 +482,7 @@ fn arguments(
     field: &str,
     arguments: &[(&str, &PropType, &Expr)],
     names: &Names<'_>,
+    state: &super::state::State,
     resources: &[Resource],
     prefix: &str,
 ) -> Result<(), Error> {
@@ -492,7 +494,7 @@ fn arguments(
                 Some(resource) if **ty == PropType::Image => format!(
                     "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }}"
                 ),
-                _ => expression::closure(value, names)?,
+                _ => expression::closure(value, names, state)?,
             };
             out.line(format_args!(
                 "brul::PropArgument {{ name: {id}, ty: brul::{ty}, expression: {expression} }},"

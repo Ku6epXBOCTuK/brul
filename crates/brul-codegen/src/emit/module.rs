@@ -18,7 +18,7 @@ use super::EmitSources;
 use super::Out;
 use super::StructureNames;
 use super::classes::ClassNames;
-use super::{alloc, classes, events, names, resources, script, style, theme, view};
+use super::{alloc, classes, events, names, resources, script, state, style, theme, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
 const ROOT_SCRIPT: &str = "view.script";
@@ -85,6 +85,7 @@ fn module_at(
             validate_build(program, &names::declared(&definition.component.members))?;
         }
     }
+    let root_state = state::State::new(parsed.program.as_ref(), &names, &state_type("script"))?;
     let mut used = HashSet::new();
     let window_bases: Vec<String> = parsed
         .windows
@@ -131,6 +132,7 @@ fn module_at(
                     resources: &registry.resources,
                     stylesheet: &parsed.stylesheet,
                     names: &names,
+                    state: &root_state,
                     program: parsed.program.as_ref(),
                     base: &window_bases[index],
                     resource_prefix: "",
@@ -174,6 +176,11 @@ fn module_at(
         let mut functions = Vec::new();
         let mut dynamic_classes = false;
         let mut class_names = ClassNames::default();
+        let component_state = state::State::new(
+            definition.program.as_ref(),
+            &names,
+            &state_type(&format!("{prefix}script")),
+        )?;
         body.push_str(HEADER);
         view::view(
             &mut body,
@@ -187,6 +194,7 @@ fn module_at(
                     resources: &definition.resources,
                     stylesheet: &definition.stylesheet,
                     names: &names,
+                    state: &component_state,
                     program: definition.program.as_ref(),
                     base,
                     resource_prefix: &prefix,
@@ -216,6 +224,7 @@ fn module_at(
             &format!("{prefix}script"),
             definition.program.as_ref(),
             &names,
+            &component_state,
         )?);
         body.push_str(&resources::functions(&prefix, &definition.resources));
         let mut functions_block = String::new();
@@ -235,7 +244,12 @@ fn module_at(
     }
     tail.push('\n');
     window_table(&mut tail, &parsed.windows, &window_bases);
-    tail.push_str(&script::module("script", parsed.program.as_ref(), &names)?);
+    tail.push_str(&script::module(
+        "script",
+        parsed.program.as_ref(),
+        &names,
+        &root_state,
+    )?);
     tail.push_str(&script::handle(parsed.program.as_ref()));
     tail.push_str(&names::output(&names));
 
@@ -329,6 +343,19 @@ fn identifier(text: &str) -> String {
         name.insert(0, '_');
     }
     name
+}
+
+fn state_type(name: &str) -> String {
+    let mut output = String::new();
+    for part in name.split('_').filter(|part| !part.is_empty()) {
+        let mut characters = part.chars();
+        if let Some(first) = characters.next() {
+            output.extend(first.to_uppercase());
+            output.push_str(characters.as_str());
+        }
+    }
+    output.push_str("State");
+    output
 }
 
 fn unique(name: &str, used: &mut HashSet<String>) -> String {

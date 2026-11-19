@@ -52,7 +52,7 @@ pub(super) fn widget(
         let content = element_expression(out, element, &classes, &events, emit, frame, counter)?;
         out.push(format_args!(";"));
         out.end();
-        content_binding(out, content, &name, emit.names)?;
+        content_binding(out, content, &name, emit.names, emit.state)?;
         parameters(out, element, &name, emit.names, emit)?;
         handler_bindings(out, &events.handlers, &name);
         out.line(format_args!("{name}"));
@@ -224,6 +224,7 @@ fn content_binding(
     content: Option<Content>,
     name: &str,
     names: &Names<'_>,
+    state: &super::state::State,
 ) -> Result<(), Error> {
     let Some(content) = content else {
         return Ok(());
@@ -235,7 +236,7 @@ fn content_binding(
     };
     out.line(format_args!(
         "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({})));",
-        expression::closure(&expression, names)?
+        expression::closure(&expression, names, state)?
     ));
     Ok(())
 }
@@ -510,12 +511,12 @@ fn parameters(
         };
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
-            expression::closure(value, names)?
+            expression::closure(value, names, emit.state)?
         ));
     }
     if x.is_some() || y.is_some() {
-        let x = optional_expression(x, names)?;
-        let y = optional_expression(y, names)?;
+        let x = optional_expression(x, names, emit.state)?;
+        let y = optional_expression(y, names, emit.state)?;
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Offset {{ x: {x}, y: {y} }}));"
         ));
@@ -525,15 +526,19 @@ fn parameters(
         let table = classes::table(emit.resource_prefix);
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
-            expression::closure(value, names)?
+            expression::closure(value, names, emit.state)?
         ));
     }
     Ok(())
 }
 
-fn optional_expression(value: Option<&Expr>, names: &Names<'_>) -> Result<String, Error> {
+fn optional_expression(
+    value: Option<&Expr>,
+    names: &Names<'_>,
+    state: &super::state::State,
+) -> Result<String, Error> {
     Ok(match value {
-        Some(item) => format!("Some({})", expression::closure(item, names)?),
+        Some(item) => format!("Some({})", expression::closure(item, names, state)?),
         None => "None".to_owned(),
     })
 }

@@ -977,11 +977,16 @@ fn emits_script_program() {
 
 <markup>
 window Demo (title: "demo") {
-    View { }
+    View { Text { count } }
 }
 </markup>
 "#;
     let module = emit::module(source).expect("module");
+    assert!(module.contains("pub struct ScriptState {"));
+    assert!(module.contains("pub limit: brul::Signal<f64>,"));
+    assert!(module.contains("fn script_state_init(component: &mut brul::Component)"));
+    assert!(module.contains("component.state::<ScriptState>().count.get()"));
+    assert!(module.contains("component.state::<ScriptState>().count.set((&value).try_into()?);"));
     assert!(module.contains("pub fn script() -> Option<brul::Script> {"));
     assert!(module.contains("fn script_init(component: &mut brul::Component)"));
     assert!(module.contains("component.declare(\"limit\", brul::Value::Number(2.0), true)?;"));
@@ -1037,7 +1042,7 @@ window Demo (title: "demo") {
 fn operated(source: &str) -> String {
     let expression = brul_syntax::parser::parse_expression(source).expect("expression parses");
     let names = emit::identifiers(&expression);
-    emit::operation(&expression, &names).expect("operation")
+    emit::operation(&expression, &names, &emit::State::default()).expect("operation")
 }
 
 #[test]
