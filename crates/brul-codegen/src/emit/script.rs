@@ -1,8 +1,10 @@
 use std::fmt::Write;
 
+use brul_script::Names;
+use brul_syntax::error::Error;
 use brul_syntax::script::Program;
 
-use crate::source::Script;
+use super::statement::block;
 
 const RESERVED: &[&str] = &[
     "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "crate",
@@ -12,34 +14,69 @@ const RESERVED: &[&str] = &[
     "unsized", "use", "virtual", "where", "while", "yield",
 ];
 
-pub(super) fn program(name: &str, script: Option<&Script>, file: Option<&str>) -> String {
+pub(super) fn module(
+    name: &str,
+    program: Option<&Program>,
+    names: &Names<'_>,
+) -> Result<String, Error> {
     let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "\npub fn {name}() -> Option<&'static brul::script::Program> {{"
-    );
-    let Some(script) = script else {
+    let _ = writeln!(out, "\npub fn {name}() -> Option<brul::Script<'static>> {{");
+    let Some(program) = program else {
         out.push_str("    None\n}\n");
-        return out;
+        return Ok(out);
     };
-    let source = match file {
-        Some(file) => format!("include_str!({file:?})"),
-        None => raw(&script.text),
-    };
-    let _ = writeln!(out, "    const SOURCE: &str = {source};");
-    out.push_str(
-        "    static PROGRAM: std::sync::LazyLock<Option<brul::script::Program>> = \
-         std::sync::LazyLock::new(|| {\n",
+    let _ = writeln!(
+        out,
+        "    Some(brul::Script::Generated {{ init: {name}_init, dispatch: {name}_dispatch }})\n}}"
     );
     let _ = writeln!(
         out,
-        "        let text = [\"\\n\".repeat({}).as_str(), SOURCE].concat();",
-        script.line - 1
+        "#[allow(unused_variables)]\nfn {name}_init(component: &mut brul::Component) -> Result<(), brul::Error> {{"
     );
-    out.push_str(
-        "        Some(brul::script::parse(&text).expect(\"the script was validated when the module was generated\"))\n    });\n    PROGRAM.as_ref()\n}\n",
+    block(&program.statements, names, &mut out)?;
+    out.push_str("    Ok(())\n}\n");
+    for function in &program.functions {
+        let function_name = format!("{name}_fn_{}", ident(&snake(&function.name)));
+        let _ = writeln!(
+            out,
+            "#[allow(unused_mut, unused_variables)]\nfn {function_name}(component: &mut brul::Component, mut arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
+        );
+        for parameter in &function.params {
+            let _ = writeln!(
+                out,
+                "    component.declare({parameter:?}, arguments.remove(0), false)?;"
+            );
+        }
+        block(&function.body, names, &mut out)?;
+        out.push_str("    Ok(brul::Value::Null)\n}\n");
+    }
+    let _ = writeln!(
+        out,
+        "fn {name}_dispatch(component: &mut brul::Component, name: &str, arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
     );
-    out
+    out.push_str("    match name {\n");
+    for function in &program.functions {
+        let function_name = format!("{name}_fn_{}", ident(&snake(&function.name)));
+        let expected = function.params.len();
+        let wrong = if expected == 0 {
+            "!arguments.is_empty()".to_owned()
+        } else {
+            format!("arguments.len() != {expected}")
+        };
+        let _ = writeln!(out, "        {:?} => {{", function.name);
+        let _ = writeln!(
+            out,
+            "            if {wrong} {{ return Err(brul::Error::FunctionArity {{ name: name.to_owned(), expected: {expected}, found: arguments.len() }}); }}"
+        );
+        let _ = writeln!(out, "            component.push_frame();");
+        let _ = writeln!(
+            out,
+            "            let result = {function_name}(component, arguments);"
+        );
+        out.push_str("            component.pop_frame();\n            result\n        }\n");
+    }
+    out.push_str("        _ => Err(brul::Error::UnknownFunction(name.to_owned())),\n    }\n}\n");
+    Ok(out)
 }
 
 pub(super) fn handle(program: Option<&Program>) -> String {
@@ -102,13 +139,4 @@ fn ident(name: &str) -> String {
     } else {
         name.to_owned()
     }
-}
-
-fn raw(text: &str) -> String {
-    let mut hashes = 1;
-    while text.contains(&format!("\"{}", "#".repeat(hashes))) {
-        hashes += 1;
-    }
-    let delimiter = "#".repeat(hashes);
-    format!("r{delimiter}\"{text}\"{delimiter}")
 }

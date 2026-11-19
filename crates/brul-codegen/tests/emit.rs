@@ -117,7 +117,7 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
     ]
 }
 
-pub fn script() -> Option<&'static brul::script::Program> {
+pub fn script() -> Option<brul::Script<'static>> {
     None
 }
 
@@ -338,7 +338,7 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
     ]
 }
 
-pub fn script() -> Option<&'static brul::script::Program> {
+pub fn script() -> Option<brul::Script<'static>> {
     None
 }
 
@@ -982,10 +982,12 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let module = emit::module(source).expect("module");
-    assert!(module.contains("pub fn script() -> Option<&'static brul::script::Program> {"));
-    assert!(module.contains("const SOURCE: &str = r#\""));
-    assert!(module.contains("const limit = 2;"));
-    assert!(module.contains("brul::script::parse(&text)"));
+    assert!(module.contains("pub fn script() -> Option<brul::Script<'static>> {"));
+    assert!(module.contains("fn script_init(component: &mut brul::Component)"));
+    assert!(module.contains("component.declare(\"limit\", brul::Value::Number(2.0), true)?;"));
+    assert!(module.contains("fn script_fn_bump(component: &mut brul::Component"));
+    assert!(module.contains("\"bump\" => {"));
+    assert!(!module.contains("brul::script::parse("));
     assert!(!module.contains("brul::script::Statement::"));
     assert!(module.contains("#[allow(dead_code)]\npub struct Script(brul::Handle);"));
     assert!(module.contains(
@@ -1050,7 +1052,7 @@ fn emits_value_operations() {
 fn emits_value_calls() {
     assert_eq!(
         operated("f(1)"),
-        "brul::eval::call(component, \"f\", vec![brul::Value::Number(1.0)])?"
+        "{ let arguments = vec![brul::Value::Number(1.0)]; brul::eval::call(component, \"f\", arguments)? }"
     );
     assert!(
         operated("every(100, tick)").contains("component.every(interval, \"tick\")?"),
@@ -1129,7 +1131,7 @@ fn emits_imported_component() {
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("pub fn badge_view(theme: Option<&str>"));
-    assert!(module.contains("pub fn badge_script() -> Option<&'static brul::script::Program>"));
+    assert!(module.contains("pub fn badge_script() -> Option<brul::Script<'static>>"));
     assert!(module.contains("let built = brul::instance(build, component, brul::Instance {"));
     assert!(module.contains("bindings.extend(built.bindings);"));
     assert!(module.contains("props.extend(built.props);"));

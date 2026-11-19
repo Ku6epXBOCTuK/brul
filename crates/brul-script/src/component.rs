@@ -47,6 +47,7 @@ pub struct Component {
     environment: Environment,
     properties: Vec<Option<Property>>,
     functions: Vec<Arc<Function>>,
+    dispatch: Option<crate::ScriptDispatch>,
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
     build_scopes: Vec<Rc<[Variable]>>,
@@ -64,6 +65,7 @@ impl Default for Component {
             environment: Environment::default(),
             properties: Vec::new(),
             functions: Vec::new(),
+            dispatch: None,
             host: None,
             pending_every: Vec::new(),
             build_scopes: Vec::new(),
@@ -97,6 +99,22 @@ impl Component {
 
     pub fn set_host(&mut self, host: impl Host + 'static) {
         self.host = Some(Box::new(host));
+    }
+
+    pub fn set_dispatch(&mut self, dispatch: crate::ScriptDispatch) {
+        self.dispatch = Some(dispatch);
+    }
+
+    pub fn has_dispatch(&self) -> bool {
+        self.dispatch.is_some()
+    }
+
+    pub fn push_frame(&mut self) {
+        self.environment.push_frame();
+    }
+
+    pub fn pop_frame(&mut self) {
+        self.environment.pop_frame();
     }
 
     pub fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
@@ -178,6 +196,9 @@ impl Component {
     }
 
     pub fn call_function(&mut self, name: &str, arguments: Vec<Value>) -> Result<Value, Error> {
+        if let Some(dispatch) = self.dispatch {
+            return dispatch(self, name, arguments);
+        }
         let Some(found) = self.functions.iter().find(|function| function.name == name) else {
             return Err(Error::UnknownFunction(name.to_owned()));
         };

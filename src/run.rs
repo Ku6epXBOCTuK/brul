@@ -11,8 +11,8 @@ use brul_window::{
 use crate::handle::{Handle, Message, take};
 use crate::ui::CommandHost;
 use crate::{
-    Build, Built, Component, ComponentHandle, Host, Theme, Ui, Value, ViewError, WindowConfig,
-    execute_program, script,
+    Build, Built, Component, ComponentHandle, Host, Script, Theme, Ui, Value, ViewError,
+    WindowConfig, execute_program, script,
 };
 
 pub struct WindowDef<T: Theme> {
@@ -24,7 +24,7 @@ pub struct WindowDef<T: Theme> {
 /// Запускает окна по модулю, сгенерированному из `.brul`.
 pub fn run_generated<T: Theme>(
     windows: Vec<WindowDef<T>>,
-    script: Option<&script::Program>,
+    script: Option<Script<'_>>,
     names: &'static [&'static str],
     theme: Option<T>,
     seeds: &[(&str, Value)],
@@ -37,7 +37,7 @@ pub fn run_generated<T: Theme>(
 /// фоновый поток пишет им в DSL, цикл просыпается и перерисовывает окна.
 pub fn run_generated_with<T: Theme>(
     windows: Vec<WindowDef<T>>,
-    script: Option<&script::Program>,
+    script: Option<Script<'_>>,
     names: &'static [&'static str],
     theme: Option<T>,
     seeds: &[(&str, Value)],
@@ -69,7 +69,7 @@ pub fn run_generated_with<T: Theme>(
         theme: Rc::clone(&shown),
     });
     let pending = std::mem::take(&mut *commands.borrow_mut());
-    if let Some(program) = script {
+    if let Some(Script::Program(program)) = script {
         check(&component.borrow(), program)?;
     }
     let runtime = Rc::new(RefCell::new(Runtime::new(
@@ -114,7 +114,7 @@ fn check(
 
 pub(crate) fn generated_component(
     names: &'static [&'static str],
-    script: Option<&script::Program>,
+    script: Option<Script<'_>>,
     seeds: &[(&str, Value)],
 ) -> Result<ComponentHandle, Box<dyn std::error::Error>> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
@@ -122,8 +122,16 @@ pub(crate) fn generated_component(
     for (name, value) in seeds {
         component.borrow_mut().declare(name, value.clone(), false)?;
     }
-    if let Some(program) = script {
-        execute_program(&mut component.borrow_mut(), program)?;
+    if let Some(script) = script {
+        match script {
+            Script::Program(program) => {
+                execute_program(&mut component.borrow_mut(), program)?;
+            }
+            Script::Generated { init, dispatch } => {
+                component.borrow_mut().set_dispatch(dispatch);
+                init(&mut component.borrow_mut())?;
+            }
+        }
     }
     Ok(component)
 }
@@ -134,7 +142,7 @@ pub(crate) fn generated_built<T: Theme>(
     names: &'static [&'static str],
     theme: Option<T>,
     seeds: &[(&str, Value)],
-    script: Option<&script::Program>,
+    script: Option<Script<'_>>,
 ) -> Result<(ComponentHandle, Built, Vec<crate::Structure>), Box<dyn std::error::Error>> {
     let component = generated_component(names, script, seeds)?;
     let mut build = Build::new();
@@ -401,7 +409,7 @@ mod tests {
     fn assembled(
         theme: Option<TestTheme>,
         seeds: &[(&str, Value)],
-        script: Option<&script::Program>,
+        script: Option<Script<'_>>,
     ) -> (WidgetId, Ui<TestTheme>) {
         let (component, built, structures) =
             generated_built(generated_view, NAMES, theme, seeds, script).expect("launch succeeds");
@@ -433,7 +441,7 @@ mod tests {
                 )),
             }],
         };
-        let (id, ui) = assembled(None, &[], Some(&program));
+        let (id, ui) = assembled(None, &[], Some(Script::Program(&program)));
         brul_reactive::flush();
         assert!(!ui.tree.borrow_mut().set_text(id, "from script".to_owned()));
     }
@@ -625,7 +633,8 @@ mod tests {
             })],
             statements: Vec::new(),
         };
-        let component = generated_component(NAMES, Some(&program), &seeds).expect("component");
+        let component =
+            generated_component(NAMES, Some(Script::Program(&program)), &seeds).expect("component");
         let defs = vec![WindowDef {
             name: "Only",
             config: WindowConfig::default(),
@@ -677,7 +686,8 @@ mod tests {
             })],
             statements: Vec::new(),
         };
-        let component = generated_component(CALL_NAMES, Some(&program), &seeds).expect("component");
+        let component = generated_component(CALL_NAMES, Some(Script::Program(&program)), &seeds)
+            .expect("component");
         let mut runtime = Runtime::new(
             defs(),
             component,
@@ -784,7 +794,8 @@ mod tests {
         let names: &'static [&'static str] =
             &["handleKey", "handleSettingsKey", "exit", "ev", "code"];
         let program = exit_program();
-        let component = generated_component(names, Some(&program), &[]).expect("component");
+        let component =
+            generated_component(names, Some(Script::Program(&program)), &[]).expect("component");
         let commands = Rc::new(RefCell::new(Vec::new()));
         let keys = HashMap::from([
             ("Picker".to_owned(), WindowKey(0)),

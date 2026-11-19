@@ -589,7 +589,7 @@ mod tests {
     use brul_window::WindowCommand;
 
     use crate::run::generated_built;
-    use crate::{Binding, BindingTarget, Component, HandlerEvent, script};
+    use crate::{Binding, BindingTarget, Component, HandlerEvent, Script, script};
 
     const NAMES: &[&str] = &[
         "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code",
@@ -682,9 +682,14 @@ mod tests {
                 value: Some(Expr::new(ExprKind::Bool(false), Position::default())),
             }],
         };
-        let (component, built, structures) =
-            generated_built(structured_view, NAMES, None, &[], Some(&program))
-                .expect("launch succeeds");
+        let (component, built, structures) = generated_built(
+            structured_view,
+            NAMES,
+            None,
+            &[],
+            Some(Script::Program(&program)),
+        )
+        .expect("launch succeeds");
         let parent = built.widget.id();
         let mut ui = Ui::assemble(component, built, structured_view, None, structures, None);
         brul_reactive::flush();
@@ -855,8 +860,14 @@ mod tests {
                 ),
             ],
         };
-        let (component, built, structures) =
-            generated_built(bound_view, NAMES, None, &[], Some(&program)).expect("launch succeeds");
+        let (component, built, structures) = generated_built(
+            bound_view,
+            NAMES,
+            None,
+            &[],
+            Some(Script::Program(&program)),
+        )
+        .expect("launch succeeds");
         let mut ui = Ui::assemble(component, built, bound_view, None, structures, None);
         brul_reactive::flush();
         let assembled = brul_reactive::live_nodes();
@@ -1622,7 +1633,7 @@ mod tests {
             runtime::Instance {
                 theme: theme.map(Theme::name),
                 view: child_view,
-                script: Some(&program),
+                script: Some(Script::Program(&program)),
                 name: "Child",
                 names: NAMES,
                 props: &[],

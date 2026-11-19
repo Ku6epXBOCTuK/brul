@@ -65,7 +65,7 @@ pub fn split_module_file(path: &Path) -> Result<Module, Error> {
 fn module_at(
     source: &str,
     base: Option<&Path>,
-    split: bool,
+    _split: bool,
     entry: Option<&Path>,
 ) -> Result<Module, Error> {
     let parsed = crate::parse_source(source)?;
@@ -199,11 +199,11 @@ fn module_at(
         )?;
         style::stylesheet(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
         let script_file = format!("{name}.script");
-        body.push_str(&script::program(
+        body.push_str(&script::module(
             &format!("{prefix}script"),
-            definition.script.as_ref(),
-            split.then_some(script_file.as_str()),
-        ));
+            definition.program.as_ref(),
+            &names,
+        )?);
         body.push_str(&resources::functions(&prefix, &definition.resources));
         let mut functions_block = String::new();
         append_functions(&mut functions_block, &functions);
@@ -222,11 +222,7 @@ fn module_at(
     }
     tail.push('\n');
     window_table(&mut tail, &parsed.windows, &window_bases);
-    tail.push_str(&script::program(
-        "script",
-        parsed.script.as_ref(),
-        split.then_some(ROOT_SCRIPT),
-    ));
+    tail.push_str(&script::module("script", parsed.program.as_ref(), &names)?);
     tail.push_str(&script::handle(parsed.program.as_ref()));
     tail.push_str(&names::output(&names));
 

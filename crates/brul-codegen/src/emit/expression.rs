@@ -100,7 +100,7 @@ fn call(target: &Expr, arguments: &[Expr], names: &Names<'_>) -> Result<String, 
         return every(arguments, names);
     }
     Ok(format!(
-        "brul::eval::call(component, {name:?}, vec![{}])?",
+        "{{ let arguments = vec![{}]; brul::eval::call(component, {name:?}, arguments)? }}",
         operations(arguments, names)?
     ))
 }
