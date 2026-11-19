@@ -1,12 +1,22 @@
+use std::collections::HashMap;
+
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
 
 use super::script::{ident, snake};
 
+#[derive(Clone)]
+pub(super) struct FunctionSig {
+    pub(super) rust_name: String,
+    pub(super) params: Vec<Type>,
+    pub(super) return_type: Type,
+}
+
 pub(super) struct Scopes {
     frames: Vec<Vec<Binding>>,
     return_type: Type,
+    functions: HashMap<String, FunctionSig>,
 }
 
 impl Default for Scopes {
@@ -41,6 +51,7 @@ impl Scopes {
         Self {
             frames: vec![Vec::new()],
             return_type: Type::Void,
+            functions: HashMap::new(),
         }
     }
 
@@ -49,8 +60,17 @@ impl Scopes {
         self
     }
 
+    pub(super) fn with_functions(mut self, functions: HashMap<String, FunctionSig>) -> Self {
+        self.functions = functions;
+        self
+    }
+
     pub(super) fn return_type(&self) -> &Type {
         &self.return_type
+    }
+
+    pub(super) fn function(&self, name: &str) -> Option<&FunctionSig> {
+        self.functions.get(name)
     }
 
     pub(super) fn push(&mut self) {

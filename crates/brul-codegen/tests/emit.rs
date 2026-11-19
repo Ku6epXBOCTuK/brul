@@ -1013,14 +1013,17 @@ window Demo (title: "demo") {
     assert!(module.contains("pub fn script() -> Option<brul::Script> {"));
     assert!(module.contains("fn script_init(component: &mut brul::Component)"));
     assert!(module.contains("component.declare(\"limit\", brul::Value::Number(2.0_f64), true)?;"));
-    assert!(module.contains("fn script_fn_bump(component: &mut brul::Component"));
+    assert!(module.contains(
+        "fn script_fn_bump(component: &mut brul::Component, mut step: f64) -> Result<(), brul::Error>"
+    ));
     assert!(module.contains("\"bump\" => {"));
     assert!(!module.contains("brul::script::parse("));
     assert!(!module.contains("brul::script::Statement::"));
     assert!(module.contains("#[allow(dead_code)]\npub struct Script(brul::Handle);"));
     assert!(module.contains(
-        "pub fn bump(&self, step: impl Into<brul::Value>) {\n        self.0.call_with(\"bump\", ::std::vec![step.into()]);\n    }"
+        "pub fn bump(&self, step: f64) {\n        self.0.call_with(\"bump\", ::std::vec![brul::Value::Number(step)]);\n    }"
     ));
+    assert!(!module.contains("impl Into<brul::Value>"));
     assert!(
         module.contains("pub fn close_panel(&self) {\n        self.0.call(\"closePanel\");\n    }")
     );
@@ -1041,9 +1044,49 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let module = emit::module(source).expect("module");
-    assert!(module.contains("return Ok(brul::Value::Number(42.0_f64));"));
-    assert!(module.contains("return Ok(brul::Value::String((\"ok\".to_owned()).into()));"));
-    assert!(module.contains("return Ok(brul::Value::Null);"));
+    assert!(module.contains("return Ok(42.0_f64);"));
+    assert!(module.contains("return Ok(\"ok\".to_owned());"));
+    assert!(module.contains("return Ok(());"));
+}
+
+#[test]
+fn emits_typed_functions_and_direct_calls() {
+    let source = r#"<script>
+    function double(value: Number): Number { return value * 2; }
+    function four(): Number { return double(2); }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains(
+        "fn script_fn_double(component: &mut brul::Component, mut value: f64) -> Result<f64, brul::Error>"
+    ));
+    assert!(module.contains("return Ok((value) * (2.0_f64));"));
+    assert!(module.contains("return Ok(script_fn_double(component, 2.0_f64)?);"));
+    assert!(module.contains("pub fn double(&self, value: f64)"));
+    assert!(!module.contains("impl Into<brul::Value>"));
+}
+
+#[test]
+fn rejects_wrong_script_argument_type_at_build() {
+    let source = r#"<script>
+    function double(value: Number): Number { return value; }
+    function bad(): Number { return double("two"); }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#;
+    let error = emit::module(source).expect_err("type mismatch");
+    assert_eq!(error.message(), "argument expects Number, found String");
 }
 
 #[test]

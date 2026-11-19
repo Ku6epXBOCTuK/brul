@@ -6,7 +6,7 @@ use brul_syntax::error::Error;
 use brul_syntax::script::Statement;
 use brul_syntax::types::Type;
 
-use super::expression::{operation_in, type_name, typed, wrap_typed};
+use super::expression::{convert, operation_in, type_name, typed};
 use super::scopes::Scopes;
 use super::state::State;
 
@@ -153,7 +153,7 @@ fn emit_statement(
                         ),
                     ));
                 }
-                let _ = writeln!(out, "    return Ok(brul::Value::Null);");
+                let _ = writeln!(out, "    return Ok(());");
                 return Ok(());
             };
             if return_type == Type::Void {
@@ -173,19 +173,15 @@ fn emit_statement(
                         ),
                     ));
                 }
-                wrap_typed(code, &return_type)
+                code
             } else {
                 let code = operation_in(value, names, state, props, scopes)?;
-                match return_type {
-                    Type::Number => format!("brul::Value::Number((&{code}).try_into()?)"),
-                    Type::String => format!(
-                        "brul::Value::from(<String as std::convert::TryFrom<&brul::Value>>::try_from(&{code})?)"
-                    ),
-                    Type::Bool => format!("brul::Value::Bool((&{code}).try_into()?)"),
-                    Type::Null => format!(
-                        "match {code} {{ brul::Value::Null => brul::Value::Null, other => return Err(brul::Error::conversion(\"Null\", &other)) }}"
-                    ),
-                    _ => code,
+                if return_type == Type::Null {
+                    format!(
+                        "match {code} {{ brul::Value::Null => (), other => return Err(brul::Error::conversion(\"Null\", &other)) }}"
+                    )
+                } else {
+                    convert(&code, &return_type)
                 }
             };
             let _ = writeln!(out, "    return Ok({code});");

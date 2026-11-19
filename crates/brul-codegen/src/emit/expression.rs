@@ -99,8 +99,16 @@ pub(super) fn wrap_typed(code: String, ty: &Type) -> String {
         Type::Number => format!("brul::Value::Number({code})"),
         Type::String => format!("brul::Value::String(({code}).into())"),
         Type::Bool => format!("brul::Value::Bool({code})"),
-        Type::Null => "brul::Value::Null".to_owned(),
+        Type::Null | Type::Void => "brul::Value::Null".to_owned(),
         _ => code,
+    }
+}
+
+pub(super) fn convert(code: &str, ty: &Type) -> String {
+    match ty {
+        Type::Number | Type::String | Type::Bool => format!("(&{code}).try_into()?"),
+        Type::Null => format!("{{ let _ = {code}; () }}"),
+        _ => code.to_owned(),
     }
 }
 
@@ -263,6 +271,55 @@ pub(super) fn typed(
             Some((
                 format!("if {condition} {{ {then_code} }} else {{ {else_code} }}"),
                 then_ty,
+            ))
+        }
+        ExprKind::Call { target, args } => {
+            let ExprKind::Ident(name) = &target.kind else {
+                return Ok(None);
+            };
+            let Some(signature) = scopes.function(name) else {
+                return Ok(None);
+            };
+            if args.len() != signature.params.len() {
+                return Err(crate::error_at(
+                    expression.position,
+                    format!(
+                        "function '{name}' expects {} arguments, found {}",
+                        signature.params.len(),
+                        args.len()
+                    ),
+                ));
+            }
+            let mut arguments = Vec::new();
+            for (argument, expected) in args.iter().zip(&signature.params) {
+                let code =
+                    if let Some((code, found)) = typed(argument, names, state, props, scopes)? {
+                        if &found != expected {
+                            return Err(crate::error_at(
+                                argument.position,
+                                format!(
+                                    "argument expects {}, found {}",
+                                    type_name(expected),
+                                    type_name(&found)
+                                ),
+                            ));
+                        }
+                        code
+                    } else {
+                        convert(
+                            &operation_in(argument, names, state, props, scopes)?,
+                            expected,
+                        )
+                    };
+                arguments.push(code);
+            }
+            Some((
+                format!(
+                    "{}(component, {})?",
+                    signature.rust_name,
+                    arguments.join(", ")
+                ),
+                signature.return_type.clone(),
             ))
         }
         _ => None,

@@ -6,7 +6,8 @@ use brul_syntax::error::Error;
 use brul_syntax::script::Program;
 use brul_syntax::types::Type;
 
-use super::scopes::Scopes;
+use super::expression::{convert, wrap_typed};
+use super::scopes::{FunctionSig, Scopes};
 use super::state::State;
 use super::statement::{block_with_scopes, top_level};
 
@@ -31,6 +32,24 @@ pub(super) fn module(
         out.push_str("    None\n}\n");
         return Ok(out);
     };
+    let functions: HashMap<String, FunctionSig> = program
+        .functions
+        .iter()
+        .map(|function| {
+            (
+                function.name.clone(),
+                FunctionSig {
+                    rust_name: format!("{name}_fn_{}", ident(&snake(&function.name))),
+                    params: function
+                        .params
+                        .iter()
+                        .map(|param| param.ty.clone())
+                        .collect(),
+                    return_type: function.return_type.clone(),
+                },
+            )
+        })
+        .collect();
     let _ = writeln!(
         out,
         "    Some(brul::Script::Generated {{ init: {name}_init, dispatch: {name}_dispatch }})\n}}"
@@ -44,29 +63,45 @@ pub(super) fn module(
     out.push_str("    Ok(())\n}\n");
     for function in &program.functions {
         let function_name = format!("{name}_fn_{}", ident(&snake(&function.name)));
+        let params = function
+            .params
+            .iter()
+            .map(|param| {
+                format!(
+                    "mut {}: {}",
+                    ident(&snake(&param.name)),
+                    Scopes::local_type(&param.ty)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let separator = if params.is_empty() { "" } else { ", " };
+        let returns_unit = matches!(function.return_type, Type::Void | Type::Null);
+        let return_type = if returns_unit {
+            "()"
+        } else {
+            Scopes::local_type(&function.return_type)
+        };
         let _ = writeln!(
             out,
-            "#[allow(unused_mut, unused_variables)]\nfn {function_name}(component: &mut brul::Component, mut arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
+            "#[allow(unused_mut, unused_variables)]\nfn {function_name}(component: &mut brul::Component{separator}{params}) -> Result<{return_type}, brul::Error> {{"
         );
-        let mut scopes = Scopes::new().with_return_type(&function.return_type);
+        let mut scopes = Scopes::new()
+            .with_return_type(&function.return_type)
+            .with_functions(functions.clone());
         for parameter in &function.params {
-            let ident = scopes.declare(&parameter.name, &parameter.ty, false)?;
-            let local_ty = Scopes::local_type(&parameter.ty);
-            let value = if Scopes::is_value(&parameter.ty) {
-                "arguments.remove(0)".to_owned()
-            } else if matches!(parameter.ty, brul_syntax::types::Type::Null) {
-                "{ let _ = arguments.remove(0); () }".to_owned()
-            } else {
-                "(&arguments.remove(0)).try_into()?".to_owned()
-            };
-            let _ = writeln!(out, "    let mut {ident}: {local_ty} = {value};");
+            let _ = scopes.declare(&parameter.name, &parameter.ty, false)?;
         }
         block_with_scopes(&function.body, names, state, props, &mut out, &mut scopes)?;
-        out.push_str("    Ok(brul::Value::Null)\n}\n");
+        if returns_unit {
+            out.push_str("    Ok(())\n}\n");
+        } else {
+            out.push_str("    Err(brul::Error::Unsupported(\"missing return\"))\n}\n");
+        }
     }
     let _ = writeln!(
         out,
-        "fn {name}_dispatch(component: &mut brul::Component, name: &str, arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
+        "#[allow(unused_mut)]\nfn {name}_dispatch(component: &mut brul::Component, name: &str, mut arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
     );
     out.push_str("    match name {\n");
     for function in &program.functions {
@@ -82,7 +117,26 @@ pub(super) fn module(
             out,
             "            if {wrong} {{ return Err(brul::Error::FunctionArity {{ name: name.to_owned(), expected: {expected}, found: arguments.len() }}); }}"
         );
-        let _ = writeln!(out, "            {function_name}(component, arguments)");
+        let arguments = function
+            .params
+            .iter()
+            .map(|param| convert("arguments.remove(0)", &param.ty))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if matches!(function.return_type, Type::Void | Type::Null) {
+            let _ = writeln!(out, "            {function_name}(component, {arguments})?;");
+            out.push_str("            Ok(brul::Value::Null)\n");
+        } else {
+            let _ = writeln!(
+                out,
+                "            let result = {function_name}(component, {arguments})?;"
+            );
+            let _ = writeln!(
+                out,
+                "            Ok({})",
+                wrap_typed("result".to_owned(), &function.return_type)
+            );
+        }
         out.push_str("        }\n");
     }
     out.push_str("        _ => Err(brul::Error::UnknownFunction(name.to_owned())),\n    }\n}\n");
@@ -103,7 +157,13 @@ pub(super) fn handle(program: Option<&Program>) -> String {
         let arguments: Vec<String> = function
             .params
             .iter()
-            .map(|param| format!("{}: impl Into<brul::Value>", ident(&snake(&param.name))))
+            .map(|param| {
+                format!(
+                    "{}: {}",
+                    ident(&snake(&param.name)),
+                    Scopes::local_type(&param.ty)
+                )
+            })
             .collect();
         if arguments.is_empty() {
             let _ = writeln!(
@@ -114,7 +174,7 @@ pub(super) fn handle(program: Option<&Program>) -> String {
             let values = function
                 .params
                 .iter()
-                .map(|param| format!("{}.into()", ident(&snake(&param.name))))
+                .map(|param| wrap_typed(ident(&snake(&param.name)), &param.ty))
                 .collect::<Vec<_>>()
                 .join(", ");
             let arguments = arguments.join(", ");
