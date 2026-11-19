@@ -127,27 +127,47 @@ fn state_patch(snapshot: &Snapshot) -> Result<(WidgetStylePatch, TextStylePatch)
     let mut text = TextStylePatch::default();
     for property in snapshot.properties() {
         let kind = property.kind;
-        let value = read(&property.value, kind)?;
+        let value = &property.value;
         match kind.target() {
-            Target::Style(StyleField::Background) => style.background = Some(value.paint()),
-            Target::Style(StyleField::Border) => style.border = Some(value.color()),
-            Target::Style(StyleField::Text) => style.text = Some(value.color()),
-            Target::Style(StyleField::Tint) => style.tint = Some(value.color()),
-            Target::Style(StyleField::Opacity) => style.opacity = Some(value.number() as f32),
-            Target::Style(StyleField::Clip) => style.clip = Some(value.flag()),
-            Target::Style(StyleField::ShadowColor) => style.shadow = Some(value.color()),
-            Target::Style(StyleField::BorderRadius) => style.border_radius = Some(value.px()),
-            Target::Style(StyleField::Scroll) => style.scroll = Some(value.flag()),
-            Target::Style(StyleField::ShadowX) => style.shadow_x = Some(value.signed_px()),
-            Target::Style(StyleField::ShadowY) => style.shadow_y = Some(value.signed_px()),
-            Target::Style(StyleField::ShadowBlur) => style.shadow_blur = Some(value.px()),
-            Target::Text(TextField::VerticalAlign) => {
-                style.vertical_align = Some(vertical_align(value.keyword()));
+            Target::Style(StyleField::Background) => {
+                style.background = Some(read::<PaintTy>(value, kind)?)
             }
-            Target::Text(TextField::Align) => text.align = Some(text_align(value.keyword())),
-            Target::Text(TextField::Weight) => text.weight = Some(value.number() as u16),
-            Target::Text(TextField::Size) => text.size = Some(value.px() as f32),
-            Target::Text(TextField::Family) => text.family = Some(value.text().to_owned()),
+            Target::Style(StyleField::Border) => style.border = Some(read::<ColorTy>(value, kind)?),
+            Target::Style(StyleField::Text) => style.text = Some(read::<ColorTy>(value, kind)?),
+            Target::Style(StyleField::Tint) => style.tint = Some(read::<ColorTy>(value, kind)?),
+            Target::Style(StyleField::Opacity) => {
+                style.opacity = Some(read::<NumberTy>(value, kind)? as f32)
+            }
+            Target::Style(StyleField::Clip) => style.clip = Some(read::<FlagTy>(value, kind)?),
+            Target::Style(StyleField::ShadowColor) => {
+                style.shadow = Some(read::<ColorTy>(value, kind)?)
+            }
+            Target::Style(StyleField::BorderRadius) => {
+                style.border_radius = Some(read::<PxTy>(value, kind)?)
+            }
+            Target::Style(StyleField::Scroll) => style.scroll = Some(read::<FlagTy>(value, kind)?),
+            Target::Style(StyleField::ShadowX) => {
+                style.shadow_x = Some(read::<SignedPxTy>(value, kind)?)
+            }
+            Target::Style(StyleField::ShadowY) => {
+                style.shadow_y = Some(read::<SignedPxTy>(value, kind)?)
+            }
+            Target::Style(StyleField::ShadowBlur) => {
+                style.shadow_blur = Some(read::<PxTy>(value, kind)?)
+            }
+            Target::Text(TextField::VerticalAlign) => {
+                style.vertical_align = Some(vertical_align(read::<KeywordTy>(value, kind)?));
+            }
+            Target::Text(TextField::Align) => {
+                text.align = Some(text_align(read::<KeywordTy>(value, kind)?));
+            }
+            Target::Text(TextField::Weight) => {
+                text.weight = Some(read::<NumberTy>(value, kind)? as u16)
+            }
+            Target::Text(TextField::Size) => text.size = Some(read::<PxTy>(value, kind)? as f32),
+            Target::Text(TextField::Family) => {
+                text.family = Some(read::<TextTy>(value, kind)?.to_owned())
+            }
             _ => {}
         }
     }
@@ -176,98 +196,80 @@ fn transitions(snapshot: &Snapshot) -> Result<Transitions, StyleError> {
     Ok(transitions)
 }
 
-enum Read<'a> {
-    Px(u32),
-    SignedPx(i32),
-    Number(f64),
-    Length(Dimension),
-    Color(Color),
-    Paint(Paint),
-    Text(&'a str),
-    Keyword(&'a str),
-    Flag(bool),
+trait Read<'a> {
+    type Output;
+
+    fn matches(ty: Type) -> bool;
+    fn expected() -> &'static str;
+    fn convert(value: &'a Value, kind: Kind) -> Result<Self::Output, StyleError>;
 }
 
-impl<'a> Read<'a> {
-    fn px(self) -> u32 {
-        match self {
-            Read::Px(value) => value,
-            _ => unreachable!("the spec type gives px"),
-        }
-    }
+macro_rules! reads {
+    (owned $name:ident, $out:ty, $ty:pat, $expected:literal, $convert:ident) => {
+        struct $name;
 
-    fn signed_px(self) -> i32 {
-        match self {
-            Read::SignedPx(value) => value,
-            _ => unreachable!("the spec type gives signed px"),
-        }
-    }
+        impl<'a> Read<'a> for $name {
+            type Output = $out;
 
-    fn number(self) -> f64 {
-        match self {
-            Read::Number(value) => value,
-            _ => unreachable!("the spec type gives a number"),
-        }
-    }
+            fn matches(ty: Type) -> bool {
+                matches!(ty, $ty)
+            }
 
-    fn length(self) -> Dimension {
-        match self {
-            Read::Length(value) => value,
-            _ => unreachable!("the spec type gives a length"),
-        }
-    }
+            fn expected() -> &'static str {
+                $expected
+            }
 
-    fn color(self) -> Color {
-        match self {
-            Read::Color(value) => value,
-            _ => unreachable!("the spec type gives a color"),
+            fn convert(value: &'a Value, kind: Kind) -> Result<Self::Output, StyleError> {
+                $convert(value, kind)
+            }
         }
-    }
+    };
+    (borrowed $name:ident, $ty:pat, $expected:literal, $convert:ident) => {
+        struct $name;
 
-    fn paint(self) -> Paint {
-        match self {
-            Read::Paint(value) => value,
-            _ => unreachable!("the spec type gives a paint"),
-        }
-    }
+        impl<'a> Read<'a> for $name {
+            type Output = &'a str;
 
-    fn text(self) -> &'a str {
-        match self {
-            Read::Text(value) => value,
-            _ => unreachable!("the spec type gives a string"),
-        }
-    }
+            fn matches(ty: Type) -> bool {
+                matches!(ty, $ty)
+            }
 
-    fn keyword(self) -> &'a str {
-        match self {
-            Read::Keyword(value) => value,
-            _ => unreachable!("the spec type gives a keyword"),
-        }
-    }
+            fn expected() -> &'static str {
+                $expected
+            }
 
-    fn flag(self) -> bool {
-        match self {
-            Read::Flag(value) => value,
-            _ => unreachable!("the spec type gives a flag"),
+            fn convert(value: &'a Value, kind: Kind) -> Result<Self::Output, StyleError> {
+                $convert(value, kind)
+            }
         }
-    }
+    };
 }
 
-fn read<'a>(value: &'a Value, kind: Kind) -> Result<Read<'a>, StyleError> {
-    match kind.spec().ty {
-        Type::Px => Ok(Read::Px(px_value(value, kind)?)),
-        Type::SignedPx => Ok(Read::SignedPx(signed_px(value, kind)?)),
-        Type::Number | Type::NumberRange(..) | Type::NumberIn(..) => {
-            Ok(Read::Number(number(value, kind)?))
-        }
-        Type::Length => Ok(Read::Length(dimension(value, kind)?)),
-        Type::Color => Ok(Read::Color(paint(value, kind)?)),
-        Type::Paint => Ok(Read::Paint(background(value)?)),
-        Type::String => Ok(Read::Text(string(value, kind)?)),
-        Type::Bool => Ok(Read::Flag(flag(value, kind)?)),
-        Type::Keywords(_) => Ok(Read::Keyword(keyword(value, kind)?)),
-        Type::ThemeKey => Err(expected(kind, "a theme key")),
+reads!(owned PxTy, u32, Type::Px, "px", px_value);
+reads!(owned SignedPxTy, i32, Type::SignedPx, "px", signed_px);
+reads!(
+    owned NumberTy,
+    f64,
+    (Type::Number | Type::NumberRange(..) | Type::NumberIn(..)),
+    "a number",
+    number
+);
+reads!(owned LengthTy, Dimension, Type::Length, "px or %", dimension);
+reads!(owned ColorTy, Color, Type::Color, "a color", paint);
+reads!(owned PaintTy, Paint, Type::Paint, "a color or a gradient", background);
+reads!(borrowed TextTy, Type::String, "a string", string);
+reads!(borrowed KeywordTy, Type::Keywords(_), "a keyword", keyword);
+reads!(owned FlagTy, bool, Type::Bool, "true or false", flag);
+
+fn read<'a, T: Read<'a>>(value: &'a Value, kind: Kind) -> Result<T::Output, StyleError> {
+    let ty = kind.spec().ty;
+    if matches!(ty, Type::ThemeKey) {
+        return Err(expected(kind, "a theme key"));
     }
+    if !T::matches(ty) {
+        return Err(expected(kind, T::expected()));
+    }
+    T::convert(value, kind)
 }
 
 fn apply(
@@ -277,42 +279,56 @@ fn apply(
     text: &mut TextStyle,
 ) -> Result<(), StyleError> {
     let kind = property.kind;
-    let value = read(&property.value, kind)?;
+    let value = &property.value;
     match kind.target() {
-        Target::Layout(LayoutField::Width) => layout.width = value.length(),
-        Target::Layout(LayoutField::Height) => layout.height = value.length(),
-        Target::Layout(LayoutField::FlexGrow) => layout.flex_grow = value.number() as f32,
-        Target::Layout(LayoutField::FlexShrink) => layout.flex_shrink = value.number() as f32,
-        Target::Layout(LayoutField::FlexBasis) => layout.flex_basis = value.length(),
-        Target::Layout(LayoutField::Padding(side)) => {
-            *edge(&mut layout.padding, side) = value.px();
+        Target::Layout(LayoutField::Width) => layout.width = read::<LengthTy>(value, kind)?,
+        Target::Layout(LayoutField::Height) => layout.height = read::<LengthTy>(value, kind)?,
+        Target::Layout(LayoutField::FlexGrow) => {
+            layout.flex_grow = read::<NumberTy>(value, kind)? as f32
         }
-        Target::Layout(LayoutField::Gap) => layout.gap = value.px(),
-        Target::Layout(LayoutField::BorderWidth) => layout.border_width = value.px(),
-        Target::Layout(LayoutField::Justify) => layout.justify = justify(value.keyword()),
-        Target::Layout(LayoutField::Align) => layout.align = align(value.keyword()),
-        Target::Style(StyleField::Background) => style.background = value.paint(),
-        Target::Style(StyleField::Border) => style.border = value.color(),
-        Target::Style(StyleField::Text) => style.text = value.color(),
-        Target::Style(StyleField::Tint) => style.tint = Some(value.color()),
-        Target::Style(StyleField::BorderRadius) => style.border_radius = value.px(),
-        Target::Style(StyleField::Opacity) => style.opacity = value.number() as f32,
-        Target::Style(StyleField::Clip) => style.clip = value.flag(),
-        Target::Style(StyleField::Scroll) => style.scroll = value.flag(),
-        Target::Style(StyleField::ShadowX) => style.shadow.x = value.signed_px(),
-        Target::Style(StyleField::ShadowY) => style.shadow.y = value.signed_px(),
-        Target::Style(StyleField::ShadowBlur) => style.shadow.blur = value.px(),
-        Target::Style(StyleField::ShadowColor) => style.shadow.color = value.color(),
+        Target::Layout(LayoutField::FlexShrink) => {
+            layout.flex_shrink = read::<NumberTy>(value, kind)? as f32
+        }
+        Target::Layout(LayoutField::FlexBasis) => {
+            layout.flex_basis = read::<LengthTy>(value, kind)?
+        }
+        Target::Layout(LayoutField::Padding(side)) => {
+            *edge(&mut layout.padding, side) = read::<PxTy>(value, kind)?;
+        }
+        Target::Layout(LayoutField::Gap) => layout.gap = read::<PxTy>(value, kind)?,
+        Target::Layout(LayoutField::BorderWidth) => {
+            layout.border_width = read::<PxTy>(value, kind)?
+        }
+        Target::Layout(LayoutField::Justify) => {
+            layout.justify = justify(read::<KeywordTy>(value, kind)?)
+        }
+        Target::Layout(LayoutField::Align) => layout.align = align(read::<KeywordTy>(value, kind)?),
+        Target::Style(StyleField::Background) => style.background = read::<PaintTy>(value, kind)?,
+        Target::Style(StyleField::Border) => style.border = read::<ColorTy>(value, kind)?,
+        Target::Style(StyleField::Text) => style.text = read::<ColorTy>(value, kind)?,
+        Target::Style(StyleField::Tint) => style.tint = Some(read::<ColorTy>(value, kind)?),
+        Target::Style(StyleField::BorderRadius) => style.border_radius = read::<PxTy>(value, kind)?,
+        Target::Style(StyleField::Opacity) => style.opacity = read::<NumberTy>(value, kind)? as f32,
+        Target::Style(StyleField::Clip) => style.clip = read::<FlagTy>(value, kind)?,
+        Target::Style(StyleField::Scroll) => style.scroll = read::<FlagTy>(value, kind)?,
+        Target::Style(StyleField::ShadowX) => style.shadow.x = read::<SignedPxTy>(value, kind)?,
+        Target::Style(StyleField::ShadowY) => style.shadow.y = read::<SignedPxTy>(value, kind)?,
+        Target::Style(StyleField::ShadowBlur) => style.shadow.blur = read::<PxTy>(value, kind)?,
+        Target::Style(StyleField::ShadowColor) => {
+            style.shadow.color = read::<ColorTy>(value, kind)?
+        }
         Target::Text(TextField::Size) => {
-            text.font_size = value.px() as f32;
+            text.font_size = read::<PxTy>(value, kind)? as f32;
             text.line_height = text.font_size * 1.2;
         }
-        Target::Text(TextField::Family) => text.family = Some(value.text().to_owned()),
-        Target::Text(TextField::Align) => text.align = text_align(value.keyword()),
-        Target::Text(TextField::VerticalAlign) => {
-            style.vertical_align = vertical_align(value.keyword())
+        Target::Text(TextField::Family) => {
+            text.family = Some(read::<TextTy>(value, kind)?.to_owned())
         }
-        Target::Text(TextField::Weight) => text.weight = value.number() as u16,
+        Target::Text(TextField::Align) => text.align = text_align(read::<KeywordTy>(value, kind)?),
+        Target::Text(TextField::VerticalAlign) => {
+            style.vertical_align = vertical_align(read::<KeywordTy>(value, kind)?)
+        }
+        Target::Text(TextField::Weight) => text.weight = read::<NumberTy>(value, kind)? as u16,
     }
     Ok(())
 }
@@ -360,7 +376,7 @@ fn vertical_align(value: &str) -> VerticalAlign {
     }
 }
 
-fn background(value: &Value) -> Result<Paint, StyleError> {
+fn background(value: &Value, _kind: Kind) -> Result<Paint, StyleError> {
     match value {
         Value::Color(value) => Ok(Paint::Color(color(*value))),
         Value::Gradient(value) => Ok(Paint::Gradient(Gradient::Linear {
