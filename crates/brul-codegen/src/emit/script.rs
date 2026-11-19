@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use brul_script::Names;
 use brul_syntax::error::Error;
 use brul_syntax::script::Program;
+use brul_syntax::types::Type;
 
 use super::scopes::Scopes;
 use super::state::State;
@@ -21,6 +23,7 @@ pub(super) fn module(
     program: Option<&Program>,
     names: &Names<'_>,
     state: &State,
+    props: &HashMap<String, Type>,
 ) -> Result<String, Error> {
     let mut out = state.definition(&format!("{name}_state_init"));
     let _ = writeln!(out, "\npub fn {name}() -> Option<brul::Script> {{");
@@ -36,7 +39,7 @@ pub(super) fn module(
         out,
         "#[allow(unused_variables)]\nfn {name}_init(component: &mut brul::Component) -> Result<(), brul::Error> {{"
     );
-    top_level(&program.statements, names, state, &mut out)?;
+    top_level(&program.statements, names, state, props, &mut out)?;
     out.push_str(&state.init_call(&format!("{name}_state_init")));
     out.push_str("    Ok(())\n}\n");
     for function in &program.functions {
@@ -58,7 +61,7 @@ pub(super) fn module(
             };
             let _ = writeln!(out, "    let mut {ident}: {local_ty} = {value};");
         }
-        block_with_scopes(&function.body, names, state, &mut out, &mut scopes)?;
+        block_with_scopes(&function.body, names, state, props, &mut out, &mut scopes)?;
         out.push_str("    Ok(brul::Value::Null)\n}\n");
     }
     let _ = writeln!(

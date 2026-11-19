@@ -239,6 +239,7 @@ fn content_binding(
             &expression,
             emit.names,
             emit.state,
+            emit.prop_types,
             &emit.scope_defs,
             frame.scope,
         )?
@@ -516,7 +517,14 @@ fn parameters(
         };
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
-            expression::closure(value, emit.names, emit.state, &emit.scope_defs, frame.scope)?
+            expression::closure(
+                value,
+                emit.names,
+                emit.state,
+                emit.prop_types,
+                &emit.scope_defs,
+                frame.scope
+            )?
         ));
     }
     if x.is_some() || y.is_some() {
@@ -531,7 +539,7 @@ fn parameters(
         let table = classes::table(emit.resource_prefix);
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
-            expression::closure(value, emit.names, emit.state, &emit.scope_defs, frame.scope)?
+            expression::closure(value, emit.names, emit.state, emit.prop_types, &emit.scope_defs, frame.scope)?
         ));
     }
     Ok(())
@@ -545,7 +553,14 @@ fn optional_expression(
     Ok(match value {
         Some(item) => format!(
             "Some({})",
-            expression::closure(item, emit.names, emit.state, &emit.scope_defs, frame.scope)?
+            expression::closure(
+                item,
+                emit.names,
+                emit.state,
+                emit.prop_types,
+                &emit.scope_defs,
+                frame.scope
+            )?
         ),
         None => "None".to_owned(),
     })

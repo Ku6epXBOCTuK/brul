@@ -231,6 +231,7 @@ fn module_at(
             definition.program.as_ref(),
             &names,
             &component_state,
+            &component_prop_types,
         )?);
         body.push_str(&resources::functions(&prefix, &definition.resources));
         let mut functions_block = String::new();
@@ -255,6 +256,7 @@ fn module_at(
         parsed.program.as_ref(),
         &names,
         &root_state,
+        &root_prop_types,
     )?);
     tail.push_str(&script::handle(parsed.program.as_ref()));
     tail.push_str(&names::output(&names));

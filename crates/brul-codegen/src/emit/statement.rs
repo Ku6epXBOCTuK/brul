@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use brul_script::Names;
 use brul_syntax::error::Error;
 use brul_syntax::script::Statement;
+use brul_syntax::types::Type;
 
 use super::expression::operation_in;
 use super::scopes::Scopes;
@@ -12,31 +14,42 @@ pub(super) fn top_level(
     statements: &[Statement],
     names: &Names<'_>,
     state: &State,
+    props: &HashMap<String, Type>,
     out: &mut String,
 ) -> Result<(), Error> {
-    block_in(statements, names, state, out, &mut Scopes::new(), true)
+    block_in(
+        statements,
+        names,
+        state,
+        props,
+        out,
+        &mut Scopes::new(),
+        true,
+    )
 }
 
 pub(super) fn block_with_scopes(
     statements: &[Statement],
     names: &Names<'_>,
     state: &State,
+    props: &HashMap<String, Type>,
     out: &mut String,
     scopes: &mut Scopes,
 ) -> Result<(), Error> {
-    block_in(statements, names, state, out, scopes, false)
+    block_in(statements, names, state, props, out, scopes, false)
 }
 
 fn block_in(
     statements: &[Statement],
     names: &Names<'_>,
     state: &State,
+    props: &HashMap<String, Type>,
     out: &mut String,
     scopes: &mut Scopes,
     top_level: bool,
 ) -> Result<(), Error> {
     for statement in statements {
-        emit_statement(statement, names, state, out, scopes, top_level)?;
+        emit_statement(statement, names, state, props, out, scopes, top_level)?;
     }
     Ok(())
 }
@@ -45,6 +58,7 @@ fn emit_statement(
     statement: &Statement,
     names: &Names<'_>,
     state: &State,
+    props: &HashMap<String, Type>,
     out: &mut String,
     scopes: &mut Scopes,
     top_level: bool,
@@ -59,7 +73,7 @@ fn emit_statement(
             if top_level {
                 let null = "brul::Value::Null".to_owned();
                 let (method, value) = match value {
-                    Some(value) => ("declare", operation_in(value, names, state, scopes)?),
+                    Some(value) => ("declare", operation_in(value, names, state, props, scopes)?),
                     None => ("declare_if_absent", null),
                 };
                 let _ = writeln!(
@@ -75,12 +89,12 @@ fn emit_statement(
                 "()".to_owned()
             } else if Scopes::is_value(ty) {
                 match value {
-                    Some(value) => operation_in(value, names, state, scopes)?,
+                    Some(value) => operation_in(value, names, state, props, scopes)?,
                     None => "brul::Value::Null".to_owned(),
                 }
             } else {
                 let value = match value {
-                    Some(value) => operation_in(value, names, state, scopes)?,
+                    Some(value) => operation_in(value, names, state, props, scopes)?,
                     None => "brul::Value::Null".to_owned(),
                 };
                 format!("(&{value}).try_into()?")
@@ -91,13 +105,13 @@ fn emit_statement(
             let _ = writeln!(
                 out,
                 "    {};",
-                operation_in(expression, names, state, scopes)?
+                operation_in(expression, names, state, props, scopes)?
             );
         }
         Statement::Block(statements) => {
             out.push_str("    {\n");
             scopes.push();
-            block_in(statements, names, state, out, scopes, false)?;
+            block_in(statements, names, state, props, out, scopes, false)?;
             scopes.pop();
             out.push_str("    }\n");
         }
@@ -106,17 +120,17 @@ fn emit_statement(
             then_branch,
             else_branch,
         } => {
-            let value = operation_in(condition, names, state, scopes)?;
+            let value = operation_in(condition, names, state, props, scopes)?;
             let _ = writeln!(out, "    match {value} {{");
             let _ = writeln!(out, "        brul::Value::Bool(true) => {{");
             scopes.push();
-            block_in(then_branch, names, state, out, scopes, false)?;
+            block_in(then_branch, names, state, props, out, scopes, false)?;
             scopes.pop();
             out.push_str("        }\n");
             if let Some(branch) = else_branch {
                 out.push_str("        brul::Value::Bool(false) => {\n");
                 scopes.push();
-                emit_statement(branch, names, state, out, scopes, false)?;
+                emit_statement(branch, names, state, props, out, scopes, false)?;
                 scopes.pop();
                 out.push_str("        }\n");
             }

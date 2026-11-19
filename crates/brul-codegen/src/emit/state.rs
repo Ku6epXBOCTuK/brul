@@ -134,6 +134,17 @@ impl State {
         })
     }
 
+    pub fn read_typed(&self, name: &str) -> Option<(String, Type)> {
+        let field = self.fields.iter().find(|field| field.name == name)?;
+        let state = format!("component.state::<{}>().{}", self.type_name, field.ident);
+        let code = match field.ty {
+            Type::Number | Type::Bool | Type::Null => format!("{state}.get()"),
+            Type::String => format!("{state}.get()"),
+            _ => return None,
+        };
+        Some((code, field.ty.clone()))
+    }
+
     pub fn write(&self, name: &str, value: &str) -> Option<String> {
         let field = self.fields.iter().find(|field| field.name == name)?;
         let state = format!("component.state::<{}>().{}", self.type_name, field.ident);

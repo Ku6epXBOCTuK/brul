@@ -105,6 +105,15 @@ impl Scopes {
         })
     }
 
+    pub(super) fn read_typed(&self, name: &str) -> Option<(String, Type)> {
+        let binding = self.find(name)?;
+        let code = match binding.ty {
+            Type::String | Type::Array(_) | Type::Object => format!("{}.clone()", binding.access),
+            _ => binding.access.clone(),
+        };
+        Some((code, binding.ty.clone()))
+    }
+
     pub(super) fn write(&self, name: &str, value: &str) -> Result<Option<String>, Error> {
         let Some(binding) = self.find(name) else {
             return Ok(None);

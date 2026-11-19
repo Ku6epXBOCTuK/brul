@@ -1,7 +1,10 @@
 use brul_script::Names;
+use std::collections::HashMap;
+
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Event, Member, Prop, PropType};
+use brul_syntax::types::Type;
 
 use crate::Resource;
 use crate::error_at;
@@ -392,6 +395,7 @@ fn write(
     let resources = emit.resources;
     let scopes = &emit.scope_defs;
     let scope = frame.scope;
+    let prop_types = emit.prop_types;
     let dynamic_classes = &mut *emit.dynamic_classes;
     let base = bases[index].as_str();
     let Call {
@@ -416,13 +420,25 @@ fn write(
             out.line(format_args!("script: {base}_script(),"));
             out.line(format_args!("name: {name:?},"));
             out.line(format_args!("names: names(),"));
-            arguments(out, "props", &props, names, emit.state, resources, prefix, scopes, scope)?;
+            arguments(
+                out,
+                "props",
+                &props,
+                names,
+                emit.state,
+                emit.prop_types,
+                resources,
+                prefix,
+                scopes,
+                scope,
+            )?;
             arguments(
                 out,
                 "defaults",
                 &defaults,
                 names,
                 emit.state,
+                emit.prop_types,
                 resources,
                 prefix,
                 scopes,
@@ -482,7 +498,7 @@ fn write(
             *dynamic_classes = true;
             out.line(format_args!(
                 "bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {} }}));",
-                expression::closure(value, names, state, scopes, scope)?
+                expression::closure(value, names, state, prop_types, scopes, scope)?
             ));
         }
         out.line(format_args!("{widget}"));
@@ -499,6 +515,7 @@ fn arguments(
     arguments: &[(&str, &PropType, &Expr)],
     names: &Names<'_>,
     state: &super::state::State,
+    props: &HashMap<String, Type>,
     resources: &[Resource],
     prefix: &str,
     scopes: &[super::scopes::ScopeInfo],
@@ -512,7 +529,7 @@ fn arguments(
                 Some(resource) if **ty == PropType::Image => format!(
                     "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }}"
                 ),
-                _ => expression::closure(value, names, state, scopes, scope)?,
+                _ => expression::closure(value, names, state, props, scopes, scope)?,
             };
             out.line(format_args!(
                 "brul::PropArgument {{ name: {id}, ty: brul::{ty}, expression: {expression} }},"

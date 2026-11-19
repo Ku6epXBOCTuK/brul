@@ -31,6 +31,8 @@ mod theme;
 mod view;
 
 pub(super) use scopes::ScopeInfo;
+pub(super) type PropTypes = HashMap<String, Type>;
+
 pub use state::State;
 
 pub use alloc::allocations;

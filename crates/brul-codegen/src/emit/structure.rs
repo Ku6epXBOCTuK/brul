@@ -42,6 +42,7 @@ pub(super) fn structure_if(
             &branch.condition,
             emit.names,
             emit.state,
+            emit.prop_types,
         )?);
     }
     let arm = rebuild_arm(&name, block, emit, frame)?;
@@ -63,6 +64,7 @@ pub(super) fn structure_each(
         &block.collection,
         emit.names,
         emit.state,
+        emit.prop_types,
     )?);
     if let Some(key) = &block.key {
         emit.functions.push(value_function(
@@ -70,6 +72,7 @@ pub(super) fn structure_each(
             key,
             emit.names,
             emit.state,
+            emit.prop_types,
         )?);
     }
     let mut fields = vec![ScopeField {
@@ -113,6 +116,7 @@ fn value_function(
     value: &brul_syntax::ast::Expr,
     names: &Names<'_>,
     state: &super::state::State,
+    props: &super::PropTypes,
 ) -> Result<String, Error> {
     let mut text = String::new();
     let mut out = Out::new(&mut text);
@@ -122,7 +126,7 @@ fn value_function(
     out.indented(|out| -> Result<(), Error> {
         out.line(format_args!(
             "let value = {};",
-            operation(value, names, state)?
+            operation(value, names, state, props)?
         ));
         out.line(format_args!("Ok(value)"));
         Ok(())

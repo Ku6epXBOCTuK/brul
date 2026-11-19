@@ -1012,7 +1012,7 @@ window Demo (title: "demo") {
     assert!(module.contains("component.state::<ScriptState>().count.set((&value).try_into()?);"));
     assert!(module.contains("pub fn script() -> Option<brul::Script> {"));
     assert!(module.contains("fn script_init(component: &mut brul::Component)"));
-    assert!(module.contains("component.declare(\"limit\", brul::Value::Number(2.0), true)?;"));
+    assert!(module.contains("component.declare(\"limit\", brul::Value::Number(2.0_f64), true)?;"));
     assert!(module.contains("fn script_fn_bump(component: &mut brul::Component"));
     assert!(module.contains("\"bump\" => {"));
     assert!(!module.contains("brul::script::parse("));
@@ -1085,9 +1085,9 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let module = emit::module(source).expect("module");
-    assert!(module.contains("let fixed: f64 = (&brul::Value::Number(3.0)).try_into()?;"));
-    assert!(module.contains("let mut step: f64 = (&brul::Value::Number(2.0)).try_into()?;"));
-    assert!(module.contains("let mut step: f64 = (&brul::Value::Number(5.0)).try_into()?;"));
+    assert!(module.contains("let fixed: f64 = (&brul::Value::Number(3.0_f64)).try_into()?;"));
+    assert!(module.contains("let mut step: f64 = (&brul::Value::Number(2.0_f64)).try_into()?;"));
+    assert!(module.contains("let mut step: f64 = (&brul::Value::Number(5.0_f64)).try_into()?;"));
     assert!(!module.contains("component.declare(\"step\""));
     assert!(!module.contains("component.push_frame()"));
 }
@@ -1114,7 +1114,13 @@ window Demo (title: "demo") {
 fn operated(source: &str) -> String {
     let expression = brul_syntax::parser::parse_expression(source).expect("expression parses");
     let names = emit::identifiers(&expression);
-    emit::operation(&expression, &names, &emit::State::default()).expect("operation")
+    emit::operation(
+        &expression,
+        &names,
+        &emit::State::default(),
+        &std::collections::HashMap::new(),
+    )
+    .expect("operation")
 }
 
 #[test]
@@ -1123,8 +1129,11 @@ fn emits_value_literals_and_reads() {
         operated("x"),
         "component.read_id(brul::VariableId::from_index(0))?"
     );
-    assert_eq!(operated("42"), "brul::Value::Number(42.0)");
-    assert_eq!(operated("\"hi\""), "brul::Value::String(\"hi\".into())");
+    assert_eq!(operated("42"), "brul::Value::Number(42.0_f64)");
+    assert_eq!(
+        operated("\"hi\""),
+        "brul::Value::String((\"hi\".to_owned()).into())"
+    );
     assert_eq!(operated("true"), "brul::Value::Bool(true)");
     assert_eq!(operated("null"), "brul::Value::Null");
     assert_eq!(
@@ -1133,7 +1142,7 @@ fn emits_value_literals_and_reads() {
     );
     assert_eq!(
         operated("a[0]"),
-        "brul::eval::read_index(&(component.read_id(brul::VariableId::from_index(0))?), &(brul::Value::Number(0.0)))?"
+        "brul::eval::read_index(&(component.read_id(brul::VariableId::from_index(0))?), &(brul::Value::Number(0.0_f64)))?"
     );
 }
 
@@ -1145,15 +1154,15 @@ fn emits_value_operations() {
     );
     assert_eq!(
         operated("1 + 2"),
-        "brul::eval::apply_binary(brul::ast::BinaryOp::Add, brul::Value::Number(1.0), brul::Value::Number(2.0))?"
+        "brul::Value::Number((1.0_f64) + (2.0_f64))"
     );
     assert_eq!(
         operated("[1, x]"),
-        "brul::Value::Array(vec![brul::Value::Number(1.0), component.read_id(brul::VariableId::from_index(0))?].into())"
+        "brul::Value::Array(vec![brul::Value::Number(1.0_f64), component.read_id(brul::VariableId::from_index(0))?].into())"
     );
     assert_eq!(
         operated("{ a: 1 }"),
-        "brul::Value::Object(vec![(\"a\".to_owned(), brul::Value::Number(1.0))].into())"
+        "brul::Value::Object(vec![(\"a\".to_owned(), brul::Value::Number(1.0_f64))].into())"
     );
     assert_eq!(
         operated("`v=${x}`"),
@@ -1165,7 +1174,7 @@ fn emits_value_operations() {
 fn emits_value_calls() {
     assert_eq!(
         operated("f(1)"),
-        "{ let arguments = vec![brul::Value::Number(1.0)]; brul::eval::call(component, \"f\", arguments)? }"
+        "{ let arguments = vec![brul::Value::Number(1.0_f64)]; brul::eval::call(component, \"f\", arguments)? }"
     );
     assert!(
         operated("every(100, tick)").contains("component.every(interval, \"tick\")?"),
@@ -1184,7 +1193,7 @@ fn emits_value_calls() {
 fn emits_value_assignments() {
     let source = operated("a.b = 1");
     assert!(
-        source.contains("let value = brul::Value::Number(1.0);"),
+        source.contains("let value = brul::Value::Number(1.0_f64);"),
         "{source}"
     );
     assert!(
@@ -1329,7 +1338,7 @@ fn emits_component_properties() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("name: \"Badge\","));
     assert!(module.contains(
-        "brul::PropArgument { name: brul::VariableId::from_index(0), ty: brul::PropType::String, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = brul::Value::String(\"hi\".into()); Ok(value) }"
+        "brul::PropArgument { name: brul::VariableId::from_index(0), ty: brul::PropType::String, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = brul::Value::String((\"hi\".to_owned()).into()); Ok(value) }"
     ));
     assert!(module.contains(
         "brul::PropArgument { name: brul::VariableId::from_index(1), ty: brul::PropType::Number,"
