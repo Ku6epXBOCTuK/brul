@@ -33,6 +33,10 @@ impl Frame {
         &self.pixels
     }
 
+    pub fn pixels_mut(&mut self) -> &mut [u8] {
+        &mut self.pixels
+    }
+
     pub fn resize(&mut self, width: u32, height: u32) {
         if self.width == width && self.height == height {
             return;

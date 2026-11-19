@@ -4,9 +4,7 @@ use brul_gui::{Atlas, Dirty, WidgetSnapshot};
 use winit::window::{Window, WindowLevel};
 
 use crate::gpu::Gpu;
-#[cfg(windows)]
-use crate::layered::LayeredSurface;
-use crate::software::{SoftbufferPresenter, SoftwareRenderer};
+use crate::software::SoftwareRenderer;
 use crate::window::{Backend, WindowError};
 
 pub(crate) trait Surface {
@@ -60,38 +58,6 @@ impl Surface for Arc<dyn Window> {
             WindowLevel::Normal
         };
         self.as_ref().set_window_level(level);
-    }
-}
-
-pub(crate) enum Presenter {
-    Softbuffer(SoftbufferPresenter),
-    #[cfg(windows)]
-    Layered(LayeredSurface),
-}
-
-impl Presenter {
-    pub(crate) fn resize(&mut self, width: u32, height: u32) {
-        match self {
-            Self::Softbuffer(presenter) => presenter.resize(width, height),
-            #[cfg(windows)]
-            Self::Layered(presenter) => presenter.resize(width, height),
-        }
-    }
-
-    pub(crate) fn clear(&mut self) -> bool {
-        match self {
-            Self::Softbuffer(presenter) => presenter.clear(),
-            #[cfg(windows)]
-            Self::Layered(presenter) => presenter.clear(),
-        }
-    }
-
-    pub(crate) fn present(&mut self, pixels: &[u8]) -> bool {
-        match self {
-            Self::Softbuffer(presenter) => presenter.present(pixels),
-            #[cfg(windows)]
-            Self::Layered(presenter) => presenter.present(pixels),
-        }
     }
 }
 

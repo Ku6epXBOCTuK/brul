@@ -19,7 +19,7 @@ use windows::core::Error as WinError;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
 
-use crate::window::WindowError;
+use crate::window::{CLEAR, WindowError};
 
 thread_local! {
     static LAYERED: RefCell<Vec<isize>> = const { RefCell::new(Vec::new()) };
@@ -206,6 +206,22 @@ impl LayeredSurface {
         // NOTE: pixels points at width * height * 4 bytes of the DIB section.
         unsafe {
             ptr::write_bytes(self.pixels, 0, width as usize * height as usize * 4);
+        }
+        self.update()
+    }
+
+    pub(crate) fn clear_opaque(&mut self) -> bool {
+        let (width, height) = self.size;
+        if width == 0 || height == 0 {
+            return false;
+        }
+        let channel = |value: f64| (value * 255.0).round() as u8;
+        let background = pack_argb(&[channel(CLEAR.r), channel(CLEAR.g), channel(CLEAR.b), 255]);
+        unsafe {
+            let target = self.pixels as *mut u32;
+            for index in 0..(width as usize * height as usize) {
+                *target.add(index) = background;
+            }
         }
         self.update()
     }
