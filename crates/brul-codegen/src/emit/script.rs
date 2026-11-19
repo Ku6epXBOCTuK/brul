@@ -20,7 +20,7 @@ pub(super) fn module(
     names: &Names<'_>,
 ) -> Result<String, Error> {
     let mut out = String::new();
-    let _ = writeln!(out, "\npub fn {name}() -> Option<brul::Script<'static>> {{");
+    let _ = writeln!(out, "\npub fn {name}() -> Option<brul::Script> {{");
     let Some(program) = program else {
         out.push_str("    None\n}\n");
         return Ok(out);

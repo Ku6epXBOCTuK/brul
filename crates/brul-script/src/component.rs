@@ -2,14 +2,11 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::rc::Rc;
-use std::sync::Arc;
 
 use brul_reactive::Signal;
-use brul_syntax::script::Function;
 
 use crate::environment::Environment;
 use crate::error::Error;
-use crate::execute::execute;
 use crate::host::Host;
 use crate::names::VariableId;
 use crate::value::Value;
@@ -46,7 +43,6 @@ pub struct Component {
     index: Index,
     environment: Environment,
     properties: Vec<Option<Property>>,
-    functions: Vec<Arc<Function>>,
     dispatch: Option<crate::ScriptDispatch>,
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
@@ -64,7 +60,6 @@ impl Default for Component {
             index: Index::default(),
             environment: Environment::default(),
             properties: Vec::new(),
-            functions: Vec::new(),
             dispatch: None,
             host: None,
             pending_every: Vec::new(),
@@ -175,19 +170,6 @@ impl Component {
         }
     }
 
-    pub fn define_function(&mut self, function: impl Into<Arc<Function>>) -> Result<(), Error> {
-        let function = function.into();
-        if self.has_function(&function.name) {
-            return Err(Error::FunctionRedeclared(function.name.clone()));
-        }
-        self.functions.push(function);
-        Ok(())
-    }
-
-    pub fn has_function(&self, name: &str) -> bool {
-        self.functions.iter().any(|function| function.name == name)
-    }
-
     pub fn commands(&self) -> Vec<&'static str> {
         match &self.host {
             Some(host) => host.commands(),
@@ -196,30 +178,10 @@ impl Component {
     }
 
     pub fn call_function(&mut self, name: &str, arguments: Vec<Value>) -> Result<Value, Error> {
-        if let Some(dispatch) = self.dispatch {
-            return dispatch(self, name, arguments);
+        match self.dispatch {
+            Some(dispatch) => dispatch(self, name, arguments),
+            None => Err(Error::UnknownFunction(name.to_owned())),
         }
-        let Some(found) = self.functions.iter().find(|function| function.name == name) else {
-            return Err(Error::UnknownFunction(name.to_owned()));
-        };
-        let function = Arc::clone(found);
-        if function.params.len() != arguments.len() {
-            return Err(Error::FunctionArity {
-                name: function.name.clone(),
-                expected: function.params.len(),
-                found: arguments.len(),
-            });
-        }
-        self.environment.push_frame();
-        for (param, argument) in function.params.iter().zip(arguments) {
-            let id = self
-                .id(param)
-                .ok_or_else(|| Error::Undefined(param.to_owned()))?;
-            self.environment.declare(id, argument, false)?;
-        }
-        let result = execute(self, &function.body);
-        self.environment.pop_frame();
-        result.map(|()| Value::Null)
     }
 
     pub fn declare(&mut self, name: &str, value: Value, constant: bool) -> Result<(), Error> {

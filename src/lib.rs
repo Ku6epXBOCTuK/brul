@@ -20,13 +20,10 @@ pub use brul_gui as gui;
 pub use brul_gui::{Theme, UnknownTheme};
 pub use brul_macros::{command, host};
 pub use brul_script::eval;
-pub use brul_script::{
-    Component, Error, Fields, Host, Script, Value, Variable, VariableId, execute_program,
-};
+pub use brul_script::{Component, Error, Fields, Host, Script, Value, Variable, VariableId};
 pub use brul_style as style;
 pub use brul_syntax::ast;
 pub use brul_syntax::markup::PropType;
-pub use brul_syntax::script;
 pub use brul_window::perf;
 pub use brul_window::{Backend, UnknownBackend, WindowConfig, WindowPosition};
 pub use each::RowMatcher;

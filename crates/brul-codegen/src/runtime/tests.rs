@@ -3,9 +3,7 @@ use super::event::EventHost;
 use super::*;
 use brul_gui::{Texture, Widget, WidgetId, WidgetTree};
 use brul_script::{Component, Error as ScriptError, Host, Value};
-use brul_syntax::ast::{BinaryOp, Expr, ExprKind, Position};
 use brul_syntax::markup::PropType;
-use brul_syntax::script::{Function, Statement};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -18,16 +16,20 @@ macro_rules! expr {
     }};
 }
 
-fn number(value: f64) -> Expr {
-    Expr::new(ExprKind::Number(value), Position::default())
-}
-
 const NAMES: &[&str] = &["name", "visible", "x", "y", "title", "on", "off", "icon"];
 
 fn component() -> Component {
     let mut component = Component::new();
     component.set_names(NAMES);
     component
+}
+
+fn noop(_: &mut Component, _: &str, _: Vec<Value>) -> Result<Value, ScriptError> {
+    Ok(Value::Null)
+}
+
+fn failing(_: &mut Component, _: &str, _: Vec<Value>) -> Result<Value, ScriptError> {
+    Err(ScriptError::DivisionByZero)
 }
 
 fn declared(name: &str, value: Value) -> Component {
@@ -110,14 +112,7 @@ fn a_binding_expression_reaches_the_tree_while_it_runs() {
 #[test]
 fn an_event_raised_from_an_expression_is_delivered_after_the_expression_returns() {
     let handle = Rc::new(RefCell::new(Component::new()));
-    handle
-        .borrow_mut()
-        .define_function(Function {
-            name: "read".to_owned(),
-            params: Vec::new(),
-            body: Vec::new(),
-        })
-        .unwrap();
+    handle.borrow_mut().set_dispatch(noop);
     handle.borrow_mut().set_host(EventHost {
         events: vec![ComponentEvent {
             name: "go",
@@ -304,14 +299,7 @@ fn event_host_checks_the_argument_types() {
 #[test]
 fn event_host_runs_the_component_function() {
     let component = Rc::new(RefCell::new(Component::new()));
-    component
-        .borrow_mut()
-        .define_function(Function {
-            name: "on_click".to_owned(),
-            params: Vec::new(),
-            body: Vec::new(),
-        })
-        .unwrap();
+    component.borrow_mut().set_dispatch(noop);
     let mut host = event_host(vec![event("on_click", &[], &component)]);
     assert_eq!(host.call("click", &[]), Ok(Value::Null));
 }
@@ -319,22 +307,7 @@ fn event_host_runs_the_component_function() {
 #[test]
 fn event_host_queues_the_body_and_leaves_errors_to_the_delivery() {
     let component = Rc::new(RefCell::new(Component::new()));
-    let divide_by_zero = Expr::new(
-        ExprKind::Binary {
-            op: BinaryOp::Div,
-            left: Box::new(number(1.0)),
-            right: Box::new(number(0.0)),
-        },
-        Position::default(),
-    );
-    component
-        .borrow_mut()
-        .define_function(Function {
-            name: "on_click".to_owned(),
-            params: Vec::new(),
-            body: vec![Statement::Expr(divide_by_zero)],
-        })
-        .unwrap();
+    component.borrow_mut().set_dispatch(failing);
     let mut host = event_host(vec![event("on_click", &[], &component)]);
     assert_eq!(host.call("click", &[]), Ok(Value::Null));
     let PendingEvent {

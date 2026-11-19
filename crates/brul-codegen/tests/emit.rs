@@ -117,7 +117,7 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
     ]
 }
 
-pub fn script() -> Option<brul::Script<'static>> {
+pub fn script() -> Option<brul::Script> {
     None
 }
 
@@ -338,7 +338,7 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
     ]
 }
 
-pub fn script() -> Option<brul::Script<'static>> {
+pub fn script() -> Option<brul::Script> {
     None
 }
 
@@ -982,7 +982,7 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let module = emit::module(source).expect("module");
-    assert!(module.contains("pub fn script() -> Option<brul::Script<'static>> {"));
+    assert!(module.contains("pub fn script() -> Option<brul::Script> {"));
     assert!(module.contains("fn script_init(component: &mut brul::Component)"));
     assert!(module.contains("component.declare(\"limit\", brul::Value::Number(2.0), true)?;"));
     assert!(module.contains("fn script_fn_bump(component: &mut brul::Component"));
@@ -1167,7 +1167,7 @@ fn emits_imported_component() {
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("pub fn badge_view(theme: Option<&str>"));
-    assert!(module.contains("pub fn badge_script() -> Option<brul::Script<'static>>"));
+    assert!(module.contains("pub fn badge_script() -> Option<brul::Script>"));
     assert!(module.contains("let built = brul::instance(build, component, brul::Instance {"));
     assert!(module.contains("bindings.extend(built.bindings);"));
     assert!(module.contains("props.extend(built.props);"));

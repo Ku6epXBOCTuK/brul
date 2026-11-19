@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_script::{Component, Script, Value, VariableId, execute_program};
+use brul_script::{Component, Script, Value, VariableId};
 use brul_syntax::markup::PropType;
 use brul_syntax::style::Stylesheet;
 
@@ -32,7 +32,7 @@ pub struct PropArgument {
 pub struct Instance<'a> {
     pub theme: Option<&'a str>,
     pub view: View,
-    pub script: Option<Script<'a>>,
+    pub script: Option<Script>,
     pub name: &'static str,
     pub names: &'static [&'static str],
     pub props: &'a [PropArgument],
@@ -83,9 +83,6 @@ fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), Vie
         });
     }
     match instance.script {
-        Some(Script::Program(program)) => {
-            execute_program(&mut component.borrow_mut(), program).map_err(ViewError::from)
-        }
         Some(Script::Generated { init, dispatch }) => {
             component.borrow_mut().set_dispatch(dispatch);
             init(&mut component.borrow_mut()).map_err(ViewError::from)

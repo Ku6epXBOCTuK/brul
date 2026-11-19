@@ -12,7 +12,7 @@ use crate::handle::{Handle, Message, take};
 use crate::ui::CommandHost;
 use crate::{
     Build, Built, Component, ComponentHandle, Host, Script, Theme, Ui, Value, ViewError,
-    WindowConfig, execute_program, script,
+    WindowConfig,
 };
 
 pub struct WindowDef<T: Theme> {
@@ -24,7 +24,7 @@ pub struct WindowDef<T: Theme> {
 /// Запускает окна по модулю, сгенерированному из `.brul`.
 pub fn run_generated<T: Theme>(
     windows: Vec<WindowDef<T>>,
-    script: Option<Script<'_>>,
+    script: Option<Script>,
     names: &'static [&'static str],
     theme: Option<T>,
     seeds: &[(&str, Value)],
@@ -37,7 +37,7 @@ pub fn run_generated<T: Theme>(
 /// фоновый поток пишет им в DSL, цикл просыпается и перерисовывает окна.
 pub fn run_generated_with<T: Theme>(
     windows: Vec<WindowDef<T>>,
-    script: Option<Script<'_>>,
+    script: Option<Script>,
     names: &'static [&'static str],
     theme: Option<T>,
     seeds: &[(&str, Value)],
@@ -69,9 +69,6 @@ pub fn run_generated_with<T: Theme>(
         theme: Rc::clone(&shown),
     });
     let pending = std::mem::take(&mut *commands.borrow_mut());
-    if let Some(Script::Program(program)) = script {
-        check(&component.borrow(), program)?;
-    }
     let runtime = Rc::new(RefCell::new(Runtime::new(
         windows, component, commands, theme, shown, pending,
     )));
@@ -102,19 +99,9 @@ pub fn run_generated_with<T: Theme>(
     Ok(())
 }
 
-fn check(
-    component: &Component,
-    program: &script::Program,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut external = component.commands();
-    external.extend_from_slice(component.names());
-    script::validate(program, &external)?;
-    Ok(())
-}
-
 pub(crate) fn generated_component(
     names: &'static [&'static str],
-    script: Option<Script<'_>>,
+    script: Option<Script>,
     seeds: &[(&str, Value)],
 ) -> Result<ComponentHandle, Box<dyn std::error::Error>> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
@@ -122,16 +109,9 @@ pub(crate) fn generated_component(
     for (name, value) in seeds {
         component.borrow_mut().declare(name, value.clone(), false)?;
     }
-    if let Some(script) = script {
-        match script {
-            Script::Program(program) => {
-                execute_program(&mut component.borrow_mut(), program)?;
-            }
-            Script::Generated { init, dispatch } => {
-                component.borrow_mut().set_dispatch(dispatch);
-                init(&mut component.borrow_mut())?;
-            }
-        }
+    if let Some(Script::Generated { init, dispatch }) = script {
+        component.borrow_mut().set_dispatch(dispatch);
+        init(&mut component.borrow_mut())?;
     }
     Ok(component)
 }
@@ -142,7 +122,7 @@ pub(crate) fn generated_built<T: Theme>(
     names: &'static [&'static str],
     theme: Option<T>,
     seeds: &[(&str, Value)],
-    script: Option<Script<'_>>,
+    script: Option<Script>,
 ) -> Result<(ComponentHandle, Built, Vec<crate::Structure>), Box<dyn std::error::Error>> {
     let component = generated_component(names, script, seeds)?;
     let mut build = Build::new();
@@ -355,7 +335,6 @@ mod tests {
     use std::collections::HashMap;
 
     use brul_gui::{Widget, WidgetEvent, WidgetId};
-    use brul_syntax::ast::{Expr, ExprKind, Position};
 
     use crate::ui::{CommandHost, Ui};
     use crate::{Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, Value};
@@ -364,6 +343,42 @@ mod tests {
 
     fn name(component: &mut crate::Component) -> Result<Value, crate::Error> {
         component.read("name")
+    }
+
+    fn noop_init(_: &mut Component) -> Result<(), crate::Error> {
+        Ok(())
+    }
+
+    fn noop(_: &mut Component, _: &str, _: Vec<Value>) -> Result<Value, crate::Error> {
+        Ok(Value::Null)
+    }
+
+    fn declares_name(component: &mut Component) -> Result<(), crate::Error> {
+        component.declare("name", Value::String("from script".into()), false)
+    }
+
+    fn mark(component: &mut Component, name: &str, _: Vec<Value>) -> Result<Value, crate::Error> {
+        if name != "mark" {
+            return Err(crate::Error::UnknownFunction(name.to_owned()));
+        }
+        component.assign("name", Value::String("called".into()))?;
+        Ok(Value::Null)
+    }
+
+    fn mark_with_arg(
+        component: &mut Component,
+        name: &str,
+        arguments: Vec<Value>,
+    ) -> Result<Value, crate::Error> {
+        if name != "mark" {
+            return Err(crate::Error::UnknownFunction(name.to_owned()));
+        }
+        component.push_frame();
+        component.declare("label", arguments[0].clone(), false)?;
+        let value = component.read("label")?;
+        component.assign("name", value)?;
+        component.pop_frame();
+        Ok(Value::Null)
     }
 
     fn generated_view(
@@ -409,7 +424,7 @@ mod tests {
     fn assembled(
         theme: Option<TestTheme>,
         seeds: &[(&str, Value)],
-        script: Option<Script<'_>>,
+        script: Option<Script>,
     ) -> (WidgetId, Ui<TestTheme>) {
         let (component, built, structures) =
             generated_built(generated_view, NAMES, theme, seeds, script).expect("launch succeeds");
@@ -430,18 +445,11 @@ mod tests {
 
     #[test]
     fn generated_launch_runs_the_script() {
-        let program = script::Program {
-            functions: Vec::new(),
-            statements: vec![script::Statement::Let {
-                constant: false,
-                name: "name".to_owned(),
-                value: Some(Expr::new(
-                    ExprKind::String("from script".to_owned()),
-                    Position::default(),
-                )),
-            }],
+        let script = Script::Generated {
+            init: declares_name,
+            dispatch: noop,
         };
-        let (id, ui) = assembled(None, &[], Some(Script::Program(&program)));
+        let (id, ui) = assembled(None, &[], Some(script));
         brul_reactive::flush();
         assert!(!ui.tree.borrow_mut().set_text(id, "from script".to_owned()));
     }
@@ -612,29 +620,11 @@ mod tests {
     #[test]
     fn a_handle_call_runs_the_script_function() {
         let seeds = [("name", Value::String("".into()))];
-        let program = script::Program {
-            functions: vec![Arc::new(script::Function {
-                name: "mark".to_owned(),
-                params: Vec::new(),
-                body: vec![script::Statement::Expr(Expr::new(
-                    ExprKind::Assign {
-                        target: Box::new(Expr::new(
-                            ExprKind::Ident("name".to_owned()),
-                            Position::default(),
-                        )),
-                        op: brul_syntax::ast::AssignOp::Set,
-                        value: Box::new(Expr::new(
-                            ExprKind::String("called".to_owned()),
-                            Position::default(),
-                        )),
-                    },
-                    Position::default(),
-                ))],
-            })],
-            statements: Vec::new(),
+        let script = Script::Generated {
+            init: noop_init,
+            dispatch: mark,
         };
-        let component =
-            generated_component(NAMES, Some(Script::Program(&program)), &seeds).expect("component");
+        let component = generated_component(NAMES, Some(script), &seeds).expect("component");
         let defs = vec![WindowDef {
             name: "Only",
             config: WindowConfig::default(),
@@ -665,29 +655,11 @@ mod tests {
     fn a_handle_call_passes_arguments() {
         const CALL_NAMES: &[&str] = &["name", "label"];
         let seeds = [("name", Value::from(""))];
-        let program = script::Program {
-            functions: vec![Arc::new(script::Function {
-                name: "mark".to_owned(),
-                params: vec!["label".to_owned()],
-                body: vec![script::Statement::Expr(Expr::new(
-                    ExprKind::Assign {
-                        target: Box::new(Expr::new(
-                            ExprKind::Ident("name".to_owned()),
-                            Position::default(),
-                        )),
-                        op: brul_syntax::ast::AssignOp::Set,
-                        value: Box::new(Expr::new(
-                            ExprKind::Ident("label".to_owned()),
-                            Position::default(),
-                        )),
-                    },
-                    Position::default(),
-                ))],
-            })],
-            statements: Vec::new(),
+        let script = Script::Generated {
+            init: noop_init,
+            dispatch: mark_with_arg,
         };
-        let component = generated_component(CALL_NAMES, Some(Script::Program(&program)), &seeds)
-            .expect("component");
+        let component = generated_component(CALL_NAMES, Some(script), &seeds).expect("component");
         let mut runtime = Runtime::new(
             defs(),
             component,
@@ -763,39 +735,34 @@ mod tests {
         key_view(component, "handleSettingsKey")
     }
 
-    fn exit_program() -> script::Program {
-        let exit = script::Statement::Expr(Expr::new(
-            ExprKind::Call {
-                target: Box::new(Expr::new(
-                    ExprKind::Ident("exit".to_owned()),
-                    Position::default(),
-                )),
-                args: Vec::new(),
-            },
-            Position::default(),
-        ));
-        script::Program {
-            functions: ["handleKey", "handleSettingsKey"]
-                .into_iter()
-                .map(|name| {
-                    Arc::new(script::Function {
-                        name: name.to_owned(),
-                        params: vec!["ev".to_owned()],
-                        body: vec![exit.clone()],
-                    })
-                })
-                .collect(),
-            statements: Vec::new(),
+    fn key_exit(
+        component: &mut Component,
+        name: &str,
+        arguments: Vec<Value>,
+    ) -> Result<Value, crate::Error> {
+        if name != "handleKey" && name != "handleSettingsKey" {
+            return Err(crate::Error::UnknownFunction(name.to_owned()));
         }
+        component.push_frame();
+        component.declare("ev", arguments[0].clone(), false)?;
+        let event = component.read("ev")?;
+        let code = crate::eval::read_field(&event, "code")?;
+        component.pop_frame();
+        if matches!(code, Value::String(text) if text.as_ref() == "Escape") {
+            crate::eval::call(component, "exit", Vec::new())?;
+        }
+        Ok(Value::Null)
     }
 
     #[test]
     fn a_key_closes_only_the_window_that_received_it() {
         let names: &'static [&'static str] =
             &["handleKey", "handleSettingsKey", "exit", "ev", "code"];
-        let program = exit_program();
-        let component =
-            generated_component(names, Some(Script::Program(&program)), &[]).expect("component");
+        let script = Script::Generated {
+            init: noop_init,
+            dispatch: key_exit,
+        };
+        let component = generated_component(names, Some(script), &[]).expect("component");
         let commands = Rc::new(RefCell::new(Vec::new()));
         let keys = HashMap::from([
             ("Picker".to_owned(), WindowKey(0)),
@@ -844,38 +811,6 @@ mod tests {
 
         assert_eq!(commands, vec![WindowCommand::Close]);
         assert!(runtime.uis.contains_key(&WindowKey(0)));
-    }
-
-    fn checked(source: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let component = generated_component(NAMES, None, &[]).expect("component");
-        component.borrow_mut().set_host(CommandHost {
-            commands: Rc::new(RefCell::new(Vec::new())),
-            app: None,
-            windows: Rc::new(HashMap::new()),
-            theme: Rc::new(RefCell::new(None)),
-        });
-        let program = script::parse(source).expect("script");
-        check(&component.borrow(), &program)
-    }
-
-    #[test]
-    fn an_unknown_command_is_caught_before_the_loop() {
-        let error = checked("trayShow();").expect_err("the typo passes");
-
-        assert!(error.to_string().contains("trayShow"), "{error}");
-    }
-
-    #[test]
-    fn builtins_script_functions_and_seeds_pass_the_check() {
-        checked(
-            "function refresh() {\n\
-               name = \"live\";\n\
-             }\n\
-             let current = theme();\n\
-             refresh();\n\
-             exit();\n",
-        )
-        .expect("known names");
     }
 
     #[test]

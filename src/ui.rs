@@ -581,15 +581,13 @@ mod tests {
 
     use std::cell::RefCell;
     use std::rc::Rc;
-    use std::sync::Arc;
 
     use brul_gui::{Direction, Size, TextEngine, Texture, Widget};
-    use brul_syntax::ast::{AssignOp, Expr, ExprKind, Position};
     use brul_syntax::markup::PropType;
     use brul_window::WindowCommand;
 
     use crate::run::generated_built;
-    use crate::{Binding, BindingTarget, Component, HandlerEvent, Script, script};
+    use crate::{Binding, BindingTarget, Component, HandlerEvent, Script};
 
     const NAMES: &[&str] = &[
         "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code",
@@ -674,20 +672,12 @@ mod tests {
 
     #[test]
     fn structure_rebuilds_when_its_value_changes() {
-        let program = script::Program {
-            functions: Vec::new(),
-            statements: vec![script::Statement::Let {
-                constant: false,
-                name: "shown".to_owned(),
-                value: Some(Expr::new(ExprKind::Bool(false), Position::default())),
-            }],
-        };
         let (component, built, structures) = generated_built(
             structured_view,
             NAMES,
             None,
             &[],
-            Some(Script::Program(&program)),
+            Some(script_with(shown_false)),
         )
         .expect("launch succeeds");
         let parent = built.widget.id();
@@ -842,30 +832,12 @@ mod tests {
 
     #[test]
     fn the_effect_of_a_removed_branch_dies_with_its_widget() {
-        let let_expr = |name: &str, value: Expr| script::Statement::Let {
-            constant: false,
-            name: name.to_owned(),
-            value: Some(value),
-        };
-        let program = script::Program {
-            functions: Vec::new(),
-            statements: vec![
-                let_expr(
-                    "shown",
-                    Expr::new(ExprKind::Bool(false), Position::default()),
-                ),
-                let_expr(
-                    "label",
-                    Expr::new(ExprKind::String("bound".to_owned()), Position::default()),
-                ),
-            ],
-        };
         let (component, built, structures) = generated_built(
             bound_view,
             NAMES,
             None,
             &[],
-            Some(Script::Program(&program)),
+            Some(script_with(shown_and_label)),
         )
         .expect("launch succeeds");
         let mut ui = Ui::assemble(component, built, bound_view, None, structures, None);
@@ -1341,7 +1313,23 @@ mod tests {
         assert_eq!((node.x, node.y), (4, 6));
     }
 
-    fn component_with(functions: Vec<script::Function>, declared: &[&str]) -> ComponentHandle {
+    fn handler_dispatch(
+        component: &mut Component,
+        name: &str,
+        arguments: Vec<Value>,
+    ) -> Result<Value, Error> {
+        match name {
+            "clicked" | "closing" | "tick" | "first" => {
+                component.assign("ran", Value::Bool(true))?;
+            }
+            "second" => component.assign("off", Value::Bool(true))?,
+            "pressed" => component.assign("seen", arguments[0].clone())?,
+            _ => return Err(Error::UnknownFunction(name.to_owned())),
+        }
+        Ok(Value::Null)
+    }
+
+    fn component_with(declared: &[&str]) -> ComponentHandle {
         let mut component = Component::new();
         component.set_names(NAMES);
         for name in declared {
@@ -1349,31 +1337,57 @@ mod tests {
                 .declare(name, Value::Null, false)
                 .expect("declared");
         }
-        for function in functions {
-            component.define_function(function).expect("function");
-        }
+        component.set_dispatch(handler_dispatch);
         Rc::new(RefCell::new(component))
     }
 
-    fn function(name: &str, params: Vec<&str>, body: Vec<script::Statement>) -> script::Function {
-        script::Function {
-            name: name.to_owned(),
-            params: params.into_iter().map(str::to_owned).collect(),
-            body,
+    fn noop_init(_: &mut Component) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn noop_dispatch(_: &mut Component, _: &str, _: Vec<Value>) -> Result<Value, Error> {
+        Ok(Value::Null)
+    }
+
+    fn raise_dispatch(
+        component: &mut Component,
+        name: &str,
+        arguments: Vec<Value>,
+    ) -> Result<Value, Error> {
+        if name == "raise" {
+            crate::eval::call(component, "clicked", arguments)
+        } else {
+            Err(Error::UnknownFunction(name.to_owned()))
         }
     }
 
-    fn let_true(name: &str) -> script::Statement {
-        let value = Expr::new(ExprKind::Bool(true), Position::default());
-        let target = Expr::new(ExprKind::Ident(name.to_owned()), Position::default());
-        script::Statement::Expr(Expr::new(
-            ExprKind::Assign {
-                target: Box::new(target),
-                op: AssignOp::Set,
-                value: Box::new(value),
-            },
-            Position::default(),
-        ))
+    fn applied_dispatch(
+        component: &mut Component,
+        name: &str,
+        _: Vec<Value>,
+    ) -> Result<Value, Error> {
+        if name == "applied" {
+            component.assign("label", Value::String("after".into()))?;
+            Ok(Value::Null)
+        } else {
+            Err(Error::UnknownFunction(name.to_owned()))
+        }
+    }
+
+    fn script_with(init: fn(&mut Component) -> Result<(), Error>) -> Script {
+        Script::Generated {
+            init,
+            dispatch: noop_dispatch,
+        }
+    }
+
+    fn shown_false(component: &mut Component) -> Result<(), Error> {
+        component.declare("shown", Value::Bool(false), false)
+    }
+
+    fn shown_and_label(component: &mut Component) -> Result<(), Error> {
+        component.declare("shown", Value::Bool(false), false)?;
+        component.declare("label", Value::String("bound".into()), false)
     }
 
     fn dispatching(
@@ -1403,10 +1417,7 @@ mod tests {
 
     #[test]
     fn dispatch_calls_the_handler_of_the_widget() {
-        let component = component_with(
-            vec![function("clicked", Vec::new(), vec![let_true("ran")])],
-            &["ran"],
-        );
+        let component = component_with(&["ran"]);
         let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
             vec![Handler::new(
                 &component,
@@ -1421,13 +1432,7 @@ mod tests {
 
     #[test]
     fn dispatch_runs_the_first_of_two_handlers_of_a_widget() {
-        let component = component_with(
-            vec![
-                function("first", Vec::new(), vec![let_true("ran")]),
-                function("second", Vec::new(), vec![let_true("off")]),
-            ],
-            &["ran", "off"],
-        );
+        let component = component_with(&["ran", "off"]);
         let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
             vec![
                 Handler::new(&component, Some(id), HandlerEvent::Click, "first"),
@@ -1442,17 +1447,7 @@ mod tests {
 
     #[test]
     fn dispatch_passes_the_key_code() {
-        let target = Expr::new(ExprKind::Ident("seen".to_owned()), Position::default());
-        let value = Expr::new(ExprKind::Ident("code".to_owned()), Position::default());
-        let body = vec![script::Statement::Expr(Expr::new(
-            ExprKind::Assign {
-                target: Box::new(target),
-                op: AssignOp::Set,
-                value: Box::new(value),
-            },
-            Position::default(),
-        ))];
-        let component = component_with(vec![function("pressed", vec!["code"], body)], &["seen"]);
+        let component = component_with(&["seen"]);
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| {
             vec![Handler::new(&component, None, HandlerEvent::Key, "pressed")]
         });
@@ -1478,10 +1473,7 @@ mod tests {
 
     #[test]
     fn a_close_handler_keeps_the_window_open() {
-        let component = component_with(
-            vec![function("closing", Vec::new(), vec![let_true("ran")])],
-            &["ran"],
-        );
+        let component = component_with(&["ran"]);
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| {
             vec![Handler::new(
                 &component,
@@ -1497,7 +1489,7 @@ mod tests {
 
     #[test]
     fn a_close_without_a_handler_closes_the_window() {
-        let component = component_with(Vec::new(), &[]);
+        let component = component_with(&[]);
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
 
         assert_eq!(
@@ -1508,10 +1500,7 @@ mod tests {
 
     #[test]
     fn dispatch_runs_a_timer() {
-        let component = component_with(
-            vec![function("tick", Vec::new(), vec![let_true("ran")])],
-            &["ran"],
-        );
+        let component = component_with(&["ran"]);
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
         ui.dispatch(&[WidgetEvent::Timer("tick".into())]);
         assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
@@ -1519,7 +1508,7 @@ mod tests {
 
     #[test]
     fn dispatch_ignores_events_without_a_handler() {
-        let component = component_with(Vec::new(), &[]);
+        let component = component_with(&[]);
         let (id, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
         let other = Widget::text("other").id();
         assert!(
@@ -1531,7 +1520,7 @@ mod tests {
 
     #[test]
     fn dispatch_returns_commands_it_cannot_handle() {
-        let component = component_with(Vec::new(), &[]);
+        let component = component_with(&[]);
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
         ui.commands.borrow_mut().push(WindowCommand::Exit);
         assert_eq!(ui.dispatch(&[]), vec![WindowCommand::Exit]);
@@ -1550,36 +1539,6 @@ mod tests {
             vec![WindowCommand::SetTheme("dark".to_owned())]
         );
         assert!(ui.theme.is_none());
-    }
-
-    fn raise(name: &str) -> script::Statement {
-        script::Statement::Expr(Expr::new(
-            ExprKind::Call {
-                target: Box::new(Expr::new(
-                    ExprKind::Ident(name.to_owned()),
-                    Position::default(),
-                )),
-                args: Vec::new(),
-            },
-            Position::default(),
-        ))
-    }
-
-    fn assign_string(name: &str, value: &str) -> script::Statement {
-        script::Statement::Expr(Expr::new(
-            ExprKind::Assign {
-                target: Box::new(Expr::new(
-                    ExprKind::Ident(name.to_owned()),
-                    Position::default(),
-                )),
-                op: AssignOp::Set,
-                value: Box::new(Expr::new(
-                    ExprKind::String(value.to_owned()),
-                    Position::default(),
-                )),
-            },
-            Position::default(),
-        ))
     }
 
     fn child_view(
@@ -1613,13 +1572,9 @@ mod tests {
         if theme.is_some() {
             return Err(unknown_theme());
         }
-        let program = script::Program {
-            functions: vec![Arc::new(function(
-                "raise",
-                Vec::new(),
-                vec![raise("clicked")],
-            ))],
-            statements: Vec::new(),
+        let script = Script::Generated {
+            init: noop_init,
+            dispatch: raise_dispatch,
         };
         let events = [runtime::ComponentEvent {
             name: "clicked",
@@ -1633,7 +1588,7 @@ mod tests {
             runtime::Instance {
                 theme: theme.map(Theme::name),
                 view: child_view,
-                script: Some(Script::Program(&program)),
+                script: Some(script),
                 name: "Child",
                 names: NAMES,
                 props: &[],
@@ -1666,15 +1621,7 @@ mod tests {
             .expect("declared");
         let click = built.handlers[0].widget.expect("widget");
         let text = built.bindings[0].widget;
-        let program = script::Program {
-            functions: vec![Arc::new(function(
-                "applied",
-                Vec::new(),
-                vec![assign_string("label", "after")],
-            ))],
-            statements: Vec::new(),
-        };
-        crate::execute_program(&mut component.borrow_mut(), &program).expect("program");
+        component.borrow_mut().set_dispatch(applied_dispatch);
         let mut ui = Ui::assemble(component, built, raising_view, None, structures, None);
 
         ui.dispatch(&[WidgetEvent::Click(click)]);

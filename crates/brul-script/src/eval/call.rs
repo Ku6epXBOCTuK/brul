@@ -9,7 +9,6 @@ pub fn call(component: &mut Component, name: &str, values: Vec<Value>) -> Result
         "String" => call_string(values),
         "Number" => call_number(values),
         "len" => call_len(values),
-        _ if component.has_function(name) => component.call_function(name, values),
         _ if component.has_dispatch() => match component.call_function(name, values.clone()) {
             Err(Error::UnknownFunction(_)) => component.call(name, &values),
             result => result,
