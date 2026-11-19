@@ -1,8 +1,6 @@
 use std::any::Any;
-use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
-use std::rc::Rc;
 
 use brul_reactive::Signal;
 
@@ -10,6 +8,7 @@ use crate::environment::Environment;
 use crate::error::Error;
 use crate::host::Host;
 use crate::names::VariableId;
+use crate::scope::Scope;
 use crate::value::Value;
 
 struct Property {
@@ -33,12 +32,6 @@ impl Hasher for Fnv {
 
 type Index = HashMap<&'static str, VariableId, BuildHasherDefault<Fnv>>;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Variable {
-    pub name: VariableId,
-    pub value: Value,
-}
-
 pub struct Component {
     names: &'static [&'static str],
     index: Index,
@@ -48,8 +41,7 @@ pub struct Component {
     state: Option<Box<dyn Any>>,
     host: Option<Box<dyn Host>>,
     pending_every: Vec<(f64, String)>,
-    build_scopes: Vec<Rc<[Variable]>>,
-    scopes_snapshot: OnceCell<Rc<[Rc<[Variable]>]>>,
+    scope: Scope,
     // NOTE: environment frames and host functions are not signals, so their
     // changes wake every reader of them through this one coarse signal
     external: Signal<u64>,
@@ -66,8 +58,7 @@ impl Default for Component {
             state: None,
             host: None,
             pending_every: Vec::new(),
-            build_scopes: Vec::new(),
-            scopes_snapshot: OnceCell::new(),
+            scope: Scope::root(),
             external: Signal::new(0),
         }
     }
@@ -144,36 +135,12 @@ impl Component {
         std::mem::take(&mut self.pending_every)
     }
 
-    pub fn push_build_scope(&mut self, variables: Vec<Variable>) {
-        let scope: Rc<[Variable]> = variables.into();
-        self.environment.push_scope(Rc::clone(&scope));
-        self.build_scopes.push(scope);
-        self.scopes_snapshot.take();
+    pub fn set_scope(&mut self, scope: Scope) {
+        self.scope = scope;
     }
 
-    pub fn pop_build_scope(&mut self) {
-        self.environment.pop_scope();
-        self.build_scopes.pop();
-        self.scopes_snapshot.take();
-    }
-
-    pub fn build_scopes(&self) -> Rc<[Rc<[Variable]>]> {
-        Rc::clone(
-            self.scopes_snapshot
-                .get_or_init(|| Rc::from(self.build_scopes.clone())),
-        )
-    }
-
-    pub fn push_binding_scopes(&mut self, scopes: &Rc<[Rc<[Variable]>]>) {
-        for scope in scopes.iter() {
-            self.environment.push_scope(Rc::clone(scope));
-        }
-    }
-
-    pub fn pop_binding_scopes(&mut self, count: usize) {
-        for _ in 0..count {
-            self.environment.pop_scope();
-        }
+    pub fn scope(&self) -> &Scope {
+        &self.scope
     }
 
     pub fn commands(&self) -> Vec<&'static str> {
@@ -303,6 +270,7 @@ impl Component {
 #[cfg(test)]
 mod tests {
     use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
 
     use brul_reactive::{Effect, flush};
 

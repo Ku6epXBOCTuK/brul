@@ -49,6 +49,7 @@ pub(super) fn component(
     index: usize,
     emit: &mut Emit<'_>,
     counter: &mut usize,
+    frame: super::Frame<'_>,
 ) -> Result<(), Error> {
     let definition = &emit.registry.definitions[index];
     let name = &definition.name;
@@ -87,6 +88,7 @@ pub(super) fn component(
         counter,
         emit,
         index,
+        frame,
     )?;
     Ok(())
 }
@@ -381,12 +383,15 @@ fn write(
     counter: &mut usize,
     emit: &mut Emit<'_>,
     index: usize,
+    frame: Frame<'_>,
 ) -> Result<(), Error> {
     let bases = emit.bases;
     let names = emit.names;
     let state = emit.state;
     let prefix = emit.resource_prefix;
     let resources = emit.resources;
+    let scopes = &emit.scope_defs;
+    let scope = frame.scope;
     let dynamic_classes = &mut *emit.dynamic_classes;
     let base = bases[index].as_str();
     let Call {
@@ -411,8 +416,18 @@ fn write(
             out.line(format_args!("script: {base}_script(),"));
             out.line(format_args!("name: {name:?},"));
             out.line(format_args!("names: names(),"));
-            arguments(out, "props", &props, names, emit.state, resources, prefix)?;
-            arguments(out, "defaults", &defaults, names, emit.state, resources, prefix)?;
+            arguments(out, "props", &props, names, emit.state, resources, prefix, scopes, scope)?;
+            arguments(
+                out,
+                "defaults",
+                &defaults,
+                names,
+                emit.state,
+                resources,
+                prefix,
+                scopes,
+                scope,
+            )?;
             out.line(format_args!("events: &["));
             out.indented(|out| {
                 for (event, handler, params) in &events {
@@ -467,7 +482,7 @@ fn write(
             *dynamic_classes = true;
             out.line(format_args!(
                 "bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {} }}));",
-                expression::closure(value, names, state)?
+                expression::closure(value, names, state, scopes, scope)?
             ));
         }
         out.line(format_args!("{widget}"));
@@ -477,6 +492,7 @@ fn write(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn arguments(
     out: &mut Out<'_>,
     field: &str,
@@ -485,6 +501,8 @@ fn arguments(
     state: &super::state::State,
     resources: &[Resource],
     prefix: &str,
+    scopes: &[super::scopes::ScopeInfo],
+    scope: Option<usize>,
 ) -> Result<(), Error> {
     out.line(format_args!("{field}: &["));
     out.indented(|out| -> Result<(), Error> {
@@ -494,7 +512,7 @@ fn arguments(
                 Some(resource) if **ty == PropType::Image => format!(
                     "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }}"
                 ),
-                _ => expression::closure(value, names, state)?,
+                _ => expression::closure(value, names, state, scopes, scope)?,
             };
             out.line(format_args!(
                 "brul::PropArgument {{ name: {id}, ty: brul::{ty}, expression: {expression} }},"

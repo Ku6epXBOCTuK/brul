@@ -732,13 +732,15 @@ window Demo (title: "demo") {
     assert!(module.contains(
         "fn demo_each1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
     ));
-    assert!(module.contains("component.borrow_mut().push_build_scope(vec!["));
-    assert!(module.contains(
-        "brul::Variable { name: brul::VariableId::from_index(1), value: item.clone() },"
-    ));
-    assert!(module.contains(
-        r#"brul::Variable { name: brul::VariableId::from_index(2), value: brul::Value::Number(position as f64) },"#
-    ));
+    assert!(module.contains("struct demo_each1_scope {"));
+    assert!(module.contains("item: brul::Value,"));
+    assert!(module.contains("index: f64,"));
+    assert!(
+        module.contains("component.borrow_mut().set_scope(brul::Scope::each(demo_each1_scope {")
+    );
+    assert!(module.contains("item: item.clone(),"));
+    assert!(module.contains("index: position as f64,"));
+    assert!(module.contains("component.borrow_mut().set_scope(previous_scope);"));
     assert!(module.contains(
         "let key = demo_each1_key(&mut component.borrow_mut()).map(brul::RowKey::Explicit).unwrap_or(brul::RowKey::Index(position));"
     ));
@@ -748,6 +750,27 @@ window Demo (title: "demo") {
     assert!(module.contains(
         "brul::register_structure(build, component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);"
     ));
+}
+
+#[test]
+fn emits_nested_each_scopes_with_shadowing() {
+    let source = r#"<markup>
+window Demo (title: "demo") {
+    Column {
+        @each (groups as item) {
+            @each (item.rows as item) { Text { item.name } }
+        }
+    }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains("struct demo_each1_scope {"));
+    assert!(module.contains("struct demo_each2_scope {"));
+    assert!(module.contains("outer_item: brul::Value,"));
+    assert!(module.contains("let item = data.item.clone();"));
+    assert!(module.contains("let outer_item = data.outer_item.clone();"));
+    assert!(module.contains("component.scope().get::<demo_each2_scope>().expect(\"each scope\")"));
 }
 
 #[test]
@@ -1522,10 +1545,10 @@ fn emits_each_inside_a_slot_fill() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("fn demo_slot1("), "{module}");
     assert!(
-        module.contains("component.borrow_mut().push_build_scope(vec!["),
+        module.contains("component.borrow_mut().set_scope(brul::Scope::each("),
         "{module}"
     );
-    assert!(module.contains("value: item.clone()"), "{module}");
+    assert!(module.contains("item: item.clone()"), "{module}");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

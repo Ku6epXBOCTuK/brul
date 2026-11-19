@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use brul_gui::{Widget, WidgetId};
-use brul_script::{Component, Error as ScriptError, Value, Variable};
+use brul_script::{Component, Error as ScriptError, Scope, Value};
 
 use super::ComponentHandle;
 use super::binding::{Binding, PropBinding};
@@ -21,7 +21,7 @@ pub struct Structure {
     pub parent: WidgetId,
     pub each: bool,
     pub component: ComponentHandle,
-    pub scopes: Rc<[Rc<[Variable]>]>,
+    pub scope: Scope,
     pub slots: Option<Rc<Slots>>,
     pub value: StructureValue,
     pub rebuild: StructureRebuild,
@@ -61,7 +61,7 @@ pub fn register_structure(
         parent,
         each,
         component: Rc::clone(component),
-        scopes: component.borrow().build_scopes(),
+        scope: component.borrow().scope().clone(),
         slots: build.slots(),
         value,
         rebuild,

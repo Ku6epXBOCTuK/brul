@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use brul_gui::{Class, Image, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Error as ScriptError, Value, Variable, VariableId};
+use brul_script::{Component, Error as ScriptError, Scope, Value, VariableId};
 use brul_syntax::markup::PropType;
 use tracing::error;
 
@@ -19,7 +19,7 @@ pub type ClassTable = fn(&str) -> Option<Class>;
 pub struct Binding {
     pub widget: WidgetId,
     pub target: BindingTarget,
-    pub scopes: Rc<[Rc<[Variable]>]>,
+    pub scope: Scope,
     pub component: ComponentHandle,
 }
 
@@ -28,7 +28,7 @@ impl Binding {
         Self {
             widget,
             target,
-            scopes: component.borrow().build_scopes(),
+            scope: component.borrow().scope().clone(),
             component: Rc::clone(component),
         }
     }
@@ -41,7 +41,7 @@ pub struct PropBinding {
     pub name: VariableId,
     pub ty: PropType,
     pub expression: Expression,
-    pub scopes: Rc<[Rc<[Variable]>]>,
+    pub scope: Scope,
     pub component: ComponentHandle,
 }
 
@@ -99,13 +99,12 @@ pub enum Write {
 }
 
 pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
-    let count = binding.scopes.len();
     binding
         .component
         .borrow_mut()
-        .push_binding_scopes(&binding.scopes);
+        .set_scope(binding.scope.clone());
     let component = &binding.component;
-    let write = match &binding.target {
+    match &binding.target {
         BindingTarget::Text(expression) => Write::Text(string(component, *expression)),
         BindingTarget::Input(expression) => Write::Input(string(component, *expression)),
         BindingTarget::Image(expression) => Write::Image(texture(component, *expression, textures)),
@@ -119,9 +118,7 @@ pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
         BindingTarget::Class { table, expression } => {
             Write::Class(class_value(component, *table, *expression))
         }
-    };
-    binding.component.borrow_mut().pop_binding_scopes(count);
-    write
+    }
 }
 
 pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {

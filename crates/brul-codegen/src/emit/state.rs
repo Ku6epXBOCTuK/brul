@@ -62,6 +62,13 @@ impl State {
         Ok(state)
     }
 
+    pub fn field_type(&self, name: &str) -> Option<&Type> {
+        self.fields
+            .iter()
+            .find(|field| field.name == name)
+            .map(|field| &field.ty)
+    }
+
     pub fn definition(&self, init_name: &str) -> String {
         if self.fields.is_empty() {
             return String::new();

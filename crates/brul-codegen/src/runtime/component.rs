@@ -54,7 +54,7 @@ pub fn instance(
     let slots = (!instance.slots.is_empty()).then(|| {
         Rc::new(Slots {
             component: Rc::clone(parent),
-            scopes: parent.borrow().build_scopes(),
+            scope: parent.borrow().scope().clone(),
             parent: build.slots(),
             entries: instance.slots.to_vec(),
         })
@@ -136,7 +136,7 @@ fn bind(
             name: argument.name,
             ty: argument.ty.clone(),
             expression: argument.expression,
-            scopes: parent.borrow().build_scopes(),
+            scope: parent.borrow().scope().clone(),
             component: Rc::clone(parent),
         });
     }

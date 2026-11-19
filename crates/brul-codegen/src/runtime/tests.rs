@@ -2,7 +2,7 @@ use super::binding::offset_value;
 use super::event::EventHost;
 use super::*;
 use brul_gui::{Texture, Widget, WidgetId, WidgetTree};
-use brul_script::{Component, Error as ScriptError, Host, Value};
+use brul_script::{Component, Error as ScriptError, Host, Scope, Value};
 use brul_syntax::markup::PropType;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -51,7 +51,7 @@ fn text_binding_follows_the_component() {
     let bindings = [Binding {
         widget: id,
         target: BindingTarget::Text(expr!("name")),
-        scopes: Vec::new().into(),
+        scope: Scope::default(),
         component: Rc::clone(&component),
     }];
 
@@ -100,7 +100,7 @@ fn a_binding_expression_reaches_the_tree_while_it_runs() {
     let bindings = [Binding {
         widget: id,
         target: BindingTarget::Visible(probe),
-        scopes: Vec::new().into(),
+        scope: Scope::default(),
         component: Rc::clone(&handle),
     }];
 
@@ -339,7 +339,7 @@ fn a_class_binding_applies_the_named_class() {
             table: class_table,
             expression: expr!("title"),
         },
-        scopes: Vec::new().into(),
+        scope: Scope::default(),
         component: Rc::clone(&component),
     };
 
@@ -374,7 +374,7 @@ fn a_class_binding_ignores_an_unknown_name() {
             table: class_table,
             expression: expr!("title"),
         },
-        scopes: Vec::new().into(),
+        scope: Scope::default(),
         component,
     };
 
@@ -444,7 +444,7 @@ fn every_binding_target_writes_its_own_state() {
         .map(|(index, target)| Binding {
             widget: ids[index],
             target,
-            scopes: Vec::new().into(),
+            scope: Scope::default(),
             component: Rc::clone(&component),
         })
         .collect();
@@ -487,13 +487,13 @@ fn a_binding_ignores_a_value_of_the_wrong_type() {
         Binding {
             widget: ids[0],
             target: BindingTarget::Text(expr!("title")),
-            scopes: Vec::new().into(),
+            scope: Scope::default(),
             component: Rc::clone(&component),
         },
         Binding {
             widget: ids[1],
             target: BindingTarget::Checked(expr!("on")),
-            scopes: Vec::new().into(),
+            scope: Scope::default(),
             component: Rc::clone(&component),
         },
     ];
@@ -526,7 +526,7 @@ fn image_binding(path: Value) -> (Binding, Textures) {
     let binding = Binding {
         widget: widget.id(),
         target: BindingTarget::Image(expr!("icon")),
-        scopes: Vec::new().into(),
+        scope: Scope::default(),
         component,
     };
     (binding, Textures::default())

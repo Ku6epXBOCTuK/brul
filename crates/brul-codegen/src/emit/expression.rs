@@ -5,13 +5,47 @@ use brul_syntax::ast::{AssignOp, Expr, ExprKind, TemplatePart};
 use brul_syntax::error::Error;
 
 use super::names;
-use super::scopes::Scopes;
+use super::scopes::{ScopeInfo, Scopes};
 use super::state::State;
 
-pub fn closure(value: &Expr, names: &Names<'_>, state: &State) -> Result<String, Error> {
+pub fn closure(
+    value: &Expr,
+    names: &Names<'_>,
+    state: &State,
+    definitions: &[ScopeInfo],
+    current: Option<usize>,
+) -> Result<String, Error> {
+    let mut scopes = Scopes::default();
+    let mut locals = String::new();
+    if let Some(index) = current {
+        let info = &definitions[index];
+        let outer = info.outer.map(|index| &definitions[index]);
+        if let Some(outer) = outer {
+            for field in &outer.fields {
+                locals.push_str(&format!(
+                    "let {} = data.{}.clone();\n",
+                    field.field, field.field
+                ));
+            }
+        }
+        for field in &info.fields {
+            locals.push_str(&format!(
+                "let {} = data.{}.clone();\n",
+                field.field, field.field
+            ));
+        }
+        scopes.push_scope(info, outer);
+        locals.insert_str(
+            0,
+            &format!(
+                "let data = component.scope().get::<{}>().expect(\"each scope\");\n",
+                info.struct_name
+            ),
+        );
+    }
     Ok(format!(
-        "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ let value = {}; Ok(value) }}",
-        operation(value, names, state)?
+        "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ {locals}let value = {}; Ok(value) }}",
+        operation_in(value, names, state, &scopes)?
     ))
 }
 

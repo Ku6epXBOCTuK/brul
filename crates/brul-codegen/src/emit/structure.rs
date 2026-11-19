@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Block, EachBlock, IfBlock};
@@ -7,7 +8,7 @@ use super::Emit;
 use super::Frame;
 use super::Out;
 use super::expression::operation;
-use super::names::variable_expr;
+use super::scopes::{ScopeField, ScopeInfo, Scopes};
 use super::{contains_slot, items, items_spliced};
 
 use brul_script::Names;
@@ -71,7 +72,37 @@ pub(super) fn structure_each(
             emit.state,
         )?);
     }
-    let arm = each_arm(&name, block, emit, frame)?;
+    let mut fields = vec![ScopeField {
+        name: block.item.clone(),
+        field: "item".to_owned(),
+        ty: emit.item_type(&block.collection),
+    }];
+    if let Some(index) = &block.index {
+        fields.push(ScopeField {
+            name: index.clone(),
+            field: "index".to_owned(),
+            ty: brul_syntax::types::Type::Number,
+        });
+    }
+    if let Some(outer) = frame.scope.and_then(|index| emit.scope_def(index)) {
+        for field in &outer.fields {
+            fields.push(ScopeField {
+                name: field.name.clone(),
+                field: format!("outer_{}", field.field),
+                ty: field.ty.clone(),
+            });
+        }
+    }
+    let info = ScopeInfo {
+        struct_name: format!("{name}_scope"),
+        outer: frame.scope,
+        fields,
+    };
+    emit.functions.push(scope_struct(&info));
+    let scope = emit.add_scope(info);
+    let mut body_frame = frame;
+    body_frame.scope = Some(scope);
+    let arm = each_arm(&name, block, emit, body_frame)?;
     emit.functions.push(arm);
     inline(out, &name, &format!("{name}_value"), true, counter);
     Ok(())
@@ -98,6 +129,74 @@ fn value_function(
     })?;
     out.line(format_args!("}}"));
     Ok(text)
+}
+
+fn scope_struct(info: &ScopeInfo) -> String {
+    let mut text = String::new();
+    let _ = writeln!(
+        text,
+        "\n#[derive(Clone)]\n#[allow(dead_code)]\nstruct {} {{",
+        info.struct_name
+    );
+    for field in &info.fields {
+        let _ = writeln!(
+            text,
+            "    {}: {},",
+            field.field,
+            Scopes::local_type(&field.ty)
+        );
+    }
+    text.push_str("}\n");
+    text
+}
+
+fn scope_default(ty: &brul_syntax::types::Type) -> &'static str {
+    match ty {
+        brul_syntax::types::Type::Number => "0.0",
+        brul_syntax::types::Type::String => "String::new()",
+        brul_syntax::types::Type::Bool => "false",
+        brul_syntax::types::Type::Null => "()",
+        _ => "brul::Value::Null",
+    }
+}
+
+fn each_scope(out: &mut Out<'_>, info: &ScopeInfo, emit: &Emit<'_>) -> Result<(), Error> {
+    out.line(format_args!(
+        "let previous_scope = component.borrow().scope().clone();"
+    ));
+    let mut values = Vec::new();
+    for (index, field) in info.fields.iter().enumerate() {
+        let value = if index == 0 {
+            "item.clone()".to_owned()
+        } else if field.field == "index" {
+            "position as f64".to_owned()
+        } else if let Some(outer) = info
+            .outer
+            .and_then(|index| emit.scope_def(index))
+            .map(|info| info.struct_name.as_str())
+        {
+            let source = field.field.strip_prefix("outer_").unwrap_or(&field.field);
+            let default = scope_default(&field.ty);
+            format!(
+                "component.borrow().scope().get::<{outer}>().map(|value| value.{source}.clone()).unwrap_or_else(|| {default})"
+            )
+        } else {
+            scope_default(&field.ty).to_owned()
+        };
+        values.push(format!("{}: {value}", field.field));
+    }
+    out.line(format_args!(
+        "component.borrow_mut().set_scope(brul::Scope::each({} {{",
+        info.struct_name
+    ));
+    out.indented(|out| {
+        for value in values {
+            out.line(format_args!("{value},"));
+        }
+        Ok::<(), Error>(())
+    })?;
+    out.line(format_args!("}}));"));
+    Ok(())
 }
 
 fn inline(out: &mut Out<'_>, name: &str, value: &str, each: bool, counter: &mut usize) {
@@ -303,38 +402,23 @@ fn each_row(
     emit: &mut Emit<'_>,
     arm: Frame<'_>,
 ) -> Result<(), Error> {
-    each_scope(out, block, emit)?;
+    let info = arm
+        .scope
+        .and_then(|index| emit.scope_def(index))
+        .cloned()
+        .expect("each scope definition");
+    each_scope(out, &info, emit)?;
     each_key(out, name, block);
     out.line(format_args!("let start = children.len();"));
     each_take(out);
     each_body(out, &block.block, emit, arm)?;
     out.line(format_args!("let count = children.len() - start;"));
-    out.line(format_args!("component.borrow_mut().pop_build_scope();"));
+    out.line(format_args!(
+        "component.borrow_mut().set_scope(previous_scope);"
+    ));
     out.line(format_args!(
         "rows.push(brul::RowInfo {{ key, item, start, count, reuse: None }});"
     ));
-    Ok(())
-}
-
-fn each_scope(out: &mut Out<'_>, block: &EachBlock, emit: &mut Emit<'_>) -> Result<(), Error> {
-    let position = block.collection.position;
-    out.line(format_args!(
-        "component.borrow_mut().push_build_scope(vec!["
-    ));
-    out.indented(|out| -> Result<(), Error> {
-        out.line(format_args!(
-            "brul::Variable {{ name: {}, value: item.clone() }},",
-            variable_expr(block.item.as_str(), position, emit.names)?
-        ));
-        if let Some(index_name) = &block.index {
-            out.line(format_args!(
-                "brul::Variable {{ name: {}, value: brul::Value::Number(position as f64) }},",
-                variable_expr(index_name.as_str(), position, emit.names)?
-            ));
-        }
-        Ok(())
-    })?;
-    out.line(format_args!("]);"));
     Ok(())
 }
 
@@ -356,7 +440,9 @@ fn each_take(out: &mut Out<'_>) {
         out.line(format_args!(
             "rows.push(brul::RowInfo {{ key, item, start, count: 0, reuse: Some(other) }});"
         ));
-        out.line(format_args!("component.borrow_mut().pop_build_scope();"));
+        out.line(format_args!(
+            "component.borrow_mut().set_scope(previous_scope);"
+        ));
         out.line(format_args!("continue;"));
     });
     out.line(format_args!("}}"));
@@ -380,7 +466,9 @@ fn each_body(
 }
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
-    Frame::root(theme).inside(frame.direction(), frame.gap())
+    let mut arm = Frame::root(theme).inside(frame.direction(), frame.gap());
+    arm.scope = frame.scope;
+    arm
 }
 
 fn arm_header(out: &mut Out<'_>, name: &str) {

@@ -1,10 +1,12 @@
 use std::hint::black_box;
 use std::time::Duration;
 
-use brul::{Component, Value, Variable, VariableId};
+use brul::{Component, Scope, Value, VariableId};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 const NAMES: &[&str] = &["item", "position", "icon", "name", "path", "selected"];
+
+type Row = (Value, f64);
 
 fn item() -> Value {
     Value::Object(
@@ -18,20 +20,8 @@ fn item() -> Value {
     )
 }
 
-fn row_scopes() -> std::rc::Rc<[std::rc::Rc<[Variable]>]> {
-    let mut scoped = Component::new();
-    scoped.set_names(NAMES);
-    scoped.push_build_scope(vec![
-        Variable {
-            name: VariableId::from_index(0),
-            value: item(),
-        },
-        Variable {
-            name: VariableId::from_index(1),
-            value: Value::Number(0.0),
-        },
-    ]);
-    scoped.build_scopes()
+fn row_scope() -> Scope {
+    Scope::each((item(), 0.0_f64))
 }
 
 fn prop_component() -> Component {
@@ -82,45 +72,39 @@ fn read(c: &mut Criterion) {
     group.bench_function("property_scalar_id", |b| {
         b.iter(|| black_box(property.read_id(VariableId::from_index(5)).unwrap()));
     });
-    let scopes = row_scopes();
-    let mut frame = Component::new();
-    frame.set_names(NAMES);
-    frame.push_binding_scopes(&scopes);
-    group.bench_function("variable_in_frame", |b| {
-        b.iter(|| black_box(frame.read("position").unwrap()));
+    let scope = row_scope();
+    group.bench_function("each_scope_item", |b| {
+        b.iter(|| black_box(scope.get::<Row>().unwrap().0.clone()));
     });
-    group.bench_function("variable_in_frame_id", |b| {
-        b.iter(|| black_box(frame.read_id(VariableId::from_index(1)).unwrap()));
+    group.bench_function("each_scope_position", |b| {
+        b.iter(|| black_box(scope.get::<Row>().unwrap().1));
     });
     group.finish();
 }
 
 fn binding(c: &mut Criterion) {
     let mut group = group(c, "binding");
-    let scopes = row_scopes();
+    let scope = row_scope();
     let mut component = prop_component();
     group.bench_function("props_read", |b| {
         b.iter(|| {
-            component.push_binding_scopes(&scopes);
+            component.set_scope(scope.clone());
             black_box(component.read("icon").unwrap());
             black_box(component.read("name").unwrap());
             black_box(component.read("path").unwrap());
-            component.pop_binding_scopes(scopes.len());
         });
     });
     group.bench_function("props_read_id", |b| {
         b.iter(|| {
-            component.push_binding_scopes(&scopes);
+            component.set_scope(scope.clone());
             black_box(component.read_id(VariableId::from_index(2)).unwrap());
             black_box(component.read_id(VariableId::from_index(3)).unwrap());
             black_box(component.read_id(VariableId::from_index(4)).unwrap());
-            component.pop_binding_scopes(scopes.len());
         });
     });
-    group.bench_function("frame_only", |b| {
+    group.bench_function("scope_swap", |b| {
         b.iter(|| {
-            component.push_binding_scopes(&scopes);
-            component.pop_binding_scopes(scopes.len());
+            component.set_scope(scope.clone());
         });
     });
     group.finish();

@@ -316,17 +316,17 @@ impl<T: Theme> Ui<T> {
     fn bind_structures(&mut self, structures: Vec<Structure>) {
         for structure in structures {
             let component = Rc::clone(&structure.component);
-            let scopes = Rc::clone(&structure.scopes);
+            let each_scope = structure.scope.clone();
             let requests = Rc::clone(&self.requests);
             let initialized = Rc::new(Cell::new(false));
             let last: Rc<Cell<Option<Value>>> = Rc::new(Cell::new(None));
             let scope = self.scope.child();
             scope.run(|| {
                 Effect::new(move || {
-                    let count = scopes.len();
-                    component.borrow_mut().push_binding_scopes(&scopes);
+                    let previous = component.borrow().scope().clone();
+                    component.borrow_mut().set_scope(each_scope.clone());
                     let evaluated = (structure.value)(&mut component.borrow_mut());
-                    component.borrow_mut().pop_binding_scopes(count);
+                    component.borrow_mut().set_scope(previous);
                     let value = match evaluated {
                         Ok(value) => Some(value),
                         Err(error) => {
@@ -475,10 +475,8 @@ impl<T: Theme> Ui<T> {
             } else {
                 Vec::new()
             };
-            let count = structure.scopes.len();
-            component
-                .borrow_mut()
-                .push_binding_scopes(&structure.scopes);
+            let previous = component.borrow().scope().clone();
+            component.borrow_mut().set_scope(structure.scope.clone());
             let mut build = Build::with_slots(structure.slots.clone());
             let rebuilt = (structure.rebuild)(
                 self.theme.map(Theme::name),
@@ -487,7 +485,7 @@ impl<T: Theme> Ui<T> {
                 &old_rows,
             );
             let added = build.take_structures();
-            component.borrow_mut().pop_binding_scopes(count);
+            component.borrow_mut().set_scope(previous);
             let (built, rebuilt_rows) = match rebuilt {
                 Ok(result) => result,
                 Err(message) => {
@@ -554,10 +552,8 @@ impl<T: Theme> Ui<T> {
 }
 
 pub(crate) fn apply_prop(prop: &PropBinding) {
-    let count = prop.scopes.len();
-    prop.component
-        .borrow_mut()
-        .push_binding_scopes(&prop.scopes);
+    let previous = prop.component.borrow().scope().clone();
+    prop.component.borrow_mut().set_scope(prop.scope.clone());
     let value = match (prop.expression)(&mut prop.component.borrow_mut()) {
         Ok(value) => Some(value),
         Err(error) => {
@@ -571,13 +567,13 @@ pub(crate) fn apply_prop(prop: &PropBinding) {
     {
         tracing::error!(%error, "property assignment failed");
     }
-    prop.component.borrow_mut().pop_binding_scopes(count);
+    prop.component.borrow_mut().set_scope(previous);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::TestTheme;
+    use crate::{Scope, TestTheme};
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -882,7 +878,7 @@ mod tests {
             name,
             ty,
             expression,
-            scopes: Vec::new().into(),
+            scope: Scope::default(),
             component: Rc::clone(component),
         }
     }

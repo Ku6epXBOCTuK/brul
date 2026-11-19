@@ -1,4 +1,3 @@
-use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Slot, Widget};
@@ -26,7 +25,7 @@ pub(super) fn widget(
         .find(|import| import.name == element.name)
         .map(|import| import.definition)
     {
-        return component::component(out, element, index, emit, counter);
+        return component::component(out, element, index, emit, counter, frame);
     }
     let classes = classes(element)
         .iter()
@@ -52,8 +51,8 @@ pub(super) fn widget(
         let content = element_expression(out, element, &classes, &events, emit, frame, counter)?;
         out.push(format_args!(";"));
         out.end();
-        content_binding(out, content, &name, emit.names, emit.state)?;
-        parameters(out, element, &name, emit.names, emit)?;
+        content_binding(out, content, &name, emit, frame)?;
+        parameters(out, element, &name, emit, frame)?;
         handler_bindings(out, &events.handlers, &name);
         out.line(format_args!("{name}"));
         Ok(())
@@ -223,8 +222,8 @@ fn content_binding(
     out: &mut Out<'_>,
     content: Option<Content>,
     name: &str,
-    names: &Names<'_>,
-    state: &super::state::State,
+    emit: &Emit<'_>,
+    frame: Frame<'_>,
 ) -> Result<(), Error> {
     let Some(content) = content else {
         return Ok(());
@@ -236,7 +235,13 @@ fn content_binding(
     };
     out.line(format_args!(
         "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({})));",
-        expression::closure(&expression, names, state)?
+        expression::closure(
+            &expression,
+            emit.names,
+            emit.state,
+            &emit.scope_defs,
+            frame.scope,
+        )?
     ));
     Ok(())
 }
@@ -468,8 +473,8 @@ fn parameters(
     out: &mut Out<'_>,
     element: &Element,
     name: &str,
-    names: &Names<'_>,
     emit: &mut Emit<'_>,
+    frame: Frame<'_>,
 ) -> Result<(), Error> {
     let mut x = None;
     let mut y = None;
@@ -511,12 +516,12 @@ fn parameters(
         };
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
-            expression::closure(value, names, emit.state)?
+            expression::closure(value, emit.names, emit.state, &emit.scope_defs, frame.scope)?
         ));
     }
     if x.is_some() || y.is_some() {
-        let x = optional_expression(x, names, emit.state)?;
-        let y = optional_expression(y, names, emit.state)?;
+        let x = optional_expression(x, emit, frame)?;
+        let y = optional_expression(y, emit, frame)?;
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Offset {{ x: {x}, y: {y} }}));"
         ));
@@ -526,7 +531,7 @@ fn parameters(
         let table = classes::table(emit.resource_prefix);
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
-            expression::closure(value, names, emit.state)?
+            expression::closure(value, emit.names, emit.state, &emit.scope_defs, frame.scope)?
         ));
     }
     Ok(())
@@ -534,11 +539,14 @@ fn parameters(
 
 fn optional_expression(
     value: Option<&Expr>,
-    names: &Names<'_>,
-    state: &super::state::State,
+    emit: &Emit<'_>,
+    frame: Frame<'_>,
 ) -> Result<String, Error> {
     Ok(match value {
-        Some(item) => format!("Some({})", expression::closure(item, names, state)?),
+        Some(item) => format!(
+            "Some({})",
+            expression::closure(item, emit.names, emit.state, &emit.scope_defs, frame.scope)?
+        ),
         None => "None".to_owned(),
     })
 }

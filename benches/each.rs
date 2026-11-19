@@ -1,12 +1,14 @@
 use std::hint::black_box;
 use std::time::Duration;
 
-use brul::{Component, Value, Variable, VariableId};
+use brul::{Component, Scope, Value};
 use brul_gui::{StyleSet, Widget, WidgetStyle};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 const BINDINGS: usize = 6;
 const NAMES: &[&str] = &["item", "position"];
+
+type Row = (Value, f64);
 
 fn component() -> Component {
     let mut component = Component::new();
@@ -27,16 +29,7 @@ fn item() -> Value {
 }
 
 fn push_row(component: &mut Component, position: f64) {
-    component.push_build_scope(vec![
-        Variable {
-            name: VariableId::from_index(0),
-            value: item(),
-        },
-        Variable {
-            name: VariableId::from_index(1),
-            value: Value::Number(position),
-        },
-    ]);
+    component.set_scope(Scope::each((item(), position)));
 }
 
 fn row_widgets() -> Widget {
@@ -61,14 +54,13 @@ fn group<'a>(
 
 fn each_row(c: &mut Criterion) {
     let mut group = group(c, "each_row");
-    let mut component = component();
-    group.bench_function(format!("scopes_{BINDINGS}_bindings"), |b| {
+    let mut row = component();
+    group.bench_function(format!("scope_{BINDINGS}_bindings"), |b| {
         b.iter(|| {
-            push_row(&mut component, 0.0);
+            push_row(&mut row, 0.0);
             for _ in 0..BINDINGS {
-                black_box(component.build_scopes());
+                black_box(row.scope().get::<Row>().unwrap().1);
             }
-            component.pop_build_scope();
         });
     });
     group.bench_function("widgets", |b| {
@@ -77,15 +69,15 @@ fn each_row(c: &mut Criterion) {
     group.finish();
 }
 
-fn build_scopes(c: &mut Criterion) {
-    let mut group = group(c, "build_scopes");
+fn scope_depth(c: &mut Criterion) {
+    let mut group = group(c, "scope_depth");
     for depth in [1, 3] {
         let mut component = component();
         for level in 0..depth {
             push_row(&mut component, level as f64);
         }
         group.bench_function(format!("depth_{depth}"), |b| {
-            b.iter(|| black_box(component.build_scopes()));
+            b.iter(|| black_box(component.scope().clone()));
         });
     }
     group.finish();
@@ -95,48 +87,15 @@ fn apply_row(c: &mut Criterion) {
     let mut group = group(c, "apply_row");
     let mut scoped = component();
     push_row(&mut scoped, 0.0);
-    let scopes = scoped.build_scopes();
+    let scope = scoped.scope().clone();
     let mut component = component();
-    group.bench_function("declares", |b| {
+    group.bench_function("scope_swap", |b| {
         b.iter(|| {
-            component.push_binding_scopes(&scopes);
-            component.pop_binding_scopes(scopes.len());
+            component.set_scope(scope.clone());
         });
     });
     group.finish();
 }
 
-fn row_rows(count: usize) -> Vec<brul::RowInfo> {
-    (0..count)
-        .map(|at| brul::RowInfo {
-            key: brul::RowKey::Explicit(Value::Number(at as f64)),
-            item: item(),
-            start: at,
-            count: 1,
-            reuse: None,
-        })
-        .collect()
-}
-
-fn row_match(c: &mut Criterion) {
-    let mut group = group(c, "row_match");
-    let item = item();
-    for count in [100, 1000] {
-        let old = row_rows(count);
-        let keys: Vec<brul::RowKey> = (0..count)
-            .map(|at| brul::RowKey::Explicit(Value::Number(at as f64)))
-            .collect();
-        group.bench_function(format!("keyed_{count}"), |b| {
-            b.iter(|| {
-                let mut matcher = brul::RowMatcher::new(&old);
-                for (at, key) in keys.iter().enumerate() {
-                    black_box(matcher.take(key, &item, at));
-                }
-            });
-        });
-    }
-    group.finish();
-}
-
-criterion_group!(benches, each_row, build_scopes, apply_row, row_match);
+criterion_group!(benches, each_row, scope_depth, apply_row);
 criterion_main!(benches);

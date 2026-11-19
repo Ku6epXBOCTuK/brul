@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_reactive::{Effect, flush};
-use brul_script::{Component, Error, Value, Variable, VariableId, eval};
+use brul_script::{Component, Error, Scope, Value, VariableId, eval};
 use brul_syntax::parser::parse_expression;
 
 const NAMES: &[&str] = &[
@@ -185,31 +185,16 @@ fn evaluation_resolves_identifiers() {
 }
 
 #[test]
-fn build_scopes_share_their_snapshot_until_the_stack_changes() {
+fn each_scope_is_stored_on_the_component() {
     let mut component = component();
-    component.push_build_scope(vec![Variable {
-        name: id("item"),
-        value: Value::Number(1.0),
-    }]);
+    assert!(component.scope().get::<i32>().is_none());
 
-    let first = component.build_scopes();
-    let second = component.build_scopes();
-    assert!(Rc::ptr_eq(&first, &second));
-    assert_eq!(first.len(), 1);
+    component.set_scope(Scope::each(7_i32));
+    assert_eq!(component.scope().get::<i32>(), Some(&7));
+    assert!(component.scope().get::<String>().is_none());
 
-    component.push_build_scope(vec![Variable {
-        name: id("row"),
-        value: Value::Number(2.0),
-    }]);
-    let deeper = component.build_scopes();
-    assert!(!Rc::ptr_eq(&first, &deeper));
-    assert_eq!(deeper.len(), 2);
-
-    component.pop_build_scope();
-    component.pop_build_scope();
-    let empty = component.build_scopes();
-    assert!(empty.is_empty());
-    assert!(!Rc::ptr_eq(&deeper, &empty));
+    component.set_scope(Scope::root());
+    assert!(component.scope().get::<i32>().is_none());
 }
 
 #[test]
@@ -243,20 +228,15 @@ fn reading_a_property_tracks_it() {
 }
 
 #[test]
-fn a_scoped_variable_is_readable_but_not_assignable() {
+fn an_each_scope_can_be_replaced_without_leaking_into_reads() {
     let mut component = component();
-    let scopes: Rc<[Rc<[Variable]>]> = Rc::from(vec![Rc::from(vec![Variable {
-        name: id("item"),
-        value: Value::Number(1.0),
-    }])]);
-
-    component.push_binding_scopes(&scopes);
-    assert_eq!(component.read("item"), Ok(Value::Number(1.0)));
+    component.set_scope(Scope::each(String::from("item")));
     assert_eq!(
-        component.assign("item", Value::Number(2.0)),
-        Err(Error::Constant("item".to_owned()))
+        component.scope().get::<String>().map(String::as_str),
+        Some("item")
     );
-    component.pop_binding_scopes(1);
+
+    component.set_scope(Scope::root());
     assert_eq!(
         component.read("item"),
         Err(Error::Undefined("item".to_owned()))

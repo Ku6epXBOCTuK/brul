@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::script::Program;
 use brul_syntax::style::Stylesheet;
+use brul_syntax::types::Type;
 
 use crate::{Import, Registry, Resource};
 
@@ -27,6 +30,7 @@ mod style;
 mod theme;
 mod view;
 
+pub(super) use scopes::ScopeInfo;
 pub use state::State;
 
 pub use alloc::allocations;
@@ -61,7 +65,9 @@ pub(super) struct Emit<'a> {
     stylesheet: &'a Stylesheet,
     names: &'a Names<'a>,
     state: &'a State,
+    prop_types: &'a HashMap<String, Type>,
     program: Option<&'a Program>,
+    scope_defs: Vec<ScopeInfo>,
     functions: &'a mut Vec<String>,
     bases: &'a [String],
     structures: &'a mut StructureNames,
@@ -77,6 +83,7 @@ struct EmitSources<'a> {
     stylesheet: &'a Stylesheet,
     names: &'a Names<'a>,
     state: &'a State,
+    prop_types: &'a HashMap<String, Type>,
     program: Option<&'a Program>,
     base: &'a str,
     resource_prefix: &'a str,
@@ -109,6 +116,8 @@ impl<'a> Emit<'a> {
             stylesheet: sources.stylesheet,
             names: sources.names,
             state: sources.state,
+            prop_types: sources.prop_types,
+            scope_defs: Vec::new(),
             program: sources.program,
             functions: outputs.functions,
             bases: outputs.bases,
@@ -125,6 +134,7 @@ pub(super) struct Frame<'a> {
     theme: Option<&'a str>,
     direction: &'a str,
     gap: u32,
+    pub(super) scope: Option<usize>,
 }
 
 impl<'a> Frame<'a> {
@@ -133,6 +143,7 @@ impl<'a> Frame<'a> {
             theme,
             direction: "Column",
             gap: 0,
+            scope: None,
         }
     }
 
@@ -158,6 +169,30 @@ impl<'a> Frame<'a> {
 }
 
 impl<'a> Emit<'a> {
+    pub(super) fn prop_type(&self, name: &str) -> Option<&Type> {
+        self.prop_types.get(name)
+    }
+
+    pub(super) fn item_type(&self, collection: &Expr) -> Type {
+        let ExprKind::Ident(name) = &collection.kind else {
+            return Type::Object;
+        };
+        let ty = self.prop_type(name).or_else(|| self.state.field_type(name));
+        match ty {
+            Some(Type::Array(inner)) => (**inner).clone(),
+            _ => Type::Object,
+        }
+    }
+
+    pub(super) fn scope_def(&self, index: usize) -> Option<&ScopeInfo> {
+        self.scope_defs.get(index)
+    }
+
+    pub(super) fn add_scope(&mut self, info: ScopeInfo) -> usize {
+        self.scope_defs.push(info);
+        self.scope_defs.len() - 1
+    }
+
     pub(super) fn default_theme(&self) -> Option<&'a str> {
         self.stylesheet
             .themes

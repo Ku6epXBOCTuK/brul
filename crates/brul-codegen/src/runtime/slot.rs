@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use brul_gui::{Direction, Widget};
-use brul_script::Variable;
+use brul_script::Scope;
 
 use super::ComponentHandle;
 use super::build::Build;
@@ -19,7 +19,7 @@ pub struct SlotArgument {
 #[derive(Clone)]
 pub struct Slots {
     pub component: ComponentHandle,
-    pub scopes: Rc<[Rc<[Variable]>]>,
+    pub scope: Scope,
     pub parent: Option<Rc<Slots>>,
     pub(crate) entries: Vec<SlotArgument>,
 }
@@ -32,12 +32,12 @@ pub fn slot(theme: Option<&str>, build: &mut Build, name: &str) -> Result<Built,
         return Ok(empty_built());
     };
     let component = Rc::clone(&slots.component);
-    let count = slots.scopes.len();
-    component.borrow_mut().push_binding_scopes(&slots.scopes);
+    let previous_scope = component.borrow().scope().clone();
+    component.borrow_mut().set_scope(slots.scope.clone());
     let previous = build.replace_slots(slots.parent.clone());
     let rendered = (argument.view)(theme, build, &component);
     build.replace_slots(previous);
-    component.borrow_mut().pop_binding_scopes(count);
+    component.borrow_mut().set_scope(previous_scope);
     rendered
 }
 

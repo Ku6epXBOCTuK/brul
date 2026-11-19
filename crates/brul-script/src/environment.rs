@@ -1,6 +1,3 @@
-use std::rc::Rc;
-
-use crate::component::Variable;
 use crate::error::Error;
 use crate::names::VariableId;
 use crate::value::Value;
@@ -16,7 +13,6 @@ struct Binding {
 pub struct Environment {
     names: &'static [&'static str],
     bindings: Vec<Binding>,
-    scopes: Vec<Rc<[Variable]>>,
 }
 
 impl Environment {
@@ -29,14 +25,6 @@ impl Environment {
 
     pub fn set_names(&mut self, names: &'static [&'static str]) {
         self.names = names;
-    }
-
-    pub fn push_scope(&mut self, scope: Rc<[Variable]>) {
-        self.scopes.push(scope);
-    }
-
-    pub fn pop_scope(&mut self) {
-        self.scopes.pop();
     }
 
     pub fn declare(&mut self, id: VariableId, value: Value, constant: bool) -> Result<(), Error> {
@@ -63,13 +51,6 @@ impl Environment {
 
     pub fn assign(&mut self, id: VariableId, value: Value) -> Result<(), Error> {
         let name = self.name(id);
-        if self
-            .scopes
-            .iter()
-            .any(|scope| scope.iter().any(|variable| variable.name == id))
-        {
-            return Err(Error::Constant(name.to_owned()));
-        }
         let binding = self
             .bindings
             .iter_mut()
@@ -79,11 +60,6 @@ impl Environment {
     }
 
     fn find(&self, id: VariableId) -> Option<&Value> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(variable) = scope.iter().find(|variable| variable.name == id) {
-                return Some(&variable.value);
-            }
-        }
         self.bindings
             .iter()
             .find(|binding| binding.id == id)

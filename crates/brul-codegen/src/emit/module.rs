@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,6 +7,7 @@ use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Element, Member, Window};
 use brul_syntax::script::validate_build;
+use brul_syntax::types::Type;
 
 use crate::error_at;
 use crate::kit;
@@ -74,8 +75,10 @@ fn module_at(
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
     let names = names::table(&parsed, &registry.definitions);
     let mut root_props = Vec::new();
+    let mut root_prop_types = HashMap::new();
     for window in &parsed.windows {
         root_props.extend(names::declared(&window.members));
+        root_prop_types.extend(prop_types(&window.members));
     }
     if let Some(program) = &parsed.program {
         validate_build(program, &root_props)?;
@@ -133,6 +136,7 @@ fn module_at(
                     stylesheet: &parsed.stylesheet,
                     names: &names,
                     state: &root_state,
+                    prop_types: &root_prop_types,
                     program: parsed.program.as_ref(),
                     base: &window_bases[index],
                     resource_prefix: "",
@@ -181,6 +185,7 @@ fn module_at(
             &names,
             &state_type(&format!("{prefix}script")),
         )?;
+        let component_prop_types = prop_types(&definition.component.members);
         body.push_str(HEADER);
         view::view(
             &mut body,
@@ -195,6 +200,7 @@ fn module_at(
                     stylesheet: &definition.stylesheet,
                     names: &names,
                     state: &component_state,
+                    prop_types: &component_prop_types,
                     program: definition.program.as_ref(),
                     base,
                     resource_prefix: &prefix,
@@ -356,6 +362,16 @@ fn state_type(name: &str) -> String {
     }
     output.push_str("State");
     output
+}
+
+fn prop_types(members: &[Member]) -> HashMap<String, Type> {
+    members
+        .iter()
+        .filter_map(|member| match member {
+            Member::Prop(prop) => Some((prop.name.clone(), prop.ty.clone())),
+            _ => None,
+        })
+        .collect()
 }
 
 fn unique(name: &str, used: &mut HashSet<String>) -> String {
