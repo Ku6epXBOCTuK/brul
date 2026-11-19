@@ -44,7 +44,8 @@ pub(super) fn module(
         for parameter in &function.params {
             let _ = writeln!(
                 out,
-                "    component.declare({parameter:?}, arguments.remove(0), false)?;"
+                "    component.declare({:?}, arguments.remove(0), false)?;",
+                parameter.name
             );
         }
         block(&function.body, names, &mut out)?;
@@ -93,7 +94,7 @@ pub(super) fn handle(program: Option<&Program>) -> String {
         let arguments: Vec<String> = function
             .params
             .iter()
-            .map(|param| format!("{}: impl Into<brul::Value>", ident(&snake(param))))
+            .map(|param| format!("{}: impl Into<brul::Value>", ident(&snake(&param.name))))
             .collect();
         if arguments.is_empty() {
             let _ = writeln!(
@@ -104,7 +105,7 @@ pub(super) fn handle(program: Option<&Program>) -> String {
             let values = function
                 .params
                 .iter()
-                .map(|param| format!("{}.into()", ident(&snake(param))))
+                .map(|param| format!("{}.into()", ident(&snake(&param.name))))
                 .collect::<Vec<_>>()
                 .join(", ");
             let arguments = arguments.join(", ");

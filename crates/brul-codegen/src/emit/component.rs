@@ -13,7 +13,7 @@ use super::Out;
 use super::names::variable_expr;
 use super::{events, expression, items_spliced};
 
-type Props<'a> = Vec<(&'a str, PropType, &'a Expr)>;
+type Props<'a> = Vec<(&'a str, &'a PropType, &'a Expr)>;
 type Events<'a> = Vec<(&'a str, &'a str, Vec<PropType>)>;
 
 struct Call<'a> {
@@ -295,7 +295,11 @@ fn event_of<'a>(
         declaration.params.len(),
         element.position,
     )?;
-    let params = declaration.params.iter().map(|param| param.ty).collect();
+    let params = declaration
+        .params
+        .iter()
+        .map(|param| param.ty.clone())
+        .collect();
     Ok((event, handler, params))
 }
 
@@ -305,7 +309,7 @@ fn property_of<'a>(
     props: &Props<'a>,
     property: &'a str,
     value: &'a Expr,
-) -> Result<(&'a str, PropType, &'a Expr), Error> {
+) -> Result<(&'a str, &'a PropType, &'a Expr), Error> {
     if props.iter().any(|item| item.0 == property) {
         return Err(error_at(
             value.position,
@@ -318,7 +322,7 @@ fn property_of<'a>(
             format!("component '{name}' has no property '{property}'"),
         ));
     };
-    Ok((property, prop.ty, value))
+    Ok((property, &prop.ty, value))
 }
 
 fn find_event<'a>(definition: &'a Definition, event: &str) -> Option<&'a Event> {
@@ -366,7 +370,7 @@ fn defaults<'a>(
                 ),
             ));
         };
-        defaults.push((prop.name.as_str(), prop.ty, default));
+        defaults.push((prop.name.as_str(), &prop.ty, default));
     }
     Ok(defaults)
 }
@@ -413,7 +417,7 @@ fn write(
                 for (event, handler, params) in &events {
                     let params = params
                         .iter()
-                        .map(|ty| format!("brul::PropType::{ty:?}"))
+                        .map(|ty| format!("brul::{ty}"))
                         .collect::<Vec<_>>()
                         .join(", ");
                     out.line(format_args!(
@@ -475,7 +479,7 @@ fn write(
 fn arguments(
     out: &mut Out<'_>,
     field: &str,
-    arguments: &[(&str, PropType, &Expr)],
+    arguments: &[(&str, &PropType, &Expr)],
     names: &Names<'_>,
     resources: &[Resource],
     prefix: &str,
@@ -485,13 +489,13 @@ fn arguments(
         for (name, ty, value) in arguments {
             let id = variable_expr(name, value.position, names)?;
             let expression = match super::resource(value, resources) {
-                Some(resource) if *ty == PropType::Image => format!(
+                Some(resource) if **ty == PropType::Image => format!(
                     "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }}"
                 ),
                 _ => expression::closure(value, names)?,
             };
             out.line(format_args!(
-                "brul::PropArgument {{ name: {id}, ty: brul::PropType::{ty:?}, expression: {expression} }},"
+                "brul::PropArgument {{ name: {id}, ty: brul::{ty}, expression: {expression} }},"
             ));
         }
         Ok(())

@@ -1,5 +1,7 @@
 use crate::ast::{Expr, Position};
 
+pub use crate::types::Type as PropType;
+
 use super::widget::Widget;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -118,14 +120,6 @@ pub struct Event {
 pub struct EventParam {
     pub name: String,
     pub ty: PropType,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PropType {
-    Bool,
-    Number,
-    String,
-    Image,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -134,10 +134,10 @@ impl Host for EventHost {
             });
         }
         for (ty, value) in event.params.iter().zip(arguments) {
-            if !accepts_prop(value, *ty) {
+            if !accepts_prop(value, ty) {
                 return Err(ScriptError::EventArgument {
                     name: event.name.to_owned(),
-                    expected: prop_name(*ty),
+                    expected: prop_name(ty),
                     found: value.type_name(),
                 });
             }

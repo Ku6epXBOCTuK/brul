@@ -1,5 +1,5 @@
 <script>
-    function press() {
+    function press(): Void {
         clicked();
     }
 </script>

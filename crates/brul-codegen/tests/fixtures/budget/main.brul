@@ -1,8 +1,8 @@
 <script>
-    let items = [];
-    let kind = "";
+    let items: Array<Object> = [];
+    let kind: String = "";
 
-    function toggle() {
+    function toggle(): Void {
         toggle_label();
     }
 </script>

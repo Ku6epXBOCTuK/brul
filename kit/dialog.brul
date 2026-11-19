@@ -1,13 +1,13 @@
 <script>
-    function accept() {
+    function accept(): Void {
         closed(true);
     }
 
-    function reject() {
+    function reject(): Void {
         closed(false);
     }
 
-    function dismissDialog() {
+    function dismissDialog(): Void {
         closed(false);
     }
 </script>

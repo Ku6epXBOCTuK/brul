@@ -30,7 +30,7 @@ fn opt_out_and_invalid_markers_are_honored() {
         "script",
         "this is not script at all",
         "let = 1;",
-        "let value = 1;",
+        "let value: Number = 1;",
         parse,
     );
 }
@@ -38,12 +38,12 @@ fn opt_out_and_invalid_markers_are_honored() {
 #[test]
 fn malformed_examples_are_rejected() {
     let sources = [
-        ("let value = ;", "expected expression"),
-        ("let value = 1", "expected ';'"),
-        ("const limit;", "const requires an initializer"),
+        ("let value: Number = ;", "expected expression"),
+        ("let value: Number = 1", "expected ';'"),
+        ("const limit: Number;", "const requires an initializer"),
         ("{ name: \"Chrome\" };", "expected ';'"),
         (
-            "function run() { function inner() { } }",
+            "function run(): Void { function inner(): Void { } }",
             "only allowed at the top level",
         ),
     ];

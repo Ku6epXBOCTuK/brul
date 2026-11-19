@@ -341,12 +341,15 @@ impl Cursor<'_> {
         self.skip_trivia();
         let start = self.pos();
         let name = self.ident()?;
-        match name.as_str() {
-            "Bool" => Ok(PropType::Bool),
-            "Number" => Ok(PropType::Number),
-            "String" => Ok(PropType::String),
-            "Image" => Ok(PropType::Image),
-            _ => Err(self.error_at(start, Expected::Word("property type"))),
+        if name == "Array" {
+            self.skip_trivia();
+            self.expect('<')?;
+            let item = self.prop_type()?;
+            self.skip_trivia();
+            self.expect('>')?;
+            return Ok(PropType::Array(Box::new(item)));
         }
+        PropType::from_name(&name)
+            .ok_or_else(|| self.error_at(start, Expected::Word("property type")))
     }
 }

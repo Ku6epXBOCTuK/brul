@@ -45,6 +45,7 @@ fn emit_statement(
             name,
             value,
             constant,
+            ..
         } => {
             let null = "brul::Value::Null".to_owned();
             let (method, value) = match value {

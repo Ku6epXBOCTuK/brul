@@ -29,12 +29,12 @@ fn at(message: &str, line: usize, column: usize) -> Error {
 #[test]
 fn names_from_every_source_resolve() {
     accepts(
-        "let browsers = loadBrowsers();\n\
+        "let browsers: Array<Object> = loadBrowsers();\n\
          if (len(browsers) > 0) {\n\
-           let first = browsers[0];\n\
+           let first: Object = browsers[0];\n\
            openWith(first.path, String(first.flags));\n\
          }\n\
-         function refresh() {\n\
+         function refresh(): Void {\n\
            reloadServices();\n\
            exit();\n\
          }\n\
@@ -46,8 +46,8 @@ fn names_from_every_source_resolve() {
 #[test]
 fn undefined_variable_points_at_the_name() {
     assert_eq!(
-        failure("let value = missing;", &[]),
-        at("variable 'missing' is not defined", 1, 13)
+        failure("let value: Number = missing;", &[]),
+        at("variable 'missing' is not defined", 1, 21)
     );
 }
 
@@ -79,8 +79,8 @@ fn external_names_cover_properties_and_host_functions() {
 #[test]
 fn function_parameters_and_locals_resolve() {
     accepts(
-        "function launch(i) {\n\
-           let browser = browsers[i];\n\
+        "function launch(i: Number): Void {\n\
+           let browser: Object = browsers[i];\n\
            browser.flags = browser.flags + \"\";\n\
          }",
         &["browsers"],
@@ -90,7 +90,10 @@ fn function_parameters_and_locals_resolve() {
 #[test]
 fn function_locals_do_not_escape_the_body() {
     assert_eq!(
-        failure("function run() { let inner = 1; }\ninner;", &[]),
+        failure(
+            "function run(): Void { let inner: Number = 1; }\ninner;",
+            &[]
+        ),
         at("variable 'inner' is not defined", 2, 1)
     );
 }
@@ -98,7 +101,7 @@ fn function_locals_do_not_escape_the_body() {
 #[test]
 fn functions_resolve_before_their_declaration() {
     accepts(
-        "start();\nfunction start() { stop(); }\nfunction stop() {}",
+        "start();\nfunction start(): Void { stop(); }\nfunction stop(): Void {}",
         &[],
     );
 }
@@ -106,7 +109,7 @@ fn functions_resolve_before_their_declaration() {
 #[test]
 fn declarations_inside_blocks_and_branches_resolve() {
     accepts(
-        "if (true) { let value = 1; } else { let value = 2; }\nvalue = value + 1;",
+        "if (true) { let value: Number = 1; } else { let value: Number = 2; }\nvalue = value + 1;",
         &[],
     );
 }
@@ -114,7 +117,7 @@ fn declarations_inside_blocks_and_branches_resolve() {
 #[test]
 fn field_and_index_keys_are_not_variables() {
     accepts(
-        "let answer = settings[\"always-ask\"];\nlet path = browser[\"profile-dir\"];",
+        "let answer: Number = settings[\"always-ask\"];\nlet path: String = browser[\"profile-dir\"];",
         &["settings", "browser"],
     );
 }
@@ -126,36 +129,36 @@ fn arguments_and_template_parts_are_checked() {
         at("variable 'unknown' is not defined", 1, 5)
     );
     assert_eq!(
-        failure("let text = `value: ${missing}`;", &[]),
-        at("variable 'missing' is not defined", 1, 22)
+        failure("let text: String = `value: ${missing}`;", &[]),
+        at("variable 'missing' is not defined", 1, 30)
     );
 }
 
 #[test]
 fn a_variable_is_not_visible_in_its_own_initializer() {
     assert_eq!(
-        failure("let value = value;", &[]),
-        at("variable 'value' is not defined", 1, 13)
+        failure("let value: Number = value;", &[]),
+        at("variable 'value' is not defined", 1, 21)
     );
 }
 
 #[test]
 fn a_declaration_without_an_initializer_resolves() {
-    accepts("let value;\nvalue = 1;", &[]);
+    accepts("let value: Number;\nvalue = 1;", &[]);
 }
 
 #[test]
 fn every_expression_kind_visits_its_children() {
     for source in [
-        "let x = missing.field;",
-        "let x = -missing;",
-        "let x = missing[0];",
-        "let x = missing + 1;",
-        "let x = missing ? 1 : 2;",
-        "let x = missing = 1;",
-        "let x = [missing];",
-        "let x = { key: missing };",
-        "let x = `${missing}`;",
+        "let x: Number = missing.field;",
+        "let x: Number = -missing;",
+        "let x: Number = missing[0];",
+        "let x: Number = missing + 1;",
+        "let x: Number = missing ? 1 : 2;",
+        "let x: Number = missing = 1;",
+        "let x: Number = [missing];",
+        "let x: Number = { key: missing };",
+        "let x: Number = `${missing}`;",
     ] {
         let error = failure(source, &[]);
         assert_eq!(

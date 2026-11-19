@@ -139,7 +139,7 @@ fn script<'a>(program: &'a Program, names: &mut Names<'a>) {
 
 fn function_node<'a>(function: &'a Function, names: &mut Names<'a>) {
     for param in &function.params {
-        names.intern(param);
+        names.intern(&param.name);
     }
     statements(&function.body, names);
 }

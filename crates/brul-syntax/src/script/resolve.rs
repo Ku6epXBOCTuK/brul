@@ -35,7 +35,7 @@ fn validate_inner(
         let mut names = Names::new(functions.clone(), external, allow_host_calls);
         names
             .variables
-            .extend(function.params.iter().map(String::as_str));
+            .extend(function.params.iter().map(|param| param.name.as_str()));
         names.variables.extend(top_level.iter().copied());
         check_statements(&function.body, &mut names)?;
     }

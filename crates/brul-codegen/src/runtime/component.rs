@@ -134,7 +134,7 @@ fn bind(
             widget,
             target: Rc::clone(component),
             name: argument.name,
-            ty: argument.ty,
+            ty: argument.ty.clone(),
             expression: argument.expression,
             scopes: parent.borrow().build_scopes(),
             component: Rc::clone(parent),
@@ -155,11 +155,11 @@ fn assign(
     value: Value,
     name: &str,
 ) -> Result<(), ViewError> {
-    if !accepts_prop(&value, argument.ty) {
+    if !accepts_prop(&value, &argument.ty) {
         let property = component.borrow().name(argument.name);
         return Err(ViewError::expected(
             format!("property '{property}' of component '{name}'"),
-            prop_name(argument.ty),
+            prop_name(&argument.ty),
             value.type_name(),
         ));
     }
@@ -169,20 +169,28 @@ fn assign(
         .map_err(ViewError::from)
 }
 
-pub fn accepts_prop(value: &Value, ty: PropType) -> bool {
+pub fn accepts_prop(value: &Value, ty: &PropType) -> bool {
     match ty {
         PropType::Bool => matches!(value, Value::Bool(_)),
         PropType::Number => matches!(value, Value::Number(_)),
         PropType::String => matches!(value, Value::String(_)),
         PropType::Image => matches!(value, Value::Null | Value::Image(_) | Value::ImageBytes(_)),
+        PropType::Null => matches!(value, Value::Null),
+        PropType::Object => matches!(value, Value::Object(_)),
+        PropType::Array(_) => matches!(value, Value::Array(_)),
+        PropType::Void => false,
     }
 }
 
-pub fn prop_name(ty: PropType) -> &'static str {
+pub fn prop_name(ty: &PropType) -> &'static str {
     match ty {
         PropType::Bool => "Bool",
         PropType::Number => "Number",
         PropType::String => "String",
         PropType::Image => "Image",
+        PropType::Null => "Null",
+        PropType::Object => "Object",
+        PropType::Array(_) => "Array",
+        PropType::Void => "Void",
     }
 }

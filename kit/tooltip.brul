@@ -1,11 +1,11 @@
 <script>
-    let shown = false;
+    let shown: Bool = false;
 
-    function show() {
+    function show(): Void {
         shown = true;
     }
 
-    function hide() {
+    function hide(): Void {
         shown = false;
     }
 </script>

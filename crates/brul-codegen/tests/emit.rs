@@ -503,8 +503,8 @@ window Demo (title: "demo") {
 #[test]
 fn emits_the_focusable_flag_and_focus_handlers() {
     let source = r#"<script>
-    function gained() { }
-    function lost() { }
+    function gained(): Void { }
+    function lost(): Void { }
 </script>
 
 <markup>
@@ -522,8 +522,8 @@ window Demo (title: "demo") {
 #[test]
 fn emits_a_text_input_with_its_binding_and_handlers() {
     let source = r#"<script>
-    function edited(ev) { }
-    function submitted() { }
+    function edited(ev: Object): Void { }
+    function submitted(): Void { }
 </script>
 
 <markup>
@@ -542,7 +542,7 @@ window Demo (title: "demo") {
 #[test]
 fn rejects_a_handler_that_ignores_the_event_arguments() {
     let source = r#"<script>
-    function edited(value, caret) { }
+    function edited(value: Number, caret: Number): Void { }
 </script>
 
 <markup>
@@ -561,7 +561,7 @@ window Demo (title: "demo") {
 #[test]
 fn rejects_a_window_handler_that_ignores_the_key() {
     let source = r#"<script>
-    function quit() { }
+    function quit(): Void { }
 </script>
 
 <markup>
@@ -622,7 +622,7 @@ window Demo (title: "demo") {
 #[test]
 fn emits_widget_handlers() {
     let source = r#"<script>
-    function toggle() { }
+    function toggle(): Void { }
 </script>
 
 <markup>
@@ -784,7 +784,7 @@ window Demo (title: "demo") {
 #[test]
 fn emits_window_handler() {
     let source = r#"<script>
-    function quit(ev) { }
+    function quit(ev: Object): Void { }
 </script>
 
 <markup>
@@ -802,7 +802,7 @@ window Demo (title: "demo", on key: quit) {
 #[test]
 fn emits_a_window_close_handler() {
     let source = r#"<script>
-    function hide() { }
+    function hide(): Void { }
 </script>
 
 <markup>
@@ -959,10 +959,10 @@ window Picker (title: "two") {
 #[test]
 fn emits_script_program() {
     let source = r#"<script>
-    const limit = 2;
-    let count = 0;
+    const limit: Number = 2;
+    let count: Number = 0;
 
-    function bump(step) {
+    function bump(step: Number): Void {
         if (step > limit) {
             count = limit;
         } else {
@@ -970,7 +970,7 @@ fn emits_script_program() {
         }
     }
 
-    function closePanel() {
+    function closePanel(): Void {
         count = 0;
     }
 </script>
@@ -1001,7 +1001,7 @@ window Demo (title: "demo") {
 #[test]
 fn rejects_undefined_script_variable_at_build() {
     let source = r#"<script>
-    let count = missing;
+    let count: Number = missing;
 </script>
 
 <markup>
@@ -1017,9 +1017,9 @@ window Demo (title: "demo") {
 #[test]
 fn accepts_host_calls_with_declared_variables_at_build() {
     let source = r#"<script>
-    let label;
+    let label: String;
 
-    function greet() {
+    function greet(): Void {
         label = capitalize(label);
     }
 </script>
@@ -1347,7 +1347,7 @@ fn emits_component_events() {
             ),
             (
                 "window.brul",
-                "<script>\n    function launch(i) {\n    }\n</script>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge (on clicked: launch) { }\n    }\n}\n</markup>\n",
+                "<script>\n    function launch(i: Number): Void {\n    }\n</script>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        Badge (on clicked: launch) { }\n    }\n}\n</markup>\n",
             ),
         ],
     );
@@ -1381,7 +1381,7 @@ fn rejects_component_events() {
                 (
                     "window.brul",
                     &format!(
-                        "<script>\n    function launch() {{\n    }}\n</script>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {{\n    Column {{\n        {markup}\n    }}\n}}\n</markup>\n"
+                        "<script>\n    function launch(): Void {{\n    }}\n</script>\n\n<use>\n    import Badge from \"./badge.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {{\n    Column {{\n        {markup}\n    }}\n}}\n</markup>\n"
                     ),
                 ),
             ],
@@ -1648,8 +1648,8 @@ fn emits_the_kit_components() {
     std::fs::write(
         dir.join("window.brul"),
         r#"<script>
-    let shown = false;
-    let draft = "";
+    let shown: Bool = false;
+    let draft: String = "";
 </script>
 
 <style>
@@ -1913,8 +1913,8 @@ fn lists_imported_files_outside_the_entry_directory() {
 #[test]
 fn emits_names_in_first_appearance_order() {
     let source = r#"<script>
-    let selected = 0;
-    function bump(step) {
+    let selected: Number = 0;
+    function bump(step: Number): Void {
         selected = selected + step;
     }
 </script>
@@ -2271,7 +2271,7 @@ window Demo (title: "demo") {
 #[test]
 fn emits_a_modal_layer_that_dismisses() {
     let source = r#"<script>
-    function dismiss() { }
+    function dismiss(): Void { }
 </script>
 
 <markup>

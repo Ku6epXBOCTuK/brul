@@ -1,5 +1,5 @@
 <script>
-    function toggle() {
+    function toggle(): Void {
         if (!disabled) {
             checked = !checked;
             toggled();

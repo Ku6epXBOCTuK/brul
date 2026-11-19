@@ -212,7 +212,7 @@ fn every_prop_type_has_its_own_name() {
         PropType::Image,
     ]
     .into_iter()
-    .map(prop_name)
+    .map(|ty| prop_name(&ty))
     .collect();
     assert!(names.iter().all(|name| !name.is_empty()));
     let mut unique = names.clone();
@@ -505,15 +505,18 @@ fn a_binding_ignores_a_value_of_the_wrong_type() {
 
 #[test]
 fn an_image_prop_accepts_a_path_and_null() {
-    assert!(accepts_prop(&Value::Image("a.png".into()), PropType::Image));
-    assert!(accepts_prop(&Value::Null, PropType::Image));
+    assert!(accepts_prop(
+        &Value::Image("a.png".into()),
+        &PropType::Image
+    ));
+    assert!(accepts_prop(&Value::Null, &PropType::Image));
     assert!(!accepts_prop(
         &Value::String("a.png".into()),
-        PropType::Image
+        &PropType::Image
     ));
     assert!(accepts_prop(
         &Value::image_bytes(&[1, 2, 3]),
-        PropType::Image
+        &PropType::Image
     ));
 }
 

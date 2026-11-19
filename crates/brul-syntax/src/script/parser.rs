@@ -4,7 +4,8 @@ use std::sync::Arc;
 use crate::ast::Expr;
 use crate::error::{Error, Expected};
 use crate::lexer::{self, Punct, TokenKind, TokenStream};
-use crate::script::ast::{Function, Program, Statement};
+use crate::script::ast::{Function, Param, Program, Statement};
+use crate::types::Type;
 
 pub fn parse(source: &str) -> Result<Program, Error> {
     let tokens = lexer::tokenize(source)?;
@@ -69,6 +70,8 @@ impl Parser<'_> {
     fn let_statement(&mut self, constant: bool) -> Result<Statement, Error> {
         self.at += 1;
         let name = self.ident(Expected::Word("variable name"))?;
+        self.expect_punct(Punct::Colon, Punct::Colon)?;
+        let ty = self.type_annotation()?;
         let value = if self.tokens[self.at].kind == TokenKind::Punct(Punct::Assign) {
             self.at += 1;
             Some(self.expression()?)
@@ -81,6 +84,7 @@ impl Parser<'_> {
         Ok(Statement::Let {
             constant,
             name,
+            ty,
             value,
         })
     }
@@ -92,7 +96,10 @@ impl Parser<'_> {
         let mut params = Vec::new();
         if self.tokens[self.at].kind != TokenKind::Punct(Punct::RParen) {
             loop {
-                params.push(self.ident(Expected::Word("parameter name"))?);
+                let name = self.ident(Expected::Word("parameter name"))?;
+                self.expect_punct(Punct::Colon, Punct::Colon)?;
+                let ty = self.type_annotation()?;
+                params.push(Param { name, ty });
                 if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
                     break;
                 }
@@ -100,8 +107,32 @@ impl Parser<'_> {
             }
         }
         self.expect_punct(Punct::RParen, Punct::RParen)?;
+        self.expect_punct(Punct::Colon, Punct::Colon)?;
+        let return_type = self.type_annotation()?;
         let body = self.block_statements()?;
-        Ok(Function { name, params, body })
+        Ok(Function {
+            name,
+            params,
+            return_type,
+            body,
+        })
+    }
+
+    fn type_annotation(&mut self) -> Result<Type, Error> {
+        let token = self.token()?;
+        let span = token.span;
+        let name = match &token.kind {
+            TokenKind::Ident(name) => name.clone(),
+            _ => return Err(self.error(span, Expected::Word("type"))),
+        };
+        self.at += 1;
+        if name == "Array" {
+            self.expect_punct(Punct::Lt, Punct::Lt)?;
+            let item = self.type_annotation()?;
+            self.expect_punct(Punct::Gt, Punct::Gt)?;
+            return Ok(Type::Array(Box::new(item)));
+        }
+        Type::from_name(&name).ok_or_else(|| self.error(span, Expected::Word("type")))
     }
 
     fn if_statement(&mut self) -> Result<Statement, Error> {

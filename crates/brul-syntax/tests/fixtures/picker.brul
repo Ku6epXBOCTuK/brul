@@ -80,16 +80,16 @@ theme dark {
 <script>
 let selectedIndex = 0;
 
-function toggle() {
+function toggle(): Void {
   checked = !checked;
   toggled();
 }
 
-function itemClicked() {
+function itemClicked(): Void {
   clicked(index);
 }
 
-function handleKey(ev) {
+function handleKey(ev: Object): Void {
   if (ev.code == "Escape") {
     exit();
   }

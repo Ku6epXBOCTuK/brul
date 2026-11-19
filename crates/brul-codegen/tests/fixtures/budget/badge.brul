@@ -1,5 +1,5 @@
 <script>
-    function pick() {
+    function pick(): Void {
         clicked();
     }
 </script>

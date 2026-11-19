@@ -566,7 +566,7 @@ pub(crate) fn apply_prop(prop: &PropBinding) {
         }
     };
     if let Some(value) = value
-        && accepts_prop(&value, prop.ty)
+        && accepts_prop(&value, &prop.ty)
         && let Err(error) = prop.target.borrow_mut().assign_property(prop.name, value)
     {
         tracing::error!(%error, "property assignment failed");

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position};
-use brul_syntax::script::{Function, Program, Statement, parse};
+use brul_syntax::script::{Function, Param, Program, Statement, parse};
+use brul_syntax::types::Type;
 
 fn expr(kind: ExprKind) -> Expr {
     Expr::new(kind, Position::default())
@@ -37,6 +38,13 @@ fn index(target: Expr, index: Expr) -> Expr {
     })
 }
 
+fn param(name: &str, ty: Type) -> Param {
+    Param {
+        name: name.to_owned(),
+        ty,
+    }
+}
+
 #[test]
 fn empty_script_is_an_empty_program() {
     assert_eq!(
@@ -49,13 +57,14 @@ fn empty_script_is_an_empty_program() {
 }
 
 #[test]
-fn let_parses_name_and_value() {
-    let program = parse("let browsers = [];").unwrap();
+fn let_parses_name_type_and_value() {
+    let program = parse("let browsers: Array<Object> = [];").unwrap();
     assert_eq!(
         program.statements,
         vec![Statement::Let {
             constant: false,
             name: "browsers".to_owned(),
+            ty: Type::Array(Box::new(Type::Object)),
             value: Some(expr(ExprKind::Array(vec![]))),
         }]
     );
@@ -63,35 +72,44 @@ fn let_parses_name_and_value() {
 
 #[test]
 fn let_parses_without_value() {
-    let program = parse("let limit;").unwrap();
+    let program = parse("let limit: Number;").unwrap();
     assert_eq!(
         program.statements,
         vec![Statement::Let {
             constant: false,
             name: "limit".to_owned(),
+            ty: Type::Number,
             value: None,
         }]
     );
 }
 
 #[test]
-fn const_parses_name_and_value() {
-    let program = parse("const limit = 10;").unwrap();
+fn const_parses_name_type_and_value() {
+    let program = parse("const limit: Number = 10;").unwrap();
     assert_eq!(
         program.statements,
         vec![Statement::Let {
             constant: true,
             name: "limit".to_owned(),
+            ty: Type::Number,
             value: Some(num(10.0)),
         }]
     );
 }
 
 #[test]
+fn let_without_type_is_rejected() {
+    let error = parse("let a = 1;").unwrap_err();
+    assert_eq!(error.message(), "expected ':'");
+    assert_eq!((error.line(), error.column()), (1, 7));
+}
+
+#[test]
 fn const_without_value_is_rejected() {
-    let error = parse("const limit;").unwrap_err();
+    let error = parse("const limit: Number;").unwrap_err();
     assert_eq!(error.message(), "const requires an initializer");
-    assert_eq!((error.line(), error.column()), (1, 12));
+    assert_eq!((error.line(), error.column()), (1, 20));
 }
 
 #[test]
@@ -118,13 +136,14 @@ fn expression_statements_keep_their_position() {
 
 #[test]
 fn block_holds_parenthesised_statement_list() {
-    let program = parse("{ let a = 1; a; }").unwrap();
+    let program = parse("{ let a: Number = 1; a; }").unwrap();
     assert_eq!(
         program.statements,
         vec![Statement::Block(vec![
             Statement::Let {
                 constant: false,
                 name: "a".to_owned(),
+                ty: Type::Number,
                 value: Some(num(1.0)),
             },
             Statement::Expr(ident("a")),
@@ -147,9 +166,9 @@ fn object_literal_at_statement_position_is_rejected() {
 
 #[test]
 fn let_without_semicolon_points_at_the_end() {
-    let error = parse("let a = 1").unwrap_err();
+    let error = parse("let a: Number = 1").unwrap_err();
     assert_eq!(error.message(), "expected ';'");
-    assert_eq!((error.line(), error.column()), (1, 10));
+    assert_eq!((error.line(), error.column()), (1, 18));
 }
 
 #[test]
@@ -161,9 +180,9 @@ fn let_without_name_is_rejected() {
 
 #[test]
 fn unterminated_block_points_at_the_end() {
-    let error = parse("{ let a = 1;").unwrap_err();
+    let error = parse("{ let a: Number = 1;").unwrap_err();
     assert_eq!(error.message(), "expected '}'");
-    assert_eq!((error.line(), error.column()), (1, 13));
+    assert_eq!((error.line(), error.column()), (1, 21));
 }
 
 #[test]
@@ -241,15 +260,18 @@ fn if_without_block_is_rejected() {
 
 #[test]
 fn function_parses_params_and_body() {
-    let program = parse("function launch(i) { let browser = browsers[i]; }").unwrap();
+    let program =
+        parse("function launch(i: Number): Void { let browser: Object = browsers[i]; }").unwrap();
     assert_eq!(
         program.functions,
         vec![Arc::new(Function {
             name: "launch".to_owned(),
-            params: vec!["i".to_owned()],
+            params: vec![param("i", Type::Number)],
+            return_type: Type::Void,
             body: vec![Statement::Let {
                 constant: false,
                 name: "browser".to_owned(),
+                ty: Type::Object,
                 value: Some(index(ident("browsers"), ident("i"))),
             }],
         })]
@@ -258,12 +280,13 @@ fn function_parses_params_and_body() {
 
 #[test]
 fn function_without_params_parses_empty_list() {
-    let program = parse("function exit() { quit(); }").unwrap();
+    let program = parse("function exit(): Void { quit(); }").unwrap();
     assert_eq!(
         program.functions,
         vec![Arc::new(Function {
             name: "exit".to_owned(),
             params: vec![],
+            return_type: Type::Void,
             body: vec![Statement::Expr(call(ident("quit"), vec![]))],
         })]
     );
@@ -271,8 +294,11 @@ fn function_without_params_parses_empty_list() {
 
 #[test]
 fn function_parses_several_params() {
-    let program = parse("function move(x, y) { }").unwrap();
-    assert_eq!(program.functions[0].params, vec!["x", "y"]);
+    let program = parse("function move(x: Number, y: String): Void { }").unwrap();
+    assert_eq!(
+        program.functions[0].params,
+        vec![param("x", Type::Number), param("y", Type::String)]
+    );
 }
 
 #[test]
@@ -283,32 +309,39 @@ fn function_without_name_is_rejected() {
 }
 
 #[test]
-fn function_without_body_is_rejected() {
-    let error = parse("function f() launch();").unwrap_err();
-    assert_eq!(error.message(), "expected '{'");
+fn function_without_return_type_is_rejected() {
+    let error = parse("function f() { }").unwrap_err();
+    assert_eq!(error.message(), "expected ':'");
     assert_eq!((error.line(), error.column()), (1, 14));
+}
+
+#[test]
+fn function_without_body_is_rejected() {
+    let error = parse("function f(): Void launch();").unwrap_err();
+    assert_eq!(error.message(), "expected '{'");
+    assert_eq!((error.line(), error.column()), (1, 20));
 }
 
 #[test]
 fn function_param_with_trailing_comma_is_rejected() {
-    let error = parse("function f(a,) { }").unwrap_err();
+    let error = parse("function f(a: Number,) { }").unwrap_err();
     assert_eq!(error.message(), "expected parameter name");
-    assert_eq!((error.line(), error.column()), (1, 14));
+    assert_eq!((error.line(), error.column()), (1, 22));
 }
 
 #[test]
 fn nested_function_is_rejected() {
-    let error = parse("function f() { function g() { } }").unwrap_err();
+    let error = parse("function f(): Void { function g(): Void { } }").unwrap_err();
     assert_eq!(
         error.message(),
         "functions are only allowed at the top level"
     );
-    assert_eq!((error.line(), error.column()), (1, 16));
+    assert_eq!((error.line(), error.column()), (1, 22));
 }
 
 #[test]
 fn function_between_statements_is_a_top_level_item() {
-    let program = parse("let a = 1; function f() { } let b = 2;").unwrap();
+    let program = parse("let a: Number = 1; function f(): Void { } let b: Number = 2;").unwrap();
     assert_eq!(program.statements.len(), 2);
     assert_eq!(program.functions.len(), 1);
 }

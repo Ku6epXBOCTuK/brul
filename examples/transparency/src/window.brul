@@ -1,11 +1,11 @@
 <script>
-    function closeOnEscape(ev) {
+    function closeOnEscape(ev: Object): Void {
         if (ev.code == "Escape") {
             exit();
         }
     }
 
-    function toggleTheme() {
+    function toggleTheme(): Void {
         set_theme(theme() == "dark" ? "light" : "dark");
     }
 </script>

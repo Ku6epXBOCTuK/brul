@@ -128,9 +128,10 @@ fn the_generated_host_lists_its_commands() {
 
 #[test]
 fn a_script_call_to_the_command_resolves() {
-    let program =
-        brul_syntax::script::parse("let outcome = act(\"hide\", { name: \"garden\", port: 1 });")
-            .expect("script");
+    let program = brul_syntax::script::parse(
+        "let outcome: Object = act(\"hide\", { name: \"garden\", port: 1 });",
+    )
+    .expect("script");
 
     brul_syntax::script::validate(&program, &TestHost { calls: 0 }.commands())
         .expect("the command is known");
