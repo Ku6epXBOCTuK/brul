@@ -1,5 +1,6 @@
 //! Фасад BRUL: запуск приложения, корни окон, общий контекст.
 
+pub mod builtins;
 mod each;
 mod event;
 mod handle;

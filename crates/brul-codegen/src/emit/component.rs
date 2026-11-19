@@ -294,17 +294,12 @@ fn event_of<'a>(
             format!("component '{name}' has no event '{event}'"),
         ));
     };
-    events::define(
-        handler,
-        emit.program,
-        declaration.params.len(),
-        element.position,
-    )?;
     let params = declaration
         .params
         .iter()
         .map(|param| param.ty.clone())
-        .collect();
+        .collect::<Vec<_>>();
+    events::define(handler, emit.program, &params, element.position)?;
     Ok((event, handler, params))
 }
 

@@ -19,7 +19,7 @@ const EVENT_DEPTH: usize = 64;
 
 const BUILTINS: &[&str] = &[
     "theme",
-    "set_theme",
+    "setTheme",
     "setAlwaysOnTop",
     "openWindow",
     "exit",
@@ -80,7 +80,7 @@ impl Host for CommandHost {
                 None => Value::Null,
             });
         }
-        if name == "set_theme" {
+        if name == "setTheme" {
             if arguments.len() != 1 {
                 return Err(Error::Arity {
                     name: name.to_owned(),
@@ -89,7 +89,7 @@ impl Host for CommandHost {
             }
             let Value::String(theme) = &arguments[0] else {
                 return Err(Error::Argument {
-                    name: "set_theme",
+                    name: "setTheme",
                     expected: "String",
                     found: arguments[0].type_name(),
                 });
@@ -1013,22 +1013,22 @@ mod tests {
     fn set_theme_takes_exactly_one_string() {
         let (mut host, commands) = command_host(None);
         assert_eq!(
-            host.call("set_theme", &[]),
+            host.call("setTheme", &[]),
             Err(Error::Arity {
-                name: "set_theme".to_owned(),
+                name: "setTheme".to_owned(),
                 expected: "one",
             })
         );
         assert_eq!(
-            host.call("set_theme", &[Value::Number(1.0)]),
+            host.call("setTheme", &[Value::Number(1.0)]),
             Err(Error::Argument {
-                name: "set_theme",
+                name: "setTheme",
                 expected: "String",
                 found: "Number",
             })
         );
         assert_eq!(
-            host.call("set_theme", &[Value::String("dark".into())]),
+            host.call("setTheme", &[Value::String("dark".into())]),
             Ok(Value::Null)
         );
         assert_eq!(

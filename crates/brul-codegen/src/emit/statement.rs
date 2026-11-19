@@ -6,7 +6,7 @@ use brul_syntax::error::Error;
 use brul_syntax::script::Statement;
 use brul_syntax::types::Type;
 
-use super::expression::{convert, operation_in, type_name, typed};
+use super::expression::{convert, operation_in, operation_statement, type_name, typed};
 use super::scopes::Scopes;
 use super::state::State;
 
@@ -105,7 +105,7 @@ fn emit_statement(
             let _ = writeln!(
                 out,
                 "    {};",
-                operation_in(expression, names, state, props, scopes)?
+                operation_statement(expression, names, state, props, scopes)?
             );
         }
         Statement::Block(statements) => {
@@ -120,26 +120,51 @@ fn emit_statement(
             then_branch,
             else_branch,
         } => {
-            let value = operation_in(condition, names, state, props, scopes)?;
-            let _ = writeln!(out, "    match {value} {{");
-            let _ = writeln!(out, "        brul::Value::Bool(true) => {{");
+            let typed_condition = typed(condition, names, state, props, scopes)?;
+            if let Some((_, ty)) = &typed_condition
+                && ty != &Type::Bool
+            {
+                return Err(crate::error_at(
+                    condition.position,
+                    format!("if condition expects Bool, found {}", type_name(ty)),
+                ));
+            }
+            let typed_bool = typed_condition.is_some();
+            let value = match typed_condition {
+                Some((code, _)) => code,
+                None => operation_in(condition, names, state, props, scopes)?,
+            };
+            if typed_bool {
+                let _ = writeln!(out, "    if {value} {{");
+            } else {
+                let _ = writeln!(out, "    match {value} {{");
+                let _ = writeln!(out, "        brul::Value::Bool(true) => {{");
+            }
             scopes.push();
             block_in(then_branch, names, state, props, out, scopes, false)?;
             scopes.pop();
             out.push_str("        }\n");
             if let Some(branch) = else_branch {
-                out.push_str("        brul::Value::Bool(false) => {\n");
+                if typed_bool {
+                    out.push_str("    } else {\n");
+                } else {
+                    out.push_str("        brul::Value::Bool(false) => {\n");
+                }
                 scopes.push();
                 emit_statement(branch, names, state, props, out, scopes, false)?;
                 scopes.pop();
                 out.push_str("        }\n");
             }
-            let _ = writeln!(
-                out,
-                "        other => return Err(brul::Error::Expected {{ operation: \"if\", expected: \"Bool\", found: other.type_name() }}.at(brul::ast::Position {{ line: {}, column: {} }})),",
-                condition.position.line, condition.position.column
-            );
-            out.push_str("    }\n");
+            if typed_bool {
+                out.push_str("    }\n");
+            } else {
+                let _ = writeln!(
+                    out,
+                    "        other => return Err(brul::Error::Expected {{ operation: \"if\", expected: \"Bool\", found: other.type_name() }}.at(brul::ast::Position {{ line: {}, column: {} }})),",
+                    condition.position.line, condition.position.column
+                );
+                out.push_str("    }\n");
+            }
         }
         Statement::Return { value, position } => {
             let return_type = scopes.return_type().clone();

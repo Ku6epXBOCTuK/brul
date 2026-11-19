@@ -12,7 +12,7 @@ use crate::error_at;
 #[derive(Clone, Debug)]
 pub struct Command {
     pub name: String,
-    pub marker: String,
+    pub path: String,
     pub params: Vec<Type>,
     pub result: Type,
 }
@@ -54,7 +54,7 @@ pub fn collect(root: &Path) -> Result<Commands, Error> {
                 continue;
             }
             let name = function.sig.ident.to_string();
-            let marker = format!("__brul_command_{}", snake(&name));
+            let path = format!("crate::__brul_command_{}", snake(&name));
             let mut inputs = function.sig.inputs.iter();
             inputs.next();
             let params = inputs
@@ -69,7 +69,7 @@ pub fn collect(root: &Path) -> Result<Commands, Error> {
             };
             let command = Command {
                 name: camel(&name),
-                marker,
+                path,
                 params,
                 result,
             };

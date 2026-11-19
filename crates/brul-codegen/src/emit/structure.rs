@@ -3,12 +3,15 @@ use std::fmt::Write;
 
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Block, EachBlock, IfBlock};
+use brul_syntax::types::Type;
 
 use super::Emit;
 use super::Frame;
 use super::Out;
-use super::expression::operation;
+use super::PropTypes;
+use super::expression::{operation, type_name, typed};
 use super::scopes::{ScopeField, ScopeInfo, Scopes};
+use super::state::State;
 use super::{contains_slot, items, items_spliced};
 
 use brul_script::Names;
@@ -36,6 +39,7 @@ pub(super) fn structure_if(
 ) -> Result<(), Error> {
     let name = emit.structures.next(emit.base, "if");
     for (index, branch) in block.branches.iter().enumerate() {
+        check_condition(&branch.condition, emit.names, emit.state, emit.prop_types)?;
         let function = format!("{name}_value{index}");
         emit.functions.push(value_function(
             &function,
@@ -59,6 +63,7 @@ pub(super) fn structure_each(
     counter: &mut usize,
 ) -> Result<(), Error> {
     let name = emit.structures.next(emit.base, "each");
+    check_collection(&block.collection, emit.names, emit.state, emit.prop_types)?;
     emit.functions.push(value_function(
         &format!("{name}_value"),
         &block.collection,
@@ -108,6 +113,40 @@ pub(super) fn structure_each(
     let arm = each_arm(&name, block, emit, body_frame)?;
     emit.functions.push(arm);
     inline(out, &name, &format!("{name}_value"), true, counter);
+    Ok(())
+}
+
+fn check_condition(
+    condition: &brul_syntax::ast::Expr,
+    names: &Names<'_>,
+    state: &State,
+    props: &PropTypes,
+) -> Result<(), Error> {
+    if let Some((_, ty)) = typed(condition, names, state, props, &Scopes::new())?
+        && ty != Type::Bool
+    {
+        return Err(crate::error_at(
+            condition.position,
+            format!("if condition expects Bool, found {}", type_name(&ty)),
+        ));
+    }
+    Ok(())
+}
+
+fn check_collection(
+    collection: &brul_syntax::ast::Expr,
+    names: &Names<'_>,
+    state: &State,
+    props: &PropTypes,
+) -> Result<(), Error> {
+    if let Some((_, ty)) = typed(collection, names, state, props, &Scopes::new())?
+        && !matches!(ty, Type::Array(_) | Type::Object)
+    {
+        return Err(crate::error_at(
+            collection.position,
+            format!("each expects Array or Object, found {}", type_name(&ty)),
+        ));
+    }
     Ok(())
 }
 

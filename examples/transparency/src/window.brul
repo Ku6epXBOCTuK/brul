@@ -6,7 +6,7 @@
     }
 
     function toggleTheme(): Void {
-        set_theme(theme() == "dark" ? "light" : "dark");
+        setTheme(theme() == "dark" ? "light" : "dark");
     }
 </script>
 

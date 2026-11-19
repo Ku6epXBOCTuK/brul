@@ -1,7 +1,7 @@
 use brul_syntax::ast::ExprKind;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Element};
+use brul_syntax::markup::{Arg, Element, PropType};
 use brul_syntax::script::Program;
 
 use crate::error_at;
@@ -75,7 +75,7 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
                 format!("event '{}' is handled twice", event.name()),
             ));
         }
-        define(handler, program, event.arguments_count(), element.position)?;
+        define(handler, program, event.params(), element.position)?;
         handlers.push((event, handler.clone()));
     }
     Ok(Events {
@@ -134,12 +134,7 @@ pub(super) fn window(
                 format!("event '{}' is handled twice", event.name()),
             ));
         }
-        define(
-            &item.function,
-            program,
-            event.arguments_count(),
-            item.position,
-        )?;
+        define(&item.function, program, event.params(), item.position)?;
         handlers.push((event, item.function.clone()));
     }
     Ok(handlers)
@@ -148,7 +143,7 @@ pub(super) fn window(
 pub(super) fn define(
     name: &str,
     program: Option<&Program>,
-    arguments_count: usize,
+    params: &[PropType],
     position: Position,
 ) -> Result<(), Error> {
     let function = program.and_then(|program| {
@@ -163,14 +158,27 @@ pub(super) fn define(
             format!("function '{name}' is not defined"),
         ));
     };
-    if function.params.len() == arguments_count {
-        return Ok(());
+    if function.params.len() != params.len() {
+        return Err(error_at(
+            position,
+            format!(
+                "function '{name}' expects {} arguments, got {}",
+                params.len(),
+                function.params.len()
+            ),
+        ));
     }
-    Err(error_at(
-        position,
-        format!(
-            "function '{name}' expects {arguments_count} arguments, got {}",
-            function.params.len()
-        ),
-    ))
+    for (parameter, expected) in function.params.iter().zip(params) {
+        if &parameter.ty != expected {
+            return Err(error_at(
+                position,
+                format!(
+                    "event parameter expects {}, got {}",
+                    super::expression::type_name(expected),
+                    super::expression::type_name(&parameter.ty)
+                ),
+            ));
+        }
+    }
+    Ok(())
 }

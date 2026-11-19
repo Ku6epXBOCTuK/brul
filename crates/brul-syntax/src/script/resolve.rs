@@ -1,20 +1,8 @@
 use crate::ast::{Expr, ExprKind, Position};
 use crate::error::Error;
 use crate::script::ast::{Program, Statement};
-
-const BUILTINS: [&str; 4] = ["String", "Number", "len", "every"];
-const HOST_BUILTINS: [&str; 10] = [
-    "theme",
-    "set_theme",
-    "setAlwaysOnTop",
-    "openWindow",
-    "exit",
-    "closeWindow",
-    "dragWindow",
-    "showWindow",
-    "hideWindow",
-    "focusWindow",
-];
+use crate::script::builtins::{self, Argument};
+use crate::types::Type;
 
 pub fn validate(program: &Program, external: &[&str]) -> Result<(), Error> {
     validate_inner(program, external, &[])
@@ -83,8 +71,7 @@ impl<'a> Names<'a> {
     fn has_function(&self, name: &str) -> bool {
         self.functions.contains(&name)
             || self.external.contains(&name)
-            || BUILTINS.contains(&name)
-            || HOST_BUILTINS.contains(&name)
+            || builtins::builtin(name).is_some()
             || self.commands.contains(&name)
     }
 }
@@ -161,7 +148,44 @@ fn check_expression(expression: &Expr, names: &Names<'_>) -> Result<(), Error> {
 
 fn check_call(target: &Expr, args: &[Expr], names: &Names<'_>) -> Result<(), Error> {
     check_callee(target, names)?;
+    if let ExprKind::Ident(name) = &target.kind
+        && let Some(builtin) = builtins::builtin(name)
+    {
+        if args.len() != builtin.arguments.len() {
+            return Err(Error::at_position(
+                target.position,
+                Error::custom(format!(
+                    "'{name}' expects {} argument(s), found {}",
+                    builtin.arguments.len(),
+                    args.len()
+                )),
+            ));
+        }
+        for (argument, expected) in args.iter().zip(builtin.arguments) {
+            let Argument::Value(ty) = expected else {
+                continue;
+            };
+            if let Some(found) = literal_type(argument)
+                && &found != ty
+            {
+                return Err(Error::at_position(
+                    argument.position,
+                    Error::custom(format!("'{name}' expects {ty}, found {found}")),
+                ));
+            }
+        }
+    }
     check_arguments(target, args, names)
+}
+
+fn literal_type(expression: &Expr) -> Option<Type> {
+    match &expression.kind {
+        ExprKind::Number(_) => Some(Type::Number),
+        ExprKind::String(_) => Some(Type::String),
+        ExprKind::Bool(_) => Some(Type::Bool),
+        ExprKind::Null => Some(Type::Null),
+        _ => None,
+    }
 }
 
 fn check_callee(target: &Expr, names: &Names<'_>) -> Result<(), Error> {

@@ -4,6 +4,7 @@ use std::fmt::Write;
 use brul_script::Names;
 use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::error::Error;
+use brul_syntax::script::builtins::{self, Argument, Builtin};
 use brul_syntax::types::Type;
 
 use super::names;
@@ -223,6 +224,16 @@ pub(super) fn typed(
                     ));
                 }
             };
+            let string_comparison = left_ty == Type::String
+                && matches!(
+                    op,
+                    BinaryOp::Eq
+                        | BinaryOp::NotEq
+                        | BinaryOp::Lt
+                        | BinaryOp::Gt
+                        | BinaryOp::Le
+                        | BinaryOp::Ge
+                );
             let ty = if matches!(
                 op,
                 BinaryOp::Eq
@@ -238,7 +249,12 @@ pub(super) fn typed(
             } else {
                 left_ty
             };
-            Some((format!("({lhs}) {operator} ({rhs})"), ty))
+            let code = if string_comparison {
+                format!("({lhs}).as_str() {operator} ({rhs}).as_str()")
+            } else {
+                format!("({lhs}) {operator} ({rhs})")
+            };
+            Some((code, ty))
         }
         ExprKind::Ternary {
             condition,
@@ -278,6 +294,17 @@ pub(super) fn typed(
             let ExprKind::Ident(name) = &target.kind else {
                 return Ok(None);
             };
+            if let Some(builtin) = builtins::builtin(name) {
+                return builtin_call(
+                    builtin,
+                    args,
+                    expression.position,
+                    names,
+                    state,
+                    props,
+                    scopes,
+                );
+            }
             if let Some(command) = state.command(name) {
                 return host_call(
                     command,
@@ -338,6 +365,135 @@ pub(super) fn typed(
     })
 }
 
+fn builtin_call(
+    builtin: &Builtin,
+    arguments: &[Expr],
+    position: Position,
+    names: &Names<'_>,
+    state: &State,
+    props: &HashMap<String, Type>,
+    scopes: &Scopes,
+) -> Result<Option<(String, Type)>, Error> {
+    if arguments.len() != builtin.arguments.len() {
+        return Err(crate::error_at(
+            position,
+            format!(
+                "builtin '{}' expects {} arguments, found {}",
+                builtin.name,
+                builtin.arguments.len(),
+                arguments.len()
+            ),
+        ));
+    }
+    if let Some(marker) = builtin.marker {
+        let params = builtin
+            .arguments
+            .iter()
+            .map(|argument| match argument {
+                Argument::Value(ty) => ty.clone(),
+                Argument::Any | Argument::Function => Type::Object,
+            })
+            .collect();
+        let command = Command {
+            name: builtin.name.to_owned(),
+            path: format!("brul::builtins::{marker}"),
+            params,
+            result: builtin.result.clone(),
+        };
+        return host_call(&command, arguments, position, names, state, props, scopes);
+    }
+    match builtin.name {
+        "String" => Ok(Some((
+            format!(
+                "brul::builtins::string({})?",
+                value_argument(&arguments[0], names, state, props, scopes)?
+            ),
+            Type::String,
+        ))),
+        "Number" => Ok(Some((
+            format!(
+                "brul::builtins::number({})?",
+                value_argument(&arguments[0], names, state, props, scopes)?
+            ),
+            Type::Number,
+        ))),
+        "len" => Ok(Some((
+            format!(
+                "brul::builtins::len({})?",
+                value_argument(&arguments[0], names, state, props, scopes)?
+            ),
+            Type::Number,
+        ))),
+        "every" => every_typed(arguments, names, state, props, scopes),
+        _ => Ok(None),
+    }
+}
+
+fn value_argument(
+    expression: &Expr,
+    names: &Names<'_>,
+    state: &State,
+    props: &HashMap<String, Type>,
+    scopes: &Scopes,
+) -> Result<String, Error> {
+    match typed(expression, names, state, props, scopes)? {
+        Some((code, ty)) => Ok(wrap_typed(code, &ty)),
+        None => operation_in(expression, names, state, props, scopes),
+    }
+}
+
+fn every_typed(
+    arguments: &[Expr],
+    names: &Names<'_>,
+    state: &State,
+    props: &HashMap<String, Type>,
+    scopes: &Scopes,
+) -> Result<Option<(String, Type)>, Error> {
+    let interval = &arguments[0];
+    let function = &arguments[1];
+    let interval_code = match typed(interval, names, state, props, scopes)? {
+        Some((code, Type::Number)) => code,
+        Some((_, ty)) => {
+            return Err(crate::error_at(
+                interval.position,
+                format!("argument expects Number, found {}", type_name(&ty)),
+            ));
+        }
+        None => format!(
+            "(&{}).try_into()?",
+            operation_in(interval, names, state, props, scopes)?
+        ),
+    };
+    let ExprKind::Ident(name) = &function.kind else {
+        return Err(crate::error_at(
+            function.position,
+            "every expects a function name",
+        ));
+    };
+    let arity = if let Some(command) = state.command(name) {
+        command.params.len()
+    } else if let Some(signature) = scopes.function(name) {
+        signature.params.len()
+    } else {
+        return Err(crate::error_at(
+            function.position,
+            format!("function '{name}' is not defined"),
+        ));
+    };
+    if arity != 0 {
+        return Err(crate::error_at(
+            function.position,
+            format!("every function '{name}' takes no arguments"),
+        ));
+    }
+    Ok(Some((
+        format!(
+            "{{ let __brul_interval = {interval_code}; component.every(__brul_interval, {name:?})?; }}"
+        ),
+        Type::Void,
+    )))
+}
+
 fn host_call(
     command: &Command,
     arguments: &[Expr],
@@ -393,14 +549,34 @@ fn host_call(
     } else {
         format!("({},)", variables.join(", "))
     };
-    Ok(Some((
+    let code = if bindings.is_empty() {
         format!(
-            "{{ {} <crate::{} as brul::HostCommand>::invoke(component, {tuple})? }}",
+            "<{} as brul::HostCommand>::invoke(component, {tuple})?",
+            command.path
+        )
+    } else {
+        format!(
+            "{{ {} <{} as brul::HostCommand>::invoke(component, {tuple})? }}",
             bindings.join(" "),
-            command.marker
-        ),
-        command.result.clone(),
-    )))
+            command.path
+        )
+    };
+    Ok(Some((code, command.result.clone())))
+}
+
+pub(super) fn operation_statement(
+    expression: &Expr,
+    names: &Names<'_>,
+    state: &State,
+    props: &HashMap<String, Type>,
+    scopes: &Scopes,
+) -> Result<String, Error> {
+    if let Some((code, ty)) = typed(expression, names, state, props, scopes)?
+        && matches!(ty, Type::Null | Type::Void)
+    {
+        return Ok(code);
+    }
+    operation_in(expression, names, state, props, scopes)
 }
 
 pub(super) fn operation_in(

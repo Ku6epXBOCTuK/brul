@@ -19,7 +19,7 @@ impl Host for FakeHost {
             .borrow_mut()
             .push((name.to_owned(), arguments.to_vec()));
         match name {
-            "runBrowser" | "set_theme" | "exit" => Ok(Value::Null),
+            "runBrowser" | "setTheme" | "exit" => Ok(Value::Null),
             "currentTheme" => Ok(Value::String("dark".into())),
             _ => Err(Error::UnknownFunction(name.to_owned())),
         }
@@ -162,12 +162,12 @@ fn host_function_receives_arguments_and_returns_value() {
 #[test]
 fn side_effect_builtins_go_to_the_host() {
     let host = FakeHost::default();
-    assert_eq!(evaluate_with(&host, "set_theme(\"dark\")"), Ok(Value::Null));
+    assert_eq!(evaluate_with(&host, "setTheme(\"dark\")"), Ok(Value::Null));
     assert_eq!(evaluate_with(&host, "exit()"), Ok(Value::Null));
     assert_eq!(
         host.calls.borrow().as_slice(),
         &[
-            ("set_theme".to_owned(), vec![Value::String("dark".into())]),
+            ("setTheme".to_owned(), vec![Value::String("dark".into())]),
             ("exit".to_owned(), vec![]),
         ]
     );

@@ -70,6 +70,13 @@ impl HandlerEvent {
             _ => 0,
         }
     }
+
+    pub const fn params(self) -> &'static [PropType] {
+        match self {
+            Self::Key | Self::Input => &[PropType::Object],
+            _ => &[],
+        }
+    }
 }
 
 #[derive(Clone)]

@@ -8,7 +8,7 @@ fn host_commands() -> Commands {
         "capitalize".to_owned(),
         Command {
             name: "capitalize".to_owned(),
-            marker: "__brul_command_capitalize".to_owned(),
+            path: "crate::__brul_command_capitalize".to_owned(),
             params: vec![Type::String],
             result: Type::String,
         },
@@ -17,7 +17,7 @@ fn host_commands() -> Commands {
         "double".to_owned(),
         Command {
             name: "double".to_owned(),
-            marker: "__brul_command_double".to_owned(),
+            path: "crate::__brul_command_double".to_owned(),
             params: vec![Type::Number],
             result: Type::Number,
         },
@@ -1269,6 +1269,18 @@ fn operated(source: &str) -> String {
     .expect("operation")
 }
 
+fn operated_error(source: &str) -> brul_syntax::error::Error {
+    let expression = brul_syntax::parser::parse_expression(source).expect("expression parses");
+    let names = emit::identifiers(&expression);
+    emit::operation(
+        &expression,
+        &names,
+        &emit::State::default(),
+        &std::collections::HashMap::new(),
+    )
+    .expect_err("error")
+}
+
 #[test]
 fn emits_value_literals_and_reads() {
     assert_eq!(
@@ -1323,16 +1335,85 @@ fn emits_value_calls() {
         "{ let arguments = vec![brul::Value::Number(1.0_f64)]; brul::eval::call(component, \"f\", arguments)? }"
     );
     assert!(
-        operated("every(100, tick)").contains("component.every(interval, \"tick\")?"),
-        "{}",
-        operated("every(100, tick)")
+        operated_error("every(100, tick)")
+            .message()
+            .contains("function 'tick' is not defined")
     );
-    assert!(operated("every(100)").contains("brul::Error::Arity"));
-    assert!(operated("every(100, 5)").contains("expected: \"function name\""));
+    assert!(
+        operated_error("every(100)")
+            .message()
+            .contains("builtin 'every' expects 2 arguments")
+    );
+    assert!(
+        operated_error("every(100, 5)")
+            .message()
+            .contains("every expects a function name")
+    );
     assert!(operated("a.b()").contains("Unsupported(\"method call\")"));
     assert!(operated("a ? b : c").contains("expected: \"Bool\""));
     assert!(!operated("a ? b : c").contains("match ("));
-    assert!(!operated("every(100, tick)").contains("match ("));
+}
+
+#[test]
+fn emits_typed_builtin_calls() {
+    let source = r#"<script>
+    function apply(): Void {
+        setTheme("dark");
+        let current: String = theme();
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") { View { } }
+</markup>
+"#;
+    let output = emit::module(source).expect("module");
+    assert!(
+        output.contains("<brul::builtins::SetTheme as brul::HostCommand>::invoke"),
+        "{output}"
+    );
+    assert!(
+        output.contains("<brul::builtins::Theme as brul::HostCommand>::invoke"),
+        "{output}"
+    );
+}
+
+#[test]
+fn rejects_old_theme_command_name_at_build() {
+    let source = r#"<script>
+    function apply(): Void { set_theme("dark"); }
+</script>
+
+<markup>
+window Demo (title: "demo") { View { } }
+</markup>
+"#;
+    let error = emit::module(source).expect_err("error");
+    assert!(
+        error
+            .message()
+            .contains("function 'set_theme' is not defined"),
+        "{}",
+        error.message()
+    );
+}
+
+#[test]
+fn emits_typed_every_calls() {
+    let source = r#"<script>
+    function tick(): Void { }
+    function start(): Void { every(100, tick); }
+</script>
+
+<markup>
+window Demo (title: "demo") { View { } }
+</markup>
+"#;
+    let output = emit::module(source).expect("module");
+    assert!(
+        output.contains("component.every(__brul_interval, \"tick\")?"),
+        "{output}"
+    );
 }
 
 #[test]

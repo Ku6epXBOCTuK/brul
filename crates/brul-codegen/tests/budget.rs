@@ -11,7 +11,7 @@ fn fixed_markup_stays_within_the_output_budget() {
     let mut commands = Commands::new();
     let command = Command {
         name: "toggleLabel".to_owned(),
-        marker: "__brul_command_toggle_label".to_owned(),
+        path: "crate::__brul_command_toggle_label".to_owned(),
         params: Vec::new(),
         result: Type::Void,
     };
