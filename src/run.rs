@@ -373,11 +373,8 @@ mod tests {
         if name != "mark" {
             return Err(crate::Error::UnknownFunction(name.to_owned()));
         }
-        component.push_frame();
-        component.declare("label", arguments[0].clone(), false)?;
-        let value = component.read("label")?;
-        component.assign("name", value)?;
-        component.pop_frame();
+        let label = arguments[0].clone();
+        component.assign("name", label)?;
         Ok(Value::Null)
     }
 
@@ -743,11 +740,8 @@ mod tests {
         if name != "handleKey" && name != "handleSettingsKey" {
             return Err(crate::Error::UnknownFunction(name.to_owned()));
         }
-        component.push_frame();
-        component.declare("ev", arguments[0].clone(), false)?;
-        let event = component.read("ev")?;
+        let event = arguments[0].clone();
         let code = crate::eval::read_field(&event, "code")?;
-        component.pop_frame();
         if matches!(code, Value::String(text) if text.as_ref() == "Escape") {
             crate::eval::call(component, "exit", Vec::new())?;
         }

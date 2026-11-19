@@ -4,8 +4,9 @@ use brul_script::Names;
 use brul_syntax::error::Error;
 use brul_syntax::script::Program;
 
+use super::scopes::Scopes;
 use super::state::State;
-use super::statement::{block, top_level};
+use super::statement::{block_with_scopes, top_level};
 
 const RESERVED: &[&str] = &[
     "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "crate",
@@ -44,14 +45,20 @@ pub(super) fn module(
             out,
             "#[allow(unused_mut, unused_variables)]\nfn {function_name}(component: &mut brul::Component, mut arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
         );
+        let mut scopes = Scopes::new();
         for parameter in &function.params {
-            let _ = writeln!(
-                out,
-                "    component.declare({:?}, arguments.remove(0), false)?;",
-                parameter.name
-            );
+            let ident = scopes.declare(&parameter.name, &parameter.ty, false)?;
+            let local_ty = Scopes::local_type(&parameter.ty);
+            let value = if Scopes::is_value(&parameter.ty) {
+                "arguments.remove(0)".to_owned()
+            } else if matches!(parameter.ty, brul_syntax::types::Type::Null) {
+                "{ let _ = arguments.remove(0); () }".to_owned()
+            } else {
+                "(&arguments.remove(0)).try_into()?".to_owned()
+            };
+            let _ = writeln!(out, "    let mut {ident}: {local_ty} = {value};");
         }
-        block(&function.body, names, state, &mut out)?;
+        block_with_scopes(&function.body, names, state, &mut out, &mut scopes)?;
         out.push_str("    Ok(brul::Value::Null)\n}\n");
     }
     let _ = writeln!(
@@ -72,12 +79,8 @@ pub(super) fn module(
             out,
             "            if {wrong} {{ return Err(brul::Error::FunctionArity {{ name: name.to_owned(), expected: {expected}, found: arguments.len() }}); }}"
         );
-        let _ = writeln!(out, "            component.push_frame();");
-        let _ = writeln!(
-            out,
-            "            let result = {function_name}(component, arguments);"
-        );
-        out.push_str("            component.pop_frame();\n            result\n        }\n");
+        let _ = writeln!(out, "            {function_name}(component, arguments)");
+        out.push_str("        }\n");
     }
     out.push_str("        _ => Err(brul::Error::UnknownFunction(name.to_owned())),\n    }\n}\n");
     Ok(out)

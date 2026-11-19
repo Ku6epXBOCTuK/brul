@@ -118,14 +118,6 @@ impl Component {
             .expect("script state type mismatch")
     }
 
-    pub fn push_frame(&mut self) {
-        self.environment.push_frame();
-    }
-
-    pub fn pop_frame(&mut self) {
-        self.environment.pop_frame();
-    }
-
     pub fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
         let _ = self.external.get();
         match &mut self.host {
@@ -160,7 +152,7 @@ impl Component {
     }
 
     pub fn pop_build_scope(&mut self) {
-        self.environment.pop_frame();
+        self.environment.pop_scope();
         self.build_scopes.pop();
         self.scopes_snapshot.take();
     }
@@ -180,7 +172,7 @@ impl Component {
 
     pub fn pop_binding_scopes(&mut self, count: usize) {
         for _ in 0..count {
-            self.environment.pop_frame();
+            self.environment.pop_scope();
         }
     }
 

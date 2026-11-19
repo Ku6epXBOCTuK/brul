@@ -1039,6 +1039,55 @@ window Demo (title: "demo") {
     assert!(module.contains("component.declare_if_absent(\"label\""));
 }
 
+#[test]
+fn emits_typed_local_scopes_with_inner_shadowing() {
+    let source = r#"<script>
+    let total: Number = 0;
+
+    function update(): Void {
+        const fixed: Number = 3;
+        let step: Number = 2;
+        if (step > 1) {
+            let step: Number = 5;
+            total = step + fixed;
+        }
+        total = total + step;
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains("let fixed: f64 = (&brul::Value::Number(3.0)).try_into()?;"));
+    assert!(module.contains("let mut step: f64 = (&brul::Value::Number(2.0)).try_into()?;"));
+    assert!(module.contains("let mut step: f64 = (&brul::Value::Number(5.0)).try_into()?;"));
+    assert!(!module.contains("component.declare(\"step\""));
+    assert!(!module.contains("component.push_frame()"));
+}
+
+#[test]
+fn rejects_assignment_to_local_constant_at_build() {
+    let source = r#"<script>
+    function update(): Void {
+        const fixed: Number = 3;
+        fixed = 4;
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#;
+    let error = emit::module(source).expect_err("error");
+    assert_eq!(error.message(), "cannot assign to constant 'fixed'");
+}
+
 fn operated(source: &str) -> String {
     let expression = brul_syntax::parser::parse_expression(source).expect("expression parses");
     let names = emit::identifiers(&expression);

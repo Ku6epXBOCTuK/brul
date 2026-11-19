@@ -18,6 +18,7 @@ mod module;
 mod names;
 mod out;
 mod resources;
+mod scopes;
 mod script;
 mod state;
 mod statement;
