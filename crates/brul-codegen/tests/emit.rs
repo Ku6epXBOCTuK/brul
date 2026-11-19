@@ -999,7 +999,7 @@ window Demo (title: "demo") {
 fn operated(source: &str) -> String {
     let expression = brul_syntax::parser::parse_expression(source).expect("expression parses");
     let names = emit::identifiers(&expression);
-    emit::operation(&expression, &names)
+    emit::operation(&expression, &names).expect("operation")
 }
 
 #[test]
@@ -1409,6 +1409,31 @@ fn emits_component_slot() {
         module.contains("brul::SlotArgument { name: brul::DEFAULT_SLOT, view: demo_slot1 },"),
         "{module}"
     );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn emits_each_inside_a_slot_fill() {
+    let dir = scratch(
+        "slot-each",
+        &[
+            (
+                "list.brul",
+                "<markup>\ncomponent List {\n    View {\n        @slot\n    }\n}\n</markup>\n",
+            ),
+            (
+                "window.brul",
+                "<use>\n    import List from \"./list.brul\";\n</use>\n\n<markup>\nwindow Demo (title: \"demo\") {\n    Column {\n        List {\n            @each (items as item) { Text { item.name } }\n        }\n    }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let module = emit::module_file(&dir.join("window.brul")).unwrap();
+    assert!(module.contains("fn demo_slot1("), "{module}");
+    assert!(
+        module.contains("component.borrow_mut().push_build_scope(vec!["),
+        "{module}"
+    );
+    assert!(module.contains("value: item.clone()"), "{module}");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

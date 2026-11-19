@@ -10,6 +10,7 @@ use crate::loader::Definition;
 use super::Emit;
 use super::Frame;
 use super::Out;
+use super::names::variable_expr;
 use super::{events, expression, items_spliced};
 
 type Props<'a> = Vec<(&'a str, PropType, &'a Expr)>;
@@ -86,7 +87,7 @@ pub(super) fn component(
         counter,
         emit,
         index,
-    );
+    )?;
     Ok(())
 }
 
@@ -376,7 +377,7 @@ fn write(
     counter: &mut usize,
     emit: &mut Emit<'_>,
     index: usize,
-) {
+) -> Result<(), Error> {
     let bases = emit.bases;
     let names = emit.names;
     let prefix = emit.resource_prefix;
@@ -395,18 +396,18 @@ fn write(
     let widget = format!("widget{}", *counter);
     *counter += 1;
     out.line(format_args!("{{"));
-    out.indented(|out| {
+    out.indented(|out| -> Result<(), Error> {
         out.line(format_args!(
             "let built = brul::instance(build, component, brul::Instance {{"
         ));
-        out.indented(|out| {
+        out.indented(|out| -> Result<(), Error> {
             out.line(format_args!("theme,"));
             out.line(format_args!("view: {base}_view,"));
             out.line(format_args!("script: {base}_script(),"));
             out.line(format_args!("name: {name:?},"));
             out.line(format_args!("names: names(),"));
-            arguments(out, "props", &props, names, resources, prefix);
-            arguments(out, "defaults", &defaults, names, resources, prefix);
+            arguments(out, "props", &props, names, resources, prefix)?;
+            arguments(out, "defaults", &defaults, names, resources, prefix)?;
             out.line(format_args!("events: &["));
             out.indented(|out| {
                 for (event, handler, params) in &events {
@@ -439,7 +440,8 @@ fn write(
                 });
                 out.line(format_args!("],"));
             }
-        });
+            Ok(())
+        })?;
         out.line(format_args!("}})?;"));
         for field in ["bindings", "handlers", "props"] {
             out.line(format_args!("{field}.extend(built.{field});"));
@@ -460,12 +462,14 @@ fn write(
             *dynamic_classes = true;
             out.line(format_args!(
                 "bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {} }}));",
-                expression::closure(value, names)
+                expression::closure(value, names)?
             ));
         }
         out.line(format_args!("{widget}"));
-    });
+        Ok(())
+    })?;
     out.start(format_args!("}}"));
+    Ok(())
 }
 
 fn arguments(
@@ -475,24 +479,23 @@ fn arguments(
     names: &Names<'_>,
     resources: &[Resource],
     prefix: &str,
-) {
+) -> Result<(), Error> {
     out.line(format_args!("{field}: &["));
-    out.indented(|out| {
+    out.indented(|out| -> Result<(), Error> {
         for (name, ty, value) in arguments {
-            let id = names
-                .get(name)
-                .expect("prop is collected into the name table")
-                .index();
+            let id = variable_expr(name, value.position, names)?;
             let expression = match super::resource(value, resources) {
                 Some(resource) if *ty == PropType::Image => format!(
                     "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }}"
                 ),
-                _ => expression::closure(value, names),
+                _ => expression::closure(value, names)?,
             };
             out.line(format_args!(
-                "brul::PropArgument {{ name: brul::VariableId::from_index({id}), ty: brul::PropType::{ty:?}, expression: {expression} }},"
+                "brul::PropArgument {{ name: {id}, ty: brul::PropType::{ty:?}, expression: {expression} }},"
             ));
         }
-    });
+        Ok(())
+    })?;
     out.line(format_args!("],"));
+    Ok(())
 }

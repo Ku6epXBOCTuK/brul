@@ -52,7 +52,7 @@ pub(super) fn widget(
         let content = element_expression(out, element, &classes, &events, emit, frame, counter)?;
         out.push(format_args!(";"));
         out.end();
-        content_binding(out, content, &name, emit.names);
+        content_binding(out, content, &name, emit.names)?;
         parameters(out, element, &name, emit.names, emit)?;
         handler_bindings(out, &events.handlers, &name);
         out.line(format_args!("{name}"));
@@ -219,9 +219,14 @@ fn container(
     Ok(())
 }
 
-fn content_binding(out: &mut Out<'_>, content: Option<Content>, name: &str, names: &Names<'_>) {
+fn content_binding(
+    out: &mut Out<'_>,
+    content: Option<Content>,
+    name: &str,
+    names: &Names<'_>,
+) -> Result<(), Error> {
     let Some(content) = content else {
-        return;
+        return Ok(());
     };
     let (target, expression) = match content {
         Content::Text(expression) => ("Text", expression),
@@ -230,8 +235,9 @@ fn content_binding(out: &mut Out<'_>, content: Option<Content>, name: &str, name
     };
     out.line(format_args!(
         "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({})));",
-        expression::closure(&expression, names)
+        expression::closure(&expression, names)?
     ));
+    Ok(())
 }
 
 fn handler_bindings(out: &mut Out<'_>, handlers: &[(HandlerEvent, String)], name: &str) {
@@ -504,12 +510,12 @@ fn parameters(
         };
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
-            expression::closure(value, names)
+            expression::closure(value, names)?
         ));
     }
     if x.is_some() || y.is_some() {
-        let x = optional_expression(x, names);
-        let y = optional_expression(y, names);
+        let x = optional_expression(x, names)?;
+        let y = optional_expression(y, names)?;
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Offset {{ x: {x}, y: {y} }}));"
         ));
@@ -519,15 +525,15 @@ fn parameters(
         let table = classes::table(emit.resource_prefix);
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
-            expression::closure(value, names)
+            expression::closure(value, names)?
         ));
     }
     Ok(())
 }
 
-fn optional_expression(value: Option<&Expr>, names: &Names<'_>) -> String {
-    match value {
-        Some(item) => format!("Some({})", expression::closure(item, names)),
+fn optional_expression(value: Option<&Expr>, names: &Names<'_>) -> Result<String, Error> {
+    Ok(match value {
+        Some(item) => format!("Some({})", expression::closure(item, names)?),
         None => "None".to_owned(),
-    }
+    })
 }

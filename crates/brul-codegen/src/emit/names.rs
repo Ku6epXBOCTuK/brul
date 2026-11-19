@@ -1,9 +1,10 @@
-use brul_script::Names;
-use brul_syntax::ast::{Expr, ExprKind};
+use brul_script::{Names, VariableId};
+use brul_syntax::ast::{Expr, ExprKind, Position};
+use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Member, Prop};
 use brul_syntax::script::{Function, Program, Statement};
 
-use crate::{Definition, Source};
+use crate::{Definition, Source, error_at};
 
 pub(super) fn table<'a>(source: &'a Source, definitions: &'a [Definition]) -> Names<'a> {
     let mut names = Names::new();
@@ -30,6 +31,30 @@ pub(super) fn output(names: &Names<'_>) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     format!("\npub fn names() -> &'static [&'static str] {{\n    &[{names}]\n}}\n")
+}
+
+pub(super) fn variable(
+    name: &str,
+    position: Position,
+    names: &Names<'_>,
+) -> Result<VariableId, Error> {
+    names.get(name).ok_or_else(|| {
+        error_at(
+            position,
+            format!("identifier '{name}' is not collected into the name table"),
+        )
+    })
+}
+
+pub(super) fn variable_expr(
+    name: &str,
+    position: Position,
+    names: &Names<'_>,
+) -> Result<String, Error> {
+    Ok(format!(
+        "brul::VariableId::from_index({})",
+        variable(name, position, names)?.index()
+    ))
 }
 
 fn members<'a>(members: &'a [Member], names: &mut Names<'a>) {
@@ -86,7 +111,11 @@ fn block_node<'a>(block: &'a Block, names: &mut Names<'a>) {
                 }
             }
             BlockItem::Expr(expr) => expression(expr, names),
-            BlockItem::Slot(_) => {}
+            BlockItem::Slot(slot) => {
+                if let Some(block) = &slot.block {
+                    block_node(block, names);
+                }
+            }
         }
     }
 }
@@ -163,5 +192,23 @@ fn call<'a>(target: &'a Expr, args: &'a [Expr], names: &mut Names<'a>) {
         for argument in args {
             expression(argument, names);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use brul_syntax::ast::Position;
+
+    use super::variable;
+
+    #[test]
+    fn variable_reports_missing_identifier_at_position() {
+        let names = brul_script::Names::new();
+        let error = variable("item", Position { line: 7, column: 3 }, &names).unwrap_err();
+        assert_eq!(
+            error.message(),
+            "identifier 'item' is not collected into the name table"
+        );
+        assert_eq!((error.line(), error.column()), (7, 3));
     }
 }

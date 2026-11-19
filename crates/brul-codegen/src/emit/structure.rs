@@ -7,6 +7,7 @@ use super::Emit;
 use super::Frame;
 use super::Out;
 use super::expression::operation;
+use super::names::variable_expr;
 use super::{contains_slot, items, items_spliced};
 
 use brul_script::Names;
@@ -36,7 +37,7 @@ pub(super) fn structure_if(
     for (index, branch) in block.branches.iter().enumerate() {
         let function = format!("{name}_value{index}");
         emit.functions
-            .push(value_function(&function, &branch.condition, emit.names));
+            .push(value_function(&function, &branch.condition, emit.names)?);
     }
     let arm = rebuild_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
@@ -56,10 +57,10 @@ pub(super) fn structure_each(
         &format!("{name}_value"),
         &block.collection,
         emit.names,
-    ));
+    )?);
     if let Some(key) = &block.key {
         emit.functions
-            .push(value_function(&format!("{name}_key"), key, emit.names));
+            .push(value_function(&format!("{name}_key"), key, emit.names)?);
     }
     let arm = each_arm(&name, block, emit, frame)?;
     emit.functions.push(arm);
@@ -67,18 +68,23 @@ pub(super) fn structure_each(
     Ok(())
 }
 
-fn value_function(name: &str, value: &brul_syntax::ast::Expr, names: &Names<'_>) -> String {
+fn value_function(
+    name: &str,
+    value: &brul_syntax::ast::Expr,
+    names: &Names<'_>,
+) -> Result<String, Error> {
     let mut text = String::new();
     let mut out = Out::new(&mut text);
     out.line(format_args!(
         "fn {name}(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{"
     ));
-    out.indented(|out| {
-        out.line(format_args!("let value = {};", operation(value, names)));
+    out.indented(|out| -> Result<(), Error> {
+        out.line(format_args!("let value = {};", operation(value, names)?));
         out.line(format_args!("Ok(value)"));
-    });
+        Ok(())
+    })?;
     out.line(format_args!("}}"));
-    text
+    Ok(text)
 }
 
 fn inline(out: &mut Out<'_>, name: &str, value: &str, each: bool, counter: &mut usize) {
@@ -284,7 +290,7 @@ fn each_row(
     emit: &mut Emit<'_>,
     arm: Frame<'_>,
 ) -> Result<(), Error> {
-    each_scope(out, block, emit);
+    each_scope(out, block, emit)?;
     each_key(out, name, block);
     out.line(format_args!("let start = children.len();"));
     each_take(out);
@@ -297,23 +303,26 @@ fn each_row(
     Ok(())
 }
 
-fn each_scope(out: &mut Out<'_>, block: &EachBlock, emit: &mut Emit<'_>) {
+fn each_scope(out: &mut Out<'_>, block: &EachBlock, emit: &mut Emit<'_>) -> Result<(), Error> {
+    let position = block.collection.position;
     out.line(format_args!(
         "component.borrow_mut().push_build_scope(vec!["
     ));
-    out.indented(|out| {
+    out.indented(|out| -> Result<(), Error> {
         out.line(format_args!(
-            "brul::Variable {{ name: brul::VariableId::from_index({}), value: item.clone() }},",
-            variable(block.item.as_str(), emit.names)
+            "brul::Variable {{ name: {}, value: item.clone() }},",
+            variable_expr(block.item.as_str(), position, emit.names)?
         ));
         if let Some(index_name) = &block.index {
             out.line(format_args!(
-                "brul::Variable {{ name: brul::VariableId::from_index({}), value: brul::Value::Number(position as f64) }},",
-                variable(index_name.as_str(), emit.names)
+                "brul::Variable {{ name: {}, value: brul::Value::Number(position as f64) }},",
+                variable_expr(index_name.as_str(), position, emit.names)?
             ));
         }
-    });
+        Ok(())
+    })?;
     out.line(format_args!("]);"));
+    Ok(())
 }
 
 fn each_key(out: &mut Out<'_>, name: &str, block: &EachBlock) {
@@ -359,13 +368,6 @@ fn each_body(
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
     Frame::root(theme).inside(frame.direction(), frame.gap())
-}
-
-fn variable(name: &str, names: &Names<'_>) -> u32 {
-    names
-        .get(name)
-        .expect("each variable is collected into the name table")
-        .index()
 }
 
 fn arm_header(out: &mut Out<'_>, name: &str) {
