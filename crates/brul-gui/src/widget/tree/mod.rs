@@ -5,6 +5,8 @@ use crate::text::TextLayout;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+use self::frame::HitScratch;
+
 mod caret;
 mod edit;
 mod focus;
@@ -79,6 +81,7 @@ pub struct WidgetTree {
     texts: HashMap<WidgetId, ShapedText>,
     hovered: Vec<Slot>,
     pressed: Vec<Slot>,
+    hit_scratch: HitScratch,
     focused: Option<WidgetId>,
     modal_focus: Option<WidgetId>,
     modifiers: KeyModifiers,
@@ -180,6 +183,7 @@ impl WidgetTree {
             texts: HashMap::new(),
             hovered: Vec::new(),
             pressed: Vec::new(),
+            hit_scratch: HitScratch::default(),
             focused: None,
             modal_focus: None,
             modifiers: KeyModifiers::default(),

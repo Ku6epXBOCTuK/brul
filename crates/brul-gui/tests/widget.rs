@@ -537,6 +537,38 @@ fn a_clipped_child_is_not_hit() {
 }
 
 #[test]
+fn clipped_child_hover_does_not_stick_across_moves() {
+    let child = Widget::column(Vec::new()).with_layout(fixed(32, 16));
+    let child_id = child.id();
+    let parent = Widget::column(vec![child])
+        .with_layout(fixed(16, 16))
+        .with_styles(StyleSet::new(WidgetStyle {
+            clip: true,
+            ..WidgetStyle::default()
+        }));
+    let root = Widget::column(vec![parent]).with_layout(fixed(32, 16));
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 32,
+            height: 16,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    let inside = tree.pointer_moved(8, 8).expect("move inside");
+    assert!(inside.contains(&WidgetEvent::PointerEnter(child_id)));
+    let outside = tree.pointer_moved(20, 8).expect("move outside");
+    assert!(outside.contains(&WidgetEvent::PointerLeave(child_id)));
+    let back = tree.pointer_moved(8, 8).expect("move back");
+    assert!(back.contains(&WidgetEvent::PointerEnter(child_id)));
+}
+
+#[test]
 fn hover_switches_style_snapshot() {
     let base = style(Color::rgb(1, 2, 3));
     let hovered = style(Color::rgb(4, 5, 6));

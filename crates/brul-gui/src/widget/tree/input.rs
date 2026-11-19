@@ -1,11 +1,12 @@
+use super::frame::{HitScratch, collect_hit};
 use super::*;
 
 impl WidgetTree {
     pub fn hit(&self, x: i32, y: i32) -> Result<Option<WidgetId>, WidgetError> {
-        Ok(self
-            .hit_path(x, y)?
-            .last()
-            .map(|slot| self.nodes[slot.index()].id))
+        let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
+        let mut scratch = HitScratch::default();
+        collect_hit(&self.nodes, self.root, &geometry.boxes, &mut scratch, x, y);
+        Ok(scratch.path.last().map(|slot| self.nodes[slot.index()].id))
     }
 
     pub fn focused(&self) -> Option<WidgetId> {

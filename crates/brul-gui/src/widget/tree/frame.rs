@@ -3,6 +3,20 @@ use crate::layout::{self, LayoutBox, Size};
 use crate::rect::ClipRect;
 use std::collections::HashMap;
 
+#[derive(Default)]
+pub(super) struct HitScratch {
+    pub clips: Vec<ClipRect>,
+    pub path: Vec<Slot>,
+    pub active: Vec<Slot>,
+}
+
+impl HitScratch {
+    pub fn clear(&mut self) {
+        self.clips.clear();
+        self.path.clear();
+    }
+}
+
 pub(super) fn boundary_before(value: &str, mut index: usize) -> usize {
     index = index.min(value.len());
     while !value.is_char_boundary(index) {
@@ -242,52 +256,59 @@ pub(super) fn collect_hit(
     tree: &[Node],
     slot: Slot,
     boxes: &[LayoutBox],
-    clips: &[ClipRect],
+    scratch: &mut HitScratch,
     x: i32,
     y: i32,
-    path: &mut Vec<Slot>,
 ) -> bool {
     let node = &tree[slot.index()];
     let structure = matches!(node.data, Content::Structure);
     if !node.state.visible
         || (!structure && !contains(&boxes[slot.index()], x, y))
-        || !clips.iter().all(|clip| clip.contains(x, y))
+        || !scratch.clips.iter().all(|clip| clip.contains(x, y))
     {
         return false;
     }
 
     let style = node.styles.resolve(node.state);
-    let mut child_clips = clips.to_vec();
-    if style.clip {
+    let clip = style.clip.then(|| {
         let layout_box = &boxes[slot.index()];
-        child_clips.push(ClipRect::new(
+        ClipRect::new(
             layout_box.x,
             layout_box.y,
             layout_box.width,
             layout_box.height,
             style.border_radius,
-        ));
+        )
+    });
+    if let Some(clip) = clip {
+        scratch.clips.push(clip);
+    }
+    scratch.path.push(slot);
+
+    let mut hit = false;
+    for layer in [true, false] {
+        for &child in node.children.iter().rev() {
+            if tree[child.index()].layer != layer {
+                continue;
+            }
+            if collect_hit(tree, child, boxes, scratch, x, y) {
+                hit = true;
+                break;
+            }
+        }
+        if hit {
+            break;
+        }
     }
 
-    path.push(slot);
-    for &child in node.children.iter().rev() {
-        if !tree[child.index()].layer {
-            continue;
-        }
-        if collect_hit(tree, child, boxes, &child_clips, x, y, path) {
-            return true;
-        }
+    if clip.is_some() {
+        scratch.clips.pop();
     }
-    for &child in node.children.iter().rev() {
-        if tree[child.index()].layer {
-            continue;
-        }
-        if collect_hit(tree, child, boxes, &child_clips, x, y, path) {
-            return true;
-        }
+    if hit {
+        return true;
     }
     if node.layer || structure {
-        path.pop();
+        scratch.path.pop();
         return false;
     }
     true

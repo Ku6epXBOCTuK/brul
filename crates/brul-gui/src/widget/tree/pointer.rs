@@ -1,4 +1,4 @@
-use super::frame::{collect_hit, common_prefix};
+use super::frame::{HitScratch, collect_hit, common_prefix};
 use super::render::max_scroll_offset;
 use super::*;
 
@@ -7,10 +7,10 @@ impl WidgetTree {
         if dy == 0 {
             return false;
         }
-        let Ok(path) = self.hit_path(x, y) else {
+        if self.hit_path(x, y).is_err() {
             return false;
-        };
-        let target = path.iter().rev().copied().find(|slot| {
+        }
+        let target = self.hit_scratch.path.iter().rev().copied().find(|slot| {
             let node = &self.nodes[slot.index()];
             matches!(node.data, Content::View { .. })
                 && (node.styles.resolve(node.state).scroll
@@ -49,15 +49,19 @@ impl WidgetTree {
         {
             self.place_caret(slot, x, y, true);
         }
-        let path = self.active_path(&self.hit_path(x, y)?);
-        let common = common_prefix(&self.hovered, &path);
-        if common == self.hovered.len() && common == path.len() {
+        self.hit_path(x, y)?;
+        self.collect_active_path();
+        let old = std::mem::take(&mut self.hovered);
+        let new = std::mem::take(&mut self.hit_scratch.active);
+        let common = common_prefix(&old, &new);
+        if common == old.len() && common == new.len() {
+            self.hovered = new;
+            self.hit_scratch.active = old;
             return Ok(Vec::new());
         }
 
         let mut events = Vec::new();
-        let leaving: Vec<Slot> = self.hovered[common..].iter().rev().copied().collect();
-        for slot in leaving {
+        for slot in old[common..].iter().rev().copied() {
             let node = &mut self.nodes[slot.index()];
             node.state.hovered = false;
             let id = node.id;
@@ -65,7 +69,7 @@ impl WidgetTree {
             self.retarget(slot);
             events.push(WidgetEvent::PointerLeave(id));
         }
-        for &slot in &path[common..] {
+        for &slot in &new[common..] {
             let node = &mut self.nodes[slot.index()];
             node.state.hovered = true;
             let id = node.id;
@@ -73,12 +77,15 @@ impl WidgetTree {
             self.retarget(slot);
             events.push(WidgetEvent::PointerEnter(id));
         }
-        self.hovered = path;
+        self.hovered = new;
+        self.hit_scratch.active = old;
         Ok(events)
     }
 
     pub fn pointer_down(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {
-        let path = self.active_path(&self.hit_path(x, y)?);
+        self.hit_path(x, y)?;
+        self.collect_active_path();
+        let path = std::mem::take(&mut self.hit_scratch.active);
         self.set_pressed(false);
 
         let focus = path
@@ -107,8 +114,10 @@ impl WidgetTree {
     }
 
     pub fn pointer_up(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {
-        let path = self.active_path(&self.hit_path(x, y)?);
+        self.hit_path(x, y)?;
+        self.collect_active_path();
         let pressed = std::mem::take(&mut self.pressed);
+        let path = std::mem::take(&mut self.hit_scratch.active);
 
         let mut events = Vec::new();
         for &slot in pressed.iter().rev() {
@@ -124,6 +133,7 @@ impl WidgetTree {
                 events.push(WidgetEvent::Click(self.nodes[slot.index()].id));
             }
         }
+        self.hit_scratch.active = path;
         Ok(events)
     }
 
@@ -210,32 +220,31 @@ impl WidgetTree {
         }
     }
 
-    pub(super) fn hit_path(&self, x: i32, y: i32) -> Result<Vec<Slot>, WidgetError> {
-        let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
-        let mut path = Vec::new();
-        collect_hit(
-            &self.nodes,
-            self.root,
-            &geometry.boxes,
-            &[],
-            x,
-            y,
-            &mut path,
-        );
-        Ok(path)
+    fn collect_active_path(&mut self) {
+        let HitScratch { path, active, .. } = &mut self.hit_scratch;
+        active_path(&self.nodes, path, active);
     }
 
-    pub(super) fn active_path(&self, path: &[Slot]) -> Vec<Slot> {
-        let mut active = Vec::with_capacity(path.len());
-        for &slot in path {
-            let Some(node) = self.nodes.get(slot.index()) else {
-                break;
-            };
-            if node.state.disabled || !node.state.visible {
-                break;
-            }
-            active.push(slot);
+    pub(super) fn hit_path(&mut self, x: i32, y: i32) -> Result<(), WidgetError> {
+        self.hit_scratch.clear();
+        let nodes = &self.nodes;
+        let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
+        let scratch = &mut self.hit_scratch;
+        let root = self.root;
+        collect_hit(nodes, root, &geometry.boxes, scratch, x, y);
+        Ok(())
+    }
+}
+
+fn active_path(nodes: &[Node], path: &[Slot], out: &mut Vec<Slot>) {
+    out.clear();
+    for &slot in path {
+        let Some(node) = nodes.get(slot.index()) else {
+            break;
+        };
+        if node.state.disabled || !node.state.visible {
+            break;
         }
-        active
+        out.push(slot);
     }
 }
