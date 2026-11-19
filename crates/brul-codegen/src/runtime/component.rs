@@ -87,6 +87,16 @@ fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), Vie
             component.borrow_mut().set_dispatch(dispatch);
             init(&mut component.borrow_mut()).map_err(ViewError::from)
         }
+        Some(Script::Typed {
+            init,
+            call,
+            dispatch,
+        }) => {
+            let mut component = component.borrow_mut();
+            component.set_dispatch(dispatch);
+            component.set_typed_call(call);
+            init(&mut component).map_err(ViewError::from)
+        }
         None => Ok(()),
     }
 }

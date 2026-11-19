@@ -6,6 +6,8 @@ use brul_syntax::error::Error;
 use brul_syntax::script::Program;
 use brul_syntax::types::Type;
 
+use crate::commands::camel;
+
 use super::expression::{convert, wrap_typed};
 use super::scopes::{FunctionSig, Scopes};
 use super::state::State;
@@ -52,7 +54,7 @@ pub(super) fn module(
         .collect();
     let _ = writeln!(
         out,
-        "    Some(brul::Script::Generated {{ init: {name}_init, dispatch: {name}_dispatch }})\n}}"
+        "    Some(brul::Script::Typed {{ init: {name}_init, call: {name}_typed_call, dispatch: {name}_dispatch }})\n}}"
     );
     let _ = writeln!(
         out,
@@ -99,6 +101,63 @@ pub(super) fn module(
             out.push_str("    Err(brul::Error::Unsupported(\"missing return\"))\n}\n");
         }
     }
+    let message = format!("{}Message", pascal(name));
+    let _ = writeln!(out, "\n#[allow(dead_code)]\npub enum {message} {{");
+    for function in &program.functions {
+        let variant = pascal(&function.name);
+        if function.params.is_empty() {
+            let _ = writeln!(out, "    {variant},");
+        } else {
+            let types = function
+                .params
+                .iter()
+                .map(|param| Scopes::local_type(&param.ty))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = writeln!(out, "    {variant}({types}),");
+        }
+    }
+    out.push_str("}\n");
+    let _ = writeln!(
+        out,
+        "impl From<{message}> for brul::Message {{\n    fn from(message: {message}) -> Self {{\n        brul::Message::Invoke(Box::new(message))\n    }}\n}}\n"
+    );
+    let _ = writeln!(
+        out,
+        "#[allow(unused_variables)]\nfn {name}_typed_call(component: &mut brul::Component, message: &dyn std::any::Any) -> Result<brul::Value, brul::Error> {{"
+    );
+    let _ = writeln!(out, "    match message.downcast_ref::<{message}>() {{");
+    for function in &program.functions {
+        let variant = pascal(&function.name);
+        let function_name = format!("{name}_fn_{}", ident(&snake(&function.name)));
+        let bindings = (0..function.params.len())
+            .map(|index| format!("argument{index}"))
+            .collect::<Vec<_>>();
+        let pattern = if bindings.is_empty() {
+            variant.clone()
+        } else {
+            format!("{variant}({})", bindings.join(", "))
+        };
+        let arguments = bindings
+            .iter()
+            .map(|binding| format!("({binding}).clone()"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let separator = if arguments.is_empty() { "" } else { ", " };
+        if matches!(function.return_type, Type::Void | Type::Null) {
+            let _ = writeln!(
+                out,
+                "        Some({message}::{pattern}) => {{ {function_name}(component{separator}{arguments})?; Ok(brul::Value::Null) }}"
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "        Some({message}::{pattern}) => {{ let result = {function_name}(component{separator}{arguments})?; Ok({}) }}",
+                wrap_typed("result".to_owned(), &function.return_type)
+            );
+        }
+    }
+    out.push_str("        _ => Err(brul::Error::Unsupported(\"script message\")),\n    }\n}\n");
     let _ = writeln!(
         out,
         "#[allow(unused_mut)]\nfn {name}_dispatch(component: &mut brul::Component, name: &str, mut arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
@@ -143,17 +202,18 @@ pub(super) fn module(
     Ok(out)
 }
 
-pub(super) fn handle(program: Option<&Program>) -> String {
+pub(super) fn handle(name: &str, program: Option<&Program>) -> String {
     let Some(program) = program else {
         return String::new();
     };
+    let message = format!("{}Message", pascal(name));
     let mut out = String::from(
         "\n#[derive(Clone)]\n#[allow(dead_code)]\npub struct Script(brul::Handle);\n\n#[allow(dead_code)]\nimpl Script {\n",
     );
     out.push_str("    pub fn new(handle: brul::Handle) -> Self {\n        Self(handle)\n    }\n");
     for function in &program.functions {
         let method = ident(&snake(&function.name));
-        let name = &function.name;
+        let variant = pascal(&function.name);
         let arguments: Vec<String> = function
             .params
             .iter()
@@ -165,27 +225,36 @@ pub(super) fn handle(program: Option<&Program>) -> String {
                 )
             })
             .collect();
+        let values = function
+            .params
+            .iter()
+            .map(|param| ident(&snake(&param.name)))
+            .collect::<Vec<_>>()
+            .join(", ");
         if arguments.is_empty() {
             let _ = writeln!(
                 out,
-                "\n    pub fn {method}(&self) {{\n        self.0.call({name:?});\n    }}"
+                "\n    pub fn {method}(&self) {{\n        self.0.send({message}::{variant});\n    }}"
             );
         } else {
-            let values = function
-                .params
-                .iter()
-                .map(|param| wrap_typed(ident(&snake(&param.name)), &param.ty))
-                .collect::<Vec<_>>()
-                .join(", ");
             let arguments = arguments.join(", ");
             let _ = writeln!(
                 out,
-                "\n    pub fn {method}(&self, {arguments}) {{\n        self.0.call_with({name:?}, ::std::vec![{values}]);\n    }}"
+                "\n    pub fn {method}(&self, {arguments}) {{\n        self.0.send({message}::{variant}({values}));\n    }}"
             );
         }
     }
     out.push_str("}\n");
     out
+}
+
+fn pascal(name: &str) -> String {
+    let name = camel(name);
+    let mut characters = name.chars();
+    match characters.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
+        None => String::new(),
+    }
 }
 
 pub(super) fn snake(name: &str) -> String {

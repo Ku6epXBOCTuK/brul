@@ -281,7 +281,7 @@ fn module_at(
         &root_state,
         &root_prop_types,
     )?);
-    tail.push_str(&script::handle(parsed.program.as_ref()));
+    tail.push_str(&script::handle("script", parsed.program.as_ref()));
     tail.push_str(&names::output(&names));
 
     let mut root = head.clone();

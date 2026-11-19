@@ -4,10 +4,28 @@ use brul_window::Waker;
 
 use crate::Value;
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Message {
+pub enum Message {
     Set(String, Value),
     Call(String, Vec<Value>),
+    Invoke(Box<dyn std::any::Any + Send>),
+}
+
+impl std::fmt::Debug for Message {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Set(name, value) => formatter
+                .debug_tuple("Set")
+                .field(name)
+                .field(value)
+                .finish(),
+            Self::Call(name, arguments) => formatter
+                .debug_tuple("Call")
+                .field(name)
+                .field(arguments)
+                .finish(),
+            Self::Invoke(_) => formatter.write_str("Invoke(..)"),
+        }
+    }
 }
 
 /// Путь из фонового потока в DSL: `Handle` клонируется, переживает поток и
@@ -34,6 +52,10 @@ impl Handle {
     /// Зовёт функцию скрипта с аргументами и будит цикл событий.
     pub fn call_with(&self, function: &str, arguments: Vec<Value>) {
         self.push(Message::Call(function.to_owned(), arguments));
+    }
+
+    pub fn send<M: Into<Message> + Send + 'static>(&self, message: M) {
+        self.push(message.into());
     }
 
     fn push(&self, message: Message) {
@@ -66,9 +88,10 @@ mod tests {
     fn taking_drains_the_queue() {
         let queue = Mutex::new(vec![Message::Call("refresh".to_owned(), Vec::new())]);
 
-        assert_eq!(
-            take(&queue),
-            vec![Message::Call("refresh".to_owned(), Vec::new())]
+        let messages = take(&queue);
+        assert_eq!(messages.len(), 1);
+        assert!(
+            matches!(&messages[0], Message::Call(name, arguments) if name == "refresh" && arguments.is_empty())
         );
         assert!(take(&queue).is_empty());
     }

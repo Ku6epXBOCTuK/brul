@@ -109,9 +109,21 @@ pub(crate) fn generated_component(
     for (name, value) in seeds {
         component.borrow_mut().declare(name, value.clone(), false)?;
     }
-    if let Some(Script::Generated { init, dispatch }) = script {
-        component.borrow_mut().set_dispatch(dispatch);
-        init(&mut component.borrow_mut())?;
+    match script {
+        Some(Script::Generated { init, dispatch }) => {
+            component.borrow_mut().set_dispatch(dispatch);
+            init(&mut component.borrow_mut())?;
+        }
+        Some(Script::Typed {
+            init,
+            call,
+            dispatch,
+        }) => {
+            component.borrow_mut().set_dispatch(dispatch);
+            component.borrow_mut().set_typed_call(call);
+            init(&mut component.borrow_mut())?;
+        }
+        None => {}
     }
     Ok(component)
 }
@@ -298,6 +310,11 @@ impl<T: Theme> Runtime<T> {
                         .call_function(&function, arguments)
                     {
                         tracing::error!(%error, %function, "handle call failed");
+                    }
+                }
+                Message::Invoke(message) => {
+                    if let Err(error) = self.component.borrow_mut().call_typed(&*message) {
+                        tracing::error!(%error, "typed handle call failed");
                     }
                 }
             }

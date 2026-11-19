@@ -38,6 +38,7 @@ pub struct Component {
     environment: Environment,
     properties: Vec<Option<Property>>,
     dispatch: Option<crate::ScriptDispatch>,
+    typed_call: Option<crate::ScriptCall>,
     state: Option<Box<dyn Any>>,
     host: Option<Box<dyn AnyHost>>,
     pending_every: Vec<(f64, String)>,
@@ -55,6 +56,7 @@ impl Default for Component {
             environment: Environment::default(),
             properties: Vec::new(),
             dispatch: None,
+            typed_call: None,
             state: None,
             host: None,
             pending_every: Vec::new(),
@@ -98,6 +100,17 @@ impl Component {
 
     pub fn set_dispatch(&mut self, dispatch: crate::ScriptDispatch) {
         self.dispatch = Some(dispatch);
+    }
+
+    pub fn set_typed_call(&mut self, call: crate::ScriptCall) {
+        self.typed_call = Some(call);
+    }
+
+    pub fn call_typed(&mut self, message: &dyn std::any::Any) -> Result<Value, Error> {
+        match self.typed_call {
+            Some(call) => call(self, message),
+            None => Err(Error::Unsupported("typed script call")),
+        }
     }
 
     pub fn has_dispatch(&self) -> bool {

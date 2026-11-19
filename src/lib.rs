@@ -4,6 +4,8 @@ pub mod builtins;
 mod each;
 mod event;
 mod handle;
+
+pub use handle::Message;
 pub mod logging;
 mod run;
 mod ui;

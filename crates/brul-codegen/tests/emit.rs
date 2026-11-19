@@ -1044,14 +1044,20 @@ window Demo (title: "demo") {
     assert!(module.contains("\"bump\" => {"));
     assert!(!module.contains("brul::script::parse("));
     assert!(!module.contains("brul::script::Statement::"));
+    assert!(
+        module.contains("brul::Script::Typed { init: script_init, call: script_typed_call, dispatch: script_dispatch }")
+    );
     assert!(module.contains("#[allow(dead_code)]\npub struct Script(brul::Handle);"));
+    assert!(module.contains("pub enum ScriptMessage {"));
+    assert!(module.contains("impl From<ScriptMessage> for brul::Message {"));
     assert!(module.contains(
-        "pub fn bump(&self, step: f64) {\n        self.0.call_with(\"bump\", ::std::vec![brul::Value::Number(step)]);\n    }"
+        "pub fn bump(&self, step: f64) {\n        self.0.send(ScriptMessage::Bump(step));\n    }"
     ));
     assert!(!module.contains("impl Into<brul::Value>"));
-    assert!(
-        module.contains("pub fn close_panel(&self) {\n        self.0.call(\"closePanel\");\n    }")
-    );
+    assert!(!module.contains("self.0.call_with("));
+    assert!(module.contains(
+        "pub fn close_panel(&self) {\n        self.0.send(ScriptMessage::ClosePanel);\n    }"
+    ));
 }
 
 #[test]

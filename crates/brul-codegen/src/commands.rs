@@ -142,7 +142,7 @@ fn rust_type(ty: &SynType) -> Type {
     }
 }
 
-fn camel(name: &str) -> String {
+pub(crate) fn camel(name: &str) -> String {
     let name = name.trim_start_matches("r#");
     let mut output = String::with_capacity(name.len());
     let mut capitalize = false;
