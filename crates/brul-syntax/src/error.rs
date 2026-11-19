@@ -134,6 +134,8 @@ pub enum Error {
     OverrideNotRoot,
     #[error("functions are only allowed at the top level")]
     FunctionNotTopLevel,
+    #[error("return is only allowed inside a function")]
+    ReturnOutsideFunction,
     #[error("const requires an initializer")]
     ConstNoInitializer,
     #[error("slot is not allowed at the component root: wrap it in a container")]

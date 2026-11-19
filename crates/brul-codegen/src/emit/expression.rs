@@ -94,7 +94,7 @@ pub fn operation(
     operation_in(expression, names, state, props, &Scopes::default())
 }
 
-fn wrap_typed(code: String, ty: &Type) -> String {
+pub(super) fn wrap_typed(code: String, ty: &Type) -> String {
     match ty {
         Type::Number => format!("brul::Value::Number({code})"),
         Type::String => format!("brul::Value::String(({code}).into())"),
@@ -104,7 +104,7 @@ fn wrap_typed(code: String, ty: &Type) -> String {
     }
 }
 
-fn type_name(ty: &Type) -> &'static str {
+pub(super) fn type_name(ty: &Type) -> &'static str {
     match ty {
         Type::Number => "Number",
         Type::String => "String",
@@ -142,7 +142,7 @@ fn prop_typed(
     )))
 }
 
-fn typed(
+pub(super) fn typed(
     expression: &Expr,
     names: &Names<'_>,
     state: &State,

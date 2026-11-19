@@ -345,3 +345,50 @@ fn function_between_statements_is_a_top_level_item() {
     assert_eq!(program.statements.len(), 2);
     assert_eq!(program.functions.len(), 1);
 }
+
+#[test]
+fn return_parses_value_inside_function() {
+    let program = parse("function f(): Number { return 1; }").unwrap();
+    let Statement::Return { value, .. } = &program.functions[0].body[0] else {
+        panic!("expected return statement");
+    };
+    assert_eq!(value.as_ref(), Some(&num(1.0)));
+}
+
+#[test]
+fn return_parses_without_value() {
+    let program = parse("function f(): Void { return; }").unwrap();
+    let Statement::Return { value, position } = &program.functions[0].body[0] else {
+        panic!("expected return statement");
+    };
+    assert!(value.is_none());
+    assert_eq!(
+        *position,
+        Position {
+            line: 1,
+            column: 22
+        }
+    );
+}
+
+#[test]
+fn return_inside_nested_block_is_allowed() {
+    let program = parse("function f(): Bool { if (true) { return false; } }").unwrap();
+    let Statement::If { then_branch, .. } = &program.functions[0].body[0] else {
+        panic!("expected if statement");
+    };
+    assert!(matches!(then_branch[0], Statement::Return { .. }));
+}
+
+#[test]
+fn return_outside_function_is_rejected() {
+    let error = parse("return 1;").unwrap_err();
+    assert_eq!(error.message(), "return is only allowed inside a function");
+    assert_eq!((error.line(), error.column()), (1, 1));
+}
+
+#[test]
+fn return_inside_top_level_block_is_rejected() {
+    let error = parse("{ return; }").unwrap_err();
+    assert_eq!(error.message(), "return is only allowed inside a function");
+}

@@ -1027,6 +1027,43 @@ window Demo (title: "demo") {
 }
 
 #[test]
+fn emits_typed_return_statements() {
+    let source = r#"<script>
+    function answer(): Number { return 42; }
+    function label(): String { return "ok"; }
+    function done(): Void { return; }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains("return Ok(brul::Value::Number(42.0_f64));"));
+    assert!(module.contains("return Ok(brul::Value::String((\"ok\".to_owned()).into()));"));
+    assert!(module.contains("return Ok(brul::Value::Null);"));
+}
+
+#[test]
+fn rejects_invalid_returns_at_build() {
+    let source = |function: &str| {
+        format!(
+            "<script>\n    {function}\n</script>\n\n<markup>\nwindow Demo (title: \"demo\") {{\n    View {{ }}\n}}\n</markup>\n"
+        )
+    };
+    let error = emit::module(&source("function answer(): Number { return \"no\"; }"))
+        .expect_err("type mismatch");
+    assert_eq!(error.message(), "return expects Number, found String");
+    let error =
+        emit::module(&source("function answer(): Number { return; }")).expect_err("missing value");
+    assert_eq!(error.message(), "return requires a value of type Number");
+    let error = emit::module(&source("function done(): Void { return 1; }")).expect_err("void");
+    assert_eq!(error.message(), "a Void function cannot return a value");
+}
+
+#[test]
 fn rejects_undefined_script_variable_at_build() {
     let source = r#"<script>
     let count: Number = missing;

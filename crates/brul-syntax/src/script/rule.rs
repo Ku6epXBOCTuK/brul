@@ -24,6 +24,7 @@ rule! {
         Statement,
         LetStmt,
         IfStmt,
+        ReturnStmt,
         ExprStmt,
         Block,
         Type,

@@ -20,10 +20,11 @@ Program      = { FunctionDecl | Statement } ;
 FunctionDecl = "function" Ident "(" [ ParamList ] ")" ":" Type Block ;
 ParamList    = Param { "," Param } ;
 Param        = Ident ":" Type ;
-Statement    = LetStmt | IfStmt | ExprStmt | Block ;
+Statement    = LetStmt | IfStmt | ReturnStmt | ExprStmt | Block ;
 LetStmt      = "let" Ident ":" Type [ "=" Expr ] ";"
              | "const" Ident ":" Type "=" Expr ";" ;
 IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
+ReturnStmt   = "return" [ Expr ] ";" ;
 ExprStmt     = Expr ";" ;
 Block        = "{" { Statement } "}" ;
 Type         = "Number" | "String" | "Bool" | "Null" | "Image"

@@ -48,7 +48,7 @@ pub(super) fn module(
             out,
             "#[allow(unused_mut, unused_variables)]\nfn {function_name}(component: &mut brul::Component, mut arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
         );
-        let mut scopes = Scopes::new();
+        let mut scopes = Scopes::new().with_return_type(&function.return_type);
         for parameter in &function.params {
             let ident = scopes.declare(&parameter.name, &parameter.ty, false)?;
             let local_ty = Scopes::local_type(&parameter.ty);

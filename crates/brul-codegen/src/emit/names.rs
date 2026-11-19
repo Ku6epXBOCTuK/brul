@@ -171,6 +171,11 @@ fn statement_node<'a>(statement: &'a Statement, names: &mut Names<'a>) {
                 statement_node(else_branch, names);
             }
         }
+        Statement::Return { value, .. } => {
+            if let Some(value) = value {
+                expression(value, names);
+            }
+        }
     }
 }
 

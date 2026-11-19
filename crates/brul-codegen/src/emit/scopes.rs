@@ -4,9 +4,15 @@ use brul_syntax::types::Type;
 
 use super::script::{ident, snake};
 
-#[derive(Default)]
 pub(super) struct Scopes {
     frames: Vec<Vec<Binding>>,
+    return_type: Type,
+}
+
+impl Default for Scopes {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Clone)]
@@ -34,7 +40,17 @@ impl Scopes {
     pub(super) fn new() -> Self {
         Self {
             frames: vec![Vec::new()],
+            return_type: Type::Void,
         }
+    }
+
+    pub(super) fn with_return_type(mut self, return_type: &Type) -> Self {
+        self.return_type = return_type.clone();
+        self
+    }
+
+    pub(super) fn return_type(&self) -> &Type {
+        &self.return_type
     }
 
     pub(super) fn push(&mut self) {

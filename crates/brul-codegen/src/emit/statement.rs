@@ -6,7 +6,7 @@ use brul_syntax::error::Error;
 use brul_syntax::script::Statement;
 use brul_syntax::types::Type;
 
-use super::expression::operation_in;
+use super::expression::{operation_in, type_name, typed, wrap_typed};
 use super::scopes::Scopes;
 use super::state::State;
 
@@ -140,6 +140,55 @@ fn emit_statement(
                 condition.position.line, condition.position.column
             );
             out.push_str("    }\n");
+        }
+        Statement::Return { value, position } => {
+            let return_type = scopes.return_type().clone();
+            let Some(value) = value else {
+                if !matches!(return_type, Type::Void | Type::Null) {
+                    return Err(crate::error_at(
+                        *position,
+                        format!(
+                            "return requires a value of type {}",
+                            type_name(&return_type)
+                        ),
+                    ));
+                }
+                let _ = writeln!(out, "    return Ok(brul::Value::Null);");
+                return Ok(());
+            };
+            if return_type == Type::Void {
+                return Err(crate::error_at(
+                    value.position,
+                    "a Void function cannot return a value",
+                ));
+            }
+            let code = if let Some((code, ty)) = typed(value, names, state, props, scopes)? {
+                if ty != return_type {
+                    return Err(crate::error_at(
+                        value.position,
+                        format!(
+                            "return expects {}, found {}",
+                            type_name(&return_type),
+                            type_name(&ty)
+                        ),
+                    ));
+                }
+                wrap_typed(code, &return_type)
+            } else {
+                let code = operation_in(value, names, state, props, scopes)?;
+                match return_type {
+                    Type::Number => format!("brul::Value::Number((&{code}).try_into()?)"),
+                    Type::String => format!(
+                        "brul::Value::from(<String as std::convert::TryFrom<&brul::Value>>::try_from(&{code})?)"
+                    ),
+                    Type::Bool => format!("brul::Value::Bool((&{code}).try_into()?)"),
+                    Type::Null => format!(
+                        "match {code} {{ brul::Value::Null => brul::Value::Null, other => return Err(brul::Error::conversion(\"Null\", &other)) }}"
+                    ),
+                    _ => code,
+                }
+            };
+            let _ = writeln!(out, "    return Ok({code});");
         }
     }
     Ok(())

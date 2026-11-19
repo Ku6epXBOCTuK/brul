@@ -37,6 +37,7 @@ fn validate_inner(
             .variables
             .extend(function.params.iter().map(|param| param.name.as_str()));
         names.variables.extend(top_level.iter().copied());
+        names.in_function = true;
         check_statements(&function.body, &mut names)?;
     }
 
@@ -49,6 +50,7 @@ struct Names<'a> {
     functions: Vec<&'a str>,
     external: &'a [&'a str],
     allow_host_calls: bool,
+    in_function: bool,
 }
 
 impl<'a> Names<'a> {
@@ -58,6 +60,7 @@ impl<'a> Names<'a> {
             functions,
             external,
             allow_host_calls,
+            in_function: false,
         }
     }
 
@@ -90,6 +93,16 @@ fn check_statement<'a>(statement: &'a Statement, names: &mut Names<'a>) -> Resul
             then_branch,
             else_branch,
         } => check_if(condition, then_branch, else_branch.as_deref(), names),
+        Statement::Return { value, position } => {
+            if !names.in_function {
+                return Err(Error::at_position(*position, Error::ReturnOutsideFunction));
+            }
+            if let Some(value) = value {
+                check_expression(value, names)
+            } else {
+                Ok(())
+            }
+        }
     }
 }
 

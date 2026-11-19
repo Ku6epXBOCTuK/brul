@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::ast::Expr;
+use crate::ast::{Expr, Position};
 use crate::types::Type;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,5 +37,9 @@ pub enum Statement {
         condition: Expr,
         then_branch: Vec<Statement>,
         else_branch: Option<Box<Statement>>,
+    },
+    Return {
+        value: Option<Expr>,
+        position: Position,
     },
 }

@@ -11,6 +11,7 @@ pub fn parse(source: &str) -> Result<Program, Error> {
     let tokens = lexer::tokenize(source)?;
     let mut parser = Parser {
         stream: TokenStream::new(source, tokens),
+        in_function: false,
     };
     let mut functions = Vec::new();
     let mut statements = Vec::new();
@@ -29,6 +30,7 @@ pub fn parse(source: &str) -> Result<Program, Error> {
 
 struct Parser<'a> {
     stream: TokenStream<'a>,
+    in_function: bool,
 }
 
 impl<'a> Deref for Parser<'a> {
@@ -55,6 +57,9 @@ impl Parser<'_> {
         }
         if self.at_keyword("if") {
             return self.if_statement();
+        }
+        if self.at_keyword("return") {
+            return self.return_statement();
         }
         if self.at_keyword("function") {
             return Err(self.error(self.tokens[self.at].span, Error::FunctionNotTopLevel));
@@ -89,6 +94,22 @@ impl Parser<'_> {
         })
     }
 
+    fn return_statement(&mut self) -> Result<Statement, Error> {
+        let span = self.token()?.span;
+        let position = span.position(self.stream.source);
+        if !self.in_function {
+            return Err(self.error(span, Error::ReturnOutsideFunction));
+        }
+        self.at += 1;
+        let value = if self.tokens[self.at].kind == TokenKind::Punct(Punct::Semicolon) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.expect_punct(Punct::Semicolon, Punct::Semicolon)?;
+        Ok(Statement::Return { value, position })
+    }
+
     fn function(&mut self) -> Result<Function, Error> {
         self.expect_keyword("function")?;
         let name = self.ident(Expected::Word("function name"))?;
@@ -109,7 +130,9 @@ impl Parser<'_> {
         self.expect_punct(Punct::RParen, Punct::RParen)?;
         self.expect_punct(Punct::Colon, Punct::Colon)?;
         let return_type = self.type_annotation()?;
+        self.in_function = true;
         let body = self.block_statements()?;
+        self.in_function = false;
         Ok(Function {
             name,
             params,
