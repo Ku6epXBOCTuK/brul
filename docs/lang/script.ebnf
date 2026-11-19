@@ -9,21 +9,25 @@ Term        = Factor { ("+" | "-") Factor } ;
 Factor      = Unary { ("*" | "/" | "%") Unary } ;
 Unary       = [ "!" | "-" ] Postfix ;
 Postfix     = Primary { "." Ident | "(" [ ArgList ] ")" | "[" Expr "]" } ;
-Primary     = Number | String | Template | "true" | "false" | "null" | Ident
-            | Array | Object | "(" Expr ")" ;
+Primary     = Number | String | Template | "true" | "false" | "null" | "empty"
+            | Ident | Array | Object | "(" Expr ")" ;
 ArgList     = Expr { "," Expr } ;
 Array       = "[" [ Expr { "," Expr } ] "]" ;
 Object      = "{" [ Ident ":" Expr { "," Ident ":" Expr } ] "}" ;
 Template    = "`" { TemplateChar | "${" Expr "}" } "`" ;
 
 Program      = { FunctionDecl | Statement } ;
-FunctionDecl = "function" Ident "(" [ ParamList ] ")" Block ;
-ParamList    = Ident { "," Ident } ;              (* без типов — MVP *)
+FunctionDecl = "function" Ident "(" [ ParamList ] ")" ":" Type Block ;
+ParamList    = Param { "," Param } ;
+Param        = Ident ":" Type ;
 Statement    = LetStmt | IfStmt | ExprStmt | Block ;
-LetStmt      = "let" Ident [ "=" Expr ] ";" | "const" Ident "=" Expr ";" ;
+LetStmt      = "let" Ident ":" Type [ "=" Expr ] ";"
+             | "const" Ident ":" Type "=" Expr ";" ;
 IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
 ExprStmt     = Expr ";" ;
 Block        = "{" { Statement } "}" ;
+Type         = "Number" | "String" | "Bool" | "Null" | "Image"
+             | "Array" "<" Type ">" | "Object" | "Void" ;
 
 Ident        = letter { letter | digit | "_" } ;
 Number       = digit { digit } [ "." digit { digit } ] ;

@@ -104,7 +104,7 @@ window Note (title: "note", width: 520, height: 480, centered: true) {
 - `on key: fn` (окно) — клавиатура; функция получает событие с полем `code`
   (строка: `"Escape"`, `"Enter"`, …) и флагами модификаторов `ctrl`, `shift`,
   `alt`, `meta`; проверка — в скрипте, без спец-грамматики:
-  `function handleKey(ev) { if (ev.ctrl && ev.code == "Enter") { show() } }`
+  `function handleKey(ev: Object): Void { if (ev.ctrl && ev.code == "Enter") { show() } }`
 - `on close: fn` (окно) — запрос закрытия от оконной системы: крестик, `Alt+F4`.
   Без обработчика окно закрывается по умолчанию, с обработчиком остаётся
   открытым, пока скрипт не вызовет `exit()` или `closeWindow()`. Закрытие из
@@ -223,7 +223,7 @@ View (checkbox, checked: checked, on click: toggle) { }
   встроенную функцию — иначе ошибка компиляции с позицией;
 - один обработчик на событие; дубликат — ошибка;
 - аргументы события передаются функции параметрами: `event clicked(i: Number);`
-  → `function launch(i) { ... }`;
+  → `function launch(i: Number): Void { ... }`;
 - инлайн-тела (`on click { ... }`) в MVP **запрещены**: поведение живёт в
   скрипте, разметка — только структура и объявления компонента
   ([причина](../dev/architecture.md#ограничения-dsl)).
@@ -255,7 +255,7 @@ event clicked(i: Number);       // событие с типизированны�
 - Объявления стоят в блоке `component` рядом со структурой, порядок не важен.
 - Значение по умолчанию обязательно для `Bool`/`Number`/`String`; `Image` — по
   умолчанию пустой (`= null`).
-- `prop … : Image` принимает `null` (пустая картинка) или значение `Image`:
+- `prop … : Image` принимает `empty` (пустая картинка) или значение `Image`:
   ресурс из `<use>` либо путь, который приходит из данных приложения.
 - Присваивание свойству из обработчика — запись в сигнал.
 - Вызов события: `clicked(index)` — как вызов функции.
@@ -414,7 +414,7 @@ window Demo (title: "demo") {
 Скрипт-блок файла:
 
 ```js
-function toggle() {
+function toggle(): Void {
   checked = !checked;
   toggled();
 }
@@ -440,7 +440,7 @@ component CheckRow {
 Скрипт-блок файла:
 
 ```js
-function itemClicked() {
+function itemClicked(): Void {
   clicked(index);
 }
 ```
@@ -450,7 +450,7 @@ function itemClicked() {
 ```brul
 component BrowserItem {
     prop index: Number = 0;
-    prop icon: Image = null;
+    prop icon: Image = empty;
     prop emoji: String = "";
     prop name: String = "";
     prop isDefault: Bool = false;
@@ -531,7 +531,7 @@ window Picker (title: "picker", width: 488, height: 800,
 ```
 
 Соответствующий скрипт:
-`function handleKey(ev) { if (ev.code == "Escape") { exit() } }`,
-`function launch(i) { ... }`.
+`function handleKey(ev: Object): Void { if (ev.code == "Escape") { exit() } }`,
+`function launch(i: Number): Void { ... }`.
 
 Свойства `checkSvg`, `currentUrl` и т.п. — входные данные примера.

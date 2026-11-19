@@ -18,7 +18,10 @@ fn document_examples_parse() {
         .iter()
         .filter(|example| example.kind == Kind::Ignore)
         .count();
-    assert_eq!(ignored, 1, "expected one markup expression example");
+    assert_eq!(
+        ignored, 4,
+        "expected annotated and markup examples to be ignored"
+    );
 }
 
 #[test]
