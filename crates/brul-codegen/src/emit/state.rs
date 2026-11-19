@@ -1,12 +1,10 @@
 use std::fmt::Write;
 
-use brul_script::Names;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::script::{Program, Statement};
 use brul_syntax::types::Type;
 
-use super::names;
 use super::script::ident;
 use crate::commands::{Command, Commands};
 
@@ -21,15 +19,10 @@ struct Field {
     name: String,
     ident: String,
     ty: Type,
-    variable: String,
 }
 
 impl State {
-    pub fn new(
-        program: Option<&Program>,
-        names: &Names<'_>,
-        type_name: &str,
-    ) -> Result<Self, Error> {
+    pub fn new(program: Option<&Program>, type_name: &str) -> Result<Self, Error> {
         let mut state = Self {
             type_name: type_name.to_owned(),
             fields: Vec::new(),
@@ -54,12 +47,10 @@ impl State {
             } else {
                 ident
             };
-            let variable = names::variable_expr(name, Position { line: 0, column: 0 }, names)?;
             state.fields.push(Field {
                 name: name.clone(),
                 ident,
                 ty: ty.clone(),
-                variable,
             });
         }
         Ok(state)
@@ -107,8 +98,8 @@ impl State {
             let ty = rust_type(&field.ty).expect("state field type was checked");
             let _ = writeln!(
                 out,
-                "    let {}: {ty} = (&component.read_id({})?).try_into()?;",
-                field.ident, field.variable
+                "    let {}: {ty} = component.seed({:?}, brul::ast::Position {{ line: 0, column: 0 }})?;",
+                field.ident, field.name
             );
         }
         let values = self

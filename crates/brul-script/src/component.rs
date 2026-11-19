@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 
 use brul_reactive::Signal;
+use brul_syntax::ast::Position;
 
 use crate::environment::Environment;
 use crate::error::Error;
@@ -213,6 +214,14 @@ impl Component {
         });
         self.external_changed();
         Ok(())
+    }
+
+    pub fn seed<T>(&mut self, name: &str, position: Position) -> Result<T, Error>
+    where
+        T: for<'a> TryFrom<&'a Value, Error = Error>,
+    {
+        let value = self.read(name)?;
+        T::try_from(&value).map_err(|error| error.at(position))
     }
 
     pub fn read(&self, name: &str) -> Result<Value, Error> {

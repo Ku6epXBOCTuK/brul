@@ -16,6 +16,13 @@ use super::{contains_slot, items, items_spliced};
 
 use brul_script::Names;
 
+#[derive(Clone, Copy)]
+enum ValueKind {
+    Bool,
+    Items,
+    Inferred,
+}
+
 #[derive(Default)]
 pub struct StructureNames {
     counts: HashMap<String, usize>,
@@ -44,6 +51,7 @@ pub(super) fn structure_if(
         emit.functions.push(value_function(
             &function,
             &branch.condition,
+            ValueKind::Bool,
             emit.names,
             emit.state,
             emit.prop_types,
@@ -67,6 +75,7 @@ pub(super) fn structure_each(
     emit.functions.push(value_function(
         &format!("{name}_value"),
         &block.collection,
+        ValueKind::Items,
         emit.names,
         emit.state,
         emit.prop_types,
@@ -75,6 +84,7 @@ pub(super) fn structure_each(
         emit.functions.push(value_function(
             &format!("{name}_key"),
             key,
+            ValueKind::Inferred,
             emit.names,
             emit.state,
             emit.prop_types,
@@ -153,23 +163,41 @@ fn check_collection(
 fn value_function(
     name: &str,
     value: &brul_syntax::ast::Expr,
+    kind: ValueKind,
     names: &Names<'_>,
     state: &super::state::State,
     props: &super::PropTypes,
 ) -> Result<String, Error> {
+    let inferred = typed(value, names, state, props, &Scopes::new())?;
+    let (return_type, body) = match kind {
+        ValueKind::Bool => match inferred {
+            Some((code, Type::Bool)) => ("bool", code),
+            _ => (
+                "bool",
+                format!("(&{}).try_into()?", operation(value, names, state, props)?),
+            ),
+        },
+        ValueKind::Items => (
+            "brul::Items",
+            format!(
+                "brul::items(&{})",
+                match inferred {
+                    Some((code, _)) => code,
+                    None => operation(value, names, state, props)?,
+                }
+            ),
+        ),
+        ValueKind::Inferred => match inferred {
+            Some((code, ty)) => (Scopes::local_type(&ty), code),
+            None => ("brul::Value", operation(value, names, state, props)?),
+        },
+    };
     let mut text = String::new();
     let mut out = Out::new(&mut text);
     out.line(format_args!(
-        "fn {name}(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {{"
+        "fn {name}(component: &mut brul::Component) -> Result<{return_type}, brul::Error> {{"
     ));
-    out.indented(|out| -> Result<(), Error> {
-        out.line(format_args!(
-            "let value = {};",
-            operation(value, names, state, props)?
-        ));
-        out.line(format_args!("Ok(value)"));
-        Ok(())
-    })?;
+    out.indented(|out| out.line(format_args!("Ok({body})")));
     out.line(format_args!("}}"));
     Ok(text)
 }
@@ -290,26 +318,6 @@ fn bind_value(out: &mut Out<'_>, binding: &str, call: &str) {
     out.indented(|out| out.line(format_args!(".map_err(brul::ViewError::from)?;")));
 }
 
-fn unwrap_value(
-    out: &mut Out<'_>,
-    source: &str,
-    binding: &str,
-    variant: &str,
-    expected: &str,
-    transform: &str,
-) {
-    out.line(format_args!("let {binding} = match {source} {{"));
-    out.indented(|out| {
-        out.line(format_args!(
-            "brul::Value::{variant}({binding}) => {transform},"
-        ));
-        out.line(format_args!(
-            "other => return Err(brul::ViewError::expected(\"{expected}\", \"{variant}\", other.type_name())),"
-        ));
-    });
-    out.line(format_args!("}};"));
-}
-
 fn branch_chain(
     out: &mut Out<'_>,
     name: &str,
@@ -320,14 +328,6 @@ fn branch_chain(
     index: usize,
 ) -> Result<(), Error> {
     bind_value(out, "condition", &format!("{name}_value{index}"));
-    unwrap_value(
-        out,
-        "condition",
-        "condition",
-        "Bool",
-        "if condition",
-        "condition",
-    );
     out.line(format_args!("if condition {{"));
     out.indented(|out| arm_body(out, &block.branches[index].block, emit, frame, counter))?;
     out.line(format_args!("}} else {{"));
@@ -399,14 +399,7 @@ fn each_arm(
 fn each_collection(out: &mut Out<'_>, name: &str) {
     out.line(format_args!("let mut children = Vec::new();"));
     bind_value(out, "collection", &format!("{name}_value"));
-    unwrap_value(
-        out,
-        "collection",
-        "items",
-        "Array",
-        "each",
-        "std::sync::Arc::unwrap_or_clone(items)",
-    );
+    out.line(format_args!("let items = collection;"));
 }
 
 fn each_else(
@@ -468,7 +461,7 @@ fn each_row(
 fn each_key(out: &mut Out<'_>, name: &str, block: &EachBlock) {
     if block.key.is_some() {
         out.line(format_args!(
-            "let key = {name}_key(&mut component.borrow_mut()).map(brul::RowKey::Explicit).unwrap_or(brul::RowKey::Index(position));"
+            "let key = {name}_key(&mut component.borrow_mut()).map(|key| brul::RowKey::Explicit(key.into())).unwrap_or(brul::RowKey::Index(position));"
         ));
     } else {
         out.line(format_args!("let key = brul::RowKey::Index(position);"));

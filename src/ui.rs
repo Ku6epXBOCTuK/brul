@@ -317,6 +317,7 @@ impl<T: Theme> Ui<T> {
         for structure in structures {
             let component = Rc::clone(&structure.component);
             let each_scope = structure.scope.clone();
+            let structure_value = Rc::clone(&structure.value);
             let requests = Rc::clone(&self.requests);
             let initialized = Rc::new(Cell::new(false));
             let last: Rc<Cell<Option<Value>>> = Rc::new(Cell::new(None));
@@ -325,7 +326,7 @@ impl<T: Theme> Ui<T> {
                 Effect::new(move || {
                     let previous = component.borrow().scope().clone();
                     component.borrow_mut().set_scope(each_scope.clone());
-                    let evaluated = (structure.value)(&mut component.borrow_mut());
+                    let evaluated = structure_value.call(&mut component.borrow_mut());
                     component.borrow_mut().set_scope(previous);
                     let value = match evaluated {
                         Ok(value) => Some(value),

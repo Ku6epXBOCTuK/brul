@@ -16,7 +16,9 @@ pub use eval::eval;
 pub use host::{Host, HostCommand};
 pub use names::{Names, VariableId};
 pub use scope::Scope;
-pub use value::{Fields, Value};
+pub use value::{Fields, Value, items};
+
+pub type Items = Vec<Value>;
 
 pub type ScriptInit = fn(&mut Component) -> Result<(), Error>;
 pub type ScriptDispatch = fn(&mut Component, &str, Vec<Value>) -> Result<Value, Error>;

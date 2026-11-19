@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use crate::Error;
+use crate::{Error, Items};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -104,6 +104,20 @@ impl From<f64> for Value {
     }
 }
 
+pub fn items(value: &Value) -> Items {
+    match value {
+        Value::Array(items) => (**items).clone(),
+        Value::Object(fields) => fields.iter().map(|(_, value)| value.clone()).collect(),
+        _ => Vec::new(),
+    }
+}
+
+impl From<Vec<Value>> for Value {
+    fn from(items: Vec<Value>) -> Self {
+        Self::Array(items.into())
+    }
+}
+
 impl From<bool> for Value {
     fn from(flag: bool) -> Self {
         Self::Bool(flag)
@@ -148,6 +162,17 @@ impl TryFrom<&Value> for bool {
         value
             .as_flag()
             .ok_or_else(|| Error::conversion("Bool", value))
+    }
+}
+
+impl TryFrom<&Value> for () {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Null => Ok(()),
+            other => Err(Error::conversion("Null", other)),
+        }
     }
 }
 

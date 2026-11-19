@@ -686,20 +686,16 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "fn demo_if1_value0(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
+        "fn demo_if1_value0(component: &mut brul::Component) -> Result<bool, brul::Error> {"
     ));
     assert!(module.contains(
         "fn demo_if1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
     ));
     assert!(module.contains("    let children = {\n"), "{module}");
-    assert!(module.contains("brul::Value::Bool(condition) => condition,"));
     assert!(module.contains("        vec![\n"));
     assert!(module.contains(
         "brul::register_structure(build, component, widget0.id(), false, demo_if1_value0, demo_if1_rebuild);"
     ));
-    assert!(
-        module.contains(r#"brul::ViewError::expected("if condition", "Bool", other.type_name())"#)
-    );
 }
 
 #[test]
@@ -752,7 +748,7 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        "fn demo_each1_value(component: &mut brul::Component) -> Result<brul::Value, brul::Error> {"
+        "fn demo_each1_value(component: &mut brul::Component) -> Result<brul::Items, brul::Error> {"
     ));
     assert!(module.contains(
         "fn demo_each1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
@@ -767,7 +763,7 @@ window Demo (title: "demo") {
     assert!(module.contains("index: position as f64,"));
     assert!(module.contains("component.borrow_mut().set_scope(previous_scope);"));
     assert!(module.contains(
-        "let key = demo_each1_key(&mut component.borrow_mut()).map(brul::RowKey::Explicit).unwrap_or(brul::RowKey::Index(position));"
+        "let key = demo_each1_key(&mut component.borrow_mut()).map(|key| brul::RowKey::Explicit(key.into())).unwrap_or(brul::RowKey::Index(position));"
     ));
     assert!(module.contains("let mut matcher = brul::RowMatcher::new(old_rows);"));
     assert!(module.contains("if let Some(other) = matcher.take(&key, &item, position) {"));

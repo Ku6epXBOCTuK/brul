@@ -10,7 +10,19 @@ use super::error::ViewError;
 use super::event::Handler;
 use super::slot::Slots;
 
-pub type StructureValue = fn(&mut Component) -> Result<Value, ScriptError>;
+pub trait StructureValue {
+    fn call(&self, component: &mut Component) -> Result<Value, ScriptError>;
+}
+
+impl<F, T> StructureValue for F
+where
+    F: Fn(&mut Component) -> Result<T, ScriptError> + 'static,
+    T: Into<Value>,
+{
+    fn call(&self, component: &mut Component) -> Result<Value, ScriptError> {
+        self(component).map(Into::into)
+    }
+}
 pub type Rebuilt = Result<(Built, Vec<RowInfo>), ViewError>;
 pub type StructureRebuild = fn(Option<&str>, &mut Build, &ComponentHandle, &[RowInfo]) -> Rebuilt;
 
@@ -23,7 +35,7 @@ pub struct Structure {
     pub component: ComponentHandle,
     pub scope: Scope,
     pub slots: Option<Rc<Slots>>,
-    pub value: StructureValue,
+    pub value: Rc<dyn StructureValue>,
     pub rebuild: StructureRebuild,
 }
 
@@ -54,7 +66,7 @@ pub fn register_structure(
     component: &ComponentHandle,
     parent: WidgetId,
     each: bool,
-    value: StructureValue,
+    value: impl StructureValue + 'static,
     rebuild: StructureRebuild,
 ) {
     build.register(Structure {
@@ -63,7 +75,7 @@ pub fn register_structure(
         component: Rc::clone(component),
         scope: component.borrow().scope().clone(),
         slots: build.slots(),
-        value,
+        value: Rc::new(value),
         rebuild,
     });
 }

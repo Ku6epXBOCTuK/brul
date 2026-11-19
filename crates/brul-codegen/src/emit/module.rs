@@ -109,8 +109,8 @@ fn module_at(
             validate_build(program, &external, &command_names)?;
         }
     }
-    let root_state = state::State::new(parsed.program.as_ref(), &names, &state_type("script"))?
-        .with_commands(commands);
+    let root_state =
+        state::State::new(parsed.program.as_ref(), &state_type("script"))?.with_commands(commands);
     let mut used = HashSet::new();
     let window_bases: Vec<String> = parsed
         .windows
@@ -204,7 +204,6 @@ fn module_at(
         let mut class_names = ClassNames::default();
         let component_state = state::State::new(
             definition.program.as_ref(),
-            &names,
             &state_type(&format!("{prefix}script")),
         )?
         .with_commands(commands);
