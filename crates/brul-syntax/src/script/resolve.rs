@@ -3,20 +3,32 @@ use crate::error::Error;
 use crate::script::ast::{Program, Statement};
 
 const BUILTINS: [&str; 4] = ["String", "Number", "len", "every"];
+const HOST_BUILTINS: [&str; 10] = [
+    "theme",
+    "set_theme",
+    "setAlwaysOnTop",
+    "openWindow",
+    "exit",
+    "closeWindow",
+    "dragWindow",
+    "showWindow",
+    "hideWindow",
+    "focusWindow",
+];
 
 pub fn validate(program: &Program, external: &[&str]) -> Result<(), Error> {
-    validate_inner(program, external, false)
+    validate_inner(program, external, &[])
 }
 
-pub fn validate_build(program: &Program, external: &[&str]) -> Result<(), Error> {
-    validate_inner(program, external, true)
-}
-
-fn validate_inner(
+pub fn validate_build(
     program: &Program,
     external: &[&str],
-    allow_host_calls: bool,
+    commands: &[&str],
 ) -> Result<(), Error> {
+    validate_inner(program, external, commands)
+}
+
+fn validate_inner(program: &Program, external: &[&str], commands: &[&str]) -> Result<(), Error> {
     let functions: Vec<&str> = program
         .functions
         .iter()
@@ -32,7 +44,7 @@ fn validate_inner(
         .collect();
 
     for function in &program.functions {
-        let mut names = Names::new(functions.clone(), external, allow_host_calls);
+        let mut names = Names::new(functions.clone(), external, commands);
         names
             .variables
             .extend(function.params.iter().map(|param| param.name.as_str()));
@@ -41,7 +53,7 @@ fn validate_inner(
         check_statements(&function.body, &mut names)?;
     }
 
-    let mut names = Names::new(functions, external, allow_host_calls);
+    let mut names = Names::new(functions, external, commands);
     check_statements(&program.statements, &mut names)
 }
 
@@ -49,17 +61,17 @@ struct Names<'a> {
     variables: Vec<&'a str>,
     functions: Vec<&'a str>,
     external: &'a [&'a str],
-    allow_host_calls: bool,
+    commands: &'a [&'a str],
     in_function: bool,
 }
 
 impl<'a> Names<'a> {
-    fn new(functions: Vec<&'a str>, external: &'a [&'a str], allow_host_calls: bool) -> Self {
+    fn new(functions: Vec<&'a str>, external: &'a [&'a str], commands: &'a [&'a str]) -> Self {
         Self {
             variables: Vec::new(),
             functions,
             external,
-            allow_host_calls,
+            commands,
             in_function: false,
         }
     }
@@ -72,7 +84,8 @@ impl<'a> Names<'a> {
         self.functions.contains(&name)
             || self.external.contains(&name)
             || BUILTINS.contains(&name)
-            || self.allow_host_calls
+            || HOST_BUILTINS.contains(&name)
+            || self.commands.contains(&name)
     }
 }
 

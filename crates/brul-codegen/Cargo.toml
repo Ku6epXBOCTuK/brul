@@ -11,6 +11,7 @@ brul-syntax = { workspace = true }
 brul-window = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+syn = { workspace = true }
 
 [lints]
 workspace = true

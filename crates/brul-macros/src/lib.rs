@@ -3,7 +3,10 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{FnArg, Generics, Ident, ItemFn, Pat, PatType, Result, Token, Type};
+use syn::{
+    FnArg, GenericArgument, Generics, Ident, ItemFn, Pat, PatType, PathArguments, Result,
+    ReturnType, Token, Type,
+};
 
 #[proc_macro_attribute]
 pub fn command(attribute: TokenStream, item: TokenStream) -> TokenStream {
@@ -128,6 +131,32 @@ fn expand(function: ItemFn) -> Result<TokenStream2> {
         }
     };
 
+    let marker = format_ident!("__brul_command_{}", snake(&name.to_string()));
+    let marker_types: Vec<TokenStream2> = signature
+        .values
+        .iter()
+        .map(|(_, ty)| marker_type(ty))
+        .collect();
+    let argument_names: Vec<Ident> = (0..signature.values.len())
+        .map(|index| format_ident!("__argument{index}"))
+        .collect();
+    let bindings: Vec<TokenStream2> = signature
+        .values
+        .iter()
+        .zip(&values)
+        .zip(&argument_names)
+        .map(|(((_, ty), value), argument)| {
+            let conversion = argument_value(argument, ty, &command);
+            quote! { let #value: #ty = #conversion; }
+        })
+        .collect();
+    let host_owned = owned_type(&signature.host_type);
+    let result = result_type(&function.sig.output);
+    let result_marker = result.map(marker_type).unwrap_or_else(|| quote!(()));
+    let result_value = result
+        .map(output_value)
+        .unwrap_or_else(|| quote!(Ok(value)));
+
     Ok(quote! {
         #(#attrs)*
         #vis fn #name #declare (#host: #host_type, __arguments: &[::brul::Value]) #output {
@@ -137,6 +166,28 @@ fn expand(function: ItemFn) -> Result<TokenStream2> {
 
         #(#attrs)*
         #vis fn #hidden #declare (#host: #host_type, #(#names: #types),*) #output #body
+
+        pub struct #marker;
+
+        impl ::brul::HostCommand for #marker {
+            type Arguments = (#(#marker_types,)*);
+            type Output = #result_marker;
+
+            const NAME: &'static str = #command;
+
+            fn invoke(
+                component: &mut ::brul::Component,
+                arguments: Self::Arguments,
+            ) -> ::std::result::Result<Self::Output, ::brul::Error> {
+                let host = component
+                    .host_mut::<#host_owned>()
+                    .ok_or_else(|| ::brul::Error::UnknownFunction(#command.to_owned()))?;
+                let (#(#argument_names,)*) = arguments;
+                #(#bindings)*
+                let value = #hidden(host #(, #values)*)?;
+                #result_value
+            }
+        }
     })
 }
 
@@ -191,6 +242,115 @@ impl Commands {
             }
         }
     }
+}
+
+fn result_type(output: &ReturnType) -> Option<&Type> {
+    let ReturnType::Type(_, ty) = output else {
+        return None;
+    };
+    let Type::Path(path) = &**ty else {
+        return Some(ty);
+    };
+    let Some(segment) = path.path.segments.last() else {
+        return Some(ty);
+    };
+    if segment.ident != "Result" {
+        return Some(ty);
+    }
+    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return Some(ty);
+    };
+    arguments.args.iter().find_map(|argument| match argument {
+        GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    })
+}
+
+fn kind(ty: &Type) -> Kind {
+    match ty {
+        Type::Reference(reference) => kind(&reference.elem),
+        Type::Path(path) => match path
+            .path
+            .segments
+            .last()
+            .map(|segment| segment.ident.to_string())
+            .as_deref()
+        {
+            Some("str" | "String") => Kind::String,
+            Some("f64" | "f32" | "usize" | "u64" | "u32" | "i64" | "i32") => Kind::Number,
+            Some("bool") => Kind::Bool,
+            Some("Value") => Kind::Value,
+            _ => Kind::Other,
+        },
+        Type::Tuple(tuple) if tuple.elems.is_empty() => Kind::Null,
+        _ => Kind::Other,
+    }
+}
+
+enum Kind {
+    String,
+    Number,
+    Bool,
+    Value,
+    Null,
+    Other,
+}
+
+fn marker_type(ty: &Type) -> TokenStream2 {
+    match kind(ty) {
+        Kind::String => quote!(::std::string::String),
+        Kind::Number => quote!(f64),
+        Kind::Bool => quote!(bool),
+        Kind::Null => quote!(()),
+        Kind::Value | Kind::Other => quote!(::brul::Value),
+    }
+}
+
+fn argument_value(argument: &Ident, ty: &Type, command: &str) -> TokenStream2 {
+    match kind(ty) {
+        Kind::String if matches!(ty, Type::Reference(_)) => quote!(#argument.as_str()),
+        Kind::String | Kind::Bool | Kind::Null | Kind::Value => quote!(#argument),
+        Kind::Number => quote!(#argument as #ty),
+        Kind::Other => quote! {
+            match <#ty as ::std::convert::TryFrom<&::brul::Value>>::try_from(&#argument) {
+                ::std::result::Result::Ok(value) => value,
+                ::std::result::Result::Err(error) => {
+                    return ::std::result::Result::Err(
+                        ::brul::Error::at_command(error, #command),
+                    );
+                }
+            }
+        },
+    }
+}
+
+fn output_value(ty: &Type) -> TokenStream2 {
+    match kind(ty) {
+        Kind::String if matches!(ty, Type::Reference(_)) => quote!(Ok(value.to_owned())),
+        _ => quote!(Ok(value)),
+    }
+}
+
+fn owned_type(ty: &Type) -> &Type {
+    match ty {
+        Type::Reference(reference) => &reference.elem,
+        _ => ty,
+    }
+}
+
+fn snake(name: &str) -> String {
+    let mut output = String::with_capacity(name.len());
+    for (index, character) in name.chars().enumerate() {
+        if character.is_uppercase() {
+            if index > 0 {
+                output.push('_');
+            }
+            output.extend(character.to_lowercase());
+        } else {
+            output.push(character);
+        }
+    }
+    output
 }
 
 fn camel(name: &str) -> String {

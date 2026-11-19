@@ -1,13 +1,23 @@
 use std::path::Path;
 
-use brul_codegen::emit;
+use brul_codegen::{Command, Commands, emit};
+use brul_syntax::types::Type;
 
 const CEILING: usize = 1_200;
 
 #[test]
 fn fixed_markup_stays_within_the_output_budget() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/budget/main.brul");
-    let module = emit::module_file(&path).expect("module");
+    let mut commands = Commands::new();
+    let command = Command {
+        name: "toggleLabel".to_owned(),
+        marker: "__brul_command_toggle_label".to_owned(),
+        params: Vec::new(),
+        result: Type::Void,
+    };
+    commands.insert(command.name.clone(), command.clone());
+    commands.insert("toggle_label".to_owned(), command);
+    let module = emit::module_file_with_commands(&path, &commands).expect("module");
 
     let lines = module.lines().count();
     assert!(

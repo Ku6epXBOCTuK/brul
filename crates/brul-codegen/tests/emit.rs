@@ -1,4 +1,29 @@
 use brul_codegen::emit;
+use brul_codegen::{Command, Commands};
+use brul_syntax::types::Type;
+
+fn host_commands() -> Commands {
+    let mut commands = Commands::new();
+    commands.insert(
+        "capitalize".to_owned(),
+        Command {
+            name: "capitalize".to_owned(),
+            marker: "__brul_command_capitalize".to_owned(),
+            params: vec![Type::String],
+            result: Type::String,
+        },
+    );
+    commands.insert(
+        "double".to_owned(),
+        Command {
+            name: "double".to_owned(),
+            marker: "__brul_command_double".to_owned(),
+            params: vec![Type::Number],
+            result: Type::Number,
+        },
+    );
+    commands
+}
 
 #[test]
 fn emits_static_tree() {
@@ -1138,8 +1163,49 @@ window Demo (title: "demo") {
 }
 </markup>
 "#;
-    let module = emit::module(source).expect("module");
+    let module = emit::module_with_commands(source, &host_commands()).expect("module");
     assert!(module.contains("component.declare_if_absent(\"label\""));
+    assert!(module.contains(
+        "<crate::__brul_command_capitalize as brul::HostCommand>::invoke(component, (__brul_arg0,))?"
+    ));
+    assert!(!module.contains("brul::eval::call(component, \"capitalize\""));
+}
+
+#[test]
+fn rejects_unknown_host_command_at_build() {
+    let source = r#"<script>
+    function run(): Void {
+        missing();
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#;
+    let error = emit::module_with_commands(source, &host_commands()).expect_err("error");
+    assert_eq!(error.message(), "function 'missing' is not defined");
+}
+
+#[test]
+fn rejects_wrong_host_argument_type_at_build() {
+    let source = r#"<script>
+    let count: Number;
+    function run(): Void {
+        count = double("wrong");
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Text { String(count) }
+}
+</markup>
+"#;
+    let error = emit::module_with_commands(source, &host_commands()).expect_err("error");
+    assert_eq!(error.message(), "argument expects Number, found String");
 }
 
 #[test]

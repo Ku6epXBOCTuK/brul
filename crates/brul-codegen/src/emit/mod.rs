@@ -37,7 +37,10 @@ pub use state::State;
 
 pub use alloc::allocations;
 pub use expression::operation;
-pub use module::{GeneratedFile, Module, module, module_file, split_module_file};
+pub use module::{
+    GeneratedFile, Module, module, module_file, module_file_with_commands, module_with_commands,
+    split_module_file, split_module_file_with_commands,
+};
 pub(super) use out::Out;
 
 pub(super) fn resource<'a>(expression: &'a Expr, resources: &[Resource]) -> Option<&'a str> {

@@ -221,6 +221,7 @@ dependencies = [
  "brul-script",
  "brul-syntax",
  "brul-window",
+ "syn 2.0.119",
  "thiserror 2.0.21",
  "tracing",
 ]

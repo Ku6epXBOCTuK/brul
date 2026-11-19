@@ -8,11 +8,13 @@ use brul_syntax::types::Type;
 
 use super::names;
 use super::script::ident;
+use crate::commands::{Command, Commands};
 
 #[derive(Default)]
 pub struct State {
     type_name: String,
     fields: Vec<Field>,
+    commands: Commands,
 }
 
 struct Field {
@@ -31,6 +33,7 @@ impl State {
         let mut state = Self {
             type_name: type_name.to_owned(),
             fields: Vec::new(),
+            commands: Commands::new(),
         };
         let Some(program) = program else {
             return Ok(state);
@@ -60,6 +63,15 @@ impl State {
             });
         }
         Ok(state)
+    }
+
+    pub fn with_commands(mut self, commands: &Commands) -> Self {
+        self.commands = commands.clone();
+        self
+    }
+
+    pub fn command(&self, name: &str) -> Option<&Command> {
+        self.commands.get(name)
     }
 
     pub fn field_type(&self, name: &str) -> Option<&Type> {

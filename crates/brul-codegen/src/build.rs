@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 
 use brul_syntax::error;
 
-use crate::emit::split_module_file;
+use crate::commands;
+use crate::emit::split_module_file_with_commands;
 
 const VIEW: &str = "view.rs";
 const ALLOCATIONS: &str = "allocations.rs";
@@ -37,7 +38,9 @@ pub fn app(entry: impl AsRef<Path>) -> Result<(), Error> {
     }
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let entry = root.join(entry);
-    let module = split_module_file(&entry)?;
+    let commands = commands::collect(&root.join("src"))?;
+    println!("cargo:rerun-if-changed={}", root.join("src").display());
+    let module = split_module_file_with_commands(&entry, &commands)?;
     let output = PathBuf::from(env::var("OUT_DIR")?);
     fs::write(output.join(VIEW), &module.root)?;
     fs::write(output.join(ALLOCATIONS), crate::emit::allocations())?;

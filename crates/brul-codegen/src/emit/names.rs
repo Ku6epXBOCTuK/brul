@@ -33,6 +33,16 @@ pub(super) fn declared(members: &[Member]) -> Vec<&str> {
         .collect()
 }
 
+pub(super) fn declared_events(members: &[Member]) -> Vec<&str> {
+    members
+        .iter()
+        .filter_map(|member| match member {
+            Member::Event(event) => Some(event.name.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
 pub(super) fn output(names: &Names<'_>) -> String {
     let names = names
         .names()

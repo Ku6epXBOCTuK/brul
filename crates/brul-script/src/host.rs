@@ -1,3 +1,4 @@
+use crate::component::Component;
 use crate::error::Error;
 use crate::value::Value;
 
@@ -12,4 +13,18 @@ pub trait Host {
         let _ = (interval_ms, function);
         Err(Error::Unsupported("every"))
     }
+}
+
+pub trait AnyHost: Host + std::any::Any {}
+
+impl<T: Host + 'static> AnyHost for T {}
+
+pub trait HostCommand {
+    type Arguments;
+    type Output;
+
+    const NAME: &'static str;
+
+    fn invoke(component: &mut Component, arguments: Self::Arguments)
+    -> Result<Self::Output, Error>;
 }

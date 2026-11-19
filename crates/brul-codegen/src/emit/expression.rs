@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use brul_script::Names;
-use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, TemplatePart, UnaryOp};
+use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
 
 use super::names;
 use super::scopes::{ScopeInfo, Scopes};
 use super::state::State;
+use crate::commands::Command;
 
 fn scope_locals(definitions: &[ScopeInfo], current: Option<usize>) -> (String, Scopes) {
     let mut scopes = Scopes::default();
@@ -277,6 +278,17 @@ pub(super) fn typed(
             let ExprKind::Ident(name) = &target.kind else {
                 return Ok(None);
             };
+            if let Some(command) = state.command(name) {
+                return host_call(
+                    command,
+                    args,
+                    expression.position,
+                    names,
+                    state,
+                    props,
+                    scopes,
+                );
+            }
             let Some(signature) = scopes.function(name) else {
                 return Ok(None);
             };
@@ -324,6 +336,71 @@ pub(super) fn typed(
         }
         _ => None,
     })
+}
+
+fn host_call(
+    command: &Command,
+    arguments: &[Expr],
+    position: Position,
+    names: &Names<'_>,
+    state: &State,
+    props: &HashMap<String, Type>,
+    scopes: &Scopes,
+) -> Result<Option<(String, Type)>, Error> {
+    if arguments.len() != command.params.len() {
+        return Err(crate::error_at(
+            position,
+            format!(
+                "command '{}' expects {} arguments, found {}",
+                command.name,
+                command.params.len(),
+                arguments.len()
+            ),
+        ));
+    }
+    let mut values = Vec::new();
+    for (argument, expected) in arguments.iter().zip(&command.params) {
+        let code = if let Some((code, found)) = typed(argument, names, state, props, scopes)? {
+            if &found != expected {
+                return Err(crate::error_at(
+                    argument.position,
+                    format!(
+                        "argument expects {}, found {}",
+                        type_name(expected),
+                        type_name(&found)
+                    ),
+                ));
+            }
+            code
+        } else {
+            convert(
+                &operation_in(argument, names, state, props, scopes)?,
+                expected,
+            )
+        };
+        values.push(code);
+    }
+    let bindings: Vec<String> = values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| format!("let __brul_arg{index} = {value};"))
+        .collect();
+    let variables: Vec<String> = (0..values.len())
+        .map(|index| format!("__brul_arg{index}"))
+        .collect();
+    let tuple = if variables.is_empty() {
+        "()".to_owned()
+    } else {
+        format!("({},)", variables.join(", "))
+    };
+    Ok(Some((
+        format!(
+            "{{ {} <crate::{} as brul::HostCommand>::invoke(component, {tuple})? }}",
+            bindings.join(" "),
+            command.marker
+        ),
+        command.result.clone(),
+    )))
 }
 
 pub(super) fn operation_in(

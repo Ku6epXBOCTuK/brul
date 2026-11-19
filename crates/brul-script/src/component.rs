@@ -6,7 +6,7 @@ use brul_reactive::Signal;
 
 use crate::environment::Environment;
 use crate::error::Error;
-use crate::host::Host;
+use crate::host::{AnyHost, Host};
 use crate::names::VariableId;
 use crate::scope::Scope;
 use crate::value::Value;
@@ -39,7 +39,7 @@ pub struct Component {
     properties: Vec<Option<Property>>,
     dispatch: Option<crate::ScriptDispatch>,
     state: Option<Box<dyn Any>>,
-    host: Option<Box<dyn Host>>,
+    host: Option<Box<dyn AnyHost>>,
     pending_every: Vec<(f64, String)>,
     scope: Scope,
     // NOTE: environment frames and host functions are not signals, so their
@@ -88,6 +88,12 @@ impl Component {
 
     pub fn set_host(&mut self, host: impl Host + 'static) {
         self.host = Some(Box::new(host));
+    }
+
+    pub fn host_mut<T: Host + 'static>(&mut self) -> Option<&mut T> {
+        self.host
+            .as_mut()
+            .and_then(|host| (&mut **host as &mut dyn std::any::Any).downcast_mut())
     }
 
     pub fn set_dispatch(&mut self, dispatch: crate::ScriptDispatch) {

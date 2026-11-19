@@ -9,6 +9,7 @@ use brul_syntax::markup::{Arg, Element, Member, Window};
 use brul_syntax::script::validate_build;
 use brul_syntax::types::Type;
 
+use crate::commands::{self, Commands};
 use crate::error_at;
 use crate::kit;
 use crate::{Definition, Resource};
@@ -44,7 +45,11 @@ impl Module {
 }
 
 pub fn module(source: &str) -> Result<String, Error> {
-    let module = module_at(source, None, false, None)?;
+    module_with_commands(source, &Commands::new())
+}
+
+pub fn module_with_commands(source: &str, commands: &Commands) -> Result<String, Error> {
+    let module = module_at(source, None, false, None, commands)?;
     Ok(module.flat)
 }
 
@@ -53,7 +58,16 @@ pub fn module_file(path: &Path) -> Result<String, Error> {
     Ok(module.flat)
 }
 
+pub fn module_file_with_commands(path: &Path, commands: &Commands) -> Result<String, Error> {
+    let module = split_module_file_with_commands(path, commands)?;
+    Ok(module.flat)
+}
+
 pub fn split_module_file(path: &Path) -> Result<Module, Error> {
+    split_module_file_with_commands(path, &Commands::new())
+}
+
+pub fn split_module_file_with_commands(path: &Path, commands: &Commands) -> Result<Module, Error> {
     let position = Position { line: 1, column: 1 };
     let source = fs::read_to_string(path).map_err(|error| {
         error_at(
@@ -61,7 +75,7 @@ pub fn split_module_file(path: &Path) -> Result<Module, Error> {
             format!("cannot read '{}': {error}", path.display()),
         )
     })?;
-    module_at(&source, path.parent(), true, Some(path))
+    module_at(&source, path.parent(), true, Some(path), commands)
 }
 
 fn module_at(
@@ -69,6 +83,7 @@ fn module_at(
     base: Option<&Path>,
     _split: bool,
     entry: Option<&Path>,
+    commands: &Commands,
 ) -> Result<Module, Error> {
     let parsed = crate::parse_source(source)?;
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
@@ -76,19 +91,26 @@ fn module_at(
     let names = names::table(&parsed, &registry.definitions);
     let mut root_props = Vec::new();
     let mut root_prop_types = HashMap::new();
+    let mut root_external = Vec::new();
     for window in &parsed.windows {
         root_props.extend(names::declared(&window.members));
         root_prop_types.extend(prop_types(&window.members));
+        root_external.extend(names::declared_events(&window.members));
     }
+    let command_names = commands::names(commands);
     if let Some(program) = &parsed.program {
-        validate_build(program, &root_props)?;
+        root_external.extend(root_props.iter().copied());
+        validate_build(program, &root_external, &command_names)?;
     }
     for definition in &registry.definitions {
         if let Some(program) = &definition.program {
-            validate_build(program, &names::declared(&definition.component.members))?;
+            let mut external = names::declared(&definition.component.members);
+            external.extend(names::declared_events(&definition.component.members));
+            validate_build(program, &external, &command_names)?;
         }
     }
-    let root_state = state::State::new(parsed.program.as_ref(), &names, &state_type("script"))?;
+    let root_state = state::State::new(parsed.program.as_ref(), &names, &state_type("script"))?
+        .with_commands(commands);
     let mut used = HashSet::new();
     let window_bases: Vec<String> = parsed
         .windows
@@ -184,7 +206,8 @@ fn module_at(
             definition.program.as_ref(),
             &names,
             &state_type(&format!("{prefix}script")),
-        )?;
+        )?
+        .with_commands(commands);
         let component_prop_types = prop_types(&definition.component.members);
         body.push_str(HEADER);
         view::view(

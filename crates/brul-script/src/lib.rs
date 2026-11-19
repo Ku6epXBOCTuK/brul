@@ -13,7 +13,7 @@ pub use component::Component;
 pub use environment::Environment;
 pub use error::Error;
 pub use eval::eval;
-pub use host::Host;
+pub use host::{Host, HostCommand};
 pub use names::{Names, VariableId};
 pub use scope::Scope;
 pub use value::{Fields, Value};
