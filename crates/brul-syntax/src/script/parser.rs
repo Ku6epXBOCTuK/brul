@@ -152,11 +152,6 @@ impl Parser<'_> {
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
-        let start = self.tokens[self.at].span.start;
-        let (expr, end) = crate::parser::parse_expression_at(self.source, start)?;
-        while self.tokens[self.at].span.start < end {
-            self.at += 1;
-        }
-        Ok(expr)
+        crate::parser::Parser::new(&mut self.stream).parse_expression()
     }
 }

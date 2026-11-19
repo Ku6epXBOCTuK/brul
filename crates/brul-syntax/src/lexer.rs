@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::error::Error as ParseError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +80,7 @@ pub struct TokenStream<'a> {
     pub(crate) source: &'a str,
     pub(crate) tokens: Vec<Token>,
     pub(crate) at: usize,
+    lexer: Option<Lexer<'a>>,
 }
 
 impl<'a> TokenStream<'a> {
@@ -86,7 +89,31 @@ impl<'a> TokenStream<'a> {
             source,
             tokens,
             at: 0,
+            lexer: None,
         }
+    }
+
+    pub(crate) fn lazy(source: &'a str, lexer: Lexer<'a>) -> Self {
+        Self {
+            source,
+            tokens: Vec::new(),
+            at: 0,
+            lexer: Some(lexer),
+        }
+    }
+
+    pub(crate) fn token(&mut self) -> Result<&Token, ParseError> {
+        while self.tokens.len() <= self.at {
+            let Some(lexer) = self.lexer.as_mut() else {
+                break;
+            };
+            match lexer.next() {
+                Some(Ok(token)) => self.tokens.push(token),
+                Some(Err(error)) => return Err(error.into()),
+                None => break,
+            }
+        }
+        Ok(&self.tokens[self.at])
     }
 
     pub fn at_end(&self) -> bool {
@@ -98,47 +125,50 @@ impl<'a> TokenStream<'a> {
     }
 
     pub fn expect_keyword(&mut self, keyword: &str) -> Result<(), ParseError> {
-        let token = &self.tokens[self.at];
-        match &token.kind {
-            TokenKind::Ident(name) if name == keyword => {
-                self.at += 1;
-                Ok(())
-            }
-            _ => Err(self.error(token.span, format!("expected '{keyword}'"))),
+        let token = self.token()?;
+        let span = token.span;
+        let matches = matches!(&token.kind, TokenKind::Ident(name) if name == keyword);
+        if matches {
+            self.at += 1;
+            Ok(())
+        } else {
+            Err(self.error(span, format!("expected '{keyword}'")))
         }
     }
 
     pub fn ident(&mut self, message: &str) -> Result<String, ParseError> {
-        let token = &self.tokens[self.at];
-        match &token.kind {
+        let token = self.token()?;
+        let span = token.span;
+        match token.kind.clone() {
             TokenKind::Ident(name) => {
-                let name = name.clone();
                 self.at += 1;
                 Ok(name)
             }
-            _ => Err(self.error(token.span, message)),
+            _ => Err(self.error(span, message)),
         }
     }
 
     pub fn string(&mut self, message: &str) -> Result<String, ParseError> {
-        let token = &self.tokens[self.at];
-        match &token.kind {
+        let token = self.token()?;
+        let span = token.span;
+        match token.kind.clone() {
             TokenKind::String(value) => {
-                let value = value.clone();
                 self.at += 1;
                 Ok(value)
             }
-            _ => Err(self.error(token.span, message)),
+            _ => Err(self.error(span, message)),
         }
     }
 
     pub fn expect_punct(&mut self, punct: Punct, message: &str) -> Result<(), ParseError> {
-        let token = &self.tokens[self.at];
-        if token.kind == TokenKind::Punct(punct) {
+        let token = self.token()?;
+        let span = token.span;
+        let matches = token.kind == TokenKind::Punct(punct);
+        if matches {
             self.at += 1;
             Ok(())
         } else {
-            Err(self.error(token.span, message))
+            Err(self.error(span, message))
         }
     }
 
@@ -161,42 +191,98 @@ enum Frame {
     Template { start: usize },
 }
 
-pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
-    let mut tokens = Vec::new();
-    let mut frames = vec![Frame::Code {
-        braces: 0,
-        interpolation: false,
-    }];
-    let mut pos = 0;
-    while pos < source.len() {
-        pos = match *frames.last().expect("code frame is always present") {
-            Frame::Template { start } => {
-                template_pos(source, pos, start, &mut tokens, &mut frames)?
+pub struct Lexer<'a> {
+    source: &'a str,
+    pos: usize,
+    frames: Vec<Frame>,
+    pending: VecDeque<Token>,
+    finished: bool,
+}
+
+impl<'a> Lexer<'a> {
+    pub fn new(source: &'a str, offset: usize) -> Self {
+        Self {
+            source,
+            pos: offset,
+            frames: vec![Frame::Code {
+                braces: 0,
+                interpolation: false,
+            }],
+            pending: VecDeque::new(),
+            finished: false,
+        }
+    }
+
+    fn step(&mut self) -> Result<(), Error> {
+        while !self.finished && self.pending.is_empty() {
+            if self.pos >= self.source.len() {
+                self.finish()?;
+                break;
             }
-            Frame::Code { .. } => code_pos(source, pos, &mut tokens, &mut frames)?,
-        };
+            self.pos = match *self.frames.last().expect("code frame is always present") {
+                Frame::Template { start } => template_pos(
+                    self.source,
+                    self.pos,
+                    start,
+                    &mut self.pending,
+                    &mut self.frames,
+                )?,
+                Frame::Code { .. } => {
+                    code_pos(self.source, self.pos, &mut self.pending, &mut self.frames)?
+                }
+            };
+        }
+        Ok(())
     }
-    if let Some(start) = frames.iter().find_map(|frame| match frame {
-        Frame::Template { start } => Some(*start),
-        Frame::Code { .. } => None,
-    }) {
-        return Err(error(source, start, "unterminated template"));
+
+    fn finish(&mut self) -> Result<(), Error> {
+        self.finished = true;
+        if let Some(start) = self.frames.iter().find_map(|frame| match frame {
+            Frame::Template { start } => Some(*start),
+            Frame::Code { .. } => None,
+        }) {
+            return Err(error(self.source, start, "unterminated template"));
+        }
+        self.pending.push_back(Token {
+            kind: TokenKind::Eof,
+            span: Span {
+                start: self.pos,
+                end: self.pos,
+            },
+        });
+        Ok(())
     }
-    tokens.push(Token {
-        kind: TokenKind::Eof,
-        span: Span {
-            start: pos,
-            end: pos,
-        },
-    });
-    Ok(tokens)
+}
+
+impl Iterator for Lexer<'_> {
+    type Item = Result<Token, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(token) = self.pending.pop_front() {
+            return Some(Ok(token));
+        }
+        if self.finished {
+            return None;
+        }
+        match self.step() {
+            Ok(()) => self.pending.pop_front().map(Ok),
+            Err(error) => {
+                self.finished = true;
+                Some(Err(error))
+            }
+        }
+    }
+}
+
+pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
+    Lexer::new(source, 0).collect()
 }
 
 fn template_pos(
     source: &str,
     pos: usize,
     start: usize,
-    tokens: &mut Vec<Token>,
+    tokens: &mut VecDeque<Token>,
     frames: &mut Vec<Frame>,
 ) -> Result<usize, Error> {
     match template_step(source, pos, start)? {
@@ -205,7 +291,7 @@ fn template_pos(
             marker_end,
         } => {
             push_chunk(source, pos, chunk_end, tokens);
-            tokens.push(Token {
+            tokens.push_back(Token {
                 kind: TokenKind::TemplateInterpStart,
                 span: Span {
                     start: chunk_end,
@@ -220,7 +306,7 @@ fn template_pos(
         }
         TemplateStep::End(end) => {
             push_chunk(source, pos, end, tokens);
-            tokens.push(Token {
+            tokens.push_back(Token {
                 kind: TokenKind::TemplateEnd,
                 span: Span {
                     start: end,
@@ -233,9 +319,9 @@ fn template_pos(
     }
 }
 
-fn push_chunk(source: &str, start: usize, end: usize, tokens: &mut Vec<Token>) {
+fn push_chunk(source: &str, start: usize, end: usize, tokens: &mut VecDeque<Token>) {
     if end > start {
-        tokens.push(Token {
+        tokens.push_back(Token {
             kind: TokenKind::TemplateChunk(source[start..end].to_owned()),
             span: Span { start, end },
         });
@@ -245,7 +331,7 @@ fn push_chunk(source: &str, start: usize, end: usize, tokens: &mut Vec<Token>) {
 fn code_pos(
     source: &str,
     pos: usize,
-    tokens: &mut Vec<Token>,
+    tokens: &mut VecDeque<Token>,
     frames: &mut Vec<Frame>,
 ) -> Result<usize, Error> {
     let ch = source[pos..]
@@ -263,7 +349,7 @@ fn code_pos(
     }
     if ch.is_ascii_alphabetic() {
         let end = ident_end(source, start);
-        tokens.push(Token {
+        tokens.push_back(Token {
             kind: TokenKind::Ident(source[start..end].to_owned()),
             span: Span { start, end },
         });
@@ -271,7 +357,7 @@ fn code_pos(
     }
     if ch.is_ascii_digit() {
         let end = number_end(source, start);
-        tokens.push(Token {
+        tokens.push_back(Token {
             kind: TokenKind::Number(
                 source[start..end]
                     .parse()
@@ -311,14 +397,14 @@ fn number_end(source: &str, start: usize) -> usize {
     }
 }
 
-fn string_pos(source: &str, start: usize, tokens: &mut Vec<Token>) -> Result<usize, Error> {
+fn string_pos(source: &str, start: usize, tokens: &mut VecDeque<Token>) -> Result<usize, Error> {
     let rest = &source[start + 1..];
     let quote = rest.find('"');
     let newline = rest.find('\n');
     match quote {
         Some(offset) if newline.is_none_or(|limit| offset < limit) => {
             let value_end = start + 1 + offset;
-            tokens.push(Token {
+            tokens.push_back(Token {
                 kind: TokenKind::String(source[start + 1..value_end].to_owned()),
                 span: Span {
                     start,
@@ -335,12 +421,12 @@ fn punct_pos(
     source: &str,
     start: usize,
     ch: char,
-    tokens: &mut Vec<Token>,
+    tokens: &mut VecDeque<Token>,
     frames: &mut Vec<Frame>,
 ) -> Result<usize, Error> {
     let (kind, len) = match ch {
         '`' => {
-            tokens.push(Token {
+            tokens.push_back(Token {
                 kind: TokenKind::TemplateStart,
                 span: Span {
                     start,
@@ -369,7 +455,7 @@ fn punct_pos(
             (TokenKind::Punct(punct), len)
         }
     };
-    tokens.push(Token {
+    tokens.push_back(Token {
         kind,
         span: Span {
             start,

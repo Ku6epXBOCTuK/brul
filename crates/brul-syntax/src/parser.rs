@@ -4,40 +4,27 @@ use crate::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, Una
 pub use crate::error::Error;
 use crate::lexer::{self, Punct, Span, TokenKind, TokenStream};
 
-pub struct Parser<'a> {
-    stream: TokenStream<'a>,
+pub struct Parser<'s, 'a> {
+    stream: &'s mut TokenStream<'a>,
 }
 
-impl<'a> Deref for Parser<'a> {
+impl<'s, 'a> Deref for Parser<'s, 'a> {
     type Target = TokenStream<'a>;
 
     fn deref(&self) -> &Self::Target {
-        &self.stream
+        self.stream
     }
 }
 
-impl DerefMut for Parser<'_> {
+impl<'s, 'a> DerefMut for Parser<'s, 'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.stream
+        self.stream
     }
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(source: &'a str) -> Result<Self, Error> {
-        Self::at(source, 0)
-    }
-
-    fn at(source: &'a str, offset: usize) -> Result<Self, Error> {
-        let end = expression_end(source, offset);
-        let mut tokens =
-            lexer::tokenize(&source[offset..end]).map_err(|error| rebase(source, offset, error))?;
-        for token in &mut tokens {
-            token.span.start += offset;
-            token.span.end += offset;
-        }
-        Ok(Self {
-            stream: TokenStream::new(source, tokens),
-        })
+impl<'s, 'a> Parser<'s, 'a> {
+    pub fn new(stream: &'s mut TokenStream<'a>) -> Self {
+        Self { stream }
     }
 
     pub fn parse_expression(&mut self) -> Result<Expr, Error> {
@@ -45,16 +32,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn expect_end(&mut self) -> Result<(), Error> {
-        let token = &self.tokens[self.at];
+        let token = self.token()?;
+        let span = token.span;
         if token.kind == TokenKind::Eof {
             Ok(())
         } else {
-            Err(self.error(token.span, "expected end of expression"))
+            Err(self.error(span, "expected end of expression"))
         }
     }
 
     fn primary(&mut self) -> Result<Expr, Error> {
-        let token = &self.tokens[self.at];
+        let token = &self.token()?;
         let kind = token.kind.clone();
         let span = token.span;
         match kind {
@@ -90,16 +78,16 @@ impl<'a> Parser<'a> {
     }
 
     fn array(&mut self) -> Result<Expr, Error> {
-        let span = self.tokens[self.at].span;
+        let span = self.token()?.span;
         self.at += 1;
         let mut items = Vec::new();
-        if self.tokens[self.at].kind == TokenKind::Punct(Punct::RBracket) {
+        if self.token()?.kind == TokenKind::Punct(Punct::RBracket) {
             self.at += 1;
             return Ok(self.located(ExprKind::Array(items), span));
         }
         loop {
             items.push(self.parse_expression()?);
-            if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
+            if self.token()?.kind != TokenKind::Punct(Punct::Comma) {
                 break;
             }
             self.at += 1;
@@ -109,10 +97,10 @@ impl<'a> Parser<'a> {
     }
 
     fn object(&mut self) -> Result<Expr, Error> {
-        let span = self.tokens[self.at].span;
+        let span = self.token()?.span;
         self.at += 1;
         let mut fields = Vec::new();
-        if self.tokens[self.at].kind == TokenKind::Punct(Punct::RBrace) {
+        if self.token()?.kind == TokenKind::Punct(Punct::RBrace) {
             self.at += 1;
             return Ok(self.located(ExprKind::Object(fields), span));
         }
@@ -120,7 +108,7 @@ impl<'a> Parser<'a> {
             let name = self.expect_ident()?;
             self.expect_punct(Punct::Colon, "expected ':'")?;
             fields.push((name, self.parse_expression()?));
-            if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
+            if self.token()?.kind != TokenKind::Punct(Punct::Comma) {
                 break;
             }
             self.at += 1;
@@ -130,11 +118,11 @@ impl<'a> Parser<'a> {
     }
 
     fn template(&mut self) -> Result<Expr, Error> {
-        let span = self.tokens[self.at].span;
+        let span = self.token()?.span;
         self.at += 1;
         let mut parts = Vec::new();
         loop {
-            match self.tokens[self.at].kind.clone() {
+            match self.token()?.kind.clone() {
                 TokenKind::TemplateChunk(text) => {
                     self.at += 1;
                     parts.push(TemplatePart::Text(text));
@@ -142,8 +130,8 @@ impl<'a> Parser<'a> {
                 TokenKind::TemplateInterpStart => {
                     self.at += 1;
                     let expr = self.parse_expression()?;
-                    if self.tokens[self.at].kind != TokenKind::TemplateInterpEnd {
-                        let span = self.tokens[self.at].span;
+                    if self.token()?.kind != TokenKind::TemplateInterpEnd {
+                        let span = self.token()?.span;
                         return Err(self.error(span, "expected '}'"));
                     }
                     self.at += 1;
@@ -154,7 +142,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let span = self.tokens[self.at].span;
+                    let span = self.token()?.span;
                     return Err(self.error(span, "expected end of template"));
                 }
             }
@@ -164,7 +152,7 @@ impl<'a> Parser<'a> {
 
     fn assignment(&mut self) -> Result<Expr, Error> {
         let target = self.ternary()?;
-        let op = match &self.tokens[self.at].kind {
+        let op = match &self.token()?.kind {
             TokenKind::Punct(Punct::Assign) => AssignOp::Set,
             TokenKind::Punct(Punct::PlusAssign) => AssignOp::Add,
             TokenKind::Punct(Punct::MinusAssign) => AssignOp::Sub,
@@ -185,7 +173,7 @@ impl<'a> Parser<'a> {
 
     fn ternary(&mut self) -> Result<Expr, Error> {
         let condition = self.logic_or()?;
-        if self.tokens[self.at].kind != TokenKind::Punct(Punct::Question) {
+        if self.token()?.kind != TokenKind::Punct(Punct::Question) {
             return Ok(condition);
         }
         self.at += 1;
@@ -254,7 +242,7 @@ impl<'a> Parser<'a> {
         ops: &[(Punct, BinaryOp)],
     ) -> Result<Expr, Error> {
         let mut left = next(self)?;
-        'operators: while let TokenKind::Punct(punct) = &self.tokens[self.at].kind {
+        'operators: while let TokenKind::Punct(punct) = &self.token()?.kind {
             let punct = *punct;
             for &(token, op) in ops {
                 if punct == token {
@@ -278,8 +266,8 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Result<Expr, Error> {
-        let span = self.tokens[self.at].span;
-        let op = match &self.tokens[self.at].kind {
+        let span = self.token()?.span;
+        let op = match &self.token()?.kind {
             TokenKind::Punct(Punct::Bang) => Some(UnaryOp::Not),
             TokenKind::Punct(Punct::Minus) => Some(UnaryOp::Neg),
             _ => None,
@@ -300,7 +288,7 @@ impl<'a> Parser<'a> {
 
     fn postfix(&mut self) -> Result<Expr, Error> {
         let mut expr = self.primary()?;
-        while let TokenKind::Punct(punct) = &self.tokens[self.at].kind {
+        while let TokenKind::Punct(punct) = &self.token()?.kind {
             let punct = *punct;
             match punct {
                 Punct::Dot => {
@@ -349,12 +337,12 @@ impl<'a> Parser<'a> {
 
     fn arg_list(&mut self) -> Result<Vec<Expr>, Error> {
         let mut args = Vec::new();
-        if self.tokens[self.at].kind == TokenKind::Punct(Punct::RParen) {
+        if self.token()?.kind == TokenKind::Punct(Punct::RParen) {
             return Ok(args);
         }
         loop {
             args.push(self.parse_expression()?);
-            if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
+            if self.token()?.kind != TokenKind::Punct(Punct::Comma) {
                 break;
             }
             self.at += 1;
@@ -373,119 +361,18 @@ impl<'a> Parser<'a> {
 }
 
 pub fn parse_expression(source: &str) -> Result<Expr, Error> {
-    let mut parser = Parser::new(source)?;
+    let tokens = lexer::tokenize(source)?;
+    let mut stream = TokenStream::new(source, tokens);
+    let mut parser = Parser::new(&mut stream);
     let expr = parser.parse_expression()?;
     parser.expect_end()?;
     Ok(expr)
 }
 
 pub fn parse_expression_at(source: &str, offset: usize) -> Result<(Expr, usize), Error> {
-    let mut parser = Parser::at(source, offset)?;
+    let mut stream = TokenStream::lazy(source, lexer::Lexer::new(source, offset));
+    let mut parser = Parser::new(&mut stream);
     let expr = parser.parse_expression()?;
-    let end = parser.tokens[parser.at - 1].span.end;
+    let end = stream.tokens[stream.at - 1].span.end;
     Ok((expr, end))
-}
-
-fn expression_end(source: &str, offset: usize) -> usize {
-    let bytes = source.as_bytes();
-    let mut at = offset;
-    let mut depth = 0usize;
-    let mut quote = None;
-    let mut template = false;
-    let mut template_depth = 0usize;
-    while at < bytes.len() {
-        let ch = bytes[at];
-        if let Some(closed) = quote {
-            at += 1;
-            if ch == b'\\' {
-                at += 1;
-            } else if ch == closed {
-                quote = None;
-            }
-            continue;
-        }
-        if template {
-            match ch {
-                b'\\' => at += 2,
-                b'`' => {
-                    template = false;
-                    at += 1;
-                }
-                b'$' if bytes.get(at + 1) == Some(&b'{') => {
-                    template = false;
-                    template_depth += 1;
-                    depth += 1;
-                    at += 2;
-                }
-                _ => at += 1,
-            }
-            continue;
-        }
-        if template_depth > 0 {
-            match ch {
-                b'{' => {
-                    depth += 1;
-                    at += 1;
-                }
-                b'}' if depth == 1 => {
-                    depth -= 1;
-                    template = true;
-                    template_depth -= 1;
-                    at += 1;
-                }
-                b'}' => {
-                    depth -= 1;
-                    at += 1;
-                }
-                _ => at += 1,
-            }
-            continue;
-        }
-        match ch {
-            b'\'' | b'"' => {
-                quote = Some(ch);
-                at += 1;
-            }
-            b'`' => {
-                template = true;
-                at += 1;
-            }
-            b'/' if bytes.get(at + 1) == Some(&b'/') => {
-                at += 2;
-                while at < bytes.len() && bytes[at] != b'\n' {
-                    at += 1;
-                }
-            }
-            b'(' | b'[' | b'{' => {
-                depth += 1;
-                at += 1;
-            }
-            b')' | b']' | b'}' | b',' | b';' if depth == 0 => break,
-            b')' | b']' | b'}' => {
-                depth -= 1;
-                at += 1;
-            }
-            b'a' if depth == 0 && source[at..].starts_with("as ") => break,
-            _ => at += 1,
-        }
-    }
-    at
-}
-
-fn rebase(source: &str, offset: usize, error: lexer::Error) -> Error {
-    let (base_line, base_column) = Span {
-        start: offset,
-        end: offset,
-    }
-    .line_col(source);
-    let (line, column) = if error.line == 1 {
-        (base_line, base_column + error.column - 1)
-    } else {
-        (base_line + error.line - 1, error.column)
-    };
-    Error {
-        message: error.message,
-        line,
-        column,
-    }
 }
