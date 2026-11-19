@@ -4,7 +4,9 @@ use brul_gui::{Atlas, Dirty, WidgetSnapshot};
 use winit::window::{Window, WindowLevel};
 
 use crate::gpu::Gpu;
-use crate::software::SoftwareRenderer;
+#[cfg(windows)]
+use crate::layered::LayeredSurface;
+use crate::software::{SoftbufferPresenter, SoftwareRenderer};
 use crate::window::{Backend, WindowError};
 
 pub(crate) trait Surface {
@@ -61,72 +63,94 @@ impl Surface for Arc<dyn Window> {
     }
 }
 
-pub(crate) trait Presenter {
+pub(crate) enum Presenter {
+    Softbuffer(SoftbufferPresenter),
+    #[cfg(windows)]
+    Layered(LayeredSurface),
+}
+
+impl Presenter {
+    pub(crate) fn resize(&mut self, width: u32, height: u32) {
+        match self {
+            Self::Softbuffer(presenter) => presenter.resize(width, height),
+            #[cfg(windows)]
+            Self::Layered(presenter) => presenter.resize(width, height),
+        }
+    }
+
+    pub(crate) fn clear(&mut self) -> bool {
+        match self {
+            Self::Softbuffer(presenter) => presenter.clear(),
+            #[cfg(windows)]
+            Self::Layered(presenter) => presenter.clear(),
+        }
+    }
+
+    pub(crate) fn present(&mut self, pixels: &[u8]) -> bool {
+        match self {
+            Self::Softbuffer(presenter) => presenter.present(pixels),
+            #[cfg(windows)]
+            Self::Layered(presenter) => presenter.present(pixels),
+        }
+    }
+}
+
+pub(crate) enum Renderer {
+    Gpu(Box<Gpu>),
+    Software(SoftwareRenderer),
+    #[cfg(test)]
+    Test(Box<dyn TestRenderer>),
+}
+
+#[cfg(test)]
+pub(crate) trait TestRenderer {
     fn resize(&mut self, width: u32, height: u32);
     fn clear(&mut self) -> bool;
-    fn present(&mut self, pixels: &[u8]) -> bool;
+    fn render(&mut self, snapshot: &WidgetSnapshot, atlas: &Atlas, dirty: &Dirty) -> bool;
+    fn capture(&mut self) -> Option<Vec<u8>>;
 }
 
-pub(crate) trait Renderer {
-    fn resize(&mut self, width: u32, height: u32);
-    fn clear(&mut self, surface: &dyn Surface) -> bool;
-    fn render(
-        &mut self,
-        surface: &dyn Surface,
-        snapshot: &WidgetSnapshot,
-        atlas: &Atlas,
-        dirty: &Dirty,
-    ) -> bool;
-    fn capture(&mut self) -> Option<Vec<u8>> {
-        None
-    }
-}
-
-impl Renderer for Gpu {
-    fn resize(&mut self, width: u32, height: u32) {
-        Gpu::resize(self, width, height);
+impl Renderer {
+    pub(crate) fn resize(&mut self, width: u32, height: u32) {
+        match self {
+            Self::Gpu(gpu) => gpu.resize(width, height),
+            Self::Software(software) => software.resize(width, height),
+            #[cfg(test)]
+            Self::Test(renderer) => renderer.resize(width, height),
+        }
     }
 
-    fn clear(&mut self, surface: &dyn Surface) -> bool {
-        self.clear_surface(surface)
+    pub(crate) fn clear(&mut self, surface: &dyn Surface) -> bool {
+        match self {
+            Self::Gpu(gpu) => gpu.clear_surface(surface),
+            Self::Software(software) => software.clear_buffer(),
+            #[cfg(test)]
+            Self::Test(renderer) => renderer.clear(),
+        }
     }
 
-    fn render(
-        &mut self,
-        surface: &dyn Surface,
-        snapshot: &WidgetSnapshot,
-        atlas: &Atlas,
-        dirty: &Dirty,
-    ) -> bool {
-        Gpu::render(self, surface, snapshot, atlas, dirty)
-    }
-
-    fn capture(&mut self) -> Option<Vec<u8>> {
-        Gpu::capture(self)
-    }
-}
-
-impl Renderer for SoftwareRenderer {
-    fn resize(&mut self, width: u32, height: u32) {
-        SoftwareRenderer::resize(self, width, height);
-    }
-
-    fn clear(&mut self, _surface: &dyn Surface) -> bool {
-        self.clear_buffer()
-    }
-
-    fn render(
+    pub(crate) fn render(
         &mut self,
         surface: &dyn Surface,
         snapshot: &WidgetSnapshot,
         atlas: &Atlas,
         dirty: &Dirty,
     ) -> bool {
-        SoftwareRenderer::render(self, surface, snapshot, atlas, dirty)
+        match self {
+            Self::Gpu(gpu) => gpu.render(surface, snapshot, atlas, dirty),
+            Self::Software(software) => software.render(surface, snapshot, atlas, dirty),
+            #[cfg(test)]
+            Self::Test(renderer) => renderer.render(snapshot, atlas, dirty),
+        }
     }
 
-    fn capture(&mut self) -> Option<Vec<u8>> {
-        SoftwareRenderer::capture(self)
+    pub(crate) fn capture(&mut self) -> Option<Vec<u8>> {
+        match self {
+            Self::Gpu(gpu) => gpu.capture(),
+            Self::Software(software) => software.capture(),
+            #[cfg(test)]
+            Self::Test(renderer) => renderer.capture(),
+        }
     }
 }
 
@@ -134,85 +158,9 @@ pub(crate) fn create_renderer(
     backend: Backend,
     window: &Arc<dyn Window>,
     transparent: bool,
-) -> Result<Box<dyn Renderer>, WindowError> {
-    let window = Arc::clone(window);
-    create_renderer_with(
-        backend,
-        || Ok(Box::new(Gpu::new(&window, transparent)?)),
-        || Ok(Box::new(SoftwareRenderer::new(&window, transparent)?)),
-    )
-}
-
-fn create_renderer_with(
-    backend: Backend,
-    gpu: impl FnOnce() -> Result<Box<dyn Renderer>, WindowError>,
-    software: impl FnOnce() -> Result<Box<dyn Renderer>, WindowError>,
-) -> Result<Box<dyn Renderer>, WindowError> {
+) -> Result<Renderer, WindowError> {
     match backend {
-        Backend::Software => software(),
-        Backend::Gpu => gpu(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::cell::RefCell;
-
-    use super::*;
-
-    struct Stub;
-
-    impl Renderer for Stub {
-        fn resize(&mut self, _width: u32, _height: u32) {}
-
-        fn clear(&mut self, _surface: &dyn Surface) -> bool {
-            true
-        }
-
-        fn render(
-            &mut self,
-            _surface: &dyn Surface,
-            _snapshot: &WidgetSnapshot,
-            _atlas: &Atlas,
-            _dirty: &Dirty,
-        ) -> bool {
-            true
-        }
-    }
-
-    #[test]
-    fn the_software_backend_does_not_create_a_gpu() {
-        let calls = RefCell::new(Vec::new());
-        let renderer = create_renderer_with(
-            Backend::Software,
-            || {
-                calls.borrow_mut().push("gpu");
-                Err(WindowError::NoContent)
-            },
-            || {
-                calls.borrow_mut().push("software");
-                Ok(Box::new(Stub))
-            },
-        );
-        assert!(renderer.is_ok());
-        assert_eq!(calls.into_inner(), ["software"]);
-    }
-
-    #[test]
-    fn the_gpu_backend_does_not_create_a_software_surface() {
-        let calls = RefCell::new(Vec::new());
-        let renderer = create_renderer_with(
-            Backend::Gpu,
-            || {
-                calls.borrow_mut().push("gpu");
-                Ok(Box::new(Stub))
-            },
-            || {
-                calls.borrow_mut().push("software");
-                Err(WindowError::NoContent)
-            },
-        );
-        assert!(renderer.is_ok());
-        assert_eq!(calls.into_inner(), ["gpu"]);
+        Backend::Software => SoftwareRenderer::new(window, transparent).map(Renderer::Software),
+        Backend::Gpu => Gpu::new(window, transparent).map(|gpu| Renderer::Gpu(Box::new(gpu))),
     }
 }

@@ -8,7 +8,7 @@ use brul_gui::{
 use winit::event_loop::ControlFlow;
 
 use crate::input::Input;
-use crate::surface::{Renderer, Surface};
+use crate::surface::{Renderer, Surface, TestRenderer};
 use crate::window::{ColorScheme, WindowCommand, WindowConfig, WindowKey};
 
 use super::{EventHandler, Step, Timer, TreeApp, wakeup_at};
@@ -85,27 +85,25 @@ impl FakeRenderer {
     }
 }
 
-impl Renderer for FakeRenderer {
+impl TestRenderer for FakeRenderer {
     fn resize(&mut self, width: u32, height: u32) {
         self.calls
             .borrow_mut()
             .push(format!("resize {width}x{height}"));
     }
 
-    fn clear(&mut self, _surface: &dyn Surface) -> bool {
+    fn clear(&mut self) -> bool {
         self.calls.borrow_mut().push("clear".to_owned());
         true
     }
 
-    fn render(
-        &mut self,
-        _surface: &dyn Surface,
-        _snapshot: &WidgetSnapshot,
-        _atlas: &Atlas,
-        _dirty: &Dirty,
-    ) -> bool {
+    fn render(&mut self, _snapshot: &WidgetSnapshot, _atlas: &Atlas, _dirty: &Dirty) -> bool {
         self.calls.borrow_mut().push("render".to_owned());
         true
+    }
+
+    fn capture(&mut self) -> Option<Vec<u8>> {
+        None
     }
 }
 
@@ -113,7 +111,7 @@ fn renderable_app() -> (TreeApp, FakeSurface, Rc<RefCell<Vec<String>>>) {
     let surface = FakeSurface::new(1.0);
     let mut app = tree_app(commands(Vec::new()));
     let (renderer, calls) = FakeRenderer::new();
-    app.renderer = Some(Box::new(renderer));
+    app.renderer = Some(Renderer::Test(Box::new(renderer)));
     let mut engine = TextEngine::new();
     app.tree
         .borrow_mut()
@@ -460,7 +458,7 @@ fn a_resize_reaches_the_renderer() {
     let surface = FakeSurface::new(1.0);
     let mut app = tree_app(commands(Vec::new()));
     let (renderer, calls) = FakeRenderer::new();
-    app.renderer = Some(Box::new(renderer));
+    app.renderer = Some(Renderer::Test(Box::new(renderer)));
 
     assert_eq!(app.resize(&surface, 4, 5), Step::Continue);
     assert_eq!(calls.borrow().as_slice(), ["resize 4x5"]);
@@ -472,7 +470,7 @@ fn a_replaced_tree_is_laid_out_again_before_the_frame() {
     let mut app = tree_app(commands(Vec::new()));
     app.engine = Some(TextEngine::new());
     let (renderer, _) = FakeRenderer::new();
-    app.renderer = Some(Box::new(renderer));
+    app.renderer = Some(Renderer::Test(Box::new(renderer)));
 
     assert_eq!(app.resize(&surface, 8, 6), Step::Continue);
     app.tree.borrow_mut().replace_root(Widget::text(""));
@@ -487,7 +485,7 @@ fn the_first_frame_shows_the_window() {
     let mut app = tree_app(commands(Vec::new()));
     app.engine = Some(TextEngine::new());
     let (renderer, _) = FakeRenderer::new();
-    app.renderer = Some(Box::new(renderer));
+    app.renderer = Some(Renderer::Test(Box::new(renderer)));
 
     assert_eq!(surface.visible.get(), None);
     assert!(app.render_frame(&surface).is_ok());
@@ -512,7 +510,7 @@ fn a_window_hidden_by_its_config_stays_hidden_after_the_first_frame() {
     );
     app.engine = Some(TextEngine::new());
     let (renderer, _) = FakeRenderer::new();
-    app.renderer = Some(Box::new(renderer));
+    app.renderer = Some(Renderer::Test(Box::new(renderer)));
 
     assert!(app.render_frame(&surface).is_ok());
     assert_eq!(surface.visible.get(), Some(false));
@@ -531,7 +529,7 @@ fn a_frame_is_rendered() {
     let surface = FakeSurface::new(1.0);
     let mut app = tree_app(commands(Vec::new()));
     let (renderer, calls) = FakeRenderer::new();
-    app.renderer = Some(Box::new(renderer));
+    app.renderer = Some(Renderer::Test(Box::new(renderer)));
     let mut engine = TextEngine::new();
     app.tree
         .borrow_mut()

@@ -7,13 +7,13 @@ use tracing::warn;
 use winit::window::Window;
 
 use crate::surface::{Presenter, Surface};
-use crate::window::{CLEAR, WindowError};
 
 #[cfg(windows)]
 use crate::layered::LayeredSurface;
+use crate::window::{CLEAR, WindowError};
 
 pub(crate) struct SoftwareRenderer {
-    presenter: Box<dyn Presenter>,
+    presenter: Presenter,
     frame: Frame,
 }
 
@@ -53,7 +53,7 @@ impl SoftwareRenderer {
     }
 }
 
-struct SoftbufferPresenter {
+pub(crate) struct SoftbufferPresenter {
     _context: Context<Arc<dyn Window>>,
     surface: BufferSurface<Arc<dyn Window>, Arc<dyn Window>>,
     size: (u32, u32),
@@ -72,8 +72,8 @@ impl SoftbufferPresenter {
     }
 }
 
-impl Presenter for SoftbufferPresenter {
-    fn resize(&mut self, width: u32, height: u32) {
+impl SoftbufferPresenter {
+    pub(crate) fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 || self.size == (width, height) {
             return;
         }
@@ -87,7 +87,7 @@ impl Presenter for SoftbufferPresenter {
         self.size = (width.get(), height.get());
     }
 
-    fn clear(&mut self) -> bool {
+    pub(crate) fn clear(&mut self) -> bool {
         let Ok(mut buffer) = self.surface.buffer_mut() else {
             return false;
         };
@@ -98,7 +98,7 @@ impl Presenter for SoftbufferPresenter {
         buffer.present().is_ok()
     }
 
-    fn present(&mut self, pixels: &[u8]) -> bool {
+    pub(crate) fn present(&mut self, pixels: &[u8]) -> bool {
         let Ok(mut buffer) = self.surface.buffer_mut() else {
             return false;
         };
@@ -110,22 +110,16 @@ impl Presenter for SoftbufferPresenter {
 }
 
 #[cfg(windows)]
-fn make_presenter(
-    window: &Arc<dyn Window>,
-    transparent: bool,
-) -> Result<Box<dyn Presenter>, WindowError> {
+fn make_presenter(window: &Arc<dyn Window>, transparent: bool) -> Result<Presenter, WindowError> {
     if transparent {
-        return Ok(Box::new(LayeredSurface::new(window)?));
+        return LayeredSurface::new(window).map(Presenter::Layered);
     }
-    Ok(Box::new(SoftbufferPresenter::new(window)?))
+    SoftbufferPresenter::new(window).map(Presenter::Softbuffer)
 }
 
 #[cfg(not(windows))]
-fn make_presenter(
-    window: &Arc<dyn Window>,
-    _transparent: bool,
-) -> Result<Box<dyn Presenter>, WindowError> {
-    Ok(Box::new(SoftbufferPresenter::new(window)?))
+fn make_presenter(window: &Arc<dyn Window>, _transparent: bool) -> Result<Presenter, WindowError> {
+    SoftbufferPresenter::new(window).map(Presenter::Softbuffer)
 }
 
 fn pack(pixel: &[u8; 4]) -> u32 {

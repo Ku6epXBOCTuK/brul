@@ -19,7 +19,6 @@ use windows::core::Error as WinError;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
 
-use crate::surface::Presenter;
 use crate::window::WindowError;
 
 thread_local! {
@@ -194,12 +193,12 @@ impl LayeredSurface {
     }
 }
 
-impl Presenter for LayeredSurface {
-    fn resize(&mut self, width: u32, height: u32) {
+impl LayeredSurface {
+    pub(crate) fn resize(&mut self, width: u32, height: u32) {
         self.set_size(width, height);
     }
 
-    fn clear(&mut self) -> bool {
+    pub(crate) fn clear(&mut self) -> bool {
         let (width, height) = self.size;
         if width == 0 || height == 0 {
             return false;
@@ -211,7 +210,7 @@ impl Presenter for LayeredSurface {
         self.update()
     }
 
-    fn present(&mut self, pixels: &[u8]) -> bool {
+    pub(crate) fn present(&mut self, pixels: &[u8]) -> bool {
         let (width, height) = self.size;
         if width == 0 || height == 0 || pixels.len() != width as usize * height as usize * 4 {
             return false;

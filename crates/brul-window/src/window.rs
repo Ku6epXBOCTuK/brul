@@ -400,7 +400,7 @@ pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {
 struct App {
     config: WindowConfig,
     window: Option<Arc<dyn Window>>,
-    renderer: Option<Box<dyn Renderer>>,
+    renderer: Option<Renderer>,
     error: Rc<Cell<Option<WindowError>>>,
     revealed: bool,
 }

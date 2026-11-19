@@ -47,7 +47,7 @@ pub(crate) struct TreeApp {
     build: Option<TreeBuilder>,
     handler: EventHandler,
     window: Option<Arc<dyn Window>>,
-    renderer: Option<Box<dyn Renderer>>,
+    renderer: Option<Renderer>,
     engine: Option<TextEngine>,
     error: Rc<Cell<Option<WindowError>>>,
     pub(crate) timers: Vec<Timer>,
