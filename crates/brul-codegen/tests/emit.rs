@@ -998,6 +998,42 @@ window Demo (title: "demo") {
     );
 }
 
+#[test]
+fn rejects_undefined_script_variable_at_build() {
+    let source = r#"<script>
+    let count = missing;
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>
+"#;
+    let error = emit::module(source).expect_err("error");
+    assert_eq!(error.message(), "variable 'missing' is not defined");
+}
+
+#[test]
+fn accepts_host_calls_with_declared_variables_at_build() {
+    let source = r#"<script>
+    let label;
+
+    function greet() {
+        label = capitalize(label);
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Text { label }
+}
+</markup>
+"#;
+    let module = emit::module(source).expect("module");
+    assert!(module.contains("component.declare_if_absent(\"label\""));
+}
+
 fn operated(source: &str) -> String {
     let expression = brul_syntax::parser::parse_expression(source).expect("expression parses");
     let names = emit::identifiers(&expression);

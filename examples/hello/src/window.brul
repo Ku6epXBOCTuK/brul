@@ -1,4 +1,7 @@
 <script>
+    let name;
+    let greeting;
+
     function updateName(ev) {
         name = ev.value;
     }

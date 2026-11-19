@@ -5,6 +5,18 @@ use crate::script::ast::{Program, Statement};
 const BUILTINS: [&str; 4] = ["String", "Number", "len", "every"];
 
 pub fn validate(program: &Program, external: &[&str]) -> Result<(), Error> {
+    validate_inner(program, external, false)
+}
+
+pub fn validate_build(program: &Program, external: &[&str]) -> Result<(), Error> {
+    validate_inner(program, external, true)
+}
+
+fn validate_inner(
+    program: &Program,
+    external: &[&str],
+    allow_host_calls: bool,
+) -> Result<(), Error> {
     let functions: Vec<&str> = program
         .functions
         .iter()
@@ -20,7 +32,7 @@ pub fn validate(program: &Program, external: &[&str]) -> Result<(), Error> {
         .collect();
 
     for function in &program.functions {
-        let mut names = Names::new(functions.clone(), external);
+        let mut names = Names::new(functions.clone(), external, allow_host_calls);
         names
             .variables
             .extend(function.params.iter().map(String::as_str));
@@ -28,7 +40,7 @@ pub fn validate(program: &Program, external: &[&str]) -> Result<(), Error> {
         check_statements(&function.body, &mut names)?;
     }
 
-    let mut names = Names::new(functions, external);
+    let mut names = Names::new(functions, external, allow_host_calls);
     check_statements(&program.statements, &mut names)
 }
 
@@ -36,14 +48,16 @@ struct Names<'a> {
     variables: Vec<&'a str>,
     functions: Vec<&'a str>,
     external: &'a [&'a str],
+    allow_host_calls: bool,
 }
 
 impl<'a> Names<'a> {
-    fn new(functions: Vec<&'a str>, external: &'a [&'a str]) -> Self {
+    fn new(functions: Vec<&'a str>, external: &'a [&'a str], allow_host_calls: bool) -> Self {
         Self {
             variables: Vec::new(),
             functions,
             external,
+            allow_host_calls,
         }
     }
 
@@ -52,7 +66,10 @@ impl<'a> Names<'a> {
     }
 
     fn has_function(&self, name: &str) -> bool {
-        self.functions.contains(&name) || self.external.contains(&name) || BUILTINS.contains(&name)
+        self.functions.contains(&name)
+            || self.external.contains(&name)
+            || BUILTINS.contains(&name)
+            || self.allow_host_calls
     }
 }
 

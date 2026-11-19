@@ -11,26 +11,50 @@ pub(super) fn block(
     names: &Names<'_>,
     out: &mut String,
 ) -> Result<(), Error> {
+    block_with(statements, names, out, false)
+}
+
+pub(super) fn top_level(
+    statements: &[Statement],
+    names: &Names<'_>,
+    out: &mut String,
+) -> Result<(), Error> {
+    block_with(statements, names, out, true)
+}
+
+fn block_with(
+    statements: &[Statement],
+    names: &Names<'_>,
+    out: &mut String,
+    top_level: bool,
+) -> Result<(), Error> {
     for statement in statements {
-        emit_statement(statement, names, out)?;
+        emit_statement(statement, names, out, top_level)?;
     }
     Ok(())
 }
 
-fn emit_statement(statement: &Statement, names: &Names<'_>, out: &mut String) -> Result<(), Error> {
+fn emit_statement(
+    statement: &Statement,
+    names: &Names<'_>,
+    out: &mut String,
+    top_level: bool,
+) -> Result<(), Error> {
     match statement {
         Statement::Let {
             name,
             value,
             constant,
         } => {
-            let value = match value {
-                Some(value) => operation(value, names)?,
-                None => "brul::Value::Null".to_owned(),
+            let null = "brul::Value::Null".to_owned();
+            let (method, value) = match value {
+                Some(value) => ("declare", operation(value, names)?),
+                None if top_level => ("declare_if_absent", null),
+                None => ("declare", null),
             };
             let _ = writeln!(
                 out,
-                "    component.declare({name:?}, {value}, {constant})?;"
+                "    component.{method}({name:?}, {value}, {constant})?;"
             );
         }
         Statement::Expr(expression) => {
@@ -38,7 +62,7 @@ fn emit_statement(statement: &Statement, names: &Names<'_>, out: &mut String) ->
         }
         Statement::Block(statements) => {
             out.push_str("    {\n");
-            block(statements, names, out)?;
+            block_with(statements, names, out, false)?;
             out.push_str("    }\n");
         }
         Statement::If {
@@ -49,11 +73,11 @@ fn emit_statement(statement: &Statement, names: &Names<'_>, out: &mut String) ->
             let value = operation(condition, names)?;
             let _ = writeln!(out, "    match {value} {{");
             let _ = writeln!(out, "        brul::Value::Bool(true) => {{");
-            block(then_branch, names, out)?;
+            block_with(then_branch, names, out, false)?;
             out.push_str("        }\n");
             if let Some(branch) = else_branch {
                 out.push_str("        brul::Value::Bool(false) => {\n");
-                emit_statement(branch, names, out)?;
+                emit_statement(branch, names, out, false)?;
                 out.push_str("        }\n");
             }
             let _ = writeln!(

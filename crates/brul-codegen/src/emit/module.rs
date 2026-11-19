@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Element, Member, Window};
+use brul_syntax::script::validate_build;
 
 use crate::error_at;
 use crate::kit;
@@ -72,6 +73,18 @@ fn module_at(
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
     let names = names::table(&parsed, &registry.definitions);
+    let mut root_props = Vec::new();
+    for window in &parsed.windows {
+        root_props.extend(names::declared(&window.members));
+    }
+    if let Some(program) = &parsed.program {
+        validate_build(program, &root_props)?;
+    }
+    for definition in &registry.definitions {
+        if let Some(program) = &definition.program {
+            validate_build(program, &names::declared(&definition.component.members))?;
+        }
+    }
     let mut used = HashSet::new();
     let window_bases: Vec<String> = parsed
         .windows

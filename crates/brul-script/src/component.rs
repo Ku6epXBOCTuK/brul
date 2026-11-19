@@ -231,6 +231,21 @@ impl Component {
         Ok(())
     }
 
+    pub fn declare_if_absent(
+        &mut self,
+        name: &str,
+        value: Value,
+        constant: bool,
+    ) -> Result<(), Error> {
+        let id = self
+            .id(name)
+            .ok_or_else(|| Error::Undefined(name.to_owned()))?;
+        if self.environment.contains(id) {
+            return Ok(());
+        }
+        self.declare(name, value, constant)
+    }
+
     pub fn declare_property(&mut self, id: VariableId, value: Value) -> Result<(), Error> {
         if self.property(id).is_some() {
             return Err(Error::Redeclared(self.name(id).to_owned()));

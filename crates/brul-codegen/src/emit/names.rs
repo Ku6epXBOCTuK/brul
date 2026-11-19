@@ -23,6 +23,16 @@ pub(super) fn table<'a>(source: &'a Source, definitions: &'a [Definition]) -> Na
     names
 }
 
+pub(super) fn declared(members: &[Member]) -> Vec<&str> {
+    members
+        .iter()
+        .filter_map(|member| match member {
+            Member::Prop(prop) => Some(prop.name.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
 pub(super) fn output(names: &Names<'_>) -> String {
     let names = names
         .names()

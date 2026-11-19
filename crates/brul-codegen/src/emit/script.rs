@@ -4,7 +4,7 @@ use brul_script::Names;
 use brul_syntax::error::Error;
 use brul_syntax::script::Program;
 
-use super::statement::block;
+use super::statement::{block, top_level};
 
 const RESERVED: &[&str] = &[
     "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "crate",
@@ -33,7 +33,7 @@ pub(super) fn module(
         out,
         "#[allow(unused_variables)]\nfn {name}_init(component: &mut brul::Component) -> Result<(), brul::Error> {{"
     );
-    block(&program.statements, names, &mut out)?;
+    top_level(&program.statements, names, &mut out)?;
     out.push_str("    Ok(())\n}\n");
     for function in &program.functions {
         let function_name = format!("{name}_fn_{}", ident(&snake(&function.name)));
