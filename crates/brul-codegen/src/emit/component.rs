@@ -527,9 +527,20 @@ fn arguments(
             let id = variable_expr(name, value.position, names)?;
             let expression = match super::resource(value, resources) {
                 Some(resource) if **ty == PropType::Image => format!(
-                    "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }}"
+                    "brul::PropExpression::Image(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }})"
                 ),
-                _ => expression::closure(value, names, state, props, scopes, scope)?,
+                _ => {
+                    let variant = match ty {
+                        PropType::Number => "Number",
+                        PropType::String => "Text",
+                        PropType::Bool => "Flag",
+                        _ => "Image",
+                    };
+                    let closure = expression::typed_closure(
+                        value, names, state, props, scopes, scope, ty,
+                    )?;
+                    format!("brul::PropExpression::{variant}({closure})")
+                }
             };
             out.line(format_args!(
                 "brul::PropArgument {{ name: {id}, ty: brul::{ty}, expression: {expression} }},"

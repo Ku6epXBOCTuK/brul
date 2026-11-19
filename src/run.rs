@@ -341,8 +341,8 @@ mod tests {
 
     const NAMES: &[&str] = &["name"];
 
-    fn name(component: &mut crate::Component) -> Result<Value, crate::Error> {
-        component.read("name")
+    fn name(component: &mut crate::Component) -> Result<String, crate::Error> {
+        (&component.read("name")?).try_into()
     }
 
     fn noop_init(_: &mut Component) -> Result<(), crate::Error> {
@@ -502,14 +502,14 @@ mod tests {
         static SEEN: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     }
 
-    fn theme_text(component: &mut crate::Component) -> Result<Value, crate::Error> {
+    fn theme_text(component: &mut crate::Component) -> Result<String, crate::Error> {
         let theme = component.call("theme", &[])?;
         let name = match &theme {
             Value::String(name) => name.to_string(),
             _ => "none".to_owned(),
         };
-        SEEN.with(|seen| seen.borrow_mut().push(name));
-        Ok(theme)
+        SEEN.with(|seen| seen.borrow_mut().push(name.clone()));
+        Ok(name)
     }
 
     fn theme_view(

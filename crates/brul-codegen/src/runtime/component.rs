@@ -7,7 +7,7 @@ use brul_syntax::style::Stylesheet;
 
 use crate::{Import, Registry};
 
-use super::binding::{Expression, PropBinding};
+use super::binding::{PropBinding, PropExpression};
 use super::build::Build;
 use super::error::ViewError;
 use super::event::{ComponentEvent, EventHost};
@@ -26,7 +26,7 @@ pub struct Context {
 pub struct PropArgument {
     pub name: VariableId,
     pub ty: PropType,
-    pub expression: Expression,
+    pub expression: PropExpression,
 }
 
 pub struct Instance<'a> {
@@ -146,7 +146,10 @@ fn evaluate_argument(
     component: &ComponentHandle,
     argument: &PropArgument,
 ) -> Result<Value, ViewError> {
-    (argument.expression)(&mut component.borrow_mut()).map_err(ViewError::from)
+    argument
+        .expression
+        .evaluate(&mut component.borrow_mut())
+        .map_err(ViewError::from)
 }
 
 fn assign(

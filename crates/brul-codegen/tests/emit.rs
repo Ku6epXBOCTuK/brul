@@ -360,7 +360,7 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(module.contains(r#"let widget0 = brul::gui::Widget::text("");"#));
     assert!(module.contains(
-        r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read_id(brul::VariableId::from_index(0))?; Ok(value) })));"#
+        r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&component.read_id(brul::VariableId::from_index(0))?).try_into()?) })));"#
     ));
 }
 
@@ -479,11 +479,11 @@ window Demo (title: "demo") {
         );
     }
     assert!(module.contains(
-        r#"brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read_id(brul::VariableId::from_index(3))?; Ok(value) }"#
+        r#"brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok((&component.read_id(brul::VariableId::from_index(3))?).try_into()?) }"#
     ));
     assert!(
         module.contains(
-            r#"y: Some(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = component.read_id(brul::VariableId::from_index(4))?; Ok(value) }"#
+            r#"y: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok((&component.read_id(brul::VariableId::from_index(4))?).try_into()?) }"#
         )
     );
 }
@@ -1338,7 +1338,7 @@ fn emits_component_properties() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("name: \"Badge\","));
     assert!(module.contains(
-        "brul::PropArgument { name: brul::VariableId::from_index(0), ty: brul::PropType::String, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { let value = brul::Value::String((\"hi\".to_owned()).into()); Ok(value) }"
+        "brul::PropArgument { name: brul::VariableId::from_index(0), ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(\"hi\".to_owned()) })"
     ));
     assert!(module.contains(
         "brul::PropArgument { name: brul::VariableId::from_index(1), ty: brul::PropType::Number,"
@@ -1364,7 +1364,7 @@ fn an_image_prop_accepts_a_resource_at_the_call_site() {
     std::fs::write(dir.join("check.png"), PNG_SIGNATURE).unwrap();
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(
-        module.contains("ty: brul::PropType::Image, expression: |component: &mut brul::Component| -> Result<brul::Value, brul::Error> { Ok(brul::Value::image_bytes(resource_check())) }"),
+        module.contains("ty: brul::PropType::Image, expression: brul::PropExpression::Image(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { Ok(brul::Value::image_bytes(resource_check())) })"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();

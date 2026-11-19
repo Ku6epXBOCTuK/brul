@@ -7,6 +7,15 @@ use brul_syntax::markup::PropType;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+macro_rules! typed_expr {
+    ($macro:ident, $name:literal, $ty:ty) => {{
+        fn read(component: &mut Component) -> Result<$ty, ScriptError> {
+            (&component.read($name)?).try_into()
+        }
+        read
+    }};
+}
+
 macro_rules! expr {
     ($name:literal) => {{
         fn read(component: &mut Component) -> Result<Value, ScriptError> {
@@ -14,6 +23,24 @@ macro_rules! expr {
         }
         read
     }};
+}
+
+macro_rules! text {
+    ($name:literal) => {
+        typed_expr!(text, $name, String)
+    };
+}
+
+macro_rules! flag {
+    ($name:literal) => {
+        typed_expr!(flag, $name, bool)
+    };
+}
+
+macro_rules! number {
+    ($name:literal) => {
+        typed_expr!(number, $name, f64)
+    };
 }
 
 const NAMES: &[&str] = &["name", "visible", "x", "y", "title", "on", "off", "icon"];
@@ -50,7 +77,7 @@ fn text_binding_follows_the_component() {
     let component = Rc::new(RefCell::new(component));
     let bindings = [Binding {
         widget: id,
-        target: BindingTarget::Text(expr!("name")),
+        target: BindingTarget::Text(text!("name")),
         scope: Scope::default(),
         component: Rc::clone(&component),
     }];
@@ -86,6 +113,10 @@ fn probe(component: &mut Component) -> Result<Value, ScriptError> {
     component.call("probe", &[])
 }
 
+fn probe_flag(component: &mut Component) -> Result<bool, ScriptError> {
+    (&probe(component)?).try_into()
+}
+
 #[test]
 fn a_binding_expression_reaches_the_tree_while_it_runs() {
     let widget = Widget::text("");
@@ -99,7 +130,7 @@ fn a_binding_expression_reaches_the_tree_while_it_runs() {
     });
     let bindings = [Binding {
         widget: id,
-        target: BindingTarget::Visible(probe),
+        target: BindingTarget::Visible(probe_flag),
         scope: Scope::default(),
         component: Rc::clone(&handle),
     }];
@@ -141,10 +172,13 @@ fn an_event_raised_from_an_expression_is_delivered_after_the_expression_returns(
 #[test]
 fn text_returns_the_string_and_names_the_actual_type() {
     let mut component = declared("name", Value::String("hello".into()));
-    assert_eq!(text(&mut component, expr!("name")).unwrap(), "hello");
+    assert_eq!(
+        text(&mut component, text!("name"), "name").unwrap(),
+        "hello"
+    );
 
     let mut component = declared("name", Value::Number(3.0));
-    let error = text(&mut component, expr!("name")).unwrap_err();
+    let error = text(&mut component, text!("name"), "name").unwrap_err();
     assert!(matches!(
         error,
         ViewError::Expected { found, .. } if found == Value::Number(3.0).type_name()
@@ -155,10 +189,10 @@ fn text_returns_the_string_and_names_the_actual_type() {
 fn boolean_returns_the_flag_and_names_the_parameter() {
     let name = "visible";
     let mut component = declared(name, Value::Bool(true));
-    assert!(boolean(&mut component, expr!("visible"), name).unwrap());
+    assert!(boolean(&mut component, flag!("visible"), name).unwrap());
 
     let mut component = declared(name, Value::String("yes".into()));
-    let error = boolean(&mut component, expr!("visible"), name).unwrap_err();
+    let error = boolean(&mut component, flag!("visible"), name).unwrap_err();
     assert!(
         matches!(error, ViewError::Expected { target, .. } if target == format!("parameter '{name}'"))
     );
@@ -174,14 +208,17 @@ fn an_absent_offset_is_zero() {
 fn offset_rounds_fractions_and_rejects_the_rest() {
     let name = "x";
     let mut component = declared(name, Value::Number(-7.0));
-    assert_eq!(offset(&mut component, Some(expr!("x")), name).unwrap(), -7);
+    assert_eq!(
+        offset(&mut component, Some(number!("x")), name).unwrap(),
+        -7
+    );
 
     let mut component = declared(name, Value::Number(2.5));
-    assert_eq!(offset(&mut component, Some(expr!("x")), name).unwrap(), 3);
+    assert_eq!(offset(&mut component, Some(number!("x")), name).unwrap(), 3);
 
     for value in [f64::NAN, f64::from(i32::MAX) + 1.0] {
         let mut component = declared(name, Value::Number(value));
-        assert!(offset(&mut component, Some(expr!("x")), name).is_err());
+        assert!(offset(&mut component, Some(number!("x")), name).is_err());
     }
 }
 
@@ -191,16 +228,16 @@ fn an_offset_binding_rounds_and_ignores_what_it_has_no_number_for() {
     assert_eq!(offset_value(&none, None), Some(0));
 
     let fractional = RefCell::new(declared("x", Value::Number(1.5)));
-    assert_eq!(offset_value(&fractional, Some(expr!("x"))), Some(2));
+    assert_eq!(offset_value(&fractional, Some(number!("x"))), Some(2));
 
     let missing = RefCell::new(Component::new());
-    assert_eq!(offset_value(&missing, Some(expr!("x"))), None);
+    assert_eq!(offset_value(&missing, Some(number!("x"))), None);
 
     let text = RefCell::new(declared("x", Value::String("4".into())));
-    assert_eq!(offset_value(&text, Some(expr!("x"))), None);
+    assert_eq!(offset_value(&text, Some(number!("x"))), None);
 
     let whole = RefCell::new(declared("x", Value::Number(4.0)));
-    assert_eq!(offset_value(&whole, Some(expr!("x"))), Some(4));
+    assert_eq!(offset_value(&whole, Some(number!("x"))), Some(4));
 }
 
 #[test]
@@ -410,14 +447,14 @@ fn declared_all() -> Rc<RefCell<Component>> {
 
 fn targets() -> Vec<BindingTarget> {
     vec![
-        BindingTarget::Text(expr!("title")),
-        BindingTarget::Checked(expr!("on")),
-        BindingTarget::Selected(expr!("on")),
-        BindingTarget::Disabled(expr!("on")),
-        BindingTarget::Visible(expr!("off")),
+        BindingTarget::Text(text!("title")),
+        BindingTarget::Checked(flag!("on")),
+        BindingTarget::Selected(flag!("on")),
+        BindingTarget::Disabled(flag!("on")),
+        BindingTarget::Visible(flag!("off")),
         BindingTarget::Offset {
-            x: Some(expr!("x")),
-            y: Some(expr!("y")),
+            x: Some(number!("x")),
+            y: Some(number!("y")),
         },
     ]
 }
@@ -486,13 +523,13 @@ fn a_binding_ignores_a_value_of_the_wrong_type() {
     let bindings = [
         Binding {
             widget: ids[0],
-            target: BindingTarget::Text(expr!("title")),
+            target: BindingTarget::Text(text!("title")),
             scope: Scope::default(),
             component: Rc::clone(&component),
         },
         Binding {
             widget: ids[1],
-            target: BindingTarget::Checked(expr!("on")),
+            target: BindingTarget::Checked(flag!("on")),
             scope: Scope::default(),
             component: Rc::clone(&component),
         },

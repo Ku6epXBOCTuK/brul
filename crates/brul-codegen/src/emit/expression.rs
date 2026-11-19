@@ -10,14 +10,7 @@ use super::names;
 use super::scopes::{ScopeInfo, Scopes};
 use super::state::State;
 
-pub fn closure(
-    value: &Expr,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    definitions: &[ScopeInfo],
-    current: Option<usize>,
-) -> Result<String, Error> {
+fn scope_locals(definitions: &[ScopeInfo], current: Option<usize>) -> (String, Scopes) {
     let mut scopes = Scopes::default();
     let mut locals = String::new();
     if let Some(index) = current {
@@ -46,9 +39,49 @@ pub fn closure(
             ),
         );
     }
+    (locals, scopes)
+}
+
+pub fn closure(
+    value: &Expr,
+    names: &Names<'_>,
+    state: &State,
+    props: &HashMap<String, Type>,
+    definitions: &[ScopeInfo],
+    current: Option<usize>,
+) -> Result<String, Error> {
+    let (locals, scopes) = scope_locals(definitions, current);
     Ok(format!(
         "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ {locals}let value = {}; Ok(value) }}",
         operation_in(value, names, state, props, &scopes)?
+    ))
+}
+
+pub fn typed_closure(
+    value: &Expr,
+    names: &Names<'_>,
+    state: &State,
+    props: &HashMap<String, Type>,
+    definitions: &[ScopeInfo],
+    current: Option<usize>,
+    ty: &Type,
+) -> Result<String, Error> {
+    let (locals, scopes) = scope_locals(definitions, current);
+    let rust = match ty {
+        Type::Number => "f64",
+        Type::String => "String",
+        Type::Bool => "bool",
+        _ => "brul::Value",
+    };
+    let body = match typed(value, names, state, props, &scopes)? {
+        Some((code, found)) if &found == ty => code,
+        _ => format!(
+            "(&{}).try_into()?",
+            operation_in(value, names, state, props, &scopes)?
+        ),
+    };
+    Ok(format!(
+        "|component: &mut brul::Component| -> Result<{rust}, brul::Error> {{ {locals}Ok({body}) }}"
     ))
 }
 

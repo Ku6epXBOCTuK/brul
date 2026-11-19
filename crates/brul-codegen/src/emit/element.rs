@@ -228,13 +228,12 @@ fn content_binding(
     let Some(content) = content else {
         return Ok(());
     };
-    let (target, expression) = match content {
-        Content::Text(expression) => ("Text", expression),
-        Content::Input(expression) => ("Input", expression),
-        Content::Image(expression) => ("Image", expression),
+    let (target, expression, ty) = match content {
+        Content::Text(expression) => ("Text", expression, brul_syntax::types::Type::String),
+        Content::Input(expression) => ("Input", expression, brul_syntax::types::Type::String),
+        Content::Image(expression) => ("Image", expression, brul_syntax::types::Type::Image),
     };
-    out.line(format_args!(
-        "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({})));",
+    let closure = if ty == brul_syntax::types::Type::Image {
         expression::closure(
             &expression,
             emit.names,
@@ -243,6 +242,19 @@ fn content_binding(
             &emit.scope_defs,
             frame.scope,
         )?
+    } else {
+        expression::typed_closure(
+            &expression,
+            emit.names,
+            emit.state,
+            emit.prop_types,
+            &emit.scope_defs,
+            frame.scope,
+            &ty,
+        )?
+    };
+    out.line(format_args!(
+        "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({closure})));"
     ));
     Ok(())
 }
@@ -515,16 +527,17 @@ fn parameters(
                 ));
             }
         };
+        let closure = expression::typed_closure(
+            value,
+            emit.names,
+            emit.state,
+            emit.prop_types,
+            &emit.scope_defs,
+            frame.scope,
+            &brul_syntax::types::Type::Bool,
+        )?;
         out.line(format_args!(
-            "bindings.push(brul::Binding::new(component, {name}.id(), {target}({})));",
-            expression::closure(
-                value,
-                emit.names,
-                emit.state,
-                emit.prop_types,
-                &emit.scope_defs,
-                frame.scope
-            )?
+            "bindings.push(brul::Binding::new(component, {name}.id(), {target}({closure})));"
         ));
     }
     if x.is_some() || y.is_some() {
@@ -553,13 +566,14 @@ fn optional_expression(
     Ok(match value {
         Some(item) => format!(
             "Some({})",
-            expression::closure(
+            expression::typed_closure(
                 item,
                 emit.names,
                 emit.state,
                 emit.prop_types,
                 &emit.scope_defs,
-                frame.scope
+                frame.scope,
+                &brul_syntax::types::Type::Number,
             )?
         ),
         None => "None".to_owned(),

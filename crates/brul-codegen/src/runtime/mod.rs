@@ -11,8 +11,8 @@ mod structure;
 mod tests;
 
 pub use binding::{
-    Binding, BindingTarget, Bindings, ClassTable, Expression, PropBinding, Write, boolean,
-    evaluate, offset, text, write,
+    Binding, BindingTarget, Bindings, ClassTable, Expression, FlagExpression, NumberExpression,
+    PropBinding, PropExpression, TextExpression, Write, boolean, evaluate, offset, text, write,
 };
 pub use build::Build;
 pub use component::{

@@ -13,7 +13,29 @@ use super::error::ViewError;
 use super::paint::{Textures, set_flag, set_input, set_offset, set_text, set_texture, texture};
 
 pub type Expression = fn(&mut Component) -> Result<Value, ScriptError>;
+pub type TextExpression = fn(&mut Component) -> Result<String, ScriptError>;
+pub type FlagExpression = fn(&mut Component) -> Result<bool, ScriptError>;
+pub type NumberExpression = fn(&mut Component) -> Result<f64, ScriptError>;
 pub type ClassTable = fn(&str) -> Option<Class>;
+
+#[derive(Clone, Copy)]
+pub enum PropExpression {
+    Number(NumberExpression),
+    Text(TextExpression),
+    Flag(FlagExpression),
+    Image(Expression),
+}
+
+impl PropExpression {
+    pub fn evaluate(self, component: &mut Component) -> Result<Value, ScriptError> {
+        Ok(match self {
+            Self::Number(expression) => Value::Number(expression(component)?),
+            Self::Text(expression) => Value::String(expression(component)?.into()),
+            Self::Flag(expression) => Value::Bool(expression(component)?),
+            Self::Image(expression) => expression(component)?,
+        })
+    }
+}
 
 #[derive(Clone)]
 pub struct Binding {
@@ -40,23 +62,23 @@ pub struct PropBinding {
     pub target: ComponentHandle,
     pub name: VariableId,
     pub ty: PropType,
-    pub expression: Expression,
+    pub expression: PropExpression,
     pub scope: Scope,
     pub component: ComponentHandle,
 }
 
 #[derive(Debug, Clone)]
 pub enum BindingTarget {
-    Text(Expression),
-    Input(Expression),
+    Text(TextExpression),
+    Input(TextExpression),
     Image(Expression),
-    Checked(Expression),
-    Selected(Expression),
-    Disabled(Expression),
-    Visible(Expression),
+    Checked(FlagExpression),
+    Selected(FlagExpression),
+    Disabled(FlagExpression),
+    Visible(FlagExpression),
     Offset {
-        x: Option<Expression>,
-        y: Option<Expression>,
+        x: Option<NumberExpression>,
+        y: Option<NumberExpression>,
     },
     Class {
         table: ClassTable,
@@ -137,7 +159,10 @@ pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {
     }
 }
 
-fn value(component: &RefCell<Component>, expression: Expression) -> Option<Value> {
+fn evaluated<T>(
+    component: &RefCell<Component>,
+    expression: fn(&mut Component) -> Result<T, ScriptError>,
+) -> Option<T> {
     match expression(&mut component.borrow_mut()) {
         Ok(value) => Some(value),
         Err(error) => {
@@ -147,12 +172,16 @@ fn value(component: &RefCell<Component>, expression: Expression) -> Option<Value
     }
 }
 
-fn string(component: &RefCell<Component>, expression: Expression) -> Option<String> {
-    value(component, expression)?.as_text().map(str::to_owned)
+fn value(component: &RefCell<Component>, expression: Expression) -> Option<Value> {
+    evaluated(component, expression)
 }
 
-fn flag(component: &RefCell<Component>, expression: Expression) -> Option<bool> {
-    value(component, expression)?.as_flag()
+fn string(component: &RefCell<Component>, expression: TextExpression) -> Option<String> {
+    evaluated(component, expression)
+}
+
+fn flag(component: &RefCell<Component>, expression: FlagExpression) -> Option<bool> {
+    evaluated(component, expression)
 }
 
 thread_local! {
@@ -182,45 +211,63 @@ fn class_value(
     found.map(Box::new)
 }
 
-pub fn text(component: &mut Component, expression: Expression) -> Result<String, ViewError> {
-    let value = expression(component)?;
-    value
-        .as_text()
-        .map(str::to_owned)
-        .ok_or_else(|| ViewError::expected("Text content", "String", value.type_name()))
+pub fn text(
+    component: &mut Component,
+    expression: TextExpression,
+    name: &str,
+) -> Result<String, ViewError> {
+    expression(component).map_err(|_| {
+        ViewError::expected(
+            "Text content",
+            "String",
+            component
+                .read(name)
+                .map_or_else(|_| "unknown", |value| value.type_name()),
+        )
+    })
 }
 
 pub fn boolean(
     component: &mut Component,
-    expression: Expression,
+    expression: FlagExpression,
     name: &str,
 ) -> Result<bool, ViewError> {
-    let value = expression(component)?;
-    value.as_flag().ok_or_else(|| {
-        ViewError::expected(format!("parameter '{name}'"), "Bool", value.type_name())
+    expression(component).map_err(|_| {
+        ViewError::expected(
+            format!("parameter '{name}'"),
+            "Bool",
+            component
+                .read(name)
+                .map_or_else(|_| "unknown", |value| value.type_name()),
+        )
     })
+}
+
+fn pixels(value: f64) -> Option<i32> {
+    if !value.is_finite() || value < f64::from(i32::MIN) || value > f64::from(i32::MAX) {
+        return None;
+    }
+    Some(value.round() as i32)
 }
 
 pub fn offset(
     component: &mut Component,
-    expression: Option<Expression>,
+    expression: Option<NumberExpression>,
     name: &str,
 ) -> Result<i32, ViewError> {
     let Some(expression) = expression else {
         return Ok(0);
     };
-    let value = expression(component)?;
-    value.as_pixels().ok_or_else(|| {
-        ViewError::expected(format!("parameter '{name}'"), "Number", value.type_name())
-    })
+    pixels(expression(component)?)
+        .ok_or_else(|| ViewError::expected(format!("parameter '{name}'"), "Number", "out of range"))
 }
 
 pub(crate) fn offset_value(
     component: &RefCell<Component>,
-    expression: Option<Expression>,
+    expression: Option<NumberExpression>,
 ) -> Option<i32> {
     let Some(expression) = expression else {
         return Some(0);
     };
-    value(component, expression)?.as_pixels()
+    evaluated(component, expression).and_then(pixels)
 }

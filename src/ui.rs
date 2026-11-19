@@ -554,7 +554,7 @@ impl<T: Theme> Ui<T> {
 pub(crate) fn apply_prop(prop: &PropBinding) {
     let previous = prop.component.borrow().scope().clone();
     prop.component.borrow_mut().set_scope(prop.scope.clone());
-    let value = match (prop.expression)(&mut prop.component.borrow_mut()) {
+    let value = match prop.expression.evaluate(&mut prop.component.borrow_mut()) {
         Ok(value) => Some(value),
         Err(error) => {
             tracing::error!(%error, "binding expression failed");
@@ -596,13 +596,31 @@ mod tests {
         ))
     }
 
-    macro_rules! read {
-        ($name:literal) => {{
-            fn read(component: &mut Component) -> Result<Value, Error> {
-                component.read($name)
+    macro_rules! typed_read {
+        ($macro:ident, $name:literal, $ty:ty) => {{
+            fn read(component: &mut Component) -> Result<$ty, Error> {
+                (&component.read($name)?).try_into()
             }
             read
         }};
+    }
+
+    macro_rules! text {
+        ($name:literal) => {
+            typed_read!(text, $name, String)
+        };
+    }
+
+    macro_rules! flag {
+        ($name:literal) => {
+            typed_read!(flag, $name, bool)
+        };
+    }
+
+    macro_rules! number {
+        ($name:literal) => {
+            typed_read!(number, $name, f64)
+        };
     }
 
     fn shown(component: &mut Component) -> Result<Value, Error> {
@@ -811,7 +829,7 @@ mod tests {
             bindings.push(Binding::new(
                 component,
                 text.id(),
-                BindingTarget::Text(read!("label")),
+                BindingTarget::Text(text!("label")),
             ));
             children.push(text);
         }
@@ -869,7 +887,7 @@ mod tests {
         target: &ComponentHandle,
         name: &str,
         ty: PropType,
-        expression: brul_codegen::runtime::Expression,
+        expression: brul_codegen::runtime::PropExpression,
     ) -> PropBinding {
         let name = target.borrow().id(name).expect("prop name is in the table");
         PropBinding {
@@ -902,7 +920,7 @@ mod tests {
             &target,
             "accent",
             PropType::String,
-            read!("colour"),
+            brul_codegen::runtime::PropExpression::Text(text!("colour")),
         ));
         assert_eq!(
             target.borrow().read("accent").expect("read back"),
@@ -919,7 +937,7 @@ mod tests {
             &target,
             "accent",
             PropType::Bool,
-            read!("colour"),
+            brul_codegen::runtime::PropExpression::Text(text!("colour")),
         ));
         assert_eq!(
             target.borrow().read("accent").expect("read back"),
@@ -936,7 +954,7 @@ mod tests {
             &target,
             "missing",
             PropType::String,
-            read!("colour"),
+            brul_codegen::runtime::PropExpression::Text(text!("colour")),
         ));
         assert!(target.borrow().read("missing").is_err());
     }
@@ -1277,14 +1295,14 @@ mod tests {
     #[test]
     fn every_binding_target_writes_its_own_state() {
         let targets = [
-            BindingTarget::Text(read!("title")),
-            BindingTarget::Checked(read!("on")),
-            BindingTarget::Selected(read!("on")),
-            BindingTarget::Disabled(read!("on")),
-            BindingTarget::Visible(read!("off")),
+            BindingTarget::Text(text!("title")),
+            BindingTarget::Checked(flag!("on")),
+            BindingTarget::Selected(flag!("on")),
+            BindingTarget::Disabled(flag!("on")),
+            BindingTarget::Visible(flag!("off")),
             BindingTarget::Offset {
-                x: Some(read!("x")),
-                y: Some(read!("y")),
+                x: Some(number!("x")),
+                y: Some(number!("y")),
             },
         ];
         let (ids, mut tree) = state_after(targets);
@@ -1600,7 +1618,7 @@ mod tests {
             bindings: vec![Binding::new(
                 component,
                 id,
-                BindingTarget::Text(read!("label")),
+                BindingTarget::Text(text!("label")),
             )],
             handlers: child.handlers,
             props: Vec::new(),
