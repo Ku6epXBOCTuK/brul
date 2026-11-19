@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::Error;
@@ -12,6 +13,22 @@ pub enum Value {
     Object(Arc<Vec<(String, Value)>>),
     Image(Arc<str>),
     ImageBytes(Arc<[u8]>),
+}
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Value::Number(number) => number.to_bits().hash(state),
+            Value::String(text) => text.as_ref().hash(state),
+            Value::Bool(flag) => flag.hash(state),
+            Value::Null => {}
+            Value::Array(items) => items.hash(state),
+            Value::Object(entries) => entries.hash(state),
+            Value::Image(path) => path.as_ref().hash(state),
+            Value::ImageBytes(bytes) => bytes.as_ref().hash(state),
+        }
+    }
 }
 
 impl Value {
@@ -170,6 +187,8 @@ impl<'a> Fields<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::hash::DefaultHasher;
+
     use super::*;
 
     #[test]
@@ -254,5 +273,31 @@ mod tests {
         }
         assert!(usize::try_from(&Value::Number(-1.0)).is_err());
         assert!(usize::try_from(&Value::Number(1.5)).is_err());
+    }
+
+    #[test]
+    fn hashing_covers_the_variant_and_the_whole_shape() {
+        let fingerprint = |value: &Value| {
+            let mut hasher = DefaultHasher::new();
+            value.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        assert_eq!(
+            fingerprint(&Value::Number(1.0)),
+            fingerprint(&Value::Number(1.0))
+        );
+        assert_ne!(
+            fingerprint(&Value::Number(1.0)),
+            fingerprint(&Value::String("1".into()))
+        );
+        assert_ne!(
+            fingerprint(&Value::Array(vec![Value::Number(1.0)].into())),
+            fingerprint(&Value::Array(vec![Value::String("1".into())].into()))
+        );
+        assert_ne!(
+            fingerprint(&Value::Object(vec![("a".into(), Value::Null)].into())),
+            fingerprint(&Value::Object(vec![("b".into(), Value::Null)].into()))
+        );
     }
 }

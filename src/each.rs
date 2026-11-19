@@ -90,32 +90,8 @@ impl<'a> RowMatcher<'a> {
 
 fn fingerprint(key: &Value) -> u64 {
     let mut hasher = DefaultHasher::new();
-    hash_value(key, &mut hasher);
+    key.hash(&mut hasher);
     hasher.finish()
-}
-
-fn hash_value(value: &Value, hasher: &mut DefaultHasher) {
-    match value {
-        Value::Number(number) => (0u8, number.to_bits()).hash(hasher),
-        Value::String(text) => (1u8, text.as_ref()).hash(hasher),
-        Value::Bool(flag) => (2u8, flag).hash(hasher),
-        Value::Null => 3u8.hash(hasher),
-        Value::Array(items) => {
-            4u8.hash(hasher);
-            for item in items.iter() {
-                hash_value(item, hasher);
-            }
-        }
-        Value::Object(entries) => {
-            5u8.hash(hasher);
-            for (name, value) in entries.iter() {
-                name.hash(hasher);
-                hash_value(value, hasher);
-            }
-        }
-        Value::Image(path) => (6u8, path.as_ref()).hash(hasher),
-        Value::ImageBytes(bytes) => (7u8, bytes.as_ref()).hash(hasher),
-    }
 }
 
 #[cfg(test)]
