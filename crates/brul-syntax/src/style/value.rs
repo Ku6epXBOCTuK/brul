@@ -1,3 +1,4 @@
+use brul_style::grid::parse_tracks;
 use brul_style::{Color, ColorExpr, ColorValue, Gradient, Type, Value};
 
 use crate::cursor::Cursor;
@@ -21,8 +22,8 @@ fn parse(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<Value
         Type::ThemeKey => theme_key(cursor, name),
         Type::String => string(cursor, name).map(Value::String),
         Type::Keywords(names) => keyword(cursor, name, names),
-        Type::TrackList => Err(expected(name, "a track list")),
-        Type::GridLine => Err(expected(name, "a grid line")),
+        Type::TrackList => track_list(cursor, name),
+        Type::GridLine => grid_line(cursor, name),
         Type::NumberRange(min, max) => number_in(
             cursor,
             Error::NumberRange {
@@ -149,6 +150,33 @@ fn length(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
         cursor.pos(),
         expected(name, "px or %"),
     ))
+}
+
+fn track_list(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+    let (at, text) = grid_text(cursor);
+    parse_tracks(&text)
+        .map(Value::TrackList)
+        .map_err(|_| Error::at(cursor.source(), at, expected(name, "a track list")))
+}
+
+fn grid_line(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+    let (at, text) = grid_text(cursor);
+    text.parse()
+        .map(Value::GridLine)
+        .map_err(|_| Error::at(cursor.source(), at, expected(name, "a grid line")))
+}
+
+fn grid_text(cursor: &mut Cursor) -> (usize, String) {
+    let at = cursor.value_start();
+    let end = cursor.source()[at..]
+        .find([';', '}'])
+        .map_or(cursor.source().len(), |offset| at + offset);
+    let text = cursor.source()[at..end]
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    cursor.set_pos(end);
+    (at, text)
 }
 
 fn paint(cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {

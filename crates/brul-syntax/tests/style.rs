@@ -1,3 +1,4 @@
+use brul_style::{GridLine, LinePlacement, TrackSize};
 use brul_syntax::style::{
     Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Kind, Property, State,
     Stylesheet, Theme, ThemeEntry, Value, parse_file, parse_file_in, parse_root,
@@ -984,6 +985,14 @@ fn color_expression_errors_name_the_problem() {
                 .to_string(),
             "unknown theme key 'muted'",
         ),
+        (
+            ".a { grid-template-columns: red 1fr; }".to_string(),
+            "expected a track list for 'grid-template-columns'",
+        ),
+        (
+            ".a { grid-row: 1 / nope; }".to_string(),
+            "expected a grid line for 'grid-row'",
+        ),
     ];
     for (source, message) in sources {
         let error = parse_file(&source).unwrap_err();
@@ -993,4 +1002,73 @@ fn color_expression_errors_name_the_problem() {
             error.message()
         );
     }
+}
+
+#[test]
+fn grid_track_lists_parse() {
+    let source = "\
+.grid {
+    display: grid;
+    grid-template-columns: 100px 1fr minmax(80px, 2fr);
+    grid-template-rows: 50% 2fr;
+}
+";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "grid",
+            vec![
+                property("display", Value::Keyword("grid".to_owned())),
+                property(
+                    "grid-template-columns",
+                    Value::TrackList(vec![
+                        TrackSize::Px(100.0),
+                        TrackSize::Fr(1.0),
+                        TrackSize::Minmax(
+                            Box::new(TrackSize::Px(80.0)),
+                            Box::new(TrackSize::Fr(2.0))
+                        ),
+                    ])
+                ),
+                property(
+                    "grid-template-rows",
+                    Value::TrackList(vec![TrackSize::Percent(50.0), TrackSize::Fr(2.0)])
+                ),
+            ]
+        )])
+    );
+}
+
+#[test]
+fn grid_lines_parse() {
+    let source = "\
+.item {
+    grid-column: 1 / span 2;
+    grid-row: -1 / auto;
+    grid-auto-flow: column;
+}
+";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "item",
+            vec![
+                property(
+                    "grid-column",
+                    Value::GridLine(GridLine {
+                        start: LinePlacement::Line(1),
+                        end: Some(LinePlacement::Span(2)),
+                    })
+                ),
+                property(
+                    "grid-row",
+                    Value::GridLine(GridLine {
+                        start: LinePlacement::Line(-1),
+                        end: Some(LinePlacement::Auto),
+                    })
+                ),
+                property("grid-auto-flow", Value::Keyword("column".to_owned())),
+            ]
+        )])
+    );
 }

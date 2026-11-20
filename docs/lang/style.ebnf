@@ -8,7 +8,13 @@ Prop        = Ident ":" Value { Value } ";" ;
 Animation   = "animate" Ident ":" Duration ";" ;
 Duration    = Number "ms" ;
 Value       = Number | Number "px" | Number "%" | Color | String
-            | ThemeRef | ColorExpr | Gradient | Bool | Keyword ;
+            | ThemeRef | ColorExpr | Gradient | Bool | Keyword
+            | TrackList | GridLine ;
+TrackList   = TrackSize { TrackSize } ;
+TrackSize   = Number "fr" | Number "px" | Number "%"
+            | "minmax" "(" TrackSize "," TrackSize ")" ;
+GridLine    = LinePlacement [ "/" LinePlacement ] ;
+LinePlacement = "auto" | "span" Number | [ "-" ] Number ;
 Keyword     = Ident ;
 Bool        = "true" | "false" ;
 Gradient    = "linear-gradient" "(" Number [ "deg" ] "," ColorValue "," ColorValue ")" ;

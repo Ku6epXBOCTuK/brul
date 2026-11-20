@@ -58,8 +58,11 @@
 | `flex-grow`                                            | число                             | 0                       | ❌ геометрия                    |
 | `flex-shrink`                                          | число                             | 0 (в CSS — 1)           | ❌ геометрия                    |
 | `flex-basis`                                           | px \| %                           | auto                    | ❌ геометрия                    |
-| `display`                                              | flex                              | flex                    | ❌ геометрия                    |
+| `display`                                              | flex \| grid                      | flex                    | ❌ геометрия                    |
 | `flex-direction`                                       | row\|column                       | row                     | ❌ геометрия                    |
+| `grid-template-columns`, `grid-template-rows`          | px \| % \| fr \| minmax(...)      | — (нет сетки)           | ❌ геометрия                    |
+| `grid-column`, `grid-row`                              | auto \| N \| span N               | auto                    | ❌ геометрия                    |
+| `grid-auto-flow`                                       | row \| column                     | row                     | ❌ геометрия                    |
 | `padding` (1–4 значения, `-left/right/top/bottom`)     | px                                | 0                       | ❌ геометрия                    |
 | `gap`                                                  | px                                | 0                       | ❌ геометрия                    |
 | `justify-content`                                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
@@ -166,10 +169,15 @@ _«Меняется по состоянию?» = разрешено ли сво�
 состоянии запрещены: размер и гарнитура — свойство компоновки, а не состояния.
 
 Направление потока контейнера задаётся свойством `flex-direction` (дефолт
-`row`), `display` всегда `flex`. Остальные имена выравнивания тоже из CSS
-flexbox: `justify-content` — главная ось, `align-items` — поперечная. Значения:
-`start|center|end|space-between` (justify) и `start|center|end|stretch` (align);
-остальные значения flexbox отложены.
+`row`); `display` принимает `flex` (по умолчанию) или `grid`. Остальные имена
+выравнивания тоже из CSS flexbox: `justify-content` — главная ось, `align-items`
+— поперечная. Значения: `start|center|end|space-between` (justify) и
+`start|center|end|stretch` (align); остальные значения flexbox отложены.
+
+Для `grid` треки задаются списком `px`, `%`, `fr` и `minmax(a, b)`. Дети
+привязываются к линиям через `grid-column` / `grid-row` (`auto`, номер линии,
+`span N`, пара через `/`). `repeat()`, именованные линии и `grid-template-areas`
+пока не поддерживаются.
 
 ## Темы
 
@@ -277,10 +285,13 @@ override Button {
 
 - **Совпадает:** `width`/`height`, `padding`, `flex-grow`/`flex-shrink`/
   `flex-basis`, `display`, `flex-direction`, `justify-content`, `align-items`,
-  `gap`, `border-radius`, `background`, `color`, `opacity`.
+  `gap`, `border-radius`, `background`, `color`, `opacity`,
+  `grid-template-columns`/`grid-template-rows`, `grid-column`/`grid-row`,
+  `grid-auto-flow`.
 - **Иначе:** border-box вместо content-box; `flex-shrink` по умолчанию 0, а не
   1; `flex-direction: column` не растягивает детей по ширине; нет каскада,
-  специфичности, наследования и `!important`.
+  специфичности, наследования и `!important`; в сетке нет `repeat()`,
+  именованных линий и `grid-template-areas`.
 - **Не берём:** inline-форматирование, схлопывание margin, `float`,
   `em`/`rem`/`vw`/`vh`/`calc`.
 
@@ -450,5 +461,20 @@ theme dark {
 }
 .card:hover {
   background: lighten(theme.surface-main, 6%);
+}
+```
+
+### 7. Сетка
+
+```css
+.grid {
+  display: grid;
+  grid-template-columns: 100px 1fr minmax(80px, 2fr);
+  grid-template-rows: 40px 1fr;
+  grid-auto-flow: row;
+}
+.grid-item {
+  grid-column: 1 / span 2;
+  grid-row: -1 / auto;
 }
 ```
