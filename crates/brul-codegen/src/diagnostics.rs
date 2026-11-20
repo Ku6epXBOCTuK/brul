@@ -18,3 +18,10 @@ pub fn sfc_error(error: sfc::Error) -> Error {
 pub fn error_at(position: Position, message: impl Into<String>) -> Error {
     Error::at_position(position, Error::custom(message))
 }
+
+pub fn arg_mismatch(position: Position, expected: &str, found: &str) -> Error {
+    Error::at_position(
+        position,
+        Error::custom(format!("argument expects {expected}, found {found}")),
+    )
+}

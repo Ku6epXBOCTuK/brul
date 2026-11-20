@@ -332,13 +332,10 @@ pub(super) fn typed(
                 let code =
                     if let Some((code, found)) = typed(argument, names, state, props, scopes)? {
                         if &found != expected {
-                            return Err(crate::error_at(
+                            return Err(crate::arg_mismatch(
                                 argument.position,
-                                format!(
-                                    "argument expects {}, found {}",
-                                    type_name(expected),
-                                    type_name(&found)
-                                ),
+                                type_name(expected),
+                                type_name(&found),
                             ));
                         }
                         code
@@ -451,9 +448,10 @@ fn every_typed(
     let interval_code = match typed(interval, names, state, props, scopes)? {
         Some((code, Type::Number)) => code,
         Some((_, ty)) => {
-            return Err(crate::error_at(
+            return Err(crate::arg_mismatch(
                 interval.position,
-                format!("argument expects Number, found {}", type_name(&ty)),
+                "Number",
+                type_name(&ty),
             ));
         }
         None => format!(
@@ -515,13 +513,10 @@ fn host_call(
     for (argument, expected) in arguments.iter().zip(&command.params) {
         let code = if let Some((code, found)) = typed(argument, names, state, props, scopes)? {
             if &found != expected {
-                return Err(crate::error_at(
+                return Err(crate::arg_mismatch(
                     argument.position,
-                    format!(
-                        "argument expects {}, found {}",
-                        type_name(expected),
-                        type_name(&found)
-                    ),
+                    type_name(expected),
+                    type_name(&found),
                 ));
             }
             code
