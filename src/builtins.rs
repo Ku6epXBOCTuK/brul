@@ -1,4 +1,4 @@
-use brul_script::{Component, Error, HostCommand, Value};
+use brul_script::{Component, Error, HostCommand, TypeName, Value};
 
 pub fn string(value: impl Into<Value>) -> Result<String, Error> {
     match value.into() {

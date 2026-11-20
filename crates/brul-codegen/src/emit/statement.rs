@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use brul_script::Names;
+use brul_syntax::TypeName;
 use brul_syntax::error::Error;
 use brul_syntax::script::Statement;
 use brul_syntax::types::Type;
 
-use super::expression::{convert, operation_in, operation_statement, type_name, typed};
+use super::expression::{convert, operation_in, operation_statement, typed};
 use super::scopes::Scopes;
 use super::state::State;
 
@@ -132,7 +133,7 @@ fn emit_statement(
             {
                 return Err(crate::error_at(
                     condition.position,
-                    format!("if condition expects Bool, found {}", type_name(ty)),
+                    format!("if condition expects Bool, found {}", ty.type_name()),
                 ));
             }
             let typed_bool = typed_condition.is_some();
@@ -164,7 +165,7 @@ fn emit_statement(
                         *position,
                         format!(
                             "return requires a value of type {}",
-                            type_name(&return_type)
+                            return_type.type_name()
                         ),
                     ));
                 }
@@ -183,8 +184,8 @@ fn emit_statement(
                         value.position,
                         format!(
                             "return expects {}, found {}",
-                            type_name(&return_type),
-                            type_name(&ty)
+                            return_type.type_name(),
+                            ty.type_name()
                         ),
                     ));
                 }

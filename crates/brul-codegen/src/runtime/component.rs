@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_script::{Component, Error as ScriptError, Script, Value};
+use brul_syntax::TypeName;
 use brul_syntax::markup::PropType;
 use brul_syntax::style::Stylesheet;
 
@@ -171,7 +172,7 @@ fn assign(
     if !accepts_prop(&value, &argument.ty) {
         return Err(ViewError::expected(
             format!("property '{}' of component '{name}'", argument.name),
-            prop_name(&argument.ty),
+            &argument.ty,
             value.type_name(),
         ));
     }
@@ -195,18 +196,5 @@ pub fn accepts_prop(value: &Value, ty: &PropType) -> bool {
         PropType::Object => matches!(value, Value::Object(_)),
         PropType::Array(_) => matches!(value, Value::Array(_)),
         PropType::Void => false,
-    }
-}
-
-pub fn prop_name(ty: &PropType) -> &'static str {
-    match ty {
-        PropType::Bool => "Bool",
-        PropType::Number => "Number",
-        PropType::String => "String",
-        PropType::Image => "Image",
-        PropType::Null => "Null",
-        PropType::Object => "Object",
-        PropType::Array(_) => "Array",
-        PropType::Void => "Void",
     }
 }

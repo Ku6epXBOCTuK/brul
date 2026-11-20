@@ -30,3 +30,5 @@ pub mod sfc;
 pub mod style;
 pub mod types;
 pub mod uses;
+
+pub use types::TypeName;

@@ -20,6 +20,8 @@ pub use names::{Names, VariableId};
 pub use scope::Scope;
 pub use value::{Fields, Value};
 
+pub use brul_syntax::TypeName;
+
 pub type Items = Vec<Dyn>;
 
 pub type ScriptInit = fn(&mut Component) -> Result<(), Error>;

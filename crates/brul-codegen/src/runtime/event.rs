@@ -7,7 +7,7 @@ use brul_script::{Dyn, Error as ScriptError, EventCall, Host, Value};
 use brul_syntax::markup::PropType;
 
 use super::ComponentHandle;
-use super::component::{accepts_prop, prop_name};
+use super::component::accepts_prop;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HandlerEvent {
@@ -142,11 +142,11 @@ impl Host for EventHost {
         }
         for (ty, value) in event.params.iter().zip(arguments) {
             if !accepts_prop(value, ty) {
-                return Err(ScriptError::EventArgument {
-                    name: event.name.to_owned(),
-                    expected: prop_name(ty),
-                    found: value.type_name(),
-                });
+                return Err(ScriptError::event_argument(
+                    event.name.to_owned(),
+                    ty,
+                    value,
+                ));
             }
         }
         PENDING.with(|pending| {

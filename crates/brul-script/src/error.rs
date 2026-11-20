@@ -1,3 +1,4 @@
+use brul_syntax::TypeName;
 use brul_syntax::ast::Position;
 
 use crate::Value;
@@ -76,6 +77,18 @@ impl Error {
     pub fn conversion(expected: &'static str, found: &Value) -> Self {
         Error::Conversion {
             expected,
+            found: found.type_name(),
+        }
+    }
+
+    pub fn event_argument<E: TypeName + ?Sized, F: TypeName + ?Sized>(
+        name: impl Into<String>,
+        expected: &E,
+        found: &F,
+    ) -> Self {
+        Error::EventArgument {
+            name: name.into(),
+            expected: expected.type_name(),
             found: found.type_name(),
         }
     }

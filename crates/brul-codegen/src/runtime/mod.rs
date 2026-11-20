@@ -15,9 +15,7 @@ pub use binding::{
     PropBinding, PropExpression, TextExpression, Write, boolean, evaluate, offset, text, write,
 };
 pub use build::Build;
-pub use component::{
-    ComponentHandle, Context, Instance, PropArgument, accepts_prop, instance, prop_name,
-};
+pub use component::{ComponentHandle, Context, Instance, PropArgument, accepts_prop, instance};
 pub use error::ViewError;
 pub use event::{ComponentEvent, Handler, HandlerEvent, PendingEvent, take_event};
 pub use paint::{TextureCache, Textures, set_flag, set_input, set_offset, set_text, set_texture};

@@ -114,19 +114,6 @@ pub(super) fn convert(code: &str, ty: &Type) -> String {
     }
 }
 
-pub(super) fn type_name(ty: &Type) -> &'static str {
-    match ty {
-        Type::Number => "Number",
-        Type::String => "String",
-        Type::Bool => "Bool",
-        Type::Null => "Null",
-        Type::Image => "Image",
-        Type::Object => "Object",
-        Type::Void => "Void",
-        Type::Array(_) => "Array",
-    }
-}
-
 fn prop_typed(
     name: &str,
     ty: &Type,
@@ -332,11 +319,7 @@ pub(super) fn typed(
                 let code =
                     if let Some((code, found)) = typed(argument, names, state, props, scopes)? {
                         if &found != expected {
-                            return Err(crate::arg_mismatch(
-                                argument.position,
-                                type_name(expected),
-                                type_name(&found),
-                            ));
+                            return Err(crate::arg_mismatch(argument.position, expected, &found));
                         }
                         code
                     } else {
@@ -448,11 +431,7 @@ fn every_typed(
     let interval_code = match typed(interval, names, state, props, scopes)? {
         Some((code, Type::Number)) => code,
         Some((_, ty)) => {
-            return Err(crate::arg_mismatch(
-                interval.position,
-                "Number",
-                type_name(&ty),
-            ));
+            return Err(crate::arg_mismatch(interval.position, &Type::Number, &ty));
         }
         None => format!(
             "(&{}).try_into()?",
@@ -513,11 +492,7 @@ fn host_call(
     for (argument, expected) in arguments.iter().zip(&command.params) {
         let code = if let Some((code, found)) = typed(argument, names, state, props, scopes)? {
             if &found != expected {
-                return Err(crate::arg_mismatch(
-                    argument.position,
-                    type_name(expected),
-                    type_name(&found),
-                ));
+                return Err(crate::arg_mismatch(argument.position, expected, &found));
             }
             code
         } else {

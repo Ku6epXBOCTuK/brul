@@ -5,6 +5,7 @@ use brul_gui::{Texture, Widget, WidgetId, WidgetTree};
 use brul_script::{
     Component, Dyn, Error as ScriptError, EventCall, Host, Scope, Value, noop_event,
 };
+use brul_syntax::TypeName;
 use brul_syntax::markup::PropType;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -238,24 +239,6 @@ fn an_offset_binding_rounds_and_ignores_what_it_has_no_number_for() {
 
     let whole = RefCell::new(declared("x", Value::Number(4.0)));
     assert_eq!(offset_value(&whole, Some(number!("x"))), Some(4));
-}
-
-#[test]
-fn every_prop_type_has_its_own_name() {
-    let names: Vec<&str> = [
-        PropType::Bool,
-        PropType::Number,
-        PropType::String,
-        PropType::Image,
-    ]
-    .into_iter()
-    .map(|ty| prop_name(&ty))
-    .collect();
-    assert!(names.iter().all(|name| !name.is_empty()));
-    let mut unique = names.clone();
-    unique.sort_unstable();
-    unique.dedup();
-    assert_eq!(unique.len(), names.len());
 }
 
 #[test]

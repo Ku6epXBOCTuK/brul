@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use brul_syntax::TypeName;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Block, EachBlock, IfBlock};
 use brul_syntax::types::Type;
@@ -9,7 +10,8 @@ use super::Emit;
 use super::Frame;
 use super::Out;
 use super::PropTypes;
-use super::expression::{operation, type_name, typed};
+
+use super::expression::{operation, typed};
 use super::scopes::{ScopeField, ScopeInfo, Scopes};
 use super::state::State;
 use super::{contains_slot, items, items_spliced};
@@ -137,7 +139,7 @@ fn check_condition(
     {
         return Err(crate::error_at(
             condition.position,
-            format!("if condition expects Bool, found {}", type_name(&ty)),
+            format!("if condition expects Bool, found {}", ty.type_name()),
         ));
     }
     Ok(())
@@ -154,7 +156,7 @@ fn check_collection(
     {
         return Err(crate::error_at(
             collection.position,
-            format!("each expects Array or Object, found {}", type_name(&ty)),
+            format!("each expects Array or Object, found {}", ty.type_name()),
         ));
     }
     Ok(())

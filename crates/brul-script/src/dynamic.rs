@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use brul_syntax::TypeName;
 use brul_syntax::ast::{BinaryOp, UnaryOp};
 
 use crate::component::Component;
@@ -68,10 +69,6 @@ impl Dyn {
         <()>::try_from(self)
     }
 
-    pub fn type_name(&self) -> &'static str {
-        self.0.type_name()
-    }
-
     pub fn unary(op: UnaryOp, value: &Self) -> Result<Self, Error> {
         Ok(Self(eval::apply_unary(op, value.0.clone())?))
     }
@@ -112,6 +109,12 @@ impl Dyn {
 
     pub fn into_value(self) -> Value {
         self.0
+    }
+}
+
+impl TypeName for Dyn {
+    fn type_name(&self) -> &'static str {
+        self.0.type_name()
     }
 }
 

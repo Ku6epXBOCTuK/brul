@@ -5,6 +5,7 @@ use std::rc::Rc;
 use brul_gui::{Class, Image, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Dyn, Error as ScriptError, Scope, Value};
+use brul_syntax::TypeName;
 use brul_syntax::markup::PropType;
 use tracing::error;
 
@@ -219,7 +220,7 @@ pub fn text(
     expression(component).map_err(|_| {
         ViewError::expected(
             "Text content",
-            "String",
+            &PropType::String,
             component
                 .read(name)
                 .map_or_else(|_| "unknown", |value| value.type_name()),
@@ -235,7 +236,7 @@ pub fn boolean(
     expression(component).map_err(|_| {
         ViewError::expected(
             format!("parameter '{name}'"),
-            "Bool",
+            &PropType::Bool,
             component
                 .read(name)
                 .map_or_else(|_| "unknown", |value| value.type_name()),
@@ -258,8 +259,13 @@ pub fn offset(
     let Some(expression) = expression else {
         return Ok(0);
     };
-    pixels(expression(component)?)
-        .ok_or_else(|| ViewError::expected(format!("parameter '{name}'"), "Number", "out of range"))
+    pixels(expression(component)?).ok_or_else(|| {
+        ViewError::expected(
+            format!("parameter '{name}'"),
+            &PropType::Number,
+            "out of range",
+        )
+    })
 }
 
 pub(crate) fn offset_value(

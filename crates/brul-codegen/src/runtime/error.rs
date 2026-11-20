@@ -1,4 +1,5 @@
 use brul_script::Error as ScriptError;
+use brul_syntax::TypeName;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ViewError {
@@ -15,14 +16,14 @@ pub enum ViewError {
 }
 
 impl ViewError {
-    pub fn expected(
+    pub fn expected<E: TypeName + ?Sized>(
         target: impl Into<String>,
-        expected: &'static str,
+        expected: &E,
         found: &'static str,
     ) -> Self {
         Self::Expected {
             target: target.into(),
-            expected,
+            expected: expected.type_name(),
             found,
         }
     }

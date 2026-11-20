@@ -170,11 +170,7 @@ pub(super) fn define(
     }
     for (parameter, expected) in function.params.iter().zip(params) {
         if &parameter.ty != expected {
-            return Err(crate::arg_mismatch(
-                position,
-                super::expression::type_name(expected),
-                super::expression::type_name(&parameter.ty),
-            ));
+            return Err(crate::arg_mismatch(position, expected, &parameter.ty));
         }
     }
     Ok(())

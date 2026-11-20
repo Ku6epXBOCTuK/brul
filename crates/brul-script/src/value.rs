@@ -1,6 +1,8 @@
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use brul_syntax::TypeName;
+
 use crate::{Error, Items};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,8 +33,8 @@ impl Hash for Value {
     }
 }
 
-impl Value {
-    pub fn type_name(&self) -> &'static str {
+impl TypeName for Value {
+    fn type_name(&self) -> &'static str {
         match self {
             Value::Number(_) => "Number",
             Value::String(_) => "String",
@@ -43,7 +45,9 @@ impl Value {
             Value::Image(_) | Value::ImageBytes(_) => "Image",
         }
     }
+}
 
+impl Value {
     pub fn image_bytes(bytes: &[u8]) -> Self {
         Self::ImageBytes(Arc::from(bytes))
     }

@@ -6,6 +6,7 @@ use std::time::Duration;
 use brul_codegen::runtime::{self, accepts_prop};
 use brul_gui::{WidgetEvent, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
+use brul_script::TypeName;
 use brul_window::{WindowCommand, WindowKey};
 
 use crate::each::reconcile_each;

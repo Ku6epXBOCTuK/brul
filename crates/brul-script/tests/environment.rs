@@ -1,4 +1,4 @@
-use brul_script::{Environment, Error, Value, VariableId};
+use brul_script::{Environment, Error, TypeName, Value, VariableId};
 
 const NAMES: &[&str] = &["selectedIndex", "url", "count", "limit", "selected"];
 

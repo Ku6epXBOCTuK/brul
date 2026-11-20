@@ -1,3 +1,4 @@
+use brul_syntax::TypeName;
 use brul_syntax::ast::BinaryOp;
 
 use crate::error::Error;
