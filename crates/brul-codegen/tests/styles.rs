@@ -36,6 +36,14 @@ fn padding_covers_every_side_and_the_gap_between_children() {
 }
 
 #[test]
+fn per_axis_gaps_are_resolved_from_their_own_properties() {
+    let resolved = resolved(".a { gap: 5px; row-gap: 6px; column-gap: 7px; }");
+    assert_eq!(resolved.layout.gap, 5);
+    assert_eq!(resolved.layout.row_gap, 6);
+    assert_eq!(resolved.layout.column_gap, 7);
+}
+
+#[test]
 fn border_sets_the_width_from_either_property() {
     let shorthand = resolved(".a { border: 3px #fff; }");
     assert_eq!(shorthand.layout.border_width, 3);

@@ -23,6 +23,8 @@ fn a_value_is_read_by_the_type_of_its_spec() {
     let sheet = rule(vec![
         property(Kind::Width, Value::Percent(50.0)),
         property(Kind::Gap, Value::Px(4.0)),
+        property(Kind::RowGap, Value::Px(6.0)),
+        property(Kind::ColumnGap, Value::Px(8.0)),
         property(Kind::FontFamily, Value::String("Inter".into())),
         property(Kind::FontWeight, Value::Number(600.0)),
         property(Kind::JustifyContent, Value::Keyword("space-between".into())),
@@ -32,6 +34,8 @@ fn a_value_is_read_by_the_type_of_its_spec() {
 
     assert_eq!(resolved.layout.width, Dimension::Percent(50.0));
     assert_eq!(resolved.layout.gap, 4);
+    assert_eq!(resolved.layout.row_gap, 6);
+    assert_eq!(resolved.layout.column_gap, 8);
     assert_eq!(resolved.layout.justify, Justify::SpaceBetween);
     assert_eq!(resolved.text.base().family.as_deref(), Some("Inter"));
     assert_eq!(resolved.text.base().weight, 600);

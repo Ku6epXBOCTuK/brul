@@ -67,6 +67,7 @@
 | `grid-area`                                            | имя области \| auto               | auto                    | ❌ геометрия                    |
 | `padding` (1–4 значения, `-left/right/top/bottom`)     | px                                | 0                       | ❌ геометрия                    |
 | `gap`                                                  | px                                | 0                       | ❌ геометрия                    |
+| `row-gap`, `column-gap`                                | px                                | `gap`                   | ❌ геометрия                    |
 | `justify-content`                                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
 | `align-items`                                          | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
 | `background`                                           | Color \| Gradient                 | transparent             | ✅                              |
@@ -183,6 +184,10 @@ _«Меняется по состоянию?» = разрешено ли сво�
 списком строк в кавычках: повторяющиеся имена образуют прямоугольник, `.` —
 пустая ячейка. Ребёнок попадает в область через `grid-area: имя` (или `auto`).
 
+Зазоры между детьми задаёт `gap`; `row-gap` и `column-gap` задают ось отдельно и
+перекрывают шорткат. `column-gap` — горизонтальный зазор, `row-gap` —
+вертикальный.
+
 ## Темы
 
 ```css
@@ -289,9 +294,10 @@ override Button {
 
 - **Совпадает:** `width`/`height`, `padding`, `flex-grow`/`flex-shrink`/
   `flex-basis`, `display`, `flex-direction`, `justify-content`, `align-items`,
-  `gap`, `border-radius`, `background`, `color`, `opacity`,
-  `grid-template-columns`/`grid-template-rows`, `grid-column`/`grid-row`,
-  `grid-auto-flow`, `grid-template-areas`, `grid-area`.
+  `gap`/`row-gap`/`column-gap`, `border-radius`, `background`, `color`,
+  `opacity`, `grid-template-columns`/`grid-template-rows`,
+  `grid-column`/`grid-row`, `grid-auto-flow`, `grid-template-areas`,
+  `grid-area`.
 - **Иначе:** border-box вместо content-box; `flex-shrink` по умолчанию 0, а не
   1; `flex-direction: column` не растягивает детей по ширине; нет каскада,
   специфичности, наследования и `!important`; нет именованных линий вне

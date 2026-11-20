@@ -60,6 +60,8 @@ fn layout(patch: &LayoutPatch) -> String {
         padding => convert::padding,
         border_width => convert::decimal,
         gap => convert::decimal,
+        row_gap => convert::decimal,
+        column_gap => convert::decimal,
         flex_grow => convert::debug,
         flex_shrink => convert::debug,
         flex_basis => convert::dimension,
@@ -327,6 +329,8 @@ mod tests {
     fn a_layout_patch_emits_its_grid_fields() {
         let patch = LayoutPatch {
             display: Some(Display::Grid),
+            row_gap: Some(6),
+            column_gap: Some(7),
             grid_template_columns: Some(vec![
                 TrackSize::Fr(1.0),
                 TrackSize::Repeat(RepeatCount::AutoFill, vec![TrackSize::Px(40.0)]),
@@ -344,6 +348,8 @@ mod tests {
         };
         let emitted = layout(&patch);
         assert!(emitted.contains("display: Some(brul::gui::Display::Grid)"));
+        assert!(emitted.contains("row_gap: Some(6)"));
+        assert!(emitted.contains("column_gap: Some(7)"));
         assert!(emitted.contains(
             "grid_template_columns: Some(vec![brul::gui::TrackSize::Fr(1.0), brul::gui::TrackSize::Repeat(brul::gui::RepeatCount::AutoFill, vec![brul::gui::TrackSize::Px(40.0)])])"
         ));

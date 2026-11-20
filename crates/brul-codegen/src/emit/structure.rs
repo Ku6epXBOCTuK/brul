@@ -502,7 +502,7 @@ fn each_body(
 }
 
 fn arm_frame<'a>(theme: Option<&'a str>, frame: Frame<'a>) -> Frame<'a> {
-    let mut arm = Frame::root(theme).inside(frame.direction(), frame.gap());
+    let mut arm = Frame::root(theme).inside(frame.direction(), frame.row_gap(), frame.column_gap());
     arm.scope = frame.scope;
     arm
 }

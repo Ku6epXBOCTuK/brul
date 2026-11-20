@@ -206,8 +206,9 @@ fn container(
         return Ok(());
     }
     let frame_direction = group.direction(direction);
-    let gap = resolved.layout.gap;
-    let children = frame.inside(frame_direction, gap);
+    let row_gap = resolved.layout.row_gap();
+    let column_gap = resolved.layout.column_gap();
+    let children = frame.inside(frame_direction, row_gap, column_gap);
     if contains_slot(&element.block) {
         out.push(format_args!("brul::gui::Widget::{call}({args}{{"));
         out.end();

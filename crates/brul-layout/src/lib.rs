@@ -123,6 +123,14 @@ macro_rules! layout_patch {
                     }
                 )+
             }
+
+            pub fn row_gap(&self) -> u32 {
+                if self.row_gap == 0 { self.gap } else { self.row_gap }
+            }
+
+            pub fn column_gap(&self) -> u32 {
+                if self.column_gap == 0 { self.gap } else { self.column_gap }
+            }
         }
     };
 }
@@ -133,6 +141,8 @@ layout_patch! {
     padding: Padding,
     border_width: u32,
     gap: u32,
+    row_gap: u32,
+    column_gap: u32,
     flex_grow: f32,
     flex_shrink: f32,
     flex_basis: Dimension,
@@ -936,8 +946,8 @@ fn taffy_style(
             bottom: length(style.border_width),
         },
         gap: TaffySize {
-            width: length(style.gap),
-            height: length(style.gap),
+            width: length(style.column_gap()),
+            height: length(style.row_gap()),
         },
         flex_direction: match direction {
             Direction::Row => FlexDirection::Row,
@@ -1594,6 +1604,37 @@ mod tests {
         let column = layout(&grid(GridAutoFlow::Column), viewport).expect("column flow");
         assert_eq!((column.children[1].x, column.children[1].y), (0, 10));
         assert_eq!((column.children[2].x, column.children[2].y), (80, 0));
+    }
+
+    #[test]
+    fn per_axis_gaps_apply_to_their_own_axes() {
+        let grid = LayoutNode::row(vec![
+            LayoutNode::leaf(10, 10),
+            LayoutNode::leaf(10, 10),
+            LayoutNode::leaf(10, 10),
+            LayoutNode::leaf(10, 10),
+        ])
+        .with_style(LayoutStyle {
+            display: Display::Grid,
+            width: Dimension::Px(200),
+            grid_template_columns: vec![TrackSize::Px(80.0), TrackSize::Px(80.0)],
+            grid_template_rows: vec![TrackSize::Px(10.0), TrackSize::Px(10.0)],
+            row_gap: 5,
+            column_gap: 7,
+            ..LayoutStyle::default()
+        });
+
+        let placed = layout(
+            &grid,
+            Size {
+                width: 200,
+                height: 200,
+            },
+        )
+        .expect("per-axis gaps");
+
+        assert_eq!((placed.children[1].x, placed.children[1].y), (87, 0));
+        assert_eq!((placed.children[2].x, placed.children[2].y), (0, 15));
     }
 
     #[test]

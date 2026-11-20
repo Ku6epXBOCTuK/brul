@@ -142,7 +142,8 @@ impl<'a> Emit<'a> {
 pub(super) struct Frame<'a> {
     theme: Option<&'a str>,
     direction: &'a str,
-    gap: u32,
+    row_gap: u32,
+    column_gap: u32,
     pub(super) scope: Option<usize>,
 }
 
@@ -151,15 +152,17 @@ impl<'a> Frame<'a> {
         Self {
             theme,
             direction: "Column",
-            gap: 0,
+            row_gap: 0,
+            column_gap: 0,
             scope: None,
         }
     }
 
-    pub(super) fn inside(self, direction: &'a str, gap: u32) -> Self {
+    pub(super) fn inside(self, direction: &'a str, row_gap: u32, column_gap: u32) -> Self {
         Self {
             direction,
-            gap,
+            row_gap,
+            column_gap,
             ..self
         }
     }
@@ -172,8 +175,12 @@ impl<'a> Frame<'a> {
         self.direction
     }
 
-    pub(super) fn gap(&self) -> u32 {
-        self.gap
+    pub(super) fn row_gap(&self) -> u32 {
+        self.row_gap
+    }
+
+    pub(super) fn column_gap(&self) -> u32 {
+        self.column_gap
     }
 }
 

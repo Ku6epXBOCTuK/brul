@@ -309,6 +309,8 @@ fn apply(
             *edge(&mut layout.padding, side) = read::<PxTy>(value, kind)?;
         }
         Target::Layout(LayoutField::Gap) => layout.gap = read::<PxTy>(value, kind)?,
+        Target::Layout(LayoutField::RowGap) => layout.row_gap = read::<PxTy>(value, kind)?,
+        Target::Layout(LayoutField::ColumnGap) => layout.column_gap = read::<PxTy>(value, kind)?,
         Target::Layout(LayoutField::BorderWidth) => {
             layout.border_width = read::<PxTy>(value, kind)?
         }
