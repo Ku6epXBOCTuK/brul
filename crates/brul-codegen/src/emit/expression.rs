@@ -486,10 +486,10 @@ fn host_call(
         };
         values.push(code);
     }
-    let bindings: Vec<String> = values
+    let bindings: String = values
         .iter()
         .enumerate()
-        .map(|(index, value)| format!("let __brul_arg{index} = {value};"))
+        .map(|(index, value)| format!("let __brul_arg{index} = {value}; "))
         .collect();
     let variables: Vec<String> = (0..values.len())
         .map(|index| format!("__brul_arg{index}"))
@@ -499,18 +499,15 @@ fn host_call(
     } else {
         format!("({},)", variables.join(", "))
     };
-    let code = if bindings.is_empty() {
-        format!(
-            "<{} as brul::HostCommand>::invoke(component, {tuple})?",
-            command.path
-        )
+    let (open, close) = if bindings.is_empty() {
+        ("", "")
     } else {
-        format!(
-            "{{ {} <{} as brul::HostCommand>::invoke(component, {tuple})? }}",
-            bindings.join(" "),
-            command.path
-        )
+        ("{ ", " }")
     };
+    let code = format!(
+        "{open}{bindings}<{} as brul::HostCommand>::invoke(component, {tuple})?{close}",
+        command.path
+    );
     Ok(Some((code, command.result.clone())))
 }
 
