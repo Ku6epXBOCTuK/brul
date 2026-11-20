@@ -4,7 +4,7 @@ use std::fmt::Write;
 use brul_script::Names;
 use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::error::Error;
-use brul_syntax::script::builtins::{self, Argument, Builtin};
+use brul_syntax::script::builtins::{self, Argument, Builtin, BuiltinKind};
 use brul_syntax::types::Type;
 
 use super::names;
@@ -383,47 +383,46 @@ fn builtin_call(
             ),
         ));
     }
-    if let Some(marker) = builtin.marker {
-        let params = builtin
-            .arguments
-            .iter()
-            .map(|argument| match argument {
-                Argument::Value(ty) => ty.clone(),
-                Argument::Any | Argument::Function => Type::Object,
-            })
-            .collect();
-        let command = Command {
-            name: builtin.name.to_owned(),
-            path: format!("brul::builtins::{marker}"),
-            params,
-            result: builtin.result.clone(),
-        };
-        return host_call(&command, arguments, position, names, state, props, scopes);
-    }
-    match builtin.name {
-        "String" => Ok(Some((
+    match builtin.kind {
+        BuiltinKind::Host { marker } => {
+            let params = builtin
+                .arguments
+                .iter()
+                .map(|argument| match argument {
+                    Argument::Value(ty) => ty.clone(),
+                    Argument::Any | Argument::Function => Type::Object,
+                })
+                .collect();
+            let command = Command {
+                name: builtin.name.to_owned(),
+                path: format!("brul::builtins::{marker}"),
+                params,
+                result: builtin.result.clone(),
+            };
+            host_call(&command, arguments, position, names, state, props, scopes)
+        }
+        BuiltinKind::StringFn => Ok(Some((
             format!(
                 "brul::builtins::string({})?",
                 value_argument(&arguments[0], names, state, props, scopes)?
             ),
             Type::String,
         ))),
-        "Number" => Ok(Some((
+        BuiltinKind::NumberFn => Ok(Some((
             format!(
                 "brul::builtins::number({})?",
                 value_argument(&arguments[0], names, state, props, scopes)?
             ),
             Type::Number,
         ))),
-        "len" => Ok(Some((
+        BuiltinKind::Len => Ok(Some((
             format!(
                 "brul::builtins::len({})?",
                 value_argument(&arguments[0], names, state, props, scopes)?
             ),
             Type::Number,
         ))),
-        "every" => every_typed(arguments, names, state, props, scopes),
-        _ => Ok(None),
+        BuiltinKind::Every => every_typed(arguments, names, state, props, scopes),
     }
 }
 

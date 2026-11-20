@@ -7,12 +7,21 @@ pub enum Argument {
     Value(Type),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum BuiltinKind {
+    Host { marker: &'static str },
+    StringFn,
+    NumberFn,
+    Len,
+    Every,
+}
+
 #[derive(Debug, Clone)]
 pub struct Builtin {
     pub name: &'static str,
     pub arguments: &'static [Argument],
     pub result: Type,
-    pub marker: Option<&'static str>,
+    pub kind: BuiltinKind,
 }
 
 pub const BUILTINS: &[Builtin] = &[
@@ -20,85 +29,99 @@ pub const BUILTINS: &[Builtin] = &[
         name: "String",
         arguments: &[Argument::Any],
         result: Type::String,
-        marker: None,
+        kind: BuiltinKind::StringFn,
     },
     Builtin {
         name: "Number",
         arguments: &[Argument::Any],
         result: Type::Number,
-        marker: None,
+        kind: BuiltinKind::NumberFn,
     },
     Builtin {
         name: "len",
         arguments: &[Argument::Any],
         result: Type::Number,
-        marker: None,
+        kind: BuiltinKind::Len,
     },
     Builtin {
         name: "theme",
         arguments: &[],
         result: Type::String,
-        marker: Some("Theme"),
+        kind: BuiltinKind::Host { marker: "Theme" },
     },
     Builtin {
         name: "setTheme",
         arguments: &[Argument::Value(Type::String)],
         result: Type::Void,
-        marker: Some("SetTheme"),
+        kind: BuiltinKind::Host { marker: "SetTheme" },
     },
     Builtin {
         name: "setAlwaysOnTop",
         arguments: &[Argument::Value(Type::Bool)],
         result: Type::Void,
-        marker: Some("SetAlwaysOnTop"),
+        kind: BuiltinKind::Host {
+            marker: "SetAlwaysOnTop",
+        },
     },
     Builtin {
         name: "openWindow",
         arguments: &[Argument::Value(Type::String)],
         result: Type::Void,
-        marker: Some("OpenWindow"),
+        kind: BuiltinKind::Host {
+            marker: "OpenWindow",
+        },
     },
     Builtin {
         name: "exit",
         arguments: &[],
         result: Type::Void,
-        marker: Some("Exit"),
+        kind: BuiltinKind::Host { marker: "Exit" },
     },
     Builtin {
         name: "closeWindow",
         arguments: &[],
         result: Type::Void,
-        marker: Some("CloseWindow"),
+        kind: BuiltinKind::Host {
+            marker: "CloseWindow",
+        },
     },
     Builtin {
         name: "dragWindow",
         arguments: &[],
         result: Type::Void,
-        marker: Some("DragWindow"),
+        kind: BuiltinKind::Host {
+            marker: "DragWindow",
+        },
     },
     Builtin {
         name: "showWindow",
         arguments: &[],
         result: Type::Void,
-        marker: Some("ShowWindow"),
+        kind: BuiltinKind::Host {
+            marker: "ShowWindow",
+        },
     },
     Builtin {
         name: "hideWindow",
         arguments: &[],
         result: Type::Void,
-        marker: Some("HideWindow"),
+        kind: BuiltinKind::Host {
+            marker: "HideWindow",
+        },
     },
     Builtin {
         name: "focusWindow",
         arguments: &[],
         result: Type::Void,
-        marker: Some("FocusWindow"),
+        kind: BuiltinKind::Host {
+            marker: "FocusWindow",
+        },
     },
     Builtin {
         name: "every",
         arguments: &[Argument::Value(Type::Number), Argument::Function],
         result: Type::Void,
-        marker: None,
+        kind: BuiltinKind::Every,
     },
 ];
 
