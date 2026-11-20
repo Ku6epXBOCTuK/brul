@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use brul_gui::{Class, Image, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Dyn, Error as ScriptError, Scope, Value, VariableId};
+use brul_script::{Component, Dyn, Error as ScriptError, Scope, Value};
 use brul_syntax::markup::PropType;
 use tracing::error;
 
@@ -60,7 +60,7 @@ impl Binding {
 pub struct PropBinding {
     pub widget: WidgetId,
     pub target: ComponentHandle,
-    pub name: VariableId,
+    pub name: &'static str,
     pub ty: PropType,
     pub expression: PropExpression,
     pub scope: Scope,

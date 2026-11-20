@@ -1569,11 +1569,9 @@ fn emits_component_properties() {
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains("name: \"Badge\","));
     assert!(module.contains(
-        "brul::PropArgument { name: brul::VariableId::from_index(0), ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(\"hi\".to_owned()) })"
+        "brul::PropArgument { name: \"label\", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(\"hi\".to_owned()) })"
     ));
-    assert!(module.contains(
-        "brul::PropArgument { name: brul::VariableId::from_index(1), ty: brul::PropType::Number,"
-    ));
+    assert!(module.contains("brul::PropArgument { name: \"size\", ty: brul::PropType::Number,"));
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

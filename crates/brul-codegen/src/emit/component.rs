@@ -13,7 +13,6 @@ use crate::loader::Definition;
 use super::Emit;
 use super::Frame;
 use super::Out;
-use super::names::variable_expr;
 use super::{events, expression, items_spliced};
 
 type Props<'a> = Vec<(&'a str, &'a PropType, &'a Expr)>;
@@ -520,7 +519,6 @@ fn arguments(
     out.line(format_args!("{field}: &["));
     out.indented(|out| -> Result<(), Error> {
         for (name, ty, value) in arguments {
-            let id = variable_expr(name, value.position, names)?;
             let expression = match super::resource(value, resources) {
                 Some(resource) if **ty == PropType::Image => format!(
                     "brul::PropExpression::Image(|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> {{ Ok(brul::Dyn::image_bytes({prefix}resource_{resource}())) }})"
@@ -539,7 +537,7 @@ fn arguments(
                 }
             };
             out.line(format_args!(
-                "brul::PropArgument {{ name: {id}, ty: brul::{ty}, expression: {expression} }},"
+                "brul::PropArgument {{ name: {name:?}, ty: brul::{ty}, expression: {expression} }},"
             ));
         }
         Ok(())

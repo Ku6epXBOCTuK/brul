@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_script::{Component, Script, Value, VariableId};
+use brul_script::{Component, Error as ScriptError, Script, Value};
 use brul_syntax::markup::PropType;
 use brul_syntax::style::Stylesheet;
 
@@ -24,7 +24,7 @@ pub struct Context {
 }
 
 pub struct PropArgument {
-    pub name: VariableId,
+    pub name: &'static str,
     pub ty: PropType,
     pub expression: PropExpression,
 }
@@ -106,7 +106,7 @@ fn declare_props(
     parent: &ComponentHandle,
     props: &[PropArgument],
     name: &str,
-) -> Result<Vec<VariableId>, ViewError> {
+) -> Result<Vec<&'static str>, ViewError> {
     let mut given = Vec::new();
     for argument in props {
         let value = evaluate_argument(parent, argument)?;
@@ -119,7 +119,7 @@ fn declare_props(
 fn declare_defaults(
     component: &ComponentHandle,
     defaults: &[PropArgument],
-    given: &[VariableId],
+    given: &[&str],
     name: &str,
 ) -> Result<(), ViewError> {
     for argument in defaults {
@@ -169,16 +169,19 @@ fn assign(
     name: &str,
 ) -> Result<(), ViewError> {
     if !accepts_prop(&value, &argument.ty) {
-        let property = component.borrow().name(argument.name);
         return Err(ViewError::expected(
-            format!("property '{property}' of component '{name}'"),
+            format!("property '{}' of component '{name}'", argument.name),
             prop_name(&argument.ty),
             value.type_name(),
         ));
     }
+    let id = component
+        .borrow()
+        .id(argument.name)
+        .ok_or_else(|| ScriptError::Undefined(argument.name.to_owned()))?;
     component
         .borrow_mut()
-        .declare_property(argument.name, value)
+        .declare_property(id, value)
         .map_err(ViewError::from)
 }
 

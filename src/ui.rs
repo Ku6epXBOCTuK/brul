@@ -565,9 +565,11 @@ pub(crate) fn apply_prop(prop: &PropBinding) {
             None
         }
     };
+    let id = prop.target.borrow().id(prop.name);
     if let Some(value) = value
         && accepts_prop(&value, &prop.ty)
-        && let Err(error) = prop.target.borrow_mut().assign_property(prop.name, value)
+        && let Some(id) = id
+        && let Err(error) = prop.target.borrow_mut().assign_property(id, value)
     {
         tracing::error!(%error, "property assignment failed");
     }
@@ -889,11 +891,10 @@ mod tests {
     fn prop(
         component: &ComponentHandle,
         target: &ComponentHandle,
-        name: &str,
+        name: &'static str,
         ty: PropType,
         expression: brul_codegen::runtime::PropExpression,
     ) -> PropBinding {
-        let name = target.borrow().id(name).expect("prop name is in the table");
         PropBinding {
             widget: Widget::text("").id(),
             target: Rc::clone(target),
