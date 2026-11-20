@@ -24,6 +24,25 @@ pub enum BinaryOp {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOpKind {
+    Arithmetic,
+    Comparison,
+    Logical,
+}
+
+impl BinaryOp {
+    pub fn kind(self) -> BinaryOpKind {
+        match self {
+            Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Rem => BinaryOpKind::Arithmetic,
+            Self::Eq | Self::NotEq | Self::Lt | Self::Gt | Self::Le | Self::Ge => {
+                BinaryOpKind::Comparison
+            }
+            Self::And | Self::Or => BinaryOpKind::Logical,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssignOp {
     Set,
     Add,

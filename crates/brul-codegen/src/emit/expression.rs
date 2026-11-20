@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use brul_script::Names;
-use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
+use brul_syntax::ast::{
+    AssignOp, BinaryOp, BinaryOpKind, Expr, ExprKind, Position, TemplatePart, UnaryOp,
+};
 use brul_syntax::error::Error;
 use brul_syntax::script::builtins::{self, Argument, Builtin, BuiltinKind};
 use brul_syntax::types::Type;
@@ -209,30 +211,11 @@ pub(super) fn typed(
                     ));
                 }
             };
-            let string_comparison = left_ty == Type::String
-                && matches!(
-                    op,
-                    BinaryOp::Eq
-                        | BinaryOp::NotEq
-                        | BinaryOp::Lt
-                        | BinaryOp::Gt
-                        | BinaryOp::Le
-                        | BinaryOp::Ge
-                );
-            let ty = if matches!(
-                op,
-                BinaryOp::Eq
-                    | BinaryOp::NotEq
-                    | BinaryOp::Lt
-                    | BinaryOp::Gt
-                    | BinaryOp::Le
-                    | BinaryOp::Ge
-                    | BinaryOp::And
-                    | BinaryOp::Or
-            ) {
-                Type::Bool
-            } else {
-                left_ty
+            let string_comparison =
+                left_ty == Type::String && matches!(op.kind(), BinaryOpKind::Comparison);
+            let ty = match op.kind() {
+                BinaryOpKind::Comparison | BinaryOpKind::Logical => Type::Bool,
+                BinaryOpKind::Arithmetic => left_ty,
             };
             let code = if string_comparison {
                 format!("({lhs}).as_str() {operator} ({rhs}).as_str()")
