@@ -1,7 +1,8 @@
 use brul_gpu::{clip_set, decoration_instances, shape_instances};
 use brul_gui::{
-    CaretPosition, ClipRect, Color, Dimension, Dirty, Gradient, LayoutStyle, Paint, SelectionRect,
-    Shadow, Size, StyleSet, TextEngine, Widget, WidgetKind, WidgetStyle, WidgetTree,
+    CaretPosition, ClipRect, Color, Dimension, Dirty, DrawCommand, Gradient, LayoutStyle, Paint,
+    SelectionRect, Shadow, Size, StyleSet, TextEngine, Widget, WidgetKind, WidgetStyle, WidgetTree,
+    draw_commands,
 };
 
 fn snapshot(style: WidgetStyle, border_width: u32) -> brul_gui::WidgetSnapshot {
@@ -216,6 +217,71 @@ fn input_decorations_become_unfilled_shapes() {
     assert_eq!(shapes[1].fill[3], 1.0);
     assert_eq!(shapes[1].params[1], 0.0);
     assert_eq!(shapes[1].padding[0], 0.0);
+}
+
+#[test]
+fn instances_are_a_projection_of_the_draw_commands() {
+    let mut snapshot = snapshot(
+        WidgetStyle {
+            background: Paint::Color(Color::rgb(255, 0, 0)),
+            ..WidgetStyle::default()
+        },
+        0,
+    );
+    let node = &mut snapshot.nodes[0];
+    node.kind = WidgetKind::Input;
+    node.content_x = 3;
+    node.content_y = 5;
+    node.selection = vec![SelectionRect {
+        x: 1,
+        y: 2,
+        width: 4,
+        height: 6,
+    }];
+    node.caret = Some(CaretPosition {
+        x: 7,
+        y: 1,
+        height: 9,
+    });
+    let clips = brul_gpu::ClipSet::default();
+
+    let mut commands = Vec::new();
+    draw_commands(&snapshot, &Dirty::all(), &mut commands);
+    let shapes = shape_instances(&snapshot, &clips, &Dirty::all());
+    let decor = decoration_instances(&snapshot, &clips, &Dirty::all());
+
+    let command_shapes: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            DrawCommand::Shape(shape) => Some(shape),
+            _ => None,
+        })
+        .collect();
+    let command_rects: Vec<_> = commands
+        .iter()
+        .filter_map(|command| match command {
+            DrawCommand::Rect(rect) => Some(rect),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(shapes.len(), command_shapes.len());
+    assert_eq!(decor.len(), command_rects.len());
+    let instance = &shapes[0];
+    let command = command_shapes[0];
+    assert_eq!(
+        instance.bounds,
+        [
+            command.rect.x as f32,
+            command.rect.y as f32,
+            command.rect.width as f32,
+            command.rect.height as f32,
+        ]
+    );
+    assert_eq!(instance.params[3], command.opacity);
+    for (instance, command) in decor.iter().zip(command_rects) {
+        assert_eq!(instance.bounds, command.rect.map(|value| value as f32));
+    }
 }
 
 #[test]

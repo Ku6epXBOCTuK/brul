@@ -1,9 +1,10 @@
-use crate::atlas::{Atlas, AtlasFormat};
+use crate::atlas::Atlas;
+use crate::draw::{
+    DrawCommand, GlyphCommand, ImageCommand, RectCommand, ShapeCommand, draw_commands,
+};
 use crate::rect::{ClipRect, Rect};
 use crate::widget::Dirty;
-use crate::{Color, Image, WidgetSnapshot, WidgetSnapshotNode};
-
-use std::rc::Rc;
+use crate::{Color, Shadow, WidgetSnapshot, WidgetSnapshotNode};
 
 #[derive(Clone, Debug)]
 pub struct Frame {
@@ -89,79 +90,46 @@ impl Frame {
             self.clear_region(clip);
         }
 
-        for node in &snapshot.nodes {
-            if paint_clip(node, clip).is_some() {
-                self.paint_node(node, atlas, clip, shapes, content);
+        let mut commands = Vec::new();
+        draw_commands(snapshot, dirty, &mut commands);
+        for command in &commands {
+            match command {
+                DrawCommand::Shape(shape) if shapes => self.paint_shape(snapshot, shape, clip),
+                DrawCommand::Glyph(glyph) if content => {
+                    self.paint_glyph(snapshot, glyph, atlas, clip)
+                }
+                DrawCommand::Image(image) if content => self.paint_image(snapshot, image, clip),
+                DrawCommand::Rect(decoration) => self.paint_decoration(snapshot, decoration, clip),
+                _ => {}
             }
         }
     }
 
-    fn paint_node(
+    fn paint_shape(&mut self, snapshot: &WidgetSnapshot, shape: &ShapeCommand, clip: Clip) {
+        let node = &snapshot.nodes[shape.node];
+        if let Some(shadow) = shape.shadow {
+            self.paint_shadow(node, &shape.rect, shadow, shape.opacity, clip);
+        }
+        if shape.draw_fill {
+            self.paint_rect(&shape.rect, shape.opacity, clip, &node.clips);
+        }
+    }
+
+    fn paint_shadow(
         &mut self,
         node: &WidgetSnapshotNode,
-        atlas: &Atlas,
+        rect: &Rect,
+        shadow: Shadow,
+        opacity: f32,
         clip: Clip,
-        shapes: bool,
-        content: bool,
     ) {
-        let opacity = opacity(node.style.opacity);
-        if shapes {
-            let rect = Rect::new(node.x, node.y, node.width, node.height)
-                .with_radius(node.style.border_radius)
-                .with_fill(node.style.background)
-                .with_border(node.border_width, node.style.border);
-            self.paint_shadow(node, &rect, opacity, clip);
-            self.paint_rect(&rect, opacity, clip, &node.clips);
-        }
-
-        match node.kind {
-            crate::WidgetKind::Text => {
-                if content && let Some(text) = &node.text {
-                    self.paint_text(node, text, atlas, opacity, clip);
-                }
-            }
-            crate::WidgetKind::Image => {
-                if content && let Some(image) = &node.image {
-                    self.paint_image(node, image, opacity, clip);
-                }
-            }
-            crate::WidgetKind::Input => {
-                self.paint_selection(node, &node.selection, opacity, clip);
-                if content && let Some(text) = &node.text {
-                    self.paint_text(node, text, atlas, opacity, clip);
-                }
-                if let Some(preedit) = &node.preedit
-                    && let Some(caret) = node.caret
-                {
-                    if content {
-                        self.paint_preedit(node, preedit, caret, atlas, opacity, clip);
-                    }
-                    self.paint_preedit_underline(node, preedit, caret, opacity, clip);
-                }
-                if let Some(caret) = node.caret {
-                    self.paint_caret(node, caret, opacity, clip);
-                }
-            }
-            crate::WidgetKind::View | crate::WidgetKind::Structure => {}
-        }
-    }
-
-    fn paint_shadow(&mut self, node: &WidgetSnapshotNode, rect: &Rect, opacity: f32, clip: Clip) {
-        let shadow = node.style.shadow;
-        if shadow.color.a == 0 || rect.width == 0 || rect.height == 0 {
-            return;
-        }
         let Some(area) = paint_clip(node, clip) else {
             return;
         };
-        let clips = &node.clips;
         for y in area.top..area.bottom {
             for x in area.left..area.right {
                 let coverage = shadow.coverage(x as i32, y as i32, rect);
-                if coverage <= 0.0 {
-                    continue;
-                }
-                if !clips.is_empty() && !visible(clips, x as i32, y as i32) {
+                if coverage <= 0.0 || !visible(&node.clips, x as i32, y as i32) {
                     continue;
                 }
                 self.blend(x as i32, y as i32, shadow.color, opacity * coverage);
@@ -202,233 +170,103 @@ impl Frame {
         }
     }
 
-    fn paint_text(
+    fn paint_glyph(
         &mut self,
-        node: &WidgetSnapshotNode,
-        text: &crate::TextLayout,
+        snapshot: &WidgetSnapshot,
+        glyph: &GlyphCommand,
         atlas: &Atlas,
-        opacity: f32,
         clip: Clip,
     ) {
-        self.paint_glyphs(node, text, 0, atlas, opacity, clip);
-    }
-
-    fn paint_glyphs(
-        &mut self,
-        node: &WidgetSnapshotNode,
-        text: &crate::TextLayout,
-        shift: i32,
-        atlas: &Atlas,
-        opacity: f32,
-        clip: Clip,
-    ) {
+        let node = &snapshot.nodes[glyph.node];
         let Some(clip) = node_clip(node, clip) else {
             return;
         };
-        let color = node.style.text;
-        let offset = node
-            .style
-            .vertical_align
-            .offset(node.content_height, text.size.height) as i32
-            - node.scroll;
-        for glyph in &text.glyphs {
-            let slot = glyph.slot;
-            let origin_x = node.content_x.saturating_add(shift).saturating_add(glyph.x);
-            let origin_y = node
-                .content_y
-                .saturating_add(glyph.y)
-                .saturating_add(offset);
-            for row in 0..slot.height {
-                for column in 0..slot.width {
-                    let x = origin_x.saturating_add(column as i32);
-                    let y = origin_y.saturating_add(row as i32);
-                    if !clip.contains(i64::from(x), i64::from(y)) || !visible(&node.clips, x, y) {
-                        continue;
-                    }
-                    let index = ((slot.y + row) as usize * atlas.width() as usize
-                        + (slot.x + column) as usize)
-                        * 4;
-                    let pixels = atlas.pixels();
-                    let (red, green, blue, alpha) = match slot.format {
-                        AtlasFormat::Mask => (
-                            color.r,
-                            color.g,
-                            color.b,
-                            (u16::from(pixels[index + 3]) * u16::from(color.a) / 255) as u8,
-                        ),
-                        AtlasFormat::Color => (
-                            pixels[index],
-                            pixels[index + 1],
-                            pixels[index + 2],
-                            pixels[index + 3],
-                        ),
-                    };
-                    self.blend_rgba(x, y, Color::rgba(red, green, blue, alpha), opacity);
+        let slot = glyph.slot;
+        let pixels = atlas.pixels();
+        for row in 0..slot.height {
+            for column in 0..slot.width {
+                let x = glyph.x.saturating_add(column as i32);
+                let y = glyph.y.saturating_add(row as i32);
+                if !clip.contains(i64::from(x), i64::from(y)) || !visible(&node.clips, x, y) {
+                    continue;
                 }
+                let index = ((slot.y + row) as usize * atlas.width() as usize
+                    + (slot.x + column) as usize)
+                    * 4;
+                let color = match glyph.tint {
+                    Some(tint) => Color::rgba(
+                        tint.r,
+                        tint.g,
+                        tint.b,
+                        (u16::from(pixels[index + 3]) * u16::from(tint.a) / 255) as u8,
+                    ),
+                    None => Color::rgba(
+                        pixels[index],
+                        pixels[index + 1],
+                        pixels[index + 2],
+                        pixels[index + 3],
+                    ),
+                };
+                self.blend_rgba(x, y, color, glyph.opacity);
             }
         }
     }
 
-    fn paint_selection(
+    fn paint_decoration(
         &mut self,
-        node: &WidgetSnapshotNode,
-        selection: &[crate::SelectionRect],
-        opacity: f32,
+        snapshot: &WidgetSnapshot,
+        decoration: &RectCommand,
         clip: Clip,
     ) {
+        let node = &snapshot.nodes[decoration.node];
         let Some(clip) = node_clip(node, clip) else {
             return;
         };
-        let height = node.text.as_ref().map_or(0, |text| text.size.height as i32);
-        let offset = node
-            .style
-            .vertical_align
-            .offset(node.content_height, height as u32) as i32
-            - node.scroll;
-        let color = node.style.text.with_alpha(60);
-        for rect in selection {
-            let origin_x = node.content_x.saturating_add(rect.x);
-            let right = origin_x.saturating_add(rect.width);
-            let top = node.content_y.saturating_add(rect.y).saturating_add(offset);
-            let bottom = top.saturating_add(rect.height);
-            for y in top..bottom {
-                for x in origin_x..right {
-                    if !clip.contains(i64::from(x), i64::from(y)) || !visible(&node.clips, x, y) {
-                        continue;
-                    }
-                    self.blend_rgba(x, y, color, opacity);
-                }
-            }
-        }
-    }
-
-    fn paint_preedit(
-        &mut self,
-        node: &WidgetSnapshotNode,
-        preedit: &crate::TextLayout,
-        caret: crate::CaretPosition,
-        atlas: &Atlas,
-        opacity: f32,
-        clip: Clip,
-    ) {
-        let shift = caret.x.saturating_sub(preedit.size.width as i32);
-        self.paint_glyphs(node, preedit, shift, atlas, opacity, clip);
-    }
-
-    fn paint_preedit_underline(
-        &mut self,
-        node: &WidgetSnapshotNode,
-        preedit: &crate::TextLayout,
-        caret: crate::CaretPosition,
-        opacity: f32,
-        clip: Clip,
-    ) {
-        let shift = caret.x.saturating_sub(preedit.size.width as i32);
-        let Some(clip) = node_clip(node, clip) else {
-            return;
-        };
-        let height = node
-            .text
-            .as_ref()
-            .map_or(caret.y, |text| text.size.height as i32);
-        let offset = node
-            .style
-            .vertical_align
-            .offset(node.content_height, height as u32) as i32
-            - node.scroll;
-        let top = node
-            .content_y
-            .saturating_add(caret.y)
-            .saturating_add(offset)
-            .saturating_add(preedit.size.height as i32)
-            .saturating_sub(1);
-        let left = node.content_x.saturating_add(shift);
-        let right = left.saturating_add(preedit.size.width as i32);
-        for x in left..right {
-            if !clip.contains(i64::from(x), i64::from(top)) || !visible(&node.clips, x, top) {
-                continue;
-            }
-            self.blend_rgba(x, top, node.style.text, opacity);
-        }
-    }
-
-    fn paint_caret(
-        &mut self,
-        node: &WidgetSnapshotNode,
-        caret: crate::CaretPosition,
-        opacity: f32,
-        clip: Clip,
-    ) {
-        let Some(clip) = node_clip(node, clip) else {
-            return;
-        };
-        let color = node.style.text;
-        let height = node
-            .text
-            .as_ref()
-            .map_or(caret.y, |text| text.size.height as i32);
-        let offset = node
-            .style
-            .vertical_align
-            .offset(node.content_height, height as u32) as i32
-            - node.scroll;
-        let origin_x = node.content_x.saturating_add(caret.x);
-        let top = node
-            .content_y
-            .saturating_add(caret.y)
-            .saturating_add(offset);
-        let bottom = top.saturating_add(caret.height);
+        let [left, top, width, height] = decoration.rect;
+        let right = left.saturating_add(width);
+        let bottom = top.saturating_add(height);
         for y in top..bottom {
-            if !clip.contains(i64::from(origin_x), i64::from(y))
-                || !visible(&node.clips, origin_x, y)
-            {
-                continue;
+            for x in left..right {
+                if !clip.contains(i64::from(x), i64::from(y)) || !visible(&node.clips, x, y) {
+                    continue;
+                }
+                self.blend_rgba(x, y, decoration.color, decoration.opacity);
             }
-            self.blend_rgba(origin_x, y, color, opacity);
         }
     }
 
-    fn paint_image(&mut self, node: &WidgetSnapshotNode, image: &Image, opacity: f32, clip: Clip) {
-        if node.content_width == 0 || node.content_height == 0 {
-            return;
-        }
-        let (texture, tint) = match image {
-            Image::Raster(texture) => (Rc::clone(texture), node.style.tint),
-            Image::Vector(vector) => {
-                let current = node.style.tint.unwrap_or(node.style.text);
-                match vector.raster(node.content_width, node.content_height, current) {
-                    Some(texture) => (texture, None),
-                    None => return,
-                }
-            }
-        };
+    fn paint_image(&mut self, snapshot: &WidgetSnapshot, image: &ImageCommand, clip: Clip) {
+        let node = &snapshot.nodes[image.node];
+        let [left, top, raw_width, raw_height] = image.rect;
+        let width = raw_width.max(0) as u32;
+        let height = raw_height.max(0) as u32;
         let Some(area) = Clip::new(
-            i64::from(node.content_x),
-            i64::from(node.content_y),
-            i64::from(node.content_x) + i64::from(node.content_width),
-            i64::from(node.content_y) + i64::from(node.content_height),
+            i64::from(left),
+            i64::from(top),
+            i64::from(left) + i64::from(width),
+            i64::from(top) + i64::from(height),
         )
         .and_then(|bounds| bounds.intersect(clip)) else {
             return;
         };
 
+        let texture = &image.texture;
         for y in area.top..area.bottom {
             for x in area.left..area.right {
                 if !visible(&node.clips, x as i32, y as i32) {
                     continue;
                 }
-                let source_x = ((x - i64::from(node.content_x)) as u64 * u64::from(texture.width())
-                    / u64::from(node.content_width)) as u32;
-                let source_y = ((y - i64::from(node.content_y)) as u64
-                    * u64::from(texture.height())
-                    / u64::from(node.content_height)) as u32;
+                let source_x = ((x - i64::from(left)) as u64 * u64::from(texture.width())
+                    / u64::from(width)) as u32;
+                let source_y = ((y - i64::from(top)) as u64 * u64::from(texture.height())
+                    / u64::from(height)) as u32;
                 let Some(mut color) = texture.color_at(source_x, source_y) else {
                     continue;
                 };
-                if let Some(tint) = tint {
+                if let Some(tint) = image.tint {
                     color = color.multiply(tint);
                 }
-                self.blend(x as i32, y as i32, color, opacity);
+                self.blend(x as i32, y as i32, color, image.opacity);
             }
         }
     }
@@ -573,14 +411,6 @@ fn dirty_region(snapshot: &WidgetSnapshot, dirty: &Dirty) -> Option<Clip> {
         });
     }
     region
-}
-
-fn opacity(value: f32) -> f32 {
-    if value.is_finite() {
-        value.clamp(0.0, 1.0)
-    } else {
-        1.0
-    }
 }
 
 fn pixel_len(width: u32, height: u32) -> usize {
