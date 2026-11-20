@@ -1,4 +1,5 @@
 use brul_gui::{Color, Gradient, Rect};
+use brul_style::{Color as StyleColor, mix};
 
 const RED: Color = Color::rgb(255, 0, 0);
 const BLUE: Color = Color::rgb(0, 0, 255);
@@ -27,6 +28,17 @@ fn ninety_degrees_runs_left_to_right() {
 
     assert!(gradient.at(&rect, 0, 0).r > gradient.at(&rect, 3, 0).r);
     assert!(gradient.at(&rect, 3, 0).b > gradient.at(&rect, 0, 0).b);
+}
+
+#[test]
+fn a_midpoint_matches_color_mix() {
+    let rect = Rect::new(0, 0, 1, 1);
+    let expected = mix(StyleColor::rgb(255, 0, 0), StyleColor::rgb(0, 0, 255), 50.0);
+
+    assert_eq!(
+        linear(90.0).at(&rect, 0, 0),
+        Color::rgba(expected.r, expected.g, expected.b, expected.a)
+    );
 }
 
 #[test]

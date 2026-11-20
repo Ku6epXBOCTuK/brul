@@ -38,23 +38,6 @@ impl Gradient {
         let dx = x as f32 + 0.5 - center_x;
         let dy = y as f32 + 0.5 - center_y;
 
-        blend(
-            from,
-            to,
-            ((dx * sin - dy * cos) / length + 0.5).clamp(0.0, 1.0),
-        )
+        from.mix(to, ((dx * sin - dy * cos) / length + 0.5).clamp(0.0, 1.0))
     }
-}
-
-fn blend(from: Color, to: Color, t: f32) -> Color {
-    fn channel(from: u8, to: u8, t: f32) -> u8 {
-        (f32::from(from) + (f32::from(to) - f32::from(from)) * t).round() as u8
-    }
-
-    Color::rgba(
-        channel(from.r, to.r, t),
-        channel(from.g, to.g, t),
-        channel(from.b, to.b, t),
-        channel(from.a, to.a, t),
-    )
 }

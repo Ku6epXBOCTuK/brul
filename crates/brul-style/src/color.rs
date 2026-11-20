@@ -76,7 +76,7 @@ fn alpha(color: Color, amount: f64) -> Color {
     }
 }
 
-fn mix(from: Color, to: Color, amount: f64) -> Color {
+pub fn mix(from: Color, to: Color, amount: f64) -> Color {
     let share = amount / 100.0;
     let to_weight = share * f64::from(to.a);
     let from_weight = (1.0 - share) * f64::from(from.a);

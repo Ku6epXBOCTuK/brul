@@ -47,7 +47,7 @@ impl Tween for f32 {
 
 impl Tween for Color {
     fn tween(self, to: Self, progress: f32) -> Self {
-        self.lerp(to, progress)
+        self.mix(to, progress)
     }
 }
 
@@ -96,7 +96,7 @@ mod tests {
         assert_eq!(0.0_f32.tween(10.0, 0.5), 5.0);
         assert_eq!(
             Color::BLACK.tween(Color::WHITE, 0.5),
-            Color::rgb(128, 128, 128)
+            Color::rgb(112, 112, 111)
         );
     }
 }

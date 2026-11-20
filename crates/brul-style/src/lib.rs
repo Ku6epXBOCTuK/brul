@@ -26,6 +26,7 @@ pub use ast::{
     Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Property, State, Stylesheet,
     Theme, ThemeEntry, Value,
 };
+pub use color::mix;
 pub use grid::{
     Area, AreaTemplate, GridLine, LinePlacement, ParseGridError, RepeatCount, TrackSize,
 };

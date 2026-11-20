@@ -1,3 +1,5 @@
+use brul_style::Color as StyleColor;
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Color {
     pub r: u8,
@@ -23,13 +25,13 @@ impl Color {
         Self { a, ..self }
     }
 
-    pub fn lerp(self, to: Self, progress: f32) -> Self {
-        Self {
-            r: lerp_channel(self.r, to.r, progress),
-            g: lerp_channel(self.g, to.g, progress),
-            b: lerp_channel(self.b, to.b, progress),
-            a: lerp_channel(self.a, to.a, progress),
-        }
+    pub fn mix(self, to: Self, progress: f32) -> Self {
+        brul_style::mix(
+            self.into(),
+            to.into(),
+            f64::from(progress.clamp(0.0, 1.0)) * 100.0,
+        )
+        .into()
     }
 
     pub fn multiply(self, other: Self) -> Self {
@@ -42,12 +44,28 @@ impl Color {
     }
 }
 
-fn multiply_channel(left: u8, right: u8) -> u8 {
-    ((u16::from(left) * u16::from(right) + 127) / 255) as u8
+impl From<Color> for StyleColor {
+    fn from(value: Color) -> Self {
+        Self {
+            r: value.r,
+            g: value.g,
+            b: value.b,
+            a: value.a,
+        }
+    }
 }
 
-fn lerp_channel(from: u8, to: u8, progress: f32) -> u8 {
-    let from = f32::from(from);
-    let to = f32::from(to);
-    (from + (to - from) * progress.clamp(0.0, 1.0)).round() as u8
+impl From<StyleColor> for Color {
+    fn from(value: StyleColor) -> Self {
+        Self {
+            r: value.r,
+            g: value.g,
+            b: value.b,
+            a: value.a,
+        }
+    }
+}
+
+fn multiply_channel(left: u8, right: u8) -> u8 {
+    ((u16::from(left) * u16::from(right) + 127) / 255) as u8
 }
