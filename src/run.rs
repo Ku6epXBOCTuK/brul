@@ -354,7 +354,9 @@ mod tests {
     use brul_gui::{Widget, WidgetEvent, WidgetId};
 
     use crate::ui::{CommandHost, Ui};
-    use crate::{Binding, BindingTarget, Built, ComponentHandle, Handler, HandlerEvent, Value};
+    use crate::{
+        Binding, BindingTarget, Built, ComponentHandle, Dyn, Handler, HandlerEvent, Value,
+    };
 
     const NAMES: &[&str] = &["name"];
 
@@ -366,33 +368,33 @@ mod tests {
         Ok(())
     }
 
-    fn noop(_: &mut Component, _: &str, _: Vec<Value>) -> Result<Value, crate::Error> {
-        Ok(Value::Null)
+    fn noop(_: &mut Component, _: &str, _: Vec<Dyn>) -> Result<Dyn, crate::Error> {
+        Ok(Dyn::null())
     }
 
     fn declares_name(component: &mut Component) -> Result<(), crate::Error> {
         component.declare("name", Value::String("from script".into()), false)
     }
 
-    fn mark(component: &mut Component, name: &str, _: Vec<Value>) -> Result<Value, crate::Error> {
+    fn mark(component: &mut Component, name: &str, _: Vec<Dyn>) -> Result<Dyn, crate::Error> {
         if name != "mark" {
             return Err(crate::Error::UnknownFunction(name.to_owned()));
         }
         component.assign("name", Value::String("called".into()))?;
-        Ok(Value::Null)
+        Ok(Dyn::null())
     }
 
     fn mark_with_arg(
         component: &mut Component,
         name: &str,
-        arguments: Vec<Value>,
-    ) -> Result<Value, crate::Error> {
+        arguments: Vec<Dyn>,
+    ) -> Result<Dyn, crate::Error> {
         if name != "mark" {
             return Err(crate::Error::UnknownFunction(name.to_owned()));
         }
-        let label = arguments[0].clone();
+        let label = Value::from(arguments[0].clone());
         component.assign("name", label)?;
-        Ok(Value::Null)
+        Ok(Dyn::null())
     }
 
     fn generated_view(
@@ -723,12 +725,12 @@ mod tests {
         assert!(runtime.uis.is_empty());
     }
 
-    fn key_view(component: &ComponentHandle, function: &str) -> Result<Built, ViewError> {
+    fn key_view(component: &ComponentHandle, call: crate::EventCall) -> Result<Built, ViewError> {
         let widget = Widget::text("");
         Ok(Built {
             widget,
             bindings: Vec::new(),
-            handlers: vec![Handler::new(component, None, HandlerEvent::Key, function)],
+            handlers: vec![Handler::new(component, None, HandlerEvent::Key, call)],
             props: Vec::new(),
         })
     }
@@ -738,7 +740,7 @@ mod tests {
         _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
-        key_view(component, "handleKey")
+        key_view(component, key_exit)
     }
 
     fn settings_view(
@@ -746,23 +748,29 @@ mod tests {
         _build: &mut Build,
         component: &ComponentHandle,
     ) -> Result<Built, ViewError> {
-        key_view(component, "handleSettingsKey")
+        key_view(component, key_exit)
     }
 
-    fn key_exit(
+    fn key_exit(component: &mut Component, arguments: &[Dyn]) -> Result<Dyn, crate::Error> {
+        if arguments[0].field("code")?.as_text()? == "Escape" {
+            <crate::builtins::Exit as crate::HostCommand>::invoke(component, ())?;
+        }
+        Ok(Dyn::null())
+    }
+
+    fn key_exit_dispatch(
         component: &mut Component,
         name: &str,
-        arguments: Vec<Value>,
-    ) -> Result<Value, crate::Error> {
+        arguments: Vec<Dyn>,
+    ) -> Result<Dyn, crate::Error> {
         if name != "handleKey" && name != "handleSettingsKey" {
             return Err(crate::Error::UnknownFunction(name.to_owned()));
         }
-        let event = arguments[0].clone();
-        let code = crate::eval::read_field(&event, "code")?;
+        let code = crate::eval::read_field(&Value::from(arguments[0].clone()), "code")?;
         if matches!(code, Value::String(text) if text.as_ref() == "Escape") {
             crate::eval::call(component, "exit", Vec::new())?;
         }
-        Ok(Value::Null)
+        Ok(Dyn::null())
     }
 
     #[test]
@@ -771,7 +779,7 @@ mod tests {
             &["handleKey", "handleSettingsKey", "exit", "ev", "code"];
         let script = Script::Generated {
             init: noop_init,
-            dispatch: key_exit,
+            dispatch: key_exit_dispatch,
         };
         let component = generated_component(names, Some(script), &[]).expect("component");
         let commands = Rc::new(RefCell::new(Vec::new()));

@@ -5,6 +5,7 @@ use std::hash::{BuildHasherDefault, Hasher};
 use brul_reactive::Signal;
 use brul_syntax::ast::Position;
 
+use crate::dynamic::Dyn;
 use crate::environment::Environment;
 use crate::error::Error;
 use crate::host::{AnyHost, Host};
@@ -43,6 +44,7 @@ pub struct Component {
     state: Option<Box<dyn Any>>,
     host: Option<Box<dyn AnyHost>>,
     pending_every: Vec<(f64, String)>,
+    event_calls: HashMap<String, crate::EventCall>,
     scope: Scope,
     // NOTE: environment frames and host functions are not signals, so their
     // changes wake every reader of them through this one coarse signal
@@ -61,6 +63,7 @@ impl Default for Component {
             state: None,
             host: None,
             pending_every: Vec::new(),
+            event_calls: HashMap::new(),
             scope: Scope::root(),
             external: Signal::new(0),
         }
@@ -99,6 +102,14 @@ impl Component {
             .and_then(|host| (&mut **host as &mut dyn std::any::Any).downcast_mut())
     }
 
+    pub fn register_event_call(&mut self, name: &str, call: crate::EventCall) {
+        self.event_calls.insert(name.to_owned(), call);
+    }
+
+    pub fn event_call(&self, name: &str) -> Option<crate::EventCall> {
+        self.event_calls.get(name).copied()
+    }
+
     pub fn set_dispatch(&mut self, dispatch: crate::ScriptDispatch) {
         self.dispatch = Some(dispatch);
     }
@@ -107,7 +118,7 @@ impl Component {
         self.typed_call = Some(call);
     }
 
-    pub fn call_typed(&mut self, message: &dyn std::any::Any) -> Result<Value, Error> {
+    pub fn call_typed(&mut self, message: &dyn std::any::Any) -> Result<Dyn, Error> {
         match self.typed_call {
             Some(call) => call(self, message),
             None => Err(Error::Unsupported("typed script call")),
@@ -172,7 +183,11 @@ impl Component {
 
     pub fn call_function(&mut self, name: &str, arguments: Vec<Value>) -> Result<Value, Error> {
         match self.dispatch {
-            Some(dispatch) => dispatch(self, name, arguments),
+            Some(dispatch) => Ok(Value::from(dispatch(
+                self,
+                name,
+                arguments.into_iter().map(Dyn::from).collect(),
+            )?)),
             None => Err(Error::UnknownFunction(name.to_owned())),
         }
     }

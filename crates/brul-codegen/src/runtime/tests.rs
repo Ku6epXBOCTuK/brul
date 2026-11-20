@@ -2,7 +2,9 @@ use super::binding::offset_value;
 use super::event::EventHost;
 use super::*;
 use brul_gui::{Texture, Widget, WidgetId, WidgetTree};
-use brul_script::{Component, Error as ScriptError, Host, Scope, Value};
+use brul_script::{
+    Component, Dyn, Error as ScriptError, EventCall, Host, Scope, Value, noop_event,
+};
 use brul_syntax::markup::PropType;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -18,8 +20,8 @@ macro_rules! typed_expr {
 
 macro_rules! expr {
     ($name:literal) => {{
-        fn read(component: &mut Component) -> Result<Value, ScriptError> {
-            component.read($name)
+        fn read(component: &mut Component) -> Result<Dyn, ScriptError> {
+            Ok(Dyn::from(component.read($name)?))
         }
         read
     }};
@@ -51,11 +53,15 @@ fn component() -> Component {
     component
 }
 
-fn noop(_: &mut Component, _: &str, _: Vec<Value>) -> Result<Value, ScriptError> {
-    Ok(Value::Null)
+fn noop(_: &mut Component, _: &str, _: Vec<Dyn>) -> Result<Dyn, ScriptError> {
+    Ok(Dyn::null())
 }
 
-fn failing(_: &mut Component, _: &str, _: Vec<Value>) -> Result<Value, ScriptError> {
+fn failing_event(_: &mut Component, _: &[Dyn]) -> Result<Dyn, ScriptError> {
+    Err(ScriptError::DivisionByZero)
+}
+
+fn failing(_: &mut Component, _: &str, _: Vec<Dyn>) -> Result<Dyn, ScriptError> {
     Err(ScriptError::DivisionByZero)
 }
 
@@ -147,7 +153,7 @@ fn an_event_raised_from_an_expression_is_delivered_after_the_expression_returns(
     handle.borrow_mut().set_host(EventHost {
         events: vec![ComponentEvent {
             name: "go",
-            function: "read",
+            call: noop_event,
             params: &[],
             component: Rc::clone(&handle),
         }],
@@ -157,16 +163,10 @@ fn an_event_raised_from_an_expression_is_delivered_after_the_expression_returns(
 
     let PendingEvent {
         component,
-        function,
+        call,
         arguments,
     } = take_event().expect("the event is queued");
-    assert_eq!(function, "read");
-    assert!(
-        component
-            .borrow_mut()
-            .call_function(function, arguments)
-            .is_ok()
-    );
+    assert!(call(&mut component.borrow_mut(), &arguments).is_ok());
 }
 
 #[test]
@@ -290,13 +290,13 @@ fn event_host(events: Vec<ComponentEvent>) -> EventHost {
 }
 
 fn event(
-    function: &'static str,
+    call: EventCall,
     params: &'static [PropType],
     component: &ComponentHandle,
 ) -> ComponentEvent {
     ComponentEvent {
         name: "click",
-        function,
+        call,
         params,
         component: Rc::clone(component),
     }
@@ -305,7 +305,7 @@ fn event(
 #[test]
 fn event_host_rejects_an_unknown_event() {
     let component = Rc::new(RefCell::new(Component::new()));
-    let mut host = event_host(vec![event("on_click", &[], &component)]);
+    let mut host = event_host(vec![event(noop_event, &[], &component)]);
     let error = host.call("hover", &[]).unwrap_err();
     assert!(matches!(error, ScriptError::UnknownFunction(ref name) if name == "hover"));
 }
@@ -313,7 +313,7 @@ fn event_host_rejects_an_unknown_event() {
 #[test]
 fn event_host_checks_the_arity_before_the_call() {
     let component = Rc::new(RefCell::new(Component::new()));
-    let mut host = event_host(vec![event("on_click", &[PropType::Bool], &component)]);
+    let mut host = event_host(vec![event(noop_event, &[PropType::Bool], &component)]);
     let error = host.call("click", &[]).unwrap_err();
     assert!(matches!(
         error,
@@ -328,7 +328,7 @@ fn event_host_checks_the_arity_before_the_call() {
 #[test]
 fn event_host_checks_the_argument_types() {
     let component = Rc::new(RefCell::new(Component::new()));
-    let mut host = event_host(vec![event("on_click", &[PropType::Bool], &component)]);
+    let mut host = event_host(vec![event(noop_event, &[PropType::Bool], &component)]);
     let error = host.call("click", &[Value::Number(1.0)]).unwrap_err();
     assert!(matches!(error, ScriptError::EventArgument { .. }));
 }
@@ -337,7 +337,7 @@ fn event_host_checks_the_argument_types() {
 fn event_host_runs_the_component_function() {
     let component = Rc::new(RefCell::new(Component::new()));
     component.borrow_mut().set_dispatch(noop);
-    let mut host = event_host(vec![event("on_click", &[], &component)]);
+    let mut host = event_host(vec![event(noop_event, &[], &component)]);
     assert_eq!(host.call("click", &[]), Ok(Value::Null));
 }
 
@@ -345,17 +345,15 @@ fn event_host_runs_the_component_function() {
 fn event_host_queues_the_body_and_leaves_errors_to_the_delivery() {
     let component = Rc::new(RefCell::new(Component::new()));
     component.borrow_mut().set_dispatch(failing);
-    let mut host = event_host(vec![event("on_click", &[], &component)]);
+    let mut host = event_host(vec![event(failing_event, &[], &component)]);
     assert_eq!(host.call("click", &[]), Ok(Value::Null));
     let PendingEvent {
         component,
-        function,
+        call,
         arguments,
     } = take_event().expect("queued");
     assert_eq!(
-        component
-            .borrow_mut()
-            .call_function(function, arguments)
+        call(&mut component.borrow_mut(), &arguments)
             .unwrap_err()
             .reason(),
         ScriptError::DivisionByZero.reason()

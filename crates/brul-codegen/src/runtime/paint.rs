@@ -30,6 +30,7 @@ pub(crate) fn texture(
             return None;
         }
     };
+    let value = Value::from(value);
     match &value {
         Value::Image(path) => load_texture(Path::new(path.as_ref()), textures),
         Value::ImageBytes(bytes) => match Image::from_bytes(bytes) {

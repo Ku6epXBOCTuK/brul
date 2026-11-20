@@ -106,8 +106,11 @@ impl From<f64> for Value {
 
 pub fn items(value: &Value) -> Items {
     match value {
-        Value::Array(items) => (**items).clone(),
-        Value::Object(fields) => fields.iter().map(|(_, value)| value.clone()).collect(),
+        Value::Array(items) => items.iter().cloned().map(crate::Dyn::from).collect(),
+        Value::Object(fields) => fields
+            .iter()
+            .map(|(_, value)| crate::Dyn::from(value.clone()))
+            .collect(),
         _ => Vec::new(),
     }
 }

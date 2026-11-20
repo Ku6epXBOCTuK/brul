@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use brul_gui::WidgetId;
-use brul_script::{Error as ScriptError, Host, Value};
+use brul_script::{Dyn, Error as ScriptError, EventCall, Host, Value};
 use brul_syntax::markup::PropType;
 
 use super::ComponentHandle;
@@ -83,7 +83,7 @@ impl HandlerEvent {
 pub struct Handler {
     pub widget: Option<WidgetId>,
     pub event: HandlerEvent,
-    pub function: String,
+    pub call: EventCall,
     pub component: ComponentHandle,
 }
 
@@ -92,12 +92,12 @@ impl Handler {
         component: &ComponentHandle,
         widget: Option<WidgetId>,
         event: HandlerEvent,
-        function: &str,
+        call: EventCall,
     ) -> Self {
         Self {
             widget,
             event,
-            function: function.to_owned(),
+            call,
             component: Rc::clone(component),
         }
     }
@@ -105,15 +105,15 @@ impl Handler {
 
 pub struct ComponentEvent {
     pub name: &'static str,
-    pub function: &'static str,
+    pub call: EventCall,
     pub params: &'static [PropType],
     pub component: ComponentHandle,
 }
 
 pub struct PendingEvent {
     pub component: ComponentHandle,
-    pub function: &'static str,
-    pub arguments: Vec<Value>,
+    pub call: EventCall,
+    pub arguments: Vec<Dyn>,
 }
 
 thread_local! {
@@ -152,8 +152,8 @@ impl Host for EventHost {
         PENDING.with(|pending| {
             pending.borrow_mut().push_back(PendingEvent {
                 component: Rc::clone(&event.component),
-                function: event.function,
-                arguments: arguments.to_vec(),
+                call: event.call,
+                arguments: arguments.iter().cloned().map(Dyn::from).collect(),
             });
         });
         Ok(Value::Null)

@@ -54,7 +54,7 @@ pub fn closure(
 ) -> Result<String, Error> {
     let (locals, scopes) = scope_locals(definitions, current);
     Ok(format!(
-        "|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ {locals}let value = {}; Ok(value) }}",
+        "|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> {{ {locals}let value = {}; Ok(value) }}",
         operation_in(value, names, state, props, &scopes)?
     ))
 }
@@ -73,7 +73,7 @@ pub fn typed_closure(
         Type::Number => "f64",
         Type::String => "String",
         Type::Bool => "bool",
-        _ => "brul::Value",
+        _ => "brul::Dyn",
     };
     let body = match typed(value, names, state, props, &scopes)? {
         Some((code, found)) if &found == ty => code,
@@ -98,10 +98,10 @@ pub fn operation(
 
 pub(super) fn wrap_typed(code: String, ty: &Type) -> String {
     match ty {
-        Type::Number => format!("brul::Value::Number({code})"),
-        Type::String => format!("brul::Value::String(({code}).into())"),
-        Type::Bool => format!("brul::Value::Bool({code})"),
-        Type::Null | Type::Void => "brul::Value::Null".to_owned(),
+        Type::Number => format!("brul::Dyn::num({code})"),
+        Type::String => format!("brul::Dyn::text({code})"),
+        Type::Bool => format!("brul::Dyn::flag({code})"),
+        Type::Null | Type::Void => "brul::Dyn::null()".to_owned(),
         _ => code,
     }
 }
@@ -109,8 +109,8 @@ pub(super) fn wrap_typed(code: String, ty: &Type) -> String {
 pub(super) fn convert(code: &str, ty: &Type) -> String {
     match ty {
         Type::Number | Type::String | Type::Bool => format!("(&{code}).try_into()?"),
-        Type::Null => format!("{{ let _ = {code}; () }}"),
-        _ => code.to_owned(),
+        Type::Null => format!("({code}).unit()?"),
+        Type::Object | Type::Image | Type::Array(_) | Type::Void => code.to_owned(),
     }
 }
 
@@ -133,20 +133,18 @@ fn prop_typed(
     position: brul_syntax::ast::Position,
     names: &Names<'_>,
 ) -> Result<Option<(String, Type)>, Error> {
-    let pattern = match ty {
-        Type::Number => "brul::Value::Number(value) => value",
-        Type::String => "brul::Value::String(value) => value.to_string()",
-        Type::Bool => "brul::Value::Bool(value) => value",
-        Type::Null => "brul::Value::Null => ()",
+    let convertor = match ty {
+        Type::Number => "f64::try_from",
+        Type::String => "String::try_from",
+        Type::Bool => "bool::try_from",
+        Type::Null => "<()>::try_from",
         _ => return Ok(None),
     };
     let id = names::variable_expr(name, position, names)?;
     Ok(Some((
         format!(
-            "match component.read_id({id})? {{ {pattern}, other => return Err(brul::Error::Expected {{ operation: \"read\", expected: {:?}, found: other.type_name() }}.at(brul::ast::Position {{ line: {}, column: {} }})) }}",
-            type_name(ty),
-            position.line,
-            position.column
+            "{{ let value = {convertor}(brul::Dyn::from(component.read_id({id})?)).map_err(|error| error.at(brul::ast::Position {{ line: {}, column: {} }}))?; value }}",
+            position.line, position.column
         ),
         ty.clone(),
     )))
@@ -590,10 +588,10 @@ pub(super) fn operation_in(
         return Ok(wrap_typed(code, &ty));
     }
     Ok(match &expression.kind {
-        ExprKind::Number(value) => format!("brul::Value::Number({value:?})"),
-        ExprKind::String(text) => format!("brul::Value::String({text:?}.into())"),
-        ExprKind::Bool(value) => format!("brul::Value::Bool({value})"),
-        ExprKind::Null => "brul::Value::Null".to_owned(),
+        ExprKind::Number(value) => format!("brul::Dyn::num({value:?})"),
+        ExprKind::String(text) => format!("brul::Dyn::text({text:?})"),
+        ExprKind::Bool(value) => format!("brul::Dyn::flag({value})"),
+        ExprKind::Null => "brul::Dyn::null()".to_owned(),
         ExprKind::Ident(name) => {
             if let Some(read) = scopes.read(name) {
                 read
@@ -601,22 +599,22 @@ pub(super) fn operation_in(
                 read
             } else {
                 format!(
-                    "component.read_id({})?",
+                    "brul::Dyn::from(component.read_id({})?)",
                     names::variable_expr(name, expression.position, names)?
                 )
             }
         }
         ExprKind::Field { target, name } => format!(
-            "brul::eval::read_field(&({}), {name:?})?",
+            "({}).field({name:?})?",
             operation_in(target, names, state, props, scopes)?
         ),
         ExprKind::Index { target, index } => format!(
-            "brul::eval::read_index(&({}), &({}))?",
+            "({}).index(&({}))?",
             operation_in(target, names, state, props, scopes)?,
             operation_in(index, names, state, props, scopes)?
         ),
         ExprKind::Array(items) => format!(
-            "brul::Value::Array(vec![{}].into())",
+            "brul::Dyn::array(vec![{}])",
             operations(items, names, state, props, scopes)?
         ),
         ExprKind::Object(fields) => {
@@ -630,28 +628,28 @@ pub(super) fn operation_in(
                 })
                 .collect::<Result<Vec<_>, Error>>()?
                 .join(", ");
-            format!("brul::Value::Object(vec![{fields}].into())")
+            format!("brul::Dyn::object(vec![{fields}])")
         }
         ExprKind::Template(parts) => {
             let parts = parts
                 .iter()
                 .map(|part| match part {
-                    TemplatePart::Text(text) => Ok(format!("brul::Value::String({text:?}.into())")),
+                    TemplatePart::Text(text) => Ok(format!("brul::Dyn::text({text:?})")),
                     TemplatePart::Expr(expression) => {
                         operation_in(expression, names, state, props, scopes)
                     }
                 })
                 .collect::<Result<Vec<_>, Error>>()?
                 .join(", ");
-            format!("brul::Value::String(brul::eval::template(vec![{parts}])?)")
+            format!("brul::Dyn::template(vec![{parts}])?")
         }
         ExprKind::Call { target, args } => call(target, args, names, state, props, scopes)?,
         ExprKind::Unary { op, operand } => format!(
-            "brul::eval::apply_unary(brul::ast::UnaryOp::{op:?}, {})?",
+            "brul::Dyn::unary(brul::ast::UnaryOp::{op:?}, &({}))?",
             operation_in(operand, names, state, props, scopes)?
         ),
         ExprKind::Binary { op, left, right } => format!(
-            "brul::eval::apply_binary(brul::ast::BinaryOp::{op:?}, {}, {})?",
+            "brul::Dyn::binary(brul::ast::BinaryOp::{op:?}, &({}), &({}))?",
             operation_in(left, names, state, props, scopes)?,
             operation_in(right, names, state, props, scopes)?
         ),
@@ -660,7 +658,7 @@ pub(super) fn operation_in(
             then_branch,
             else_branch,
         } => format!(
-            "match {} {{ brul::Value::Bool(true) => {}, brul::Value::Bool(false) => {}, other => return Err(brul::Error::Expected {{ operation: \"?:\", expected: \"Bool\", found: other.type_name() }}), }}",
+            "if ({}).boolean()? {{ {} }} else {{ {} }}",
             operation_in(condition, names, state, props, scopes)?,
             operation_in(then_branch, names, state, props, scopes)?,
             operation_in(else_branch, names, state, props, scopes)?
@@ -700,7 +698,7 @@ fn call(
         return every(arguments, names, state, props, scopes);
     }
     Ok(format!(
-        "{{ let arguments = vec![{}]; brul::eval::call(component, {name:?}, arguments)? }}",
+        "{{ let arguments = vec![{}]; brul::Dyn::call(component, {name:?}, arguments)? }}",
         operations(arguments, names, state, props, scopes)?
     ))
 }
@@ -725,7 +723,7 @@ fn every(
         ));
     };
     Ok(format!(
-        "match {} {{ brul::Value::Number(interval) => {{ component.every(interval, {function:?})?; brul::Value::Null }}, other => return Err(brul::Error::Argument {{ name: \"every\", expected: \"Number\", found: other.type_name() }}), }}",
+        "{{ let interval = ({}).as_number()?; component.every(interval, {function:?})?; brul::Dyn::null() }}",
         operation_in(interval, names, state, props, scopes)?
     ))
 }
@@ -742,12 +740,12 @@ fn assignment(
     let value = match op {
         AssignOp::Set => operation_in(value, names, state, props, scopes)?,
         AssignOp::Add => format!(
-            "brul::eval::apply_binary(brul::ast::BinaryOp::Add, {}, {})?",
+            "brul::Dyn::binary(brul::ast::BinaryOp::Add, &({}), &({}))?",
             operation_in(target, names, state, props, scopes)?,
             operation_in(value, names, state, props, scopes)?
         ),
         AssignOp::Sub => format!(
-            "brul::eval::apply_binary(brul::ast::BinaryOp::Sub, {}, {})?",
+            "brul::Dyn::binary(brul::ast::BinaryOp::Sub, &({}), &({}))?",
             operation_in(target, names, state, props, scopes)?,
             operation_in(value, names, state, props, scopes)?
         ),
@@ -781,7 +779,7 @@ fn assign_to(
             }
             let _ = writeln!(
                 out,
-                "component.assign_id({}, {value}.clone())?;",
+                "component.assign_id({}, ({value}.clone()).into())?;",
                 names::variable_expr(name, target.position, names)?
             );
             Ok(())
@@ -796,10 +794,7 @@ fn assign_to(
                 "let mut {container} = {};",
                 operation_in(field, names, state, props, scopes)?
             );
-            let _ = writeln!(
-                out,
-                "brul::eval::assign_field(&mut {container}, {name:?}, {value}.clone())?;"
-            );
+            let _ = writeln!(out, "{container}.assign_field({name:?}, &{value})?;");
             assign_to(
                 out,
                 field,
@@ -827,10 +822,7 @@ fn assign_to(
                 "let mut {container} = {};",
                 operation_in(container_expression, names, state, props, scopes)?
             );
-            let _ = writeln!(
-                out,
-                "brul::eval::assign_index(&mut {container}, &{position}, {value}.clone())?;"
-            );
+            let _ = writeln!(out, "{container}.assign_index(&{position}, &{value})?;");
             assign_to(
                 out,
                 container_expression,

@@ -152,6 +152,7 @@ fn module_at(
             &window_handlers,
             &mut Emit::window(
                 EmitSources {
+                    script_name: "script",
                     registry: &registry,
                     imports: &registry.imports,
                     resources: &registry.resources,
@@ -216,6 +217,7 @@ fn module_at(
             &[],
             &mut Emit::component(
                 EmitSources {
+                    script_name: &format!("{prefix}script"),
                     registry: &registry,
                     imports: &definition.imports,
                     resources: &definition.resources,

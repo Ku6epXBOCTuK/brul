@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use brul_gui::{Class, Image, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::{Component, Error as ScriptError, Scope, Value, VariableId};
+use brul_script::{Component, Dyn, Error as ScriptError, Scope, Value, VariableId};
 use brul_syntax::markup::PropType;
 use tracing::error;
 
@@ -12,7 +12,7 @@ use super::ComponentHandle;
 use super::error::ViewError;
 use super::paint::{Textures, set_flag, set_input, set_offset, set_text, set_texture, texture};
 
-pub type Expression = fn(&mut Component) -> Result<Value, ScriptError>;
+pub type Expression = fn(&mut Component) -> Result<Dyn, ScriptError>;
 pub type TextExpression = fn(&mut Component) -> Result<String, ScriptError>;
 pub type FlagExpression = fn(&mut Component) -> Result<bool, ScriptError>;
 pub type NumberExpression = fn(&mut Component) -> Result<f64, ScriptError>;
@@ -32,7 +32,7 @@ impl PropExpression {
             Self::Number(expression) => Value::Number(expression(component)?),
             Self::Text(expression) => Value::String(expression(component)?.into()),
             Self::Flag(expression) => Value::Bool(expression(component)?),
-            Self::Image(expression) => expression(component)?,
+            Self::Image(expression) => Value::from(expression(component)?),
         })
     }
 }
@@ -173,7 +173,7 @@ fn evaluated<T>(
 }
 
 fn value(component: &RefCell<Component>, expression: Expression) -> Option<Value> {
-    evaluated(component, expression)
+    evaluated(component, expression).map(Value::from)
 }
 
 fn string(component: &RefCell<Component>, expression: TextExpression) -> Option<String> {

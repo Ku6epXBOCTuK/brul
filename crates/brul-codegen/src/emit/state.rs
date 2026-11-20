@@ -129,10 +129,10 @@ impl State {
         let field = self.fields.iter().find(|field| field.name == name)?;
         let state = format!("component.state::<{}>().{}", self.type_name, field.ident);
         Some(match field.ty {
-            Type::Number => format!("brul::Value::Number({state}.get())"),
-            Type::Bool => format!("brul::Value::Bool({state}.get())"),
-            Type::String => format!("brul::Value::String({state}.get().into())"),
-            Type::Null => "brul::Value::Null".to_owned(),
+            Type::Number => format!("brul::Dyn::num({state}.get())"),
+            Type::Bool => format!("brul::Dyn::flag({state}.get())"),
+            Type::String => format!("brul::Dyn::text({state}.get().as_str())"),
+            Type::Null => "brul::Dyn::null()".to_owned(),
             _ => unreachable!("state field type was checked"),
         })
     }

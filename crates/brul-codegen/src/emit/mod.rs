@@ -62,6 +62,7 @@ pub fn identifiers(expression: &brul_syntax::ast::Expr) -> Names<'_> {
 pub(super) use element::{contains_slot, items, items_spliced};
 
 pub(super) struct Emit<'a> {
+    script_name: &'a str,
     registry: &'a Registry,
     imports: &'a [Import],
     resources: &'a [Resource],
@@ -82,6 +83,7 @@ pub(super) struct Emit<'a> {
 }
 
 struct EmitSources<'a> {
+    script_name: &'a str,
     registry: &'a Registry,
     imports: &'a [Import],
     resources: &'a [Resource],
@@ -113,6 +115,7 @@ impl<'a> Emit<'a> {
 
     fn new(sources: EmitSources<'a>, outputs: EmitOutputs<'a>, slots: bool) -> Self {
         Self {
+            script_name: sources.script_name,
             registry: sources.registry,
             imports: sources.imports,
             resources: sources.resources,

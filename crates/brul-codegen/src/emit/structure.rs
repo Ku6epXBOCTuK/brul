@@ -180,7 +180,7 @@ fn value_function(
         ValueKind::Items => (
             "brul::Items",
             format!(
-                "brul::items(&{})",
+                "brul::items(&({}))",
                 match inferred {
                     Some((code, _)) => code,
                     None => operation(value, names, state, props)?,
@@ -189,7 +189,7 @@ fn value_function(
         ),
         ValueKind::Inferred => match inferred {
             Some((code, ty)) => (Scopes::local_type(&ty), code),
-            None => ("brul::Value", operation(value, names, state, props)?),
+            None => ("brul::Dyn", operation(value, names, state, props)?),
         },
     };
     let mut text = String::new();
@@ -227,7 +227,7 @@ fn scope_default(ty: &brul_syntax::types::Type) -> &'static str {
         brul_syntax::types::Type::String => "String::new()",
         brul_syntax::types::Type::Bool => "false",
         brul_syntax::types::Type::Null => "()",
-        _ => "brul::Value::Null",
+        _ => "brul::Dyn::null()",
     }
 }
 
@@ -417,9 +417,7 @@ fn each_else(
         out.line(format_args!("rows.push(brul::RowInfo {{"));
         out.indented(|out| {
             out.line(format_args!("key: brul::RowKey::Index(0),"));
-            out.line(format_args!(
-                "item: brul::Value::Array(std::sync::Arc::new(Vec::new())),"
-            ));
+            out.line(format_args!("item: brul::Dyn::array(vec![]).into(),"));
             out.line(format_args!("start: 0,"));
             out.line(format_args!("count: children.len(),"));
             out.line(format_args!("reuse: None,"));

@@ -1,7 +1,7 @@
 use brul_script::{Component, Error, HostCommand, Value};
 
-pub fn string(value: Value) -> Result<String, Error> {
-    match value {
+pub fn string(value: impl Into<Value>) -> Result<String, Error> {
+    match value.into() {
         Value::String(text) => Ok(text.to_string()),
         Value::Number(number) => Ok(number.to_string()),
         Value::Bool(value) => Ok(value.to_string()),
@@ -14,8 +14,8 @@ pub fn string(value: Value) -> Result<String, Error> {
     }
 }
 
-pub fn number(value: Value) -> Result<f64, Error> {
-    match value {
+pub fn number(value: impl Into<Value>) -> Result<f64, Error> {
+    match value.into() {
         Value::Number(number) => Ok(number),
         Value::String(text) => text
             .parse()
@@ -28,8 +28,8 @@ pub fn number(value: Value) -> Result<f64, Error> {
     }
 }
 
-pub fn len(value: Value) -> Result<f64, Error> {
-    match value {
+pub fn len(value: impl Into<Value>) -> Result<f64, Error> {
+    match value.into() {
         Value::Array(items) => Ok(items.len() as f64),
         other => Err(Error::Argument {
             name: "len",

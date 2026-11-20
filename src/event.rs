@@ -1,36 +1,26 @@
 use brul_gui::{WidgetEvent, WidgetId};
 
-use crate::{ComponentHandle, HandlerEvent, Value};
-pub(crate) fn call(component: &ComponentHandle, function: &str, arguments: Vec<Value>) {
-    tracing::debug!(
-        function,
-        arguments = arguments.len(),
-        "calling script function"
-    );
-    if let Err(error) = component.borrow_mut().call_function(function, arguments) {
-        tracing::error!(%error, function, "script function failed");
+use crate::{ComponentHandle, Dyn, EventCall, HandlerEvent};
+pub(crate) fn call(component: &ComponentHandle, function: EventCall, arguments: Vec<Dyn>) {
+    tracing::debug!(arguments = arguments.len(), "calling script function");
+    if let Err(error) = function(&mut component.borrow_mut(), &arguments) {
+        tracing::error!(%error, "script function failed");
     }
 }
 
-pub(crate) fn arguments(event: &WidgetEvent) -> Vec<Value> {
+pub(crate) fn arguments(event: &WidgetEvent) -> Vec<Dyn> {
     match event {
-        WidgetEvent::Key { code, modifiers } => vec![Value::Object(
-            vec![
-                ("code".to_owned(), Value::String(code.as_str().into())),
-                ("ctrl".to_owned(), Value::Bool(modifiers.control)),
-                ("shift".to_owned(), Value::Bool(modifiers.shift)),
-                ("alt".to_owned(), Value::Bool(modifiers.alt)),
-                ("meta".to_owned(), Value::Bool(modifiers.meta)),
-            ]
-            .into(),
-        )],
-        WidgetEvent::Input(_, value, caret) => vec![Value::Object(
-            vec![
-                ("value".to_owned(), Value::String(value.as_str().into())),
-                ("caret".to_owned(), Value::Number(*caret as f64)),
-            ]
-            .into(),
-        )],
+        WidgetEvent::Key { code, modifiers } => vec![Dyn::object(vec![
+            ("code".to_owned(), Dyn::text(code.as_str())),
+            ("ctrl".to_owned(), Dyn::flag(modifiers.control)),
+            ("shift".to_owned(), Dyn::flag(modifiers.shift)),
+            ("alt".to_owned(), Dyn::flag(modifiers.alt)),
+            ("meta".to_owned(), Dyn::flag(modifiers.meta)),
+        ])],
+        WidgetEvent::Input(_, value, caret) => vec![Dyn::object(vec![
+            ("value".to_owned(), Dyn::text(value.as_str())),
+            ("caret".to_owned(), Dyn::num(*caret as f64)),
+        ])],
         _ => Vec::new(),
     }
 }
@@ -93,13 +83,10 @@ mod tests {
         let arguments = arguments(&WidgetEvent::Input(id, "xy".to_owned(), 2));
         assert_eq!(
             arguments,
-            vec![Value::Object(
-                vec![
-                    ("value".to_owned(), Value::String("xy".into())),
-                    ("caret".to_owned(), Value::Number(2.0)),
-                ]
-                .into()
-            )]
+            vec![Dyn::object(vec![
+                ("value".to_owned(), Dyn::text("xy")),
+                ("caret".to_owned(), Dyn::num(2.0)),
+            ])]
         );
     }
 
@@ -114,16 +101,13 @@ mod tests {
         };
         assert_eq!(
             arguments(&event),
-            vec![Value::Object(
-                vec![
-                    ("code".to_owned(), Value::String("Enter".into())),
-                    ("ctrl".to_owned(), Value::Bool(true)),
-                    ("shift".to_owned(), Value::Bool(false)),
-                    ("alt".to_owned(), Value::Bool(false)),
-                    ("meta".to_owned(), Value::Bool(false)),
-                ]
-                .into()
-            )]
+            vec![Dyn::object(vec![
+                ("code".to_owned(), Dyn::text("Enter")),
+                ("ctrl".to_owned(), Dyn::flag(true)),
+                ("shift".to_owned(), Dyn::flag(false)),
+                ("alt".to_owned(), Dyn::flag(false)),
+                ("meta".to_owned(), Dyn::flag(false)),
+            ])]
         );
     }
 

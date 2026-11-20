@@ -60,6 +60,14 @@ pub(super) fn module(
         out,
         "#[allow(unused_variables)]\nfn {name}_init(component: &mut brul::Component) -> Result<(), brul::Error> {{"
     );
+    for function in &program.functions {
+        let _ = writeln!(
+            out,
+            "    component.register_event_call({:?}, {});",
+            function.name,
+            event_call(name, &function.name)
+        );
+    }
     top_level(&program.statements, names, state, props, &mut out)?;
     out.push_str(&state.init_call(&format!("{name}_state_init")));
     out.push_str("    Ok(())\n}\n");
@@ -101,6 +109,42 @@ pub(super) fn module(
             out.push_str("    Err(brul::Error::Unsupported(\"missing return\"))\n}\n");
         }
     }
+    for function in &program.functions {
+        let wrapper = event_call(name, &function.name);
+        let function_name = format!("{name}_fn_{}", ident(&snake(&function.name)));
+        let _ = writeln!(
+            out,
+            "#[allow(unused_variables)]\nfn {wrapper}(component: &mut brul::Component, arguments: &[brul::Dyn]) -> Result<brul::Dyn, brul::Error> {{"
+        );
+        let arguments = function
+            .params
+            .iter()
+            .enumerate()
+            .map(|(index, param)| {
+                let argument = format!("arguments[{index}]");
+                match param.ty {
+                    Type::Number | Type::String | Type::Bool | Type::Null => {
+                        convert(&argument, &param.ty)
+                    }
+                    _ => format!("({argument}).clone()"),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let separator = if arguments.is_empty() { "" } else { ", " };
+        if matches!(function.return_type, Type::Void | Type::Null) {
+            let _ = writeln!(
+                out,
+                "    {function_name}(component{separator}{arguments})?;\n    Ok(brul::Dyn::null())\n}}"
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "    let result = {function_name}(component{separator}{arguments})?;\n    Ok({})\n}}",
+                wrap_typed("result".to_owned(), &function.return_type)
+            );
+        }
+    }
     let message = format!("{}Message", pascal(name));
     let _ = writeln!(out, "\n#[allow(dead_code)]\npub enum {message} {{");
     for function in &program.functions {
@@ -124,7 +168,7 @@ pub(super) fn module(
     );
     let _ = writeln!(
         out,
-        "#[allow(unused_variables)]\nfn {name}_typed_call(component: &mut brul::Component, message: &dyn std::any::Any) -> Result<brul::Value, brul::Error> {{"
+        "#[allow(unused_variables)]\nfn {name}_typed_call(component: &mut brul::Component, message: &dyn std::any::Any) -> Result<brul::Dyn, brul::Error> {{"
     );
     let _ = writeln!(out, "    match message.downcast_ref::<{message}>() {{");
     for function in &program.functions {
@@ -147,7 +191,7 @@ pub(super) fn module(
         if matches!(function.return_type, Type::Void | Type::Null) {
             let _ = writeln!(
                 out,
-                "        Some({message}::{pattern}) => {{ {function_name}(component{separator}{arguments})?; Ok(brul::Value::Null) }}"
+                "        Some({message}::{pattern}) => {{ {function_name}(component{separator}{arguments})?; Ok(brul::Dyn::null()) }}"
             );
         } else {
             let _ = writeln!(
@@ -160,7 +204,7 @@ pub(super) fn module(
     out.push_str("        _ => Err(brul::Error::Unsupported(\"script message\")),\n    }\n}\n");
     let _ = writeln!(
         out,
-        "#[allow(unused_mut)]\nfn {name}_dispatch(component: &mut brul::Component, name: &str, mut arguments: Vec<brul::Value>) -> Result<brul::Value, brul::Error> {{"
+        "#[allow(unused_mut)]\nfn {name}_dispatch(component: &mut brul::Component, name: &str, mut arguments: Vec<brul::Dyn>) -> Result<brul::Dyn, brul::Error> {{"
     );
     out.push_str("    match name {\n");
     for function in &program.functions {
@@ -184,7 +228,7 @@ pub(super) fn module(
             .join(", ");
         if matches!(function.return_type, Type::Void | Type::Null) {
             let _ = writeln!(out, "            {function_name}(component, {arguments})?;");
-            out.push_str("            Ok(brul::Value::Null)\n");
+            out.push_str("            Ok(brul::Dyn::null())\n");
         } else {
             let _ = writeln!(
                 out,
@@ -255,6 +299,10 @@ fn pascal(name: &str) -> String {
         Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
         None => String::new(),
     }
+}
+
+pub(super) fn event_call(script: &str, function: &str) -> String {
+    format!("{script}_event_{}", ident(&snake(function)))
 }
 
 pub(super) fn snake(name: &str) -> String {

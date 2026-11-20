@@ -132,10 +132,10 @@ impl Scopes {
             format!("{}.clone()", binding.access)
         } else {
             match binding.ty {
-                Type::Number => format!("brul::Value::Number({})", binding.access),
-                Type::Bool => format!("brul::Value::Bool({})", binding.access),
-                Type::String => format!("brul::Value::String({}.as_str().into())", binding.access),
-                Type::Null => "brul::Value::Null".to_owned(),
+                Type::Number => format!("brul::Dyn::num({})", binding.access),
+                Type::Bool => format!("brul::Dyn::flag({})", binding.access),
+                Type::String => format!("brul::Dyn::text({}.as_str())", binding.access),
+                Type::Null => "brul::Dyn::null()".to_owned(),
                 _ => unreachable!("value type was checked"),
             }
         })
@@ -173,7 +173,7 @@ impl Scopes {
             Type::String => "String",
             Type::Bool => "bool",
             Type::Null => "()",
-            _ => "brul::Value",
+            _ => "brul::Dyn",
         }
     }
 

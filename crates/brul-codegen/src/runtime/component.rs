@@ -75,7 +75,7 @@ fn start(component: &ComponentHandle, instance: &Instance<'_>) -> Result<(), Vie
                 .iter()
                 .map(|event| ComponentEvent {
                     name: event.name,
-                    function: event.function,
+                    call: event.call,
                     params: event.params,
                     component: Rc::clone(&event.component),
                 })

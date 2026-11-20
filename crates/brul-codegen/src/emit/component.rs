@@ -447,8 +447,9 @@ fn write(
                         .map(|ty| format!("brul::{ty}"))
                         .collect::<Vec<_>>()
                         .join(", ");
+                    let call = super::script::event_call(emit.script_name, handler);
                     out.line(format_args!(
-                        "brul::ComponentEvent {{ name: {event:?}, function: {handler:?}, params: &[{params}], component: std::rc::Rc::clone(component) }},"
+                        "brul::ComponentEvent {{ name: {event:?}, call: {call}, params: &[{params}], component: std::rc::Rc::clone(component) }},"
                     ));
                 }
             });
@@ -522,7 +523,7 @@ fn arguments(
             let id = variable_expr(name, value.position, names)?;
             let expression = match super::resource(value, resources) {
                 Some(resource) if **ty == PropType::Image => format!(
-                    "brul::PropExpression::Image(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> {{ Ok(brul::Value::image_bytes({prefix}resource_{resource}())) }})"
+                    "brul::PropExpression::Image(|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> {{ Ok(brul::Dyn::image_bytes({prefix}resource_{resource}())) }})"
                 ),
                 _ => {
                     let variant = match ty {

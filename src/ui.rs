@@ -395,7 +395,10 @@ impl<T: Theme> Ui<T> {
         for event in events {
             match event {
                 WidgetEvent::Timer(function) => {
-                    call(&self.component, function, Vec::new());
+                    let call = self.component.borrow().event_call(function);
+                    if let Some(call) = call {
+                        let _ = call(&mut self.component.borrow_mut(), &[]);
+                    }
                 }
                 WidgetEvent::Close => self.close(),
                 _ => self.dispatch_event(event),
@@ -410,7 +413,7 @@ impl<T: Theme> Ui<T> {
             let Some(event) = runtime::take_event() else {
                 return;
             };
-            call(&event.component, event.function, event.arguments);
+            call(&event.component, event.call, event.arguments);
             brul_reactive::flush();
         }
         tracing::error!(depth = EVENT_DEPTH, "event chain is too deep");
@@ -424,14 +427,14 @@ impl<T: Theme> Ui<T> {
             return;
         };
         let handler = &self.handlers[at];
-        call(&handler.component, &handler.function, arguments(event));
+        call(&handler.component, handler.call, arguments(event));
     }
 
     fn close(&mut self) {
         match self.handler_index.get(&(None, HandlerEvent::Close)) {
             Some(&at) => {
                 let handler = &self.handlers[at];
-                call(&handler.component, &handler.function, Vec::new());
+                call(&handler.component, handler.call, Vec::new());
             }
             None => self.commands.borrow_mut().push(WindowCommand::Close),
         }
@@ -584,7 +587,7 @@ mod tests {
     use brul_window::WindowCommand;
 
     use crate::run::generated_built;
-    use crate::{Binding, BindingTarget, Component, HandlerEvent, Script};
+    use crate::{Binding, BindingTarget, Component, Dyn, HandlerEvent, Script};
 
     const NAMES: &[&str] = &[
         "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code",
@@ -1214,8 +1217,8 @@ mod tests {
         Binding::new(component, widget, target)
     }
 
-    fn icon(component: &mut Component) -> Result<Value, Error> {
-        component.read("icon")
+    fn icon(component: &mut Component) -> Result<Dyn, Error> {
+        Ok(Dyn::from(component.read("icon")?))
     }
 
     fn image_view(
@@ -1331,17 +1334,17 @@ mod tests {
     fn handler_dispatch(
         component: &mut Component,
         name: &str,
-        arguments: Vec<Value>,
-    ) -> Result<Value, Error> {
+        arguments: Vec<Dyn>,
+    ) -> Result<Dyn, Error> {
         match name {
             "clicked" | "closing" | "tick" | "first" => {
                 component.assign("ran", Value::Bool(true))?;
             }
             "second" => component.assign("off", Value::Bool(true))?,
-            "pressed" => component.assign("seen", arguments[0].clone())?,
+            "pressed" => component.assign("seen", Value::from(arguments[0].clone()))?,
             _ => return Err(Error::UnknownFunction(name.to_owned())),
         }
-        Ok(Value::Null)
+        Ok(Dyn::null())
     }
 
     fn component_with(declared: &[&str]) -> ComponentHandle {
@@ -1353,6 +1356,8 @@ mod tests {
                 .expect("declared");
         }
         component.set_dispatch(handler_dispatch);
+        component.register_event_call("tick", set_ran);
+        component.register_event_call("applied", applied_call);
         Rc::new(RefCell::new(component))
     }
 
@@ -1360,33 +1365,56 @@ mod tests {
         Ok(())
     }
 
-    fn noop_dispatch(_: &mut Component, _: &str, _: Vec<Value>) -> Result<Value, Error> {
-        Ok(Value::Null)
+    fn noop_dispatch(_: &mut Component, _: &str, _: Vec<Dyn>) -> Result<Dyn, Error> {
+        Ok(Dyn::null())
     }
 
     fn raise_dispatch(
         component: &mut Component,
         name: &str,
-        arguments: Vec<Value>,
-    ) -> Result<Value, Error> {
+        arguments: Vec<Dyn>,
+    ) -> Result<Dyn, Error> {
         if name == "raise" {
-            crate::eval::call(component, "clicked", arguments)
+            let arguments = arguments.into_iter().map(Value::from).collect();
+            Ok(Dyn::from(crate::eval::call(
+                component, "clicked", arguments,
+            )?))
         } else {
             Err(Error::UnknownFunction(name.to_owned()))
         }
     }
 
-    fn applied_dispatch(
-        component: &mut Component,
-        name: &str,
-        _: Vec<Value>,
-    ) -> Result<Value, Error> {
+    fn applied_dispatch(component: &mut Component, name: &str, _: Vec<Dyn>) -> Result<Dyn, Error> {
         if name == "applied" {
             component.assign("label", Value::String("after".into()))?;
-            Ok(Value::Null)
+            Ok(Dyn::null())
         } else {
             Err(Error::UnknownFunction(name.to_owned()))
         }
+    }
+
+    fn set_ran(component: &mut Component, _: &[Dyn]) -> Result<Dyn, Error> {
+        component.assign("ran", Value::Bool(true))?;
+        Ok(Dyn::null())
+    }
+
+    fn set_off(component: &mut Component, _: &[Dyn]) -> Result<Dyn, Error> {
+        component.assign("off", Value::Bool(true))?;
+        Ok(Dyn::null())
+    }
+
+    fn key_code(component: &mut Component, arguments: &[Dyn]) -> Result<Dyn, Error> {
+        component.assign("seen", Value::from(arguments[0].clone()))?;
+        Ok(Dyn::null())
+    }
+
+    fn raise_call(component: &mut Component, arguments: &[Dyn]) -> Result<Dyn, Error> {
+        raise_dispatch(component, "raise", arguments.to_vec())
+    }
+
+    fn applied_call(component: &mut Component, _: &[Dyn]) -> Result<Dyn, Error> {
+        component.assign("label", Value::String("after".into()))?;
+        Ok(Dyn::null())
     }
 
     fn script_with(init: fn(&mut Component) -> Result<(), Error>) -> Script {
@@ -1438,7 +1466,7 @@ mod tests {
                 &component,
                 Some(id),
                 HandlerEvent::Click,
-                "clicked",
+                set_ran,
             )]
         });
         ui.dispatch(&[WidgetEvent::Click(id)]);
@@ -1450,8 +1478,8 @@ mod tests {
         let component = component_with(&["ran", "off"]);
         let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
             vec![
-                Handler::new(&component, Some(id), HandlerEvent::Click, "first"),
-                Handler::new(&component, Some(id), HandlerEvent::Click, "second"),
+                Handler::new(&component, Some(id), HandlerEvent::Click, set_ran),
+                Handler::new(&component, Some(id), HandlerEvent::Click, set_off),
             ]
         });
 
@@ -1464,7 +1492,7 @@ mod tests {
     fn dispatch_passes_the_key_code() {
         let component = component_with(&["seen"]);
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| {
-            vec![Handler::new(&component, None, HandlerEvent::Key, "pressed")]
+            vec![Handler::new(&component, None, HandlerEvent::Key, key_code)]
         });
         ui.dispatch(&[WidgetEvent::Key {
             code: "Enter".to_owned(),
@@ -1490,12 +1518,7 @@ mod tests {
     fn a_close_handler_keeps_the_window_open() {
         let component = component_with(&["ran"]);
         let (_, mut ui) = dispatching(&component, Widget::text(""), |_| {
-            vec![Handler::new(
-                &component,
-                None,
-                HandlerEvent::Close,
-                "closing",
-            )]
+            vec![Handler::new(&component, None, HandlerEvent::Close, set_ran)]
         });
 
         assert!(ui.dispatch(&[WidgetEvent::Close]).is_empty());
@@ -1573,7 +1596,7 @@ mod tests {
                 component,
                 Some(id),
                 HandlerEvent::Click,
-                "raise",
+                raise_call,
             )],
             props: Vec::new(),
         })
@@ -1593,7 +1616,7 @@ mod tests {
         };
         let events = [runtime::ComponentEvent {
             name: "clicked",
-            function: "applied",
+            call: applied_call,
             params: &[],
             component: Rc::clone(component),
         }];

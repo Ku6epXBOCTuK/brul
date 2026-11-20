@@ -384,9 +384,12 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(r#"let widget0 = brul::gui::Widget::text("");"#));
-    assert!(module.contains(
-        r#"bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&component.read_id(brul::VariableId::from_index(0))?).try_into()?) })));"#
-    ));
+    assert!(
+        module.contains(
+            "(&brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).try_into()?"
+        ),
+        "{module}"
+    );
 }
 
 #[test]
@@ -503,13 +506,17 @@ window Demo (title: "demo") {
             "no {target} binding"
         );
     }
-    assert!(module.contains(
-        r#"brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok((&component.read_id(brul::VariableId::from_index(3))?).try_into()?) }"#
-    ));
     assert!(
         module.contains(
-            r#"y: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok((&component.read_id(brul::VariableId::from_index(4))?).try_into()?) }"#
-        )
+            "(&brul::Dyn::from(component.read_id(brul::VariableId::from_index(3))?)).try_into()?"
+        ),
+        "{module}"
+    );
+    assert!(
+        module.contains(
+            "(&brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).try_into()?"
+        ),
+        "{module}"
     );
 }
 
@@ -540,8 +547,8 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(".focusable(true)"));
-    assert!(module.contains(r#"HandlerEvent::Focus, "gained""#));
-    assert!(module.contains(r#"HandlerEvent::Blur, "lost""#));
+    assert!(module.contains("HandlerEvent::Focus, script_event_gained"));
+    assert!(module.contains("HandlerEvent::Blur, script_event_lost"));
 }
 
 #[test]
@@ -560,8 +567,8 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(module.contains("brul::gui::Widget::input(\"\")"));
     assert!(module.contains("brul::BindingTarget::Input("));
-    assert!(module.contains(r#"HandlerEvent::Input, "edited""#));
-    assert!(module.contains(r#"HandlerEvent::Submit, "submitted""#));
+    assert!(module.contains(r#"HandlerEvent::Input, script_event_edited"#));
+    assert!(module.contains(r#"HandlerEvent::Submit, script_event_submitted"#));
 }
 
 #[test]
@@ -660,10 +667,10 @@ window Demo (title: "demo") {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        r#"handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Click, "toggle"));"#
+        r#"handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Click, script_event_toggle));"#
     ));
     assert!(module.contains(
-        r#"handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Enter, "toggle"));"#
+        r#"handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Enter, script_event_toggle));"#
     ));
     assert!(module.contains("brul::gui::Widget::column(vec!["));
     assert!(module.contains(".draggable(true)"));
@@ -754,7 +761,7 @@ window Demo (title: "demo") {
         "fn demo_each1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle, old_rows: &[brul::RowInfo]) -> brul::Rebuilt {\n    let mut bindings"
     ));
     assert!(module.contains("struct demo_each1_scope {"));
-    assert!(module.contains("item: brul::Value,"));
+    assert!(module.contains("item: brul::Dyn,"));
     assert!(module.contains("index: f64,"));
     assert!(
         module.contains("component.borrow_mut().set_scope(brul::Scope::each(demo_each1_scope {")
@@ -788,7 +795,7 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(module.contains("struct demo_each1_scope {"));
     assert!(module.contains("struct demo_each2_scope {"));
-    assert!(module.contains("outer_item: brul::Value,"));
+    assert!(module.contains("outer_item: brul::Dyn,"));
     assert!(module.contains("let item = data.item.clone();"));
     assert!(module.contains("let outer_item = data.outer_item.clone();"));
     assert!(module.contains("component.scope().get::<demo_each2_scope>().expect(\"each scope\")"));
@@ -819,7 +826,7 @@ window Demo (title: "demo") {
     );
     assert!(
         module.contains(
-            "        rows.push(brul::RowInfo {\n            key: brul::RowKey::Index(0),\n            item: brul::Value::Array(std::sync::Arc::new(Vec::new())),\n            start: 0,\n            count: children.len(),\n            reuse: None,\n        });"
+            "        rows.push(brul::RowInfo {\n            key: brul::RowKey::Index(0),\n            item: brul::Dyn::array(vec![]).into(),\n            start: 0,\n            count: children.len(),\n            reuse: None,\n        });"
         ),
         "{module}"
     );
@@ -839,7 +846,7 @@ window Demo (title: "demo", on key: quit) {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        r#"handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::Key, "quit"));"#
+        r#"handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::Key, script_event_quit));"#
     ));
 }
 
@@ -857,7 +864,7 @@ window Demo (title: "demo", on close: hide) {
 "#;
     let module = emit::module(source).expect("module");
     assert!(module.contains(
-        r#"handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::Close, "hide"));"#
+        r#"handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::Close, script_event_hide));"#
     ));
 }
 
@@ -1033,7 +1040,9 @@ window Demo (title: "demo") {
     assert!(module.contains("component.state::<ScriptState>().count.set((&value).try_into()?);"));
     assert!(module.contains("pub fn script() -> Option<brul::Script> {"));
     assert!(module.contains("fn script_init(component: &mut brul::Component)"));
-    assert!(module.contains("component.declare(\"limit\", brul::Value::Number(2.0_f64), true)?;"));
+    assert!(
+        module.contains("component.declare(\"limit\", (brul::Dyn::num(2.0_f64)).into(), true)?;")
+    );
     assert!(module.contains(
         "fn script_fn_bump(component: &mut brul::Component, mut step: f64) -> Result<(), brul::Error>"
     ));
@@ -1233,9 +1242,9 @@ window Demo (title: "demo") {
 </markup>
 "#;
     let module = emit::module(source).expect("module");
-    assert!(module.contains("let fixed: f64 = (&brul::Value::Number(3.0_f64)).try_into()?;"));
-    assert!(module.contains("let mut step: f64 = (&brul::Value::Number(2.0_f64)).try_into()?;"));
-    assert!(module.contains("let mut step: f64 = (&brul::Value::Number(5.0_f64)).try_into()?;"));
+    assert!(module.contains("let fixed: f64 = (&brul::Dyn::num(3.0_f64)).try_into()?;"));
+    assert!(module.contains("let mut step: f64 = (&brul::Dyn::num(2.0_f64)).try_into()?;"));
+    assert!(module.contains("let mut step: f64 = (&brul::Dyn::num(5.0_f64)).try_into()?;"));
     assert!(!module.contains("component.declare(\"step\""));
     assert!(!module.contains("component.push_frame()"));
 }
@@ -1287,22 +1296,19 @@ fn operated_error(source: &str) -> brul_syntax::error::Error {
 fn emits_value_literals_and_reads() {
     assert_eq!(
         operated("x"),
-        "component.read_id(brul::VariableId::from_index(0))?"
+        "brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)"
     );
-    assert_eq!(operated("42"), "brul::Value::Number(42.0_f64)");
-    assert_eq!(
-        operated("\"hi\""),
-        "brul::Value::String((\"hi\".to_owned()).into())"
-    );
-    assert_eq!(operated("true"), "brul::Value::Bool(true)");
-    assert_eq!(operated("null"), "brul::Value::Null");
+    assert_eq!(operated("42"), "brul::Dyn::num(42.0_f64)");
+    assert_eq!(operated("\"hi\""), "brul::Dyn::text(\"hi\".to_owned())");
+    assert_eq!(operated("true"), "brul::Dyn::flag(true)");
+    assert_eq!(operated("null"), "brul::Dyn::null()");
     assert_eq!(
         operated("a.b"),
-        "brul::eval::read_field(&(component.read_id(brul::VariableId::from_index(0))?), \"b\")?"
+        "(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).field(\"b\")?"
     );
     assert_eq!(
         operated("a[0]"),
-        "brul::eval::read_index(&(component.read_id(brul::VariableId::from_index(0))?), &(brul::Value::Number(0.0_f64)))?"
+        "(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).index(&(brul::Dyn::num(0.0_f64)))?"
     );
 }
 
@@ -1310,23 +1316,20 @@ fn emits_value_literals_and_reads() {
 fn emits_value_operations() {
     assert_eq!(
         operated("!x"),
-        "brul::eval::apply_unary(brul::ast::UnaryOp::Not, component.read_id(brul::VariableId::from_index(0))?)?"
+        "brul::Dyn::unary(brul::ast::UnaryOp::Not, &(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)))?"
     );
-    assert_eq!(
-        operated("1 + 2"),
-        "brul::Value::Number((1.0_f64) + (2.0_f64))"
-    );
+    assert_eq!(operated("1 + 2"), "brul::Dyn::num((1.0_f64) + (2.0_f64))");
     assert_eq!(
         operated("[1, x]"),
-        "brul::Value::Array(vec![brul::Value::Number(1.0_f64), component.read_id(brul::VariableId::from_index(0))?].into())"
+        "brul::Dyn::array(vec![brul::Dyn::num(1.0_f64), brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)])"
     );
     assert_eq!(
         operated("{ a: 1 }"),
-        "brul::Value::Object(vec![(\"a\".to_owned(), brul::Value::Number(1.0_f64))].into())"
+        "brul::Dyn::object(vec![(\"a\".to_owned(), brul::Dyn::num(1.0_f64))])"
     );
     assert_eq!(
         operated("`v=${x}`"),
-        "brul::Value::String(brul::eval::template(vec![brul::Value::String(\"v=\".into()), component.read_id(brul::VariableId::from_index(0))?])?)"
+        "brul::Dyn::template(vec![brul::Dyn::text(\"v=\"), brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)])?"
     );
 }
 
@@ -1334,7 +1337,7 @@ fn emits_value_operations() {
 fn emits_value_calls() {
     assert_eq!(
         operated("f(1)"),
-        "{ let arguments = vec![brul::Value::Number(1.0_f64)]; brul::eval::call(component, \"f\", arguments)? }"
+        "{ let arguments = vec![brul::Dyn::num(1.0_f64)]; brul::Dyn::call(component, \"f\", arguments)? }"
     );
     assert!(
         operated_error("every(100, tick)")
@@ -1352,7 +1355,7 @@ fn emits_value_calls() {
             .contains("every expects a function name")
     );
     assert!(operated("a.b()").contains("Unsupported(\"method call\")"));
-    assert!(operated("a ? b : c").contains("expected: \"Bool\""));
+    assert!(operated("a ? b : c").contains(".boolean()?"));
     assert!(!operated("a ? b : c").contains("match ("));
 }
 
@@ -1422,38 +1425,37 @@ window Demo (title: "demo") { View { } }
 fn emits_value_assignments() {
     let source = operated("a.b = 1");
     assert!(
-        source.contains("let value = brul::Value::Number(1.0_f64);"),
+        source.contains("let value = brul::Dyn::num(1.0_f64);"),
         "{source}"
     );
     assert!(
         source
-            .contains("let mut container0 = component.read_id(brul::VariableId::from_index(0))?;"),
+            .contains("let mut container0 = brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?);"),
         "{source}"
     );
     assert!(
-        source.contains("brul::eval::assign_field(&mut container0, \"b\", value.clone())?;"),
+        source.contains("container0.assign_field(\"b\", &value)?;"),
         "{source}"
     );
     assert!(
-        source
-            .contains("component.assign_id(brul::VariableId::from_index(0), container0.clone())?;"),
+        source.contains(
+            "component.assign_id(brul::VariableId::from_index(0), (container0.clone()).into())?;"
+        ),
         "{source}"
     );
     assert!(source.ends_with("value }"), "{source}");
 
     assert!(
-        operated("items[0] = x").contains("brul::eval::assign_index("),
+        operated("items[0] = x").contains(".assign_index("),
         "{}",
         operated("items[0] = x")
     );
     assert!(
-        operated("x += 1").contains(
-            "brul::ast::BinaryOp::Add, component.read_id(brul::VariableId::from_index(0))?"
-        ),
+        operated("x += 1").contains("brul::Dyn::binary(brul::ast::BinaryOp::Add"),
         "{}",
         operated("x += 1")
     );
-    assert!(operated("x = [1, 2]").contains("brul::Value::Array"));
+    assert!(operated("x = [1, 2]").contains("brul::Dyn::array"));
 }
 
 fn scratch(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
@@ -1593,7 +1595,7 @@ fn an_image_prop_accepts_a_resource_at_the_call_site() {
     std::fs::write(dir.join("check.png"), PNG_SIGNATURE).unwrap();
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(
-        module.contains("ty: brul::PropType::Image, expression: brul::PropExpression::Image(|component: &mut brul::Component| -> Result<brul::Value, brul::Error> { Ok(brul::Value::image_bytes(resource_check())) })"),
+        module.contains("ty: brul::PropType::Image, expression: brul::PropExpression::Image(|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { Ok(brul::Dyn::image_bytes(resource_check())) })"),
         "{module}"
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -1668,7 +1670,7 @@ fn emits_component_events() {
     );
     let module = emit::module_file(&dir.join("window.brul")).unwrap();
     assert!(module.contains(
-        "brul::ComponentEvent { name: \"clicked\", function: \"launch\", params: &[brul::PropType::Number], component: std::rc::Rc::clone(component) },"
+        "brul::ComponentEvent { name: \"clicked\", call: script_event_launch, params: &[brul::PropType::Number], component: std::rc::Rc::clone(component) },"
     ));
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -2600,7 +2602,7 @@ window Demo (title: "demo") {
     let module = emit::module(source).expect("module");
     assert!(module.contains(".modal(true)"), "{module}");
     assert!(
-        module.contains("brul::HandlerEvent::Dismiss, \"dismiss\""),
+        module.contains("brul::HandlerEvent::Dismiss, script_event_dismiss"),
         "{module}"
     );
 }

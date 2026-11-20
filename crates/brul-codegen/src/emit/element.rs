@@ -53,7 +53,7 @@ pub(super) fn widget(
         out.end();
         content_binding(out, content, &name, emit, frame)?;
         parameters(out, element, &name, emit, frame)?;
-        handler_bindings(out, &events.handlers, &name);
+        handler_bindings(out, &events.handlers, &name, emit.script_name);
         out.line(format_args!("{name}"));
         Ok(())
     })?;
@@ -259,11 +259,16 @@ fn content_binding(
     Ok(())
 }
 
-fn handler_bindings(out: &mut Out<'_>, handlers: &[(HandlerEvent, String)], name: &str) {
+fn handler_bindings(
+    out: &mut Out<'_>,
+    handlers: &[(HandlerEvent, String)],
+    name: &str,
+    script: &str,
+) {
     for (event, handler) in handlers {
-        let handler = handler.as_str();
+        let call = super::script::event_call(script, handler);
         out.line(format_args!(
-            "handlers.push(brul::Handler::new(component, Some({name}.id()), brul::HandlerEvent::{event:?}, {handler:?}));"
+            "handlers.push(brul::Handler::new(component, Some({name}.id()), brul::HandlerEvent::{event:?}, {call}));"
         ));
     }
 }
