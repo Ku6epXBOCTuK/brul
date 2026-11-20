@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use brul_codegen::styles::resolve;
-use brul_gui::{Align, Dimension, Direction, Display, Gradient, Justify, Paint};
+use brul_gui::{
+    Align, Dimension, Direction, Display, Gradient, GridAutoFlow, GridLine, Justify, LinePlacement,
+    Paint, TrackSize,
+};
 
 fn resolved(style: &str) -> brul_codegen::styles::Resolved {
     let stylesheet = brul_syntax::style::parse_file(style).expect("stylesheet");
@@ -78,6 +81,40 @@ fn display_and_flex_direction_are_geometry_with_defaults() {
     let column = resolved(".a { display: flex; flex-direction: column; }");
     assert_eq!(column.layout.display, Display::Flex);
     assert_eq!(column.layout.flex_direction, Direction::Column);
+}
+
+#[test]
+fn grid_properties_reach_the_layout_patch() {
+    let resolved = resolved(
+        ".a { display: grid; grid-template-columns: 100px 1fr; grid-template-rows: minmax(20px, 2fr); grid-column: 1 / span 2; grid-row: -1 / auto; grid-auto-flow: column; }",
+    );
+    assert_eq!(resolved.layout.display, Display::Grid);
+    assert_eq!(
+        resolved.layout.grid_template_columns,
+        [TrackSize::Px(100.0), TrackSize::Fr(1.0)]
+    );
+    assert_eq!(
+        resolved.layout.grid_template_rows,
+        [TrackSize::Minmax(
+            Box::new(TrackSize::Px(20.0)),
+            Box::new(TrackSize::Fr(2.0))
+        )]
+    );
+    assert_eq!(
+        resolved.layout.grid_column,
+        GridLine {
+            start: LinePlacement::Line(1),
+            end: Some(LinePlacement::Span(2)),
+        }
+    );
+    assert_eq!(
+        resolved.layout.grid_row,
+        GridLine {
+            start: LinePlacement::Line(-1),
+            end: Some(LinePlacement::Auto),
+        }
+    );
+    assert_eq!(resolved.layout.grid_auto_flow, GridAutoFlow::Column);
 }
 
 #[test]

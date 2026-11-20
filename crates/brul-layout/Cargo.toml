@@ -7,5 +7,6 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+brul-style = { workspace = true }
 taffy = { workspace = true }
 thiserror = { workspace = true }

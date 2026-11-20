@@ -251,8 +251,8 @@ fn synthetic(rows: usize, per_row: usize) -> Tree {
             .map(|_| {
                 group(
                     Direction::Row,
-                    (0..per_row).map(|_| leaf(10, 16, cell)).collect(),
-                    row,
+                    (0..per_row).map(|_| leaf(10, 16, cell.clone())).collect(),
+                    row.clone(),
                 )
             })
             .collect(),

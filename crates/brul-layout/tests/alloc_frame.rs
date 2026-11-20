@@ -55,7 +55,7 @@ fn flatten(node: &LayoutNode, shapes: &mut Vec<Shape>, key: u32) -> u32 {
             offset,
         } => {
             shapes.push(Shape {
-                style: *style,
+                style: style.clone(),
                 direction: Direction::Row,
                 offset: *offset,
                 scroll: ScrollOffset::ZERO,
@@ -78,7 +78,7 @@ fn flatten(node: &LayoutNode, shapes: &mut Vec<Shape>, key: u32) -> u32 {
                 next = flatten(child, shapes, next);
             }
             shapes.push(Shape {
-                style: *style,
+                style: style.clone(),
                 direction: *direction,
                 offset: *offset,
                 scroll: *scroll_offset,

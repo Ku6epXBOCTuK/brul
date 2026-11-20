@@ -67,6 +67,11 @@ fn layout(patch: &LayoutPatch) -> String {
         flex_direction => convert::direction,
         justify => convert::justify,
         align => convert::align,
+        grid_template_columns => convert::tracks,
+        grid_template_rows => convert::tracks,
+        grid_column => convert::grid_line,
+        grid_row => convert::grid_line,
+        grid_auto_flow => convert::auto_flow,
     });
     out
 }
@@ -149,8 +154,8 @@ mod convert {
     use std::time::Duration;
 
     use brul_gui::{
-        Align, Color, Dimension, Direction, Display, Gradient, Justify, Padding, Paint, TextAlign,
-        VerticalAlign,
+        Align, Color, Dimension, Direction, Display, Gradient, GridAutoFlow, GridLine, Justify,
+        LinePlacement, Padding, Paint, TextAlign, TrackSize, VerticalAlign,
     };
 
     pub(super) fn padding(value: &Padding) -> String {
@@ -203,6 +208,51 @@ mod convert {
         }
     }
 
+    pub(super) fn tracks(value: &[TrackSize]) -> String {
+        format!(
+            "vec![{}]",
+            value.iter().map(track_size).collect::<Vec<_>>().join(", ")
+        )
+    }
+
+    fn track_size(value: &TrackSize) -> String {
+        match value {
+            TrackSize::Px(px) => format!("brul::gui::TrackSize::Px({px:?})"),
+            TrackSize::Percent(percent) => {
+                format!("brul::gui::TrackSize::Percent({percent:?})")
+            }
+            TrackSize::Fr(fr) => format!("brul::gui::TrackSize::Fr({fr:?})"),
+            TrackSize::Minmax(min, max) => format!(
+                "brul::gui::TrackSize::Minmax(Box::new({}), Box::new({}))",
+                track_size(min),
+                track_size(max)
+            ),
+        }
+    }
+
+    pub(super) fn grid_line(value: &GridLine) -> String {
+        format!(
+            "brul::gui::GridLine {{ start: {}, end: {} }}",
+            placement(&value.start),
+            value.end.as_ref().map_or_else(
+                || "None".to_owned(),
+                |end| format!("Some({})", placement(end))
+            )
+        )
+    }
+
+    fn placement(value: &LinePlacement) -> String {
+        match value {
+            LinePlacement::Auto => "brul::gui::LinePlacement::Auto".to_owned(),
+            LinePlacement::Line(line) => format!("brul::gui::LinePlacement::Line({line})"),
+            LinePlacement::Span(span) => format!("brul::gui::LinePlacement::Span({span})"),
+        }
+    }
+
+    pub(super) fn auto_flow(value: &GridAutoFlow) -> String {
+        format!("brul::gui::GridAutoFlow::{value:?}")
+    }
+
     pub(super) fn color(value: &Color) -> String {
         format!(
             "brul::gui::Color {{ r: {}, g: {}, b: {}, a: {} }}",
@@ -228,5 +278,35 @@ mod convert {
 
     pub(super) fn millis(value: &Duration) -> String {
         format!("std::time::Duration::from_millis({})", value.as_millis())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::layout;
+    use brul_gui::{Display, GridAutoFlow, GridLine, LayoutPatch, LinePlacement, TrackSize};
+
+    #[test]
+    fn a_layout_patch_emits_its_grid_fields() {
+        let patch = LayoutPatch {
+            display: Some(Display::Grid),
+            grid_template_columns: Some(vec![TrackSize::Fr(1.0)]),
+            grid_column: Some(GridLine {
+                start: LinePlacement::Span(2),
+                end: None,
+            }),
+            grid_auto_flow: Some(GridAutoFlow::Column),
+            ..LayoutPatch::DEFAULT
+        };
+        let emitted = layout(&patch);
+        assert!(emitted.contains("display: Some(brul::gui::Display::Grid)"));
+        assert!(
+            emitted.contains("grid_template_columns: Some(vec![brul::gui::TrackSize::Fr(1.0)])")
+        );
+        assert!(emitted.contains(
+            "grid_column: Some(brul::gui::GridLine { start: brul::gui::LinePlacement::Span(2), end: None })"
+        ));
+        assert!(emitted.contains("grid_auto_flow: Some(brul::gui::GridAutoFlow::Column)"));
+        syn::parse_str::<syn::Expr>(&emitted).unwrap();
     }
 }

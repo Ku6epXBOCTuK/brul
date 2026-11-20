@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+pub use brul_style::{GridLine, LinePlacement, TrackSize};
 use taffy::style_helpers::TaffyAuto;
 use taffy::{
     AlignItems, AvailableSpace, BoxSizing, Dimension as TaffyDimension, FlexDirection,
@@ -62,6 +63,7 @@ pub enum Align {
 pub enum Display {
     #[default]
     Flex,
+    Grid,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -71,14 +73,21 @@ pub enum Direction {
     Column,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum GridAutoFlow {
+    #[default]
+    Row,
+    Column,
+}
+
 macro_rules! layout_patch {
     ($($field:ident: $ty:ty),+ $(,)?) => {
-        #[derive(Clone, Copy, Debug, Default, PartialEq)]
+        #[derive(Clone, Debug, Default, PartialEq)]
         pub struct LayoutStyle {
             $(pub $field: $ty,)+
         }
 
-        #[derive(Clone, Copy, Debug, Default, PartialEq)]
+        #[derive(Clone, Debug, Default, PartialEq)]
         pub struct LayoutPatch {
             $(pub $field: Option<$ty>,)+
         }
@@ -97,7 +106,7 @@ macro_rules! layout_patch {
             fn from(style: &LayoutStyle) -> Self {
                 let default = LayoutStyle::default();
                 Self {
-                    $($field: (style.$field != default.$field).then_some(style.$field),)+
+                    $($field: (style.$field != default.$field).then(|| style.$field.clone()),)+
                 }
             }
         }
@@ -105,8 +114,8 @@ macro_rules! layout_patch {
         impl LayoutStyle {
             pub fn apply(&mut self, patch: &LayoutPatch) {
                 $(
-                    if let Some(value) = patch.$field {
-                        self.$field = value;
+                    if let Some(value) = &patch.$field {
+                        self.$field = value.clone();
                     }
                 )+
             }
@@ -127,6 +136,11 @@ layout_patch! {
     flex_direction: Direction,
     justify: Justify,
     align: Align,
+    grid_template_columns: Vec<TrackSize>,
+    grid_template_rows: Vec<TrackSize>,
+    grid_column: GridLine,
+    grid_row: GridLine,
+    grid_auto_flow: GridAutoFlow,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -371,7 +385,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
             update_nodes(entry, tree, scratch);
 
             let Some(node) = entry.node else {
-                entry.layout = *shape.style;
+                entry.layout = shape.style.clone();
                 entry.direction = shape.direction;
                 entry.offset = shape.offset;
                 entry.constrained = shape.constrained;
@@ -408,7 +422,7 @@ impl<C: PartialEq + Clone> Layouter<C> {
                 }),
                 nodes: scratch.to_vec(),
                 style: taffy,
-                layout: *shape.style,
+                layout: shape.style.clone(),
                 direction: shape.direction,
                 offset: shape.offset,
                 scroll: shape.scroll,
@@ -456,7 +470,7 @@ fn update_style<C>(
     node: NodeId,
     shape: &NodeShape<'_, C>,
 ) {
-    if entry.layout != *shape.style
+    if entry.layout != shape.style.clone()
         || entry.direction != shape.direction
         || entry.offset != shape.offset
         || entry.constrained != shape.constrained
@@ -469,7 +483,7 @@ fn update_style<C>(
         );
         entry.style = taffy.clone();
         tree.set_style(node, taffy).expect("layout tree");
-        entry.layout = *shape.style;
+        entry.layout = shape.style.clone();
         entry.direction = shape.direction;
         entry.offset = shape.offset;
         entry.constrained = shape.constrained;
@@ -1118,7 +1132,7 @@ mod tests {
             ..LayoutStyle::default()
         };
         LayoutNode::row(vec![
-            LayoutNode::leaf(20, 10).with_style(style),
+            LayoutNode::leaf(20, 10).with_style(style.clone()),
             LayoutNode::leaf(40, 10).with_style(style),
         ])
         .with_style(root)

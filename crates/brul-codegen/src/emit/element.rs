@@ -1,3 +1,4 @@
+use brul_gui::Direction;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Slot, Widget};
@@ -166,16 +167,19 @@ impl Group {
         }
     }
 
-    fn args(self) -> &'static str {
+    fn args(self, direction: Direction) -> String {
         match self {
-            Self::Container => "brul::gui::Direction::Row, ",
-            Self::Layer => "",
+            Self::Container => format!("brul::gui::Direction::{direction:?}, "),
+            Self::Layer => String::new(),
         }
     }
 
-    fn direction(self) -> &'static str {
+    fn direction(self, direction: Direction) -> &'static str {
         match self {
-            Self::Container => "Row",
+            Self::Container => match direction {
+                Direction::Row => "Row",
+                Direction::Column => "Column",
+            },
             Self::Layer => "Column",
         }
     }
@@ -190,17 +194,20 @@ fn container(
     counter: &mut usize,
 ) -> Result<(), Error> {
     let call = group.call();
-    let args = group.args();
+    let resolved = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
+        .map_err(|error| error_at(element.position, error.to_string()))?;
+    let direction = match group {
+        Group::Layer => Direction::Column,
+        Group::Container => resolved.layout.flex_direction,
+    };
+    let args = group.args(direction);
     if element.block.items.is_empty() {
         out.push(format_args!("brul::gui::Widget::{call}({args}vec![])"));
         return Ok(());
     }
-    let direction = group.direction();
-    let gap = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
-        .map_err(|error| error_at(element.position, error.to_string()))?
-        .layout
-        .gap;
-    let children = frame.inside(direction, gap);
+    let frame_direction = group.direction(direction);
+    let gap = resolved.layout.gap;
+    let children = frame.inside(frame_direction, gap);
     if contains_slot(&element.block) {
         out.push(format_args!("brul::gui::Widget::{call}({args}{{"));
         out.end();

@@ -65,8 +65,9 @@ pub fn parse_tracks(input: &str) -> Result<Vec<TrackSize>, ParseGridError> {
     Ok(tracks)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum LinePlacement {
+    #[default]
     Auto,
     Line(i32),
     Span(u16),
@@ -91,7 +92,7 @@ impl FromStr for LinePlacement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GridLine {
     pub start: LinePlacement,
     pub end: Option<LinePlacement>,

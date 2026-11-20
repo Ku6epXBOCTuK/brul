@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use brul_style::{
-    ColorValue, Kind, LayoutField, Property, Side, Snapshot, SnapshotError, State, StyleField,
-    Stylesheet, Target, TextField, Type, Value,
+    ColorValue, GridLine, Kind, LayoutField, Property, Side, Snapshot, SnapshotError, State,
+    StyleField, Stylesheet, Target, TextField, TrackSize, Type, Value,
 };
 
 use crate::widget::{
@@ -10,8 +10,8 @@ use crate::widget::{
     WidgetStylePatch,
 };
 use crate::{
-    Align, Color, Dimension, Direction, Display, Gradient, Justify, LayoutPatch, LayoutStyle,
-    Padding, Paint, TextAlign, TextStyle, VerticalAlign,
+    Align, Color, Dimension, Direction, Display, Gradient, GridAutoFlow, Justify, LayoutPatch,
+    LayoutStyle, Padding, Paint, TextAlign, TextStyle, VerticalAlign,
 };
 
 pub struct Resolved {
@@ -255,6 +255,8 @@ reads!(
     number
 );
 reads!(owned LengthTy, Dimension, Type::Length, "px or %", dimension);
+reads!(owned TrackListTy, Vec<TrackSize>, Type::TrackList, "a track list", track_list);
+reads!(owned GridLineTy, GridLine, Type::GridLine, "a grid line", grid_line);
 reads!(owned ColorTy, Color, Type::Color, "a color", paint);
 reads!(owned PaintTy, Paint, Type::Paint, "a color or a gradient", background);
 reads!(borrowed TextTy, Type::String, "a string", string);
@@ -293,7 +295,10 @@ fn apply(
             layout.flex_basis = read::<LengthTy>(value, kind)?
         }
         Target::Layout(LayoutField::Display) => {
-            layout.display = read::<KeywordTy>(value, kind).map(|_| Display::Flex)?
+            layout.display = match read::<KeywordTy>(value, kind)? {
+                "grid" => Display::Grid,
+                _ => Display::Flex,
+            }
         }
         Target::Layout(LayoutField::FlexDirection) => {
             layout.flex_direction = flex_direction(read::<KeywordTy>(value, kind)?)
@@ -308,13 +313,22 @@ fn apply(
         Target::Layout(LayoutField::Justify) => {
             layout.justify = justify(read::<KeywordTy>(value, kind)?)
         }
-        Target::Layout(
-            LayoutField::GridTemplateColumns
-            | LayoutField::GridTemplateRows
-            | LayoutField::GridColumn
-            | LayoutField::GridRow
-            | LayoutField::GridAutoFlow,
-        ) => return Err(expected(kind, "a supported layout property")),
+        Target::Layout(LayoutField::GridTemplateColumns) => {
+            layout.grid_template_columns = read::<TrackListTy>(value, kind)?
+        }
+        Target::Layout(LayoutField::GridTemplateRows) => {
+            layout.grid_template_rows = read::<TrackListTy>(value, kind)?
+        }
+        Target::Layout(LayoutField::GridColumn) => {
+            layout.grid_column = read::<GridLineTy>(value, kind)?
+        }
+        Target::Layout(LayoutField::GridRow) => layout.grid_row = read::<GridLineTy>(value, kind)?,
+        Target::Layout(LayoutField::GridAutoFlow) => {
+            layout.grid_auto_flow = match read::<KeywordTy>(value, kind)? {
+                "column" => GridAutoFlow::Column,
+                _ => GridAutoFlow::Row,
+            }
+        }
         Target::Layout(LayoutField::Align) => layout.align = align(read::<KeywordTy>(value, kind)?),
         Target::Style(StyleField::Background) => style.background = read::<PaintTy>(value, kind)?,
         Target::Style(StyleField::Border) => style.border = read::<ColorTy>(value, kind)?,
@@ -416,6 +430,20 @@ fn dimension(value: &Value, kind: Kind) -> Result<Dimension, StyleError> {
         Value::Px(value) => Ok(Dimension::Px(px(*value))),
         Value::Percent(value) => Ok(Dimension::Percent(*value as f32)),
         _ => Err(expected(kind, "px or %")),
+    }
+}
+
+fn track_list(value: &Value, kind: Kind) -> Result<Vec<TrackSize>, StyleError> {
+    match value {
+        Value::TrackList(tracks) => Ok(tracks.clone()),
+        _ => Err(expected(kind, "a track list")),
+    }
+}
+
+fn grid_line(value: &Value, kind: Kind) -> Result<GridLine, StyleError> {
+    match value {
+        Value::GridLine(line) => Ok(*line),
+        _ => Err(expected(kind, "a grid line")),
     }
 }
 

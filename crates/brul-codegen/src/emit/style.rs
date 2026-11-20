@@ -1,4 +1,7 @@
-use brul_syntax::style::{ClassRule, Color, ColorExpr, ColorValue, Kind, Stylesheet, Theme, Value};
+use brul_syntax::style::{
+    ClassRule, Color, ColorExpr, ColorValue, Kind, LinePlacement, Stylesheet, Theme, TrackSize,
+    Value,
+};
 
 use super::Out;
 
@@ -146,7 +149,39 @@ fn value(value: &Value) -> String {
             operand(&gradient.to)
         ),
         Value::Bool(flag) => format!("s::Value::Bool({flag})"),
-        value => unreachable!("grid values are not implemented yet: {value:?}"),
+        Value::TrackList(tracks) => format!(
+            "s::Value::TrackList(vec![{}])",
+            tracks.iter().map(track_size).collect::<Vec<_>>().join(", ")
+        ),
+        Value::GridLine(line) => format!(
+            "s::Value::GridLine(s::GridLine {{ start: {}, end: {} }})",
+            placement(&line.start),
+            line.end.as_ref().map_or_else(
+                || "None".to_owned(),
+                |end| format!("Some({})", placement(end))
+            )
+        ),
+    }
+}
+
+fn track_size(track: &TrackSize) -> String {
+    match track {
+        TrackSize::Px(px) => format!("s::TrackSize::Px({px:?})"),
+        TrackSize::Percent(percent) => format!("s::TrackSize::Percent({percent:?})"),
+        TrackSize::Fr(fr) => format!("s::TrackSize::Fr({fr:?})"),
+        TrackSize::Minmax(min, max) => format!(
+            "s::TrackSize::Minmax(Box::new({}), Box::new({}))",
+            track_size(min),
+            track_size(max)
+        ),
+    }
+}
+
+fn placement(value: &LinePlacement) -> String {
+    match value {
+        LinePlacement::Auto => "s::LinePlacement::Auto".to_owned(),
+        LinePlacement::Line(line) => format!("s::LinePlacement::Line({line})"),
+        LinePlacement::Span(span) => format!("s::LinePlacement::Span({span})"),
     }
 }
 
@@ -189,8 +224,8 @@ fn literal(value: Color) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::kind;
-    use brul_syntax::style::{Kind, Side};
+    use super::{kind, value};
+    use brul_syntax::style::{GridLine, Kind, LinePlacement, Side, TrackSize, Value};
 
     #[test]
     fn a_padding_side_names_its_side() {
@@ -203,5 +238,29 @@ mod tests {
     #[test]
     fn a_plain_kind_names_itself() {
         assert_eq!(kind(Kind::Background), "s::Kind::Background");
+    }
+
+    #[test]
+    fn grid_values_emit_their_brul_types() {
+        let tracks = vec![
+            TrackSize::Px(100.0),
+            TrackSize::Minmax(Box::new(TrackSize::Fr(1.0)), Box::new(TrackSize::Fr(2.0))),
+        ];
+        let tracks = value(&Value::TrackList(tracks));
+        assert_eq!(
+            tracks,
+            "s::Value::TrackList(vec![s::TrackSize::Px(100.0), s::TrackSize::Minmax(Box::new(s::TrackSize::Fr(1.0)), Box::new(s::TrackSize::Fr(2.0)))])"
+        );
+        syn::parse_str::<syn::Expr>(&tracks).unwrap();
+        let line = GridLine {
+            start: LinePlacement::Line(1),
+            end: Some(LinePlacement::Span(2)),
+        };
+        let line = value(&Value::GridLine(line));
+        assert_eq!(
+            line,
+            "s::Value::GridLine(s::GridLine { start: s::LinePlacement::Line(1), end: Some(s::LinePlacement::Span(2)) })"
+        );
+        syn::parse_str::<syn::Expr>(&line).unwrap();
     }
 }

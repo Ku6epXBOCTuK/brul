@@ -260,6 +260,7 @@ dependencies = [
 name = "brul-layout"
 version = "0.1.0"
 dependencies = [
+ "brul-style",
  "taffy",
  "thiserror 2.0.21",
 ]

@@ -60,7 +60,7 @@ impl Node {
     }
 
     fn layout_style(&self) -> LayoutStyle {
-        let mut layout = self.layout;
+        let mut layout = self.layout.clone();
         if let Some(class) = &self.class {
             layout.apply(&class.layout);
         }
@@ -263,7 +263,7 @@ impl WidgetTree {
             id: node.id,
             data,
             children,
-            layout: node.layout,
+            layout: node.layout.clone(),
             styles: node.styles.clone(),
             state: node.state,
             offset: node.offset,
