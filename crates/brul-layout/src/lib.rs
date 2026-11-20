@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
-pub use brul_style::{GridLine, LinePlacement, RepeatCount, TrackSize};
+pub use brul_style::{Area, AreaTemplate, GridLine, LinePlacement, RepeatCount, TrackSize};
 use taffy::style_helpers::{TaffyAuto, TaffyGridLine};
 use taffy::{
     AlignItems, AvailableSpace, BoxSizing, CheapCloneStr, Dimension as TaffyDimension,
     Display as TaffyDisplay, FlexDirection, GridAutoFlow as TaffyAutoFlow, GridPlacement,
-    GridTemplateComponent, GridTemplateRepetition, JustifyContent, LengthPercentage,
-    LengthPercentageAuto, Line as TaffyLine, MaxTrackSizingFunction, MinMax,
-    MinTrackSizingFunction, NodeId, Position, Rect as TaffyRect,
+    GridTemplateArea, GridTemplateAreas, GridTemplateComponent, GridTemplateRepetition,
+    JustifyContent, LengthPercentage, LengthPercentageAuto, Line as TaffyLine,
+    MaxTrackSizingFunction, MinMax, MinTrackSizingFunction, NodeId, Position, Rect as TaffyRect,
     RepetitionCount as TaffyRepetitionCount, Size as TaffySize, Style as TaffyStyle, TaffyTree,
     compute_leaf_layout,
 };
@@ -145,6 +145,8 @@ layout_patch! {
     grid_column: GridLine,
     grid_row: GridLine,
     grid_auto_flow: GridAutoFlow,
+    grid_template_areas: AreaTemplate,
+    grid_area: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -849,6 +851,36 @@ fn track_component<S: CheapCloneStr>(size: &TrackSize) -> GridTemplateComponent<
     }
 }
 
+fn taffy_areas(template: &AreaTemplate) -> Option<GridTemplateAreas<String>> {
+    if template.rows.is_empty() {
+        return None;
+    }
+    let areas = template
+        .areas()
+        .ok()?
+        .into_iter()
+        .map(|area| GridTemplateArea {
+            name: area.name,
+            row_start: area.row_start,
+            row_end: area.row_end,
+            column_start: area.column_start,
+            column_end: area.column_end,
+        })
+        .collect();
+    Some(GridTemplateAreas {
+        areas,
+        row_count: template.row_count(),
+        column_count: template.column_count(),
+    })
+}
+
+fn named_grid_line(name: &str) -> TaffyLine<GridPlacement> {
+    TaffyLine {
+        start: GridPlacement::NamedLine(name.to_owned(), 0),
+        end: GridPlacement::NamedLine(name.to_owned(), 0),
+    }
+}
+
 fn taffy_style(
     style: &LayoutStyle,
     direction: Direction,
@@ -876,8 +908,17 @@ fn taffy_style(
             GridAutoFlow::Row => TaffyAutoFlow::Row,
             GridAutoFlow::Column => TaffyAutoFlow::Column,
         },
-        grid_column: grid_line(&style.grid_column),
-        grid_row: grid_line(&style.grid_row),
+        grid_template_areas: taffy_areas(&style.grid_template_areas),
+        grid_column: if style.grid_area.is_empty() {
+            grid_line(&style.grid_column)
+        } else {
+            named_grid_line(&style.grid_area)
+        },
+        grid_row: if style.grid_area.is_empty() {
+            grid_line(&style.grid_row)
+        } else {
+            named_grid_line(&style.grid_area)
+        },
         size: TaffySize {
             width: dimension(style.width),
             height: dimension(style.height),
@@ -1553,5 +1594,40 @@ mod tests {
         let column = layout(&grid(GridAutoFlow::Column), viewport).expect("column flow");
         assert_eq!((column.children[1].x, column.children[1].y), (0, 10));
         assert_eq!((column.children[2].x, column.children[2].y), (80, 0));
+    }
+
+    #[test]
+    fn grid_named_areas_place_their_children() {
+        let area = |name: &str| {
+            LayoutNode::leaf(10, 10).with_style(LayoutStyle {
+                grid_area: name.into(),
+                ..LayoutStyle::default()
+            })
+        };
+        let grid = LayoutNode::row(vec![area("head"), area("side"), area("main")]).with_style(
+            LayoutStyle {
+                display: Display::Grid,
+                width: Dimension::Px(200),
+                grid_template_columns: vec![TrackSize::Px(80.0), TrackSize::Px(80.0)],
+                grid_template_rows: vec![TrackSize::Px(10.0), TrackSize::Px(10.0)],
+                grid_template_areas: AreaTemplate::parse(&["head head".into(), "side main".into()])
+                    .expect("area template"),
+                ..LayoutStyle::default()
+            },
+        );
+
+        let placed = layout(
+            &grid,
+            Size {
+                width: 200,
+                height: 200,
+            },
+        )
+        .expect("named areas");
+
+        assert_eq!((placed.children[0].x, placed.children[0].y), (0, 0));
+        assert_eq!(placed.children[0].width, 160);
+        assert_eq!((placed.children[1].x, placed.children[1].y), (0, 10));
+        assert_eq!((placed.children[2].x, placed.children[2].y), (80, 10));
     }
 }

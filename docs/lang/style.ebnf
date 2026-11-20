@@ -9,7 +9,7 @@ Animation   = "animate" Ident ":" Duration ";" ;
 Duration    = Number "ms" ;
 Value       = Number | Number "px" | Number "%" | Color | String
             | ThemeRef | ColorExpr | Gradient | Bool | Keyword
-            | TrackList | GridLine ;
+            | TrackList | GridLine | AreaTemplate | GridArea ;
 TrackList   = TrackSize { TrackSize } ;
 TrackSize   = Number "fr" | Number "px" | Number "%"
             | "minmax" "(" TrackSize "," TrackSize ")"
@@ -17,6 +17,8 @@ TrackSize   = Number "fr" | Number "px" | Number "%"
 RepeatCount = Number | "auto-fill" | "auto-fit" ;
 GridLine    = LinePlacement [ "/" LinePlacement ] ;
 LinePlacement = "auto" | "span" Number | [ "-" ] Number ;
+AreaTemplate = String { String } ;
+GridArea    = Ident ;
 Keyword     = Ident ;
 Bool        = "true" | "false" ;
 Gradient    = "linear-gradient" "(" Number [ "deg" ] "," ColorValue "," ColorValue ")" ;

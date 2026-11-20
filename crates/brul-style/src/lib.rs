@@ -26,7 +26,9 @@ pub use ast::{
     Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Property, State, Stylesheet,
     Theme, ThemeEntry, Value,
 };
-pub use grid::{GridLine, LinePlacement, ParseGridError, RepeatCount, TrackSize};
+pub use grid::{
+    Area, AreaTemplate, GridLine, LinePlacement, ParseGridError, RepeatCount, TrackSize,
+};
 pub use properties::{
     Kind, LayoutField, SPECS, Side, Spec, StatePolicy, StyleField, Target, TextField, ThemeType,
 };

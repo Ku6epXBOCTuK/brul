@@ -16,6 +16,8 @@ rule! {
         RepeatCount,
         GridLine,
         LinePlacement,
+        AreaTemplate,
+        GridArea,
         Keyword,
         Bool,
         Gradient,

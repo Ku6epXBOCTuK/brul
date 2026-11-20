@@ -63,6 +63,8 @@
 | `grid-template-columns`, `grid-template-rows`          | px \| % \| fr \| minmax(...)      | — (нет сетки)           | ❌ геометрия                    |
 | `grid-column`, `grid-row`                              | auto \| N \| span N               | auto                    | ❌ геометрия                    |
 | `grid-auto-flow`                                       | row \| column                     | row                     | ❌ геометрия                    |
+| `grid-template-areas`                                  | строки имён                       | — (нет областей)        | ❌ геометрия                    |
+| `grid-area`                                            | имя области \| auto               | auto                    | ❌ геометрия                    |
 | `padding` (1–4 значения, `-left/right/top/bottom`)     | px                                | 0                       | ❌ геометрия                    |
 | `gap`                                                  | px                                | 0                       | ❌ геометрия                    |
 | `justify-content`                                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
@@ -177,8 +179,9 @@ _«Меняется по состоянию?» = разрешено ли сво�
 Для `grid` треки задаются списком `px`, `%`, `fr`, `minmax(a, b)` и
 `repeat(n, ...)` / `repeat(auto-fill, ...)` / `repeat(auto-fit, ...)`. Дети
 привязываются к линиям через `grid-column` / `grid-row` (`auto`, номер линии,
-`span N`, пара через `/`). Именованные линии и `grid-template-areas` пока не
-поддерживаются.
+`span N`, пара через `/`). Именованные области задаются `grid-template-areas`
+списком строк в кавычках: повторяющиеся имена образуют прямоугольник, `.` —
+пустая ячейка. Ребёнок попадает в область через `grid-area: имя` (или `auto`).
 
 ## Темы
 
@@ -288,10 +291,10 @@ override Button {
   `flex-basis`, `display`, `flex-direction`, `justify-content`, `align-items`,
   `gap`, `border-radius`, `background`, `color`, `opacity`,
   `grid-template-columns`/`grid-template-rows`, `grid-column`/`grid-row`,
-  `grid-auto-flow`.
+  `grid-auto-flow`, `grid-template-areas`, `grid-area`.
 - **Иначе:** border-box вместо content-box; `flex-shrink` по умолчанию 0, а не
   1; `flex-direction: column` не растягивает детей по ширине; нет каскада,
-  специфичности, наследования и `!important`; в сетке нет именованных линий и
+  специфичности, наследования и `!important`; нет именованных линий вне
   `grid-template-areas`.
 - **Не берём:** inline-форматирование, схлопывание margin, `float`,
   `em`/`rem`/`vw`/`vh`/`calc`.
@@ -472,10 +475,10 @@ theme dark {
   display: grid;
   grid-template-columns: repeat(2, 100px) minmax(80px, 2fr);
   grid-template-rows: 40px 1fr;
+  grid-template-areas: "head head" "side main";
   grid-auto-flow: row;
 }
 .grid-item {
-  grid-column: 1 / span 2;
-  grid-row: -1 / auto;
+  grid-area: main;
 }
 ```

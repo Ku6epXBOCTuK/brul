@@ -12,6 +12,8 @@ pub enum Type {
     Keywords(&'static [&'static str]),
     TrackList,
     GridLine,
+    AreaTemplate,
+    GridArea,
     NumberRange(f64, f64),
     NumberIn(&'static [f64]),
 }

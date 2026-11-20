@@ -1,4 +1,4 @@
-use brul_style::{GridLine, LinePlacement, RepeatCount, TrackSize};
+use brul_style::{AreaTemplate, GridLine, LinePlacement, RepeatCount, TrackSize};
 use brul_syntax::style::{
     Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Kind, Property, State,
     Stylesheet, Theme, ThemeEntry, Value, parse_file, parse_file_in, parse_root,
@@ -1096,4 +1096,39 @@ fn grid_lines_parse() {
             ]
         )])
     );
+}
+
+#[test]
+fn grid_areas_parse() {
+    let source = "\
+.grid {
+    grid-template-areas: \"head head\" \"side main\";
+}
+.grid-item {
+    grid-area: main;
+}
+";
+    let rows = ["head head".to_owned(), "side main".to_owned()];
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![
+            rule(
+                "grid",
+                vec![property(
+                    "grid-template-areas",
+                    Value::AreaTemplate(AreaTemplate::parse(&rows).unwrap())
+                )]
+            ),
+            rule(
+                "grid-item",
+                vec![property("grid-area", Value::GridArea("main".to_owned()))]
+            )
+        ])
+    );
+}
+
+#[test]
+fn malformed_grid_areas_are_rejected() {
+    let source = ".grid { grid-template-areas: \"a b\" \"b a\"; }";
+    assert!(parse_file(source).is_err());
 }

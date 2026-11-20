@@ -132,9 +132,9 @@ pub use draw::{DrawCommand, GlyphCommand, ImageCommand, RectCommand, ShapeComman
 pub use gradient::{Gradient, Paint};
 pub use image::{Image, Vector};
 pub use layout::{
-    Align, Dimension, Direction, Display, GridAutoFlow, GridLine, Justify, LayoutBox, LayoutError,
-    LayoutNode, LayoutPatch, LayoutStyle, LinePlacement, Offset, Padding, RepeatCount, Size,
-    TrackSize, layout,
+    Align, Area, AreaTemplate, Dimension, Direction, Display, GridAutoFlow, GridLine, Justify,
+    LayoutBox, LayoutError, LayoutNode, LayoutPatch, LayoutStyle, LinePlacement, Offset, Padding,
+    RepeatCount, Size, TrackSize, layout,
 };
 pub use paint::Frame;
 pub use rect::{ClipRect, Rect, RectSample, Shadow};

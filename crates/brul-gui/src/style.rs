@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use brul_style::{
-    ColorValue, GridLine, Kind, LayoutField, Property, Side, Snapshot, SnapshotError, State,
-    StyleField, Stylesheet, Target, TextField, TrackSize, Type, Value,
+    AreaTemplate, ColorValue, GridLine, Kind, LayoutField, Property, Side, Snapshot, SnapshotError,
+    State, StyleField, Stylesheet, Target, TextField, TrackSize, Type, Value,
 };
 
 use crate::widget::{
@@ -257,6 +257,8 @@ reads!(
 reads!(owned LengthTy, Dimension, Type::Length, "px or %", dimension);
 reads!(owned TrackListTy, Vec<TrackSize>, Type::TrackList, "a track list", track_list);
 reads!(owned GridLineTy, GridLine, Type::GridLine, "a grid line", grid_line);
+reads!(owned AreaTemplateTy, AreaTemplate, Type::AreaTemplate, "an area template", area_template);
+reads!(owned GridAreaTy, String, Type::GridArea, "a grid area", grid_area);
 reads!(owned ColorTy, Color, Type::Color, "a color", paint);
 reads!(owned PaintTy, Paint, Type::Paint, "a color or a gradient", background);
 reads!(borrowed TextTy, Type::String, "a string", string);
@@ -328,6 +330,12 @@ fn apply(
                 "column" => GridAutoFlow::Column,
                 _ => GridAutoFlow::Row,
             }
+        }
+        Target::Layout(LayoutField::GridTemplateAreas) => {
+            layout.grid_template_areas = read::<AreaTemplateTy>(value, kind)?
+        }
+        Target::Layout(LayoutField::GridArea) => {
+            layout.grid_area = read::<GridAreaTy>(value, kind)?
         }
         Target::Layout(LayoutField::Align) => layout.align = align(read::<KeywordTy>(value, kind)?),
         Target::Style(StyleField::Background) => style.background = read::<PaintTy>(value, kind)?,
@@ -444,6 +452,20 @@ fn grid_line(value: &Value, kind: Kind) -> Result<GridLine, StyleError> {
     match value {
         Value::GridLine(line) => Ok(*line),
         _ => Err(expected(kind, "a grid line")),
+    }
+}
+
+fn area_template(value: &Value, kind: Kind) -> Result<AreaTemplate, StyleError> {
+    match value {
+        Value::AreaTemplate(template) => Ok(template.clone()),
+        _ => Err(expected(kind, "an area template")),
+    }
+}
+
+fn grid_area(value: &Value, kind: Kind) -> Result<String, StyleError> {
+    match value {
+        Value::GridArea(area) => Ok(area.clone()),
+        _ => Err(expected(kind, "a grid area")),
     }
 }
 

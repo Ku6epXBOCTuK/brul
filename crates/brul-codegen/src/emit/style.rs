@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    ClassRule, Color, ColorExpr, ColorValue, Kind, LinePlacement, RepeatCount, Stylesheet, Theme,
-    TrackSize, Value,
+    AreaTemplate, ClassRule, Color, ColorExpr, ColorValue, Kind, LinePlacement, RepeatCount,
+    Stylesheet, Theme, TrackSize, Value,
 };
 
 use super::Out;
@@ -161,7 +161,27 @@ fn value(value: &Value) -> String {
                 |end| format!("Some({})", placement(end))
             )
         ),
+        Value::AreaTemplate(template) => format!(
+            "s::Value::AreaTemplate(s::AreaTemplate {{ rows: {} }})",
+            area_rows(template)
+        ),
+        Value::GridArea(area) => format!("s::Value::GridArea({area:?}.into())"),
     }
+}
+
+fn area_rows(template: &AreaTemplate) -> String {
+    let rows = template.rows.iter().map(|row| {
+        let cells = row
+            .iter()
+            .map(|cell| match cell {
+                Some(name) => format!("Some({name:?}.into())"),
+                None => "None".to_owned(),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("vec![{cells}]")
+    });
+    format!("vec![{}]", rows.collect::<Vec<_>>().join(", "))
 }
 
 fn track_size(track: &TrackSize) -> String {
@@ -238,7 +258,9 @@ fn literal(value: Color) -> String {
 #[cfg(test)]
 mod tests {
     use super::{kind, value};
-    use brul_syntax::style::{GridLine, Kind, LinePlacement, RepeatCount, Side, TrackSize, Value};
+    use brul_syntax::style::{
+        AreaTemplate, GridLine, Kind, LinePlacement, RepeatCount, Side, TrackSize, Value,
+    };
 
     #[test]
     fn a_padding_side_names_its_side() {
@@ -279,5 +301,19 @@ mod tests {
             "s::Value::GridLine(s::GridLine { start: s::LinePlacement::Line(1), end: Some(s::LinePlacement::Span(2)) })"
         );
         syn::parse_str::<syn::Expr>(&line).unwrap();
+    }
+
+    #[test]
+    fn grid_areas_emit_their_brul_types() {
+        let rows = ["head head".to_owned(), "side main".to_owned()];
+        let template = value(&Value::AreaTemplate(AreaTemplate::parse(&rows).unwrap()));
+        assert_eq!(
+            template,
+            "s::Value::AreaTemplate(s::AreaTemplate { rows: vec![vec![Some(\"head\".into()), Some(\"head\".into())], vec![Some(\"side\".into()), Some(\"main\".into())]] })"
+        );
+        syn::parse_str::<syn::Expr>(&template).unwrap();
+        let area = value(&Value::GridArea("main".to_owned()));
+        assert_eq!(area, "s::Value::GridArea(\"main\".into())");
+        syn::parse_str::<syn::Expr>(&area).unwrap();
     }
 }

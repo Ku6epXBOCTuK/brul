@@ -1,5 +1,5 @@
 use brul_style::grid::parse_tracks;
-use brul_style::{Color, ColorExpr, ColorValue, Gradient, Type, Value};
+use brul_style::{AreaTemplate, Color, ColorExpr, ColorValue, Gradient, Type, Value};
 
 use crate::cursor::Cursor;
 use crate::error::{Error, Unterminated};
@@ -24,6 +24,8 @@ fn parse(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<Value
         Type::Keywords(names) => keyword(cursor, name, names),
         Type::TrackList => track_list(cursor, name),
         Type::GridLine => grid_line(cursor, name),
+        Type::AreaTemplate => area_template(cursor, name),
+        Type::GridArea => grid_area(cursor, name),
         Type::NumberRange(min, max) => number_in(
             cursor,
             Error::NumberRange {
@@ -177,6 +179,34 @@ fn grid_text(cursor: &mut Cursor) -> (usize, String) {
         .join(" ");
     cursor.set_pos(end);
     (at, text)
+}
+
+fn area_template(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+    let at = cursor.value_start();
+    let mut rows = Vec::new();
+    loop {
+        cursor.skip_trivia();
+        if cursor.peek() != Some('"') {
+            break;
+        }
+        rows.push(string(cursor, name)?);
+    }
+    AreaTemplate::parse(&rows)
+        .map(Value::AreaTemplate)
+        .map_err(|_| Error::at(cursor.source(), at, expected(name, "an area template")))
+}
+
+fn grid_area(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
+    let at = cursor.value_start();
+    let area = cursor
+        .ident()
+        .map_err(|_| Error::at(cursor.source(), at, expected(name, "a grid area")))?;
+    let area = if area == "auto" || area == "none" {
+        String::new()
+    } else {
+        area
+    };
+    Ok(Value::GridArea(area))
 }
 
 fn paint(cursor: &mut Cursor, theme: bool, name: &str) -> Result<Value, Error> {

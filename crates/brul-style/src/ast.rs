@@ -1,4 +1,4 @@
-use crate::grid::{GridLine, TrackSize};
+use crate::grid::{AreaTemplate, GridLine, TrackSize};
 use crate::properties::Kind;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +80,8 @@ pub enum Value {
     Bool(bool),
     TrackList(Vec<TrackSize>),
     GridLine(GridLine),
+    AreaTemplate(AreaTemplate),
+    GridArea(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]

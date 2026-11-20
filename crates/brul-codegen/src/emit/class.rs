@@ -72,6 +72,8 @@ fn layout(patch: &LayoutPatch) -> String {
         grid_column => convert::grid_line,
         grid_row => convert::grid_line,
         grid_auto_flow => convert::auto_flow,
+        grid_template_areas => convert::area_template,
+        grid_area => convert::family,
     });
     out
 }
@@ -154,8 +156,9 @@ mod convert {
     use std::time::Duration;
 
     use brul_gui::{
-        Align, Color, Dimension, Direction, Display, Gradient, GridAutoFlow, GridLine, Justify,
-        LinePlacement, Padding, Paint, RepeatCount, TextAlign, TrackSize, VerticalAlign,
+        Align, AreaTemplate, Color, Dimension, Direction, Display, Gradient, GridAutoFlow,
+        GridLine, Justify, LinePlacement, Padding, Paint, RepeatCount, TextAlign, TrackSize,
+        VerticalAlign,
     };
 
     pub(super) fn padding(value: &Padding) -> String {
@@ -266,6 +269,24 @@ mod convert {
         format!("brul::gui::GridAutoFlow::{value:?}")
     }
 
+    pub(super) fn area_template(value: &AreaTemplate) -> String {
+        let rows = value.rows.iter().map(|row| {
+            let cells = row
+                .iter()
+                .map(|cell| match cell {
+                    Some(name) => format!("Some(String::from({name:?}))"),
+                    None => "None".to_owned(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("vec![{cells}]")
+        });
+        format!(
+            "brul::gui::AreaTemplate {{ rows: vec![{}] }}",
+            rows.collect::<Vec<_>>().join(", ")
+        )
+    }
+
     pub(super) fn color(value: &Color) -> String {
         format!(
             "brul::gui::Color {{ r: {}, g: {}, b: {}, a: {} }}",
@@ -298,7 +319,8 @@ mod convert {
 mod tests {
     use super::layout;
     use brul_gui::{
-        Display, GridAutoFlow, GridLine, LayoutPatch, LinePlacement, RepeatCount, TrackSize,
+        AreaTemplate, Display, GridAutoFlow, GridLine, LayoutPatch, LinePlacement, RepeatCount,
+        TrackSize,
     };
 
     #[test]
@@ -314,6 +336,10 @@ mod tests {
                 end: None,
             }),
             grid_auto_flow: Some(GridAutoFlow::Column),
+            grid_template_areas: Some(AreaTemplate {
+                rows: vec![vec![Some("head".to_owned()), None]],
+            }),
+            grid_area: Some("head".to_owned()),
             ..LayoutPatch::DEFAULT
         };
         let emitted = layout(&patch);
@@ -325,6 +351,10 @@ mod tests {
             "grid_column: Some(brul::gui::GridLine { start: brul::gui::LinePlacement::Span(2), end: None })"
         ));
         assert!(emitted.contains("grid_auto_flow: Some(brul::gui::GridAutoFlow::Column)"));
+        assert!(emitted.contains(
+            "grid_template_areas: Some(brul::gui::AreaTemplate { rows: vec![vec![Some(String::from(\"head\")), None]] })"
+        ));
+        assert!(emitted.contains("grid_area: Some(String::from(\"head\"))"));
         syn::parse_str::<syn::Expr>(&emitted).unwrap();
     }
 }
