@@ -6,7 +6,6 @@ use std::time::Duration;
 use brul_codegen::runtime::{self, accepts_prop};
 use brul_gui::{WidgetEvent, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_script::TypeName;
 use brul_window::{WindowCommand, WindowKey};
 
 use crate::each::reconcile_each;
@@ -57,72 +56,50 @@ impl Host for CommandHost {
     fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
         tracing::debug!(name, arguments = arguments.len(), "host call");
         if name == "theme" {
-            if !arguments.is_empty() {
-                return Err(Error::Arity {
-                    name: name.to_owned(),
-                    expected: "no",
-                });
-            }
+            no_arguments(arguments, name)?;
             return Ok(match &*self.theme.borrow() {
                 Some(theme) => Value::String(theme.clone().into()),
                 None => Value::Null,
             });
         }
-        if name == "setTheme" {
-            if arguments.len() != 1 {
-                return Err(Error::Arity {
-                    name: name.to_owned(),
-                    expected: "one",
-                });
-            }
-            let Value::String(theme) = &arguments[0] else {
-                return Err(Error::Argument {
-                    name: "setTheme",
-                    expected: "String",
-                    found: arguments[0].type_name(),
-                });
-            };
-            self.commands
-                .borrow_mut()
-                .push(WindowCommand::SetTheme(theme.to_string()));
-            return Ok(Value::Null);
-        }
-        if name == "setAlwaysOnTop" {
-            if arguments.len() != 1 {
-                return Err(Error::Arity {
-                    name: name.to_owned(),
-                    expected: "one",
-                });
-            }
-            let Value::Bool(on_top) = &arguments[0] else {
-                return Err(Error::Argument {
-                    name: "setAlwaysOnTop",
-                    expected: "Bool",
-                    found: arguments[0].type_name(),
-                });
-            };
-            self.commands
-                .borrow_mut()
-                .push(WindowCommand::AlwaysOnTop(*on_top));
-            return Ok(Value::Null);
-        }
-        if name == "openWindow" {
-            return self.open_window(arguments);
-        }
         let command = match name {
-            "exit" | "closeWindow" => WindowCommand::Close,
-            "dragWindow" => WindowCommand::Drag,
-            "showWindow" => WindowCommand::Show,
-            "hideWindow" => WindowCommand::Hide,
-            "focusWindow" => WindowCommand::Focus,
+            "setTheme" => {
+                let theme = one_argument(arguments, "setTheme")?;
+                WindowCommand::SetTheme(theme)
+            }
+            "setAlwaysOnTop" => {
+                let on_top = one_argument(arguments, "setAlwaysOnTop")?;
+                WindowCommand::AlwaysOnTop(on_top)
+            }
+            "openWindow" => {
+                let window: String = one_argument(arguments, "openWindow")?;
+                let Some(key) = self.windows.get(window.as_str()) else {
+                    return Err(Error::UnknownWindow(window));
+                };
+                WindowCommand::Open(*key)
+            }
+            "exit" | "closeWindow" => {
+                no_arguments(arguments, name)?;
+                WindowCommand::Close
+            }
+            "dragWindow" => {
+                no_arguments(arguments, name)?;
+                WindowCommand::Drag
+            }
+            "showWindow" => {
+                no_arguments(arguments, name)?;
+                WindowCommand::Show
+            }
+            "hideWindow" => {
+                no_arguments(arguments, name)?;
+                WindowCommand::Hide
+            }
+            "focusWindow" => {
+                no_arguments(arguments, name)?;
+                WindowCommand::Focus
+            }
             _ => return self.delegate(name, arguments),
         };
-        if !arguments.is_empty() {
-            return Err(Error::Arity {
-                name: name.to_owned(),
-                expected: "no",
-            });
-        }
         self.commands.borrow_mut().push(command);
         Ok(Value::Null)
     }
@@ -143,33 +120,36 @@ impl Host for CommandHost {
 }
 
 impl CommandHost {
-    fn open_window(&mut self, arguments: &[Value]) -> Result<Value, Error> {
-        if arguments.len() != 1 {
-            return Err(Error::Arity {
-                name: "openWindow".to_owned(),
-                expected: "one",
-            });
-        }
-        let Value::String(name) = &arguments[0] else {
-            return Err(Error::Argument {
-                name: "openWindow",
-                expected: "String",
-                found: arguments[0].type_name(),
-            });
-        };
-        let Some(key) = self.windows.get(&**name) else {
-            return Err(Error::UnknownWindow(name.to_string()));
-        };
-        self.commands.borrow_mut().push(WindowCommand::Open(*key));
-        Ok(Value::Null)
-    }
-
     fn delegate(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
         match &mut self.app {
             Some(host) => host.call(name, arguments),
             None => Err(Error::UnknownFunction(name.to_owned())),
         }
     }
+}
+
+fn no_arguments(arguments: &[Value], name: &str) -> Result<(), Error> {
+    if arguments.is_empty() {
+        Ok(())
+    } else {
+        Err(Error::Arity {
+            name: name.to_owned(),
+            expected: "no",
+        })
+    }
+}
+
+fn one_argument<T>(arguments: &[Value], name: &'static str) -> Result<T, Error>
+where
+    T: for<'a> TryFrom<&'a Value, Error = Error>,
+{
+    let [value] = arguments else {
+        return Err(Error::Arity {
+            name: name.to_owned(),
+            expected: "one",
+        });
+    };
+    T::try_from(value).map_err(|error| error.at_command(name))
 }
 
 impl<T: Theme> Ui<T> {
