@@ -1468,6 +1468,43 @@ fn scratch(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
 }
 
 #[test]
+fn generates_a_component_file_without_a_window() {
+    let dir = scratch(
+        "standalone",
+        &[(
+            "badge.brul",
+            "<markup>\ncomponent Badge {\n    prop label: String = \"badge\";\n    Text { label }\n}\n</markup>\n",
+        )],
+    );
+    let generated = emit::component_file(&dir.join("badge.brul")).unwrap();
+    assert!(generated.starts_with("use super::*;\n"));
+    assert!(generated.contains("pub fn badge_view("));
+    assert!(!generated.contains("window"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_component_file_resolves_its_imports() {
+    let dir = scratch(
+        "standalone-import",
+        &[
+            (
+                "label.brul",
+                "<markup>\ncomponent Label {\n    Text { \"label\" }\n}\n</markup>\n",
+            ),
+            (
+                "badge.brul",
+                "<use>\n    import Label from \"./label.brul\";\n</use>\n\n<markup>\ncomponent Badge {\n    Label { }\n}\n</markup>\n",
+            ),
+        ],
+    );
+    let generated = emit::component_file(&dir.join("badge.brul")).unwrap();
+    assert!(generated.contains("pub fn badge_view("), "{generated}");
+    assert!(generated.contains("view: label_view,"), "{generated}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn emits_imported_component() {
     let dir = scratch(
         "component",

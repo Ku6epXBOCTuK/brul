@@ -31,6 +31,22 @@ impl Script {
     }
 }
 
+impl Source {
+    pub fn empty() -> Self {
+        Self {
+            windows: Vec::new(),
+            stylesheet: Stylesheet {
+                themes: Vec::new(),
+                rules: Vec::new(),
+            },
+            overrides: Vec::new(),
+            uses: Block::default(),
+            program: None,
+            script: None,
+        }
+    }
+}
+
 pub fn parse(source: &str) -> Result<Source, Error> {
     let sfc = sfc::parse(source).map_err(sfc_error)?;
     let markup = markup::parse_file(&padded(source, sfc.markup))?;

@@ -58,6 +58,29 @@ pub fn resolve(uses: &Block, base: Option<&Path>, palette: &[Theme]) -> Result<R
     })
 }
 
+pub fn load_entry(path: &Path) -> Result<(Registry, usize), Error> {
+    let mut loader = Loader {
+        definitions: Vec::new(),
+        index: HashMap::new(),
+        stack: Vec::new(),
+        palette: &[],
+    };
+    let path = fs::canonicalize(path).map_err(|error| {
+        at(
+            Some(path),
+            format!("cannot read '{}': {error}", path.display()),
+        )
+    })?;
+    let index = loader.file(&path, Some(&path))?;
+    let imports = loader.definitions[index].imports.clone();
+    let registry = Registry {
+        definitions: loader.definitions,
+        imports,
+        resources: Vec::new(),
+    };
+    Ok((registry, index))
+}
+
 pub fn apply_overrides(
     registry: &mut Registry,
     overrides: &[Override],

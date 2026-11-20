@@ -3,6 +3,7 @@ use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use brul_script::Names;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Element, Member, Window};
@@ -12,7 +13,7 @@ use brul_syntax::types::Type;
 use crate::commands::{self, Commands};
 use crate::error_at;
 use crate::kit;
-use crate::{Definition, Resource};
+use crate::{Definition, Registry, Resource};
 
 use super::Emit;
 use super::EmitOutputs;
@@ -78,6 +79,39 @@ pub fn split_module_file_with_commands(path: &Path, commands: &Commands) -> Resu
     module_at(&source, path.parent(), true, Some(path), commands)
 }
 
+pub fn component_file(path: &Path) -> Result<String, Error> {
+    component_file_with_commands(path, &Commands::new())
+}
+
+pub fn component_file_with_commands(path: &Path, commands: &Commands) -> Result<String, Error> {
+    let (registry, entry) = crate::load_entry(path)?;
+    let command_names = commands::names(commands);
+    validate_components(&registry.definitions, &command_names)?;
+    let source = crate::Source::empty();
+    let names = names::table(&source, &registry.definitions);
+    let mut used = HashSet::new();
+    let bases: Vec<String> = registry
+        .definitions
+        .iter()
+        .map(|definition| unique(&identifier(&stem(&definition.path)), &mut used))
+        .collect();
+    let mut structures = StructureNames::default();
+    let mut sinks = ComponentSinks {
+        structures: &mut structures,
+        scripts: None,
+    };
+    let emitted = emit_component(
+        &registry.definitions[entry],
+        &bases[entry],
+        &registry,
+        &bases,
+        &names,
+        commands,
+        &mut sinks,
+    )?;
+    Ok(emitted.file.source)
+}
+
 fn module_at(
     source: &str,
     base: Option<&Path>,
@@ -102,13 +136,7 @@ fn module_at(
         root_external.extend(root_props.iter().copied());
         validate_build(program, &root_external, &command_names)?;
     }
-    for definition in &registry.definitions {
-        if let Some(program) = &definition.program {
-            let mut external = names::declared(&definition.component.members);
-            external.extend(names::declared_events(&definition.component.members));
-            validate_build(program, &external, &command_names)?;
-        }
-    }
+    validate_components(&registry.definitions, &command_names)?;
     let root_state =
         state::State::new(parsed.program.as_ref(), &state_type("script"))?.with_commands(commands);
     let mut used = HashSet::new();
@@ -195,78 +223,22 @@ fn module_at(
     let mut component_bodies = Vec::new();
     let mut component_functions = String::new();
     for (index, definition) in registry.definitions.iter().enumerate() {
-        let root = definition_root(definition)?;
-        let base = &component_bases[index];
-        let prefix = format!("{base}_");
-        let name = format!("bc_{base}");
-        let mut body = String::new();
-        let mut functions = Vec::new();
-        let mut dynamic_classes = false;
-        let mut class_names = ClassNames::default();
-        let component_state = state::State::new(
-            definition.program.as_ref(),
-            &state_type(&format!("{prefix}script")),
-        )?
-        .with_commands(commands);
-        let component_prop_types = prop_types(&definition.component.members);
-        body.push_str(HEADER);
-        view::view(
-            &mut body,
-            &format!("{prefix}view"),
-            root,
-            &[],
-            &mut Emit::component(
-                EmitSources {
-                    script_name: &format!("{prefix}script"),
-                    registry: &registry,
-                    imports: &definition.imports,
-                    resources: &definition.resources,
-                    stylesheet: &definition.stylesheet,
-                    names: &names,
-                    state: &component_state,
-                    prop_types: &component_prop_types,
-                    program: definition.program.as_ref(),
-                    base,
-                    resource_prefix: &prefix,
-                },
-                EmitOutputs {
-                    functions: &mut functions,
-                    bases: &component_bases,
-                    structures: &mut structures,
-                    dynamic_classes: &mut dynamic_classes,
-                    classes: &mut class_names,
-                },
-            ),
-            false,
-        )?;
-        if dynamic_classes {
-            classes::tables(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
-        }
-        classes::statics(
-            &mut Out::new(&mut body),
-            &prefix,
-            &definition.stylesheet,
-            &class_names,
-        )?;
-        style::stylesheet(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
-        let script_file = format!("{name}.script");
-        body.push_str(&script::module(
-            &format!("{prefix}script"),
-            definition.program.as_ref(),
+        let mut sinks = ComponentSinks {
+            structures: &mut structures,
+            scripts: Some(&mut scripts),
+        };
+        let emitted = emit_component(
+            definition,
+            &component_bases[index],
+            &registry,
+            &component_bases,
             &names,
-            &component_state,
-            &component_prop_types,
-        )?);
-        body.push_str(&resources::functions(&prefix, &definition.resources));
-        let mut functions_block = String::new();
-        append_functions(&mut functions_block, &functions);
-        append_functions(&mut component_functions, &functions);
-        push_script(&mut scripts, script_file, definition.script.as_ref());
-        let mut file = String::from("use super::*;\n");
-        file.push_str(&body);
-        file.push_str(&functions_block);
-        files.push(GeneratedFile { name, source: file });
-        component_bodies.push(body);
+            commands,
+            &mut sinks,
+        )?;
+        files.push(emitted.file);
+        component_bodies.push(emitted.body);
+        component_functions.push_str(&emitted.functions);
     }
 
     let mut tail = String::new();
@@ -310,6 +282,118 @@ fn module_at(
         scripts,
         sources: module_sources(&registry, entry),
         flat,
+    })
+}
+
+struct ComponentOutput {
+    file: GeneratedFile,
+    body: String,
+    functions: String,
+}
+
+fn validate_components(definitions: &[Definition], commands: &[&str]) -> Result<(), Error> {
+    for definition in definitions {
+        let Some(program) = &definition.program else {
+            continue;
+        };
+        let mut external = names::declared(&definition.component.members);
+        external.extend(names::declared_events(&definition.component.members));
+        validate_build(program, &external, commands)?;
+    }
+    Ok(())
+}
+
+struct ComponentSinks<'a> {
+    structures: &'a mut StructureNames,
+    scripts: Option<&'a mut Vec<GeneratedFile>>,
+}
+
+fn emit_component(
+    definition: &Definition,
+    base: &str,
+    registry: &Registry,
+    bases: &[String],
+    names: &Names<'_>,
+    commands: &Commands,
+    sinks: &mut ComponentSinks<'_>,
+) -> Result<ComponentOutput, Error> {
+    let root = definition_root(definition)?;
+    let prefix = format!("{base}_");
+    let name = format!("bc_{base}");
+    let mut body = String::new();
+    let mut functions = Vec::new();
+    let mut dynamic_classes = false;
+    let mut class_names = ClassNames::default();
+    let component_state = state::State::new(
+        definition.program.as_ref(),
+        &state_type(&format!("{prefix}script")),
+    )?
+    .with_commands(commands);
+    let component_prop_types = prop_types(&definition.component.members);
+    body.push_str(HEADER);
+    view::view(
+        &mut body,
+        &format!("{prefix}view"),
+        root,
+        &[],
+        &mut Emit::component(
+            EmitSources {
+                script_name: &format!("{prefix}script"),
+                registry,
+                imports: &definition.imports,
+                resources: &definition.resources,
+                stylesheet: &definition.stylesheet,
+                names,
+                state: &component_state,
+                prop_types: &component_prop_types,
+                program: definition.program.as_ref(),
+                base,
+                resource_prefix: &prefix,
+            },
+            EmitOutputs {
+                functions: &mut functions,
+                bases,
+                structures: &mut *sinks.structures,
+                dynamic_classes: &mut dynamic_classes,
+                classes: &mut class_names,
+            },
+        ),
+        false,
+    )?;
+    if dynamic_classes {
+        classes::tables(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
+    }
+    classes::statics(
+        &mut Out::new(&mut body),
+        &prefix,
+        &definition.stylesheet,
+        &class_names,
+    )?;
+    style::stylesheet(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
+    body.push_str(&script::module(
+        &format!("{prefix}script"),
+        definition.program.as_ref(),
+        names,
+        &component_state,
+        &component_prop_types,
+    )?);
+    body.push_str(&resources::functions(&prefix, &definition.resources));
+    let mut functions_block = String::new();
+    append_functions(&mut functions_block, &functions);
+    if let Some(scripts) = &mut sinks.scripts {
+        push_script(
+            scripts,
+            format!("{name}.script"),
+            definition.script.as_ref(),
+        );
+    }
+    let mut file = String::from("use super::*;\n");
+    file.push_str(&body);
+    file.push_str(&functions_block);
+    Ok(ComponentOutput {
+        file: GeneratedFile { name, source: file },
+        body,
+        functions: functions_block,
     })
 }
 
