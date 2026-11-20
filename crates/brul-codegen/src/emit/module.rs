@@ -9,11 +9,13 @@ use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Element, Member, Window};
 use brul_syntax::script::validate_build;
+use brul_syntax::style::Stylesheet;
 use brul_syntax::types::Type;
 
 use crate::commands::{self, Commands};
 use crate::error_at;
 use crate::kit;
+use crate::runtime::HandlerEvent;
 use crate::{Definition, Registry, Resource};
 
 use super::Emit;
@@ -196,49 +198,44 @@ fn module_at(
             head.push_str(HEADER);
         }
         let mut functions = Vec::new();
-        view::view(
+        emit_view(
             &mut head,
             &format!("{}_view", window_bases[index]),
             root,
             &window_handlers,
-            &mut Emit::window(
-                EmitSources {
-                    script_name: "script",
-                    registry: &registry,
-                    imports: &registry.imports,
-                    resources: &registry.resources,
-                    stylesheet: &parsed.stylesheet,
-                    names: &names,
-                    state: &root_state,
-                    prop_types: &root_prop_types,
-                    program: parsed.program.as_ref(),
-                    base: &window_bases[index],
-                    resource_prefix: "",
-                },
-                EmitOutputs {
-                    functions: &mut functions,
-                    bases: &component_bases,
-                    structures: &mut structures,
-                    dynamic_classes: &mut dynamic_classes,
-                    classes: &mut class_names,
-                },
-            ),
-            true,
+            EmitSources {
+                script_name: "script",
+                registry: &registry,
+                imports: &registry.imports,
+                resources: &registry.resources,
+                stylesheet: &parsed.stylesheet,
+                names: &names,
+                state: &root_state,
+                prop_types: &root_prop_types,
+                program: parsed.program.as_ref(),
+                base: &window_bases[index],
+                resource_prefix: "",
+            },
+            EmitOutputs {
+                functions: &mut functions,
+                bases: &component_bases,
+                structures: &mut structures,
+                dynamic_classes: &mut dynamic_classes,
+                classes: &mut class_names,
+            },
+            ViewKind::Window,
         )?;
         append_functions(&mut head_functions, &functions);
         configs.push(config);
     }
-    theme::id(&mut head, &parsed.stylesheet)?;
-    classes::statics(
-        &mut Out::new(&mut head),
+    emit_tail(
+        &mut head,
+        ViewKind::Window,
         "",
         &parsed.stylesheet,
         &class_names,
+        dynamic_classes,
     )?;
-    if dynamic_classes {
-        classes::tables(&mut Out::new(&mut head), "", &parsed.stylesheet);
-    }
-    style::stylesheet(&mut Out::new(&mut head), "", &parsed.stylesheet);
     head.push_str(&resources::functions("", &registry.resources));
 
     let mut files = Vec::new();
@@ -372,45 +369,41 @@ fn emit_component(
     .with_commands(commands);
     let component_prop_types = prop_types(&definition.component.members);
     body.push_str(HEADER);
-    view::view(
+    emit_view(
         &mut body,
         &format!("{prefix}view"),
         root,
         &[],
-        &mut Emit::component(
-            EmitSources {
-                script_name: &format!("{prefix}script"),
-                registry,
-                imports: &definition.imports,
-                resources: &definition.resources,
-                stylesheet: &definition.stylesheet,
-                names,
-                state: &component_state,
-                prop_types: &component_prop_types,
-                program: definition.program.as_ref(),
-                base,
-                resource_prefix: &prefix,
-            },
-            EmitOutputs {
-                functions: &mut functions,
-                bases,
-                structures: &mut *sinks.structures,
-                dynamic_classes: &mut dynamic_classes,
-                classes: &mut class_names,
-            },
-        ),
-        false,
+        EmitSources {
+            script_name: &format!("{prefix}script"),
+            registry,
+            imports: &definition.imports,
+            resources: &definition.resources,
+            stylesheet: &definition.stylesheet,
+            names,
+            state: &component_state,
+            prop_types: &component_prop_types,
+            program: definition.program.as_ref(),
+            base,
+            resource_prefix: &prefix,
+        },
+        EmitOutputs {
+            functions: &mut functions,
+            bases,
+            structures: &mut *sinks.structures,
+            dynamic_classes: &mut dynamic_classes,
+            classes: &mut class_names,
+        },
+        ViewKind::Component,
     )?;
-    if dynamic_classes {
-        classes::tables(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
-    }
-    classes::statics(
-        &mut Out::new(&mut body),
+    emit_tail(
+        &mut body,
+        ViewKind::Component,
         &prefix,
         &definition.stylesheet,
         &class_names,
+        dynamic_classes,
     )?;
-    style::stylesheet(&mut Out::new(&mut body), &prefix, &definition.stylesheet);
     body.push_str(&script::module(
         &format!("{prefix}script"),
         definition.program.as_ref(),
@@ -443,6 +436,64 @@ fn append_functions(out: &mut String, functions: &[String]) {
         out.push('\n');
         out.push_str(function);
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ViewKind {
+    Window,
+    Component,
+}
+
+impl ViewKind {
+    fn typed(self) -> bool {
+        matches!(self, Self::Window)
+    }
+}
+
+fn emit_view(
+    out: &mut String,
+    name: &str,
+    root: &Element,
+    handlers: &[(HandlerEvent, String)],
+    sources: EmitSources<'_>,
+    outputs: EmitOutputs<'_>,
+    kind: ViewKind,
+) -> Result<(), Error> {
+    let mut emit = match kind {
+        ViewKind::Window => Emit::window(sources, outputs),
+        ViewKind::Component => Emit::component(sources, outputs),
+    };
+    view::view(out, name, root, handlers, &mut emit, kind.typed())
+}
+
+fn emit_tail(
+    out: &mut String,
+    kind: ViewKind,
+    prefix: &str,
+    stylesheet: &Stylesheet,
+    class_names: &ClassNames,
+    dynamic: bool,
+) -> Result<(), Error> {
+    if kind == ViewKind::Window {
+        theme::id(out, stylesheet)?;
+    }
+    let mut out = Out::new(out);
+    match kind {
+        ViewKind::Window => {
+            classes::statics(&mut out, prefix, stylesheet, class_names)?;
+            if dynamic {
+                classes::tables(&mut out, prefix, stylesheet);
+            }
+        }
+        ViewKind::Component => {
+            if dynamic {
+                classes::tables(&mut out, prefix, stylesheet);
+            }
+            classes::statics(&mut out, prefix, stylesheet, class_names)?;
+        }
+    }
+    style::stylesheet(&mut out, prefix, stylesheet);
+    Ok(())
 }
 
 fn push_script(
