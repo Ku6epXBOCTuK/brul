@@ -91,6 +91,13 @@ pub fn component_file(path: &Path) -> Result<String, Error> {
 }
 
 pub fn component_file_with_commands(path: &Path, commands: &Commands) -> Result<String, Error> {
+    Ok(split_component_file_with_commands(path, commands)?.flat)
+}
+
+pub fn split_component_file_with_commands(
+    path: &Path,
+    commands: &Commands,
+) -> Result<Module, Error> {
     let (registry, entry) = crate::load_entry(path)?;
     let command_names = commands::names(commands);
     validate_components(&registry.definitions, &command_names)?;
@@ -116,7 +123,15 @@ pub fn component_file_with_commands(path: &Path, commands: &Commands) -> Result<
         commands,
         &mut sinks,
     )?;
-    Ok(emitted.file.source)
+    let source = emitted.file.source;
+    Ok(Module {
+        root: source.clone(),
+        files: Vec::new(),
+        scripts: Vec::new(),
+        sources: vec![fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())],
+        resources: Vec::new(),
+        flat: source,
+    })
 }
 
 fn module_at(

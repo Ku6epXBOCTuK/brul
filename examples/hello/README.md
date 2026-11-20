@@ -9,10 +9,8 @@
 Из корня рабочей копии:
 
 ```powershell
-cargo hello
+cargo run -p hello
 ```
-
-Алиас `hello` объявлен в `.cargo/config.toml`; без него — `cargo run -p hello`.
 
 ### Бэкенд отрисовки
 
@@ -21,7 +19,7 @@ cargo hello
 
 ```powershell
 $env:BRUL_EXAMPLE_BACKEND = 'gpu'
-cargo hello
+cargo run -p hello
 ```
 
 Значения — `software` (умолчание) и `gpu`; любое другое завершает запуск

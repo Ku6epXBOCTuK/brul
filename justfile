@@ -8,6 +8,9 @@ generate-rules:
 generate-codegen:
     cargo run -p brul-codegen --bin emit -- --fixtures
 
+update-brul:
+    cargo install --path crates/brul-codegen --bin cargo-brul --force
+
 transparent: transparent-software
 
 transparent-software:

@@ -2,8 +2,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use brul_codegen::emit;
-use brul_codegen::{Command, Commands};
-use brul_syntax::types::Type;
+use brul_codegen::{commands, generate as generate_module, generate_with};
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -11,48 +10,16 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn commands(name: &str) -> Commands {
-    let mut commands = Commands::new();
-    let path = fixture(name).join("commands.txt");
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return commands;
-    };
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let fields: Vec<&str> = line.split('|').collect();
-        let [name, address, params, result] = fields.as_slice() else {
-            panic!("invalid command line '{line}'");
-        };
-        let params = params
-            .split(',')
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .map(|name| Type::from_name(name).expect("command parameter type"))
-            .collect();
-        let command = Command {
-            name: name.trim().to_owned(),
-            path: address.trim().to_owned(),
-            params,
-            result: Type::from_name(result.trim()).expect("command result type"),
-        };
-        commands.insert(command.name.clone(), command);
-    }
-    commands
-}
-
 fn generate(name: &str) -> Result<String, brul_syntax::error::Error> {
-    let path = fixture(name).join("input.brul");
-    let commands = commands(name);
-    match emit::module_file_with_commands(&path, &commands) {
-        Ok(module) => Ok(module),
-        Err(error) if error.message() == "missing window declaration" => {
-            emit::component_file_with_commands(&path, &commands)
-        }
-        Err(error) => Err(error),
-    }
+    let dir = fixture(name);
+    let input = dir.join("input.brul");
+    let commands_path = dir.join("commands.txt");
+    let module = if commands_path.is_file() {
+        generate_with(&input, &commands::read(&commands_path)?)?
+    } else {
+        generate_module(&input, &dir)?
+    };
+    Ok(module.flat().to_owned())
 }
 
 macro_rules! goldens {

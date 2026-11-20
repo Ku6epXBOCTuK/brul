@@ -122,5 +122,46 @@ fn reads_host_commands_from_the_case_directory() {
 fn reports_unknown_arguments() {
     let result = run(&[Path::new("--nope")]);
     assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("usage: emit"));
+    assert!(String::from_utf8_lossy(&result.stderr).contains("usage: brul"));
+}
+
+#[test]
+fn writes_flat_source_to_stdout() {
+    let dir = scratch("stdout");
+    let input = dir.join("input.brul");
+    fs::write(
+        &input,
+        "<markup>\nwindow Demo (title: \"demo\") {\n    Text { \"hi\" }\n}\n</markup>\n",
+    )
+    .unwrap();
+    let result = run(&[&input]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let generated = String::from_utf8(result.stdout).unwrap();
+    assert!(generated.contains("pub fn demo_view("), "{generated}");
+}
+
+#[test]
+fn writes_the_out_dir_layout() {
+    let dir = scratch("layout");
+    let input = dir.join("input.brul");
+    let out = dir.join("dump");
+    fs::write(
+        &input,
+        "<markup>\nwindow Demo (title: \"demo\") {\n    Text { \"hi\" }\n}\n</markup>\n",
+    )
+    .unwrap();
+    let result = run(&[&input, Path::new("--dir"), &out]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let view = fs::read_to_string(out.join("view.rs")).unwrap();
+    let allocations = fs::read_to_string(out.join("allocations.rs")).unwrap();
+    assert!(view.contains("pub fn demo_view("), "{view}");
+    assert!(allocations.contains("global_allocator"), "{allocations}");
 }

@@ -80,6 +80,49 @@ pub fn collect(root: &Path) -> Result<Commands, Error> {
     Ok(commands)
 }
 
+pub fn read(path: &Path) -> Result<Commands, Error> {
+    let text = fs::read_to_string(path).map_err(|error| {
+        error_at(
+            Position { line: 1, column: 1 },
+            format!("cannot read '{}': {error}", path.display()),
+        )
+    })?;
+    let mut commands = Commands::new();
+    for (index, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let position = Position {
+            line: index + 1,
+            column: 1,
+        };
+        let fields: Vec<&str> = line.split('|').collect();
+        let [name, address, params, result] = fields.as_slice() else {
+            return Err(error_at(position, format!("invalid command line '{line}'")));
+        };
+        let params = params
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(|name| parse_type(name, position))
+            .collect::<Result<Vec<_>, _>>()?;
+        let command = Command {
+            name: name.trim().to_owned(),
+            path: address.trim().to_owned(),
+            params,
+            result: parse_type(result.trim(), position)?,
+        };
+        commands.insert(command.name.clone(), command);
+    }
+    Ok(commands)
+}
+
+fn parse_type(name: &str, position: Position) -> Result<Type, Error> {
+    Type::from_name(name)
+        .ok_or_else(|| error_at(position, format!("unknown command type '{name}'")))
+}
+
 pub fn names(commands: &Commands) -> Vec<&str> {
     let mut names: Vec<&str> = commands.keys().map(String::as_str).collect();
     names.sort_unstable();

@@ -5,7 +5,7 @@
 ## Пример
 
 ```sh
-cargo hello
+cargo run -p hello
 ```
 
 `examples/hello` — минимальный потребитель в рабочей копии: окно, хост-команда,

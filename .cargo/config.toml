@@ -1,2 +1,2 @@
 [alias]
-hello = "run -p hello"
+brul = "run --quiet -p brul-codegen --bin cargo-brul --"
