@@ -21,6 +21,8 @@ fn parse(cursor: &mut Cursor, theme: bool, ty: Type, name: &str) -> Result<Value
         Type::ThemeKey => theme_key(cursor, name),
         Type::String => string(cursor, name).map(Value::String),
         Type::Keywords(names) => keyword(cursor, name, names),
+        Type::TrackList => Err(expected(name, "a track list")),
+        Type::GridLine => Err(expected(name, "a grid line")),
         Type::NumberRange(min, max) => number_in(
             cursor,
             Error::NumberRange {

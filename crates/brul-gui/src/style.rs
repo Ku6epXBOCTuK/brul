@@ -308,6 +308,13 @@ fn apply(
         Target::Layout(LayoutField::Justify) => {
             layout.justify = justify(read::<KeywordTy>(value, kind)?)
         }
+        Target::Layout(
+            LayoutField::GridTemplateColumns
+            | LayoutField::GridTemplateRows
+            | LayoutField::GridColumn
+            | LayoutField::GridRow
+            | LayoutField::GridAutoFlow,
+        ) => return Err(expected(kind, "a supported layout property")),
         Target::Layout(LayoutField::Align) => layout.align = align(read::<KeywordTy>(value, kind)?),
         Target::Style(StyleField::Background) => style.background = read::<PaintTy>(value, kind)?,
         Target::Style(StyleField::Border) => style.border = read::<ColorTy>(value, kind)?,

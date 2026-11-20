@@ -146,6 +146,7 @@ fn value(value: &Value) -> String {
             operand(&gradient.to)
         ),
         Value::Bool(flag) => format!("s::Value::Bool({flag})"),
+        value => unreachable!("grid values are not implemented yet: {value:?}"),
     }
 }
 

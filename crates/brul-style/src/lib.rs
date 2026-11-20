@@ -16,6 +16,7 @@ macro_rules! states {
 
 pub mod ast;
 mod color;
+pub mod grid;
 pub mod properties;
 pub mod snapshot;
 pub mod ty;
@@ -25,6 +26,7 @@ pub use ast::{
     Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Property, State, Stylesheet,
     Theme, ThemeEntry, Value,
 };
+pub use grid::{GridLine, LinePlacement, ParseGridError, TrackSize};
 pub use properties::{
     Kind, LayoutField, SPECS, Side, Spec, StatePolicy, StyleField, Target, TextField, ThemeType,
 };

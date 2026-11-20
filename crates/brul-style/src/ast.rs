@@ -1,3 +1,4 @@
+use crate::grid::{GridLine, TrackSize};
 use crate::properties::Kind;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,6 +78,8 @@ pub enum Value {
     ColorExpr(ColorExpr),
     Gradient(Gradient),
     Bool(bool),
+    TrackList(Vec<TrackSize>),
+    GridLine(GridLine),
 }
 
 #[derive(Debug, Clone, PartialEq)]

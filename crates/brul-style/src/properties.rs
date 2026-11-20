@@ -24,6 +24,11 @@ pub enum LayoutField {
     FlexBasis,
     Display,
     FlexDirection,
+    GridTemplateColumns,
+    GridTemplateRows,
+    GridColumn,
+    GridRow,
+    GridAutoFlow,
     Padding(Side),
     Gap,
     BorderWidth,
@@ -65,6 +70,11 @@ pub enum Kind {
     FlexBasis,
     Display,
     FlexDirection,
+    GridTemplateColumns,
+    GridTemplateRows,
+    GridColumn,
+    GridRow,
+    GridAutoFlow,
     PaddingSide(Side),
     Gap,
     BorderWidth,
@@ -128,8 +138,13 @@ properties! {
     Kind::FlexGrow => ("flex-grow", Type::Number, Forbidden, layout(FlexGrow)),
     Kind::FlexShrink => ("flex-shrink", Type::Number, Forbidden, layout(FlexShrink)),
     Kind::FlexBasis => ("flex-basis", Type::Length, Forbidden, layout(FlexBasis)),
-    Kind::Display => ("display", Type::Keywords(&["flex"]), Forbidden, layout(Display)),
+    Kind::Display => ("display", Type::Keywords(&["flex", "grid"]), Forbidden, layout(Display)),
     Kind::FlexDirection => ("flex-direction", Type::Keywords(&["row", "column"]), Forbidden, layout(FlexDirection)),
+    Kind::GridTemplateColumns => ("grid-template-columns", Type::TrackList, Forbidden, layout(GridTemplateColumns)),
+    Kind::GridTemplateRows => ("grid-template-rows", Type::TrackList, Forbidden, layout(GridTemplateRows)),
+    Kind::GridColumn => ("grid-column", Type::GridLine, Forbidden, layout(GridColumn)),
+    Kind::GridRow => ("grid-row", Type::GridLine, Forbidden, layout(GridRow)),
+    Kind::GridAutoFlow => ("grid-auto-flow", Type::Keywords(&["row", "column"]), Forbidden, layout(GridAutoFlow)),
     Kind::PaddingSide(Side::Left) => ("padding-left", Type::Px, Forbidden, layout(Padding(Side::Left))),
     Kind::PaddingSide(Side::Right) => ("padding-right", Type::Px, Forbidden, layout(Padding(Side::Right))),
     Kind::PaddingSide(Side::Top) => ("padding-top", Type::Px, Forbidden, layout(Padding(Side::Top))),
@@ -244,7 +259,8 @@ impl Spec {
 
 #[cfg(test)]
 mod tests {
-    use super::{Kind, SPECS, Side};
+    use super::{Kind, SPECS, Side, StatePolicy, Target};
+    use crate::ty::Type;
 
     #[test]
     fn every_kind_has_its_own_name_and_spec() {
@@ -264,6 +280,30 @@ mod tests {
         for kind in Kind::ALL {
             assert_eq!(SPECS.iter().filter(|spec| spec.kind == *kind).count(), 1);
         }
+    }
+
+    #[test]
+    fn grid_properties_are_layout_geometry() {
+        let grid = [
+            Kind::GridTemplateColumns,
+            Kind::GridTemplateRows,
+            Kind::GridColumn,
+            Kind::GridRow,
+            Kind::GridAutoFlow,
+        ];
+        for kind in grid {
+            let spec = kind.spec();
+            assert!(matches!(spec.target, Target::Layout(_)));
+            assert!(matches!(spec.in_state, StatePolicy::Forbidden));
+        }
+    }
+
+    #[test]
+    fn display_accepts_grid() {
+        assert!(matches!(
+            Kind::Display.spec().ty,
+            Type::Keywords(names) if names.contains(&"grid")
+        ));
     }
 
     #[test]

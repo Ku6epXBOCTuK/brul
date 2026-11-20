@@ -10,6 +10,8 @@ pub enum Type {
     String,
     Bool,
     Keywords(&'static [&'static str]),
+    TrackList,
+    GridLine,
     NumberRange(f64, f64),
     NumberIn(&'static [f64]),
 }
