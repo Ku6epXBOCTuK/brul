@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 pub use brul_style::{GridLine, LinePlacement, TrackSize};
-use taffy::style_helpers::TaffyAuto;
+use taffy::style_helpers::{TaffyAuto, TaffyGridLine};
 use taffy::{
     AlignItems, AvailableSpace, BoxSizing, CheapCloneStr, Dimension as TaffyDimension,
-    Display as TaffyDisplay, FlexDirection, GridAutoFlow as TaffyAutoFlow, GridTemplateComponent,
-    JustifyContent, LengthPercentage, LengthPercentageAuto, MaxTrackSizingFunction, MinMax,
-    MinTrackSizingFunction, NodeId, Position, Rect as TaffyRect, Size as TaffySize,
-    Style as TaffyStyle, TaffyTree, compute_leaf_layout,
+    Display as TaffyDisplay, FlexDirection, GridAutoFlow as TaffyAutoFlow, GridPlacement,
+    GridTemplateComponent, JustifyContent, LengthPercentage, LengthPercentageAuto,
+    Line as TaffyLine, MaxTrackSizingFunction, MinMax, MinTrackSizingFunction, NodeId, Position,
+    Rect as TaffyRect, Size as TaffySize, Style as TaffyStyle, TaffyTree, compute_leaf_layout,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -279,12 +279,16 @@ pub enum LayoutError {
     InvalidDimension,
     #[error("invalid flex: factors and basis percent must be finite and non-negative")]
     InvalidFlex,
+    #[error("invalid grid line: lines must be non-zero i16 and spans positive")]
+    InvalidGridLine,
 }
 
 pub fn validate(style: &LayoutStyle) -> Result<(), LayoutError> {
     validate_dimension(style.width)?;
     validate_dimension(style.height)?;
-    validate_flex(style)
+    validate_flex(style)?;
+    validate_grid_line(&style.grid_column)?;
+    validate_grid_line(&style.grid_row)
 }
 
 pub struct NodeShape<'a, C> {
@@ -763,6 +767,38 @@ pub fn layout(root: &LayoutNode, viewport: Size) -> Result<LayoutBox, LayoutErro
     Ok(nested[root_key as usize].take().expect("layout root"))
 }
 
+fn valid_placement(placement: LinePlacement) -> bool {
+    match placement {
+        LinePlacement::Auto => true,
+        LinePlacement::Line(value) => i16::try_from(value).is_ok_and(|line| line != 0),
+        LinePlacement::Span(value) => value > 0,
+    }
+}
+
+fn validate_grid_line(line: &GridLine) -> Result<(), LayoutError> {
+    let mut placements = std::iter::once(line.start).chain(line.end);
+    if placements.all(valid_placement) {
+        Ok(())
+    } else {
+        Err(LayoutError::InvalidGridLine)
+    }
+}
+
+fn grid_placement(placement: LinePlacement) -> GridPlacement {
+    match placement {
+        LinePlacement::Auto => GridPlacement::Auto,
+        LinePlacement::Line(value) => GridPlacement::from_line_index(value as i16),
+        LinePlacement::Span(value) => GridPlacement::Span(value),
+    }
+}
+
+fn grid_line(line: &GridLine) -> TaffyLine<GridPlacement> {
+    TaffyLine {
+        start: grid_placement(line.start),
+        end: line.end.map_or(GridPlacement::Auto, grid_placement),
+    }
+}
+
 fn min_track(size: &TrackSize) -> MinTrackSizingFunction {
     match size {
         TrackSize::Px(value) => MinTrackSizingFunction::length(*value as f32),
@@ -815,6 +851,8 @@ fn taffy_style(
             GridAutoFlow::Row => TaffyAutoFlow::Row,
             GridAutoFlow::Column => TaffyAutoFlow::Column,
         },
+        grid_column: grid_line(&style.grid_column),
+        grid_row: grid_line(&style.grid_row),
         size: TaffySize {
             width: dimension(style.width),
             height: dimension(style.height),
@@ -1043,8 +1081,12 @@ mod tests {
 
     #[test]
     fn every_layout_error_has_its_own_message() {
-        let messages = [LayoutError::InvalidDimension, LayoutError::InvalidFlex]
-            .map(|error| error.to_string());
+        let messages = [
+            LayoutError::InvalidDimension,
+            LayoutError::InvalidFlex,
+            LayoutError::InvalidGridLine,
+        ]
+        .map(|error| error.to_string());
 
         assert!(messages.iter().all(|message| !message.is_empty()));
         assert_ne!(messages[0], messages[1]);
@@ -1274,6 +1316,123 @@ mod tests {
         };
         assert_eq!(flexible.min, MinTrackSizingFunction::auto());
         assert_eq!(flexible.max, MaxTrackSizingFunction::fr(2.0));
+    }
+
+    #[test]
+    fn grid_children_obey_explicit_lines() {
+        let grid = LayoutNode::row(vec![
+            LayoutNode::leaf(10, 10).with_style(LayoutStyle {
+                grid_column: GridLine {
+                    start: LinePlacement::Line(2),
+                    end: None,
+                },
+                grid_row: GridLine {
+                    start: LinePlacement::Line(1),
+                    end: None,
+                },
+                ..LayoutStyle::default()
+            }),
+            LayoutNode::leaf(10, 10).with_style(LayoutStyle {
+                grid_column: GridLine {
+                    start: LinePlacement::Line(1),
+                    end: Some(LinePlacement::Line(3)),
+                },
+                grid_row: GridLine {
+                    start: LinePlacement::Line(2),
+                    end: None,
+                },
+                ..LayoutStyle::default()
+            }),
+            LayoutNode::leaf(10, 10).with_style(LayoutStyle {
+                grid_column: GridLine {
+                    start: LinePlacement::Line(-2),
+                    end: None,
+                },
+                grid_row: GridLine {
+                    start: LinePlacement::Line(-2),
+                    end: None,
+                },
+                ..LayoutStyle::default()
+            }),
+            LayoutNode::leaf(10, 10),
+        ])
+        .with_style(LayoutStyle {
+            display: Display::Grid,
+            width: Dimension::Px(200),
+            grid_template_columns: vec![TrackSize::Px(80.0), TrackSize::Px(80.0)],
+            grid_template_rows: vec![TrackSize::Px(10.0), TrackSize::Px(10.0)],
+            ..LayoutStyle::default()
+        });
+
+        let placed = layout(
+            &grid,
+            Size {
+                width: 200,
+                height: 200,
+            },
+        )
+        .expect("grid placement");
+
+        assert_eq!((placed.children[0].x, placed.children[0].y), (80, 0));
+        assert_eq!((placed.children[1].x, placed.children[1].y), (0, 10));
+        assert_eq!(placed.children[1].width, 160);
+        assert_eq!((placed.children[2].x, placed.children[2].y), (80, 10));
+        assert_eq!((placed.children[3].x, placed.children[3].y), (0, 0));
+    }
+
+    #[test]
+    fn grid_span_placement_covers_its_tracks() {
+        let grid = LayoutNode::row(vec![
+            LayoutNode::leaf(10, 10).with_style(LayoutStyle {
+                grid_column: GridLine {
+                    start: LinePlacement::Span(2),
+                    end: None,
+                },
+                ..LayoutStyle::default()
+            }),
+            LayoutNode::leaf(10, 10),
+        ])
+        .with_style(LayoutStyle {
+            display: Display::Grid,
+            width: Dimension::Px(200),
+            grid_template_columns: vec![TrackSize::Px(80.0), TrackSize::Px(80.0)],
+            grid_template_rows: vec![TrackSize::Px(10.0), TrackSize::Px(10.0)],
+            ..LayoutStyle::default()
+        });
+
+        let placed = layout(
+            &grid,
+            Size {
+                width: 200,
+                height: 200,
+            },
+        )
+        .expect("grid span");
+
+        assert_eq!(placed.children[0].width, 160);
+        assert_eq!((placed.children[1].x, placed.children[1].y), (0, 10));
+    }
+
+    #[test]
+    fn grid_children_reject_zero_lines() {
+        let grid = LayoutNode::row(vec![LayoutNode::leaf(10, 10).with_style(LayoutStyle {
+            grid_column: GridLine {
+                start: LinePlacement::Line(0),
+                end: None,
+            },
+            ..LayoutStyle::default()
+        })]);
+
+        assert_eq!(
+            layout(
+                &grid,
+                Size {
+                    width: 200,
+                    height: 200,
+                },
+            ),
+            Err(LayoutError::InvalidGridLine)
+        );
     }
 
     #[test]
