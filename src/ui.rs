@@ -45,6 +45,162 @@ struct OwnedStructure {
     _scope: EffectScope,
 }
 
+#[derive(Default)]
+struct Staged {
+    bindings: Vec<Binding>,
+    handlers: Vec<Handler>,
+    props: Vec<PropBinding>,
+    structures: Vec<Structure>,
+}
+
+struct Rebuilt {
+    built: Built,
+    rows: Vec<RowInfo>,
+    structures: Vec<Structure>,
+}
+
+struct Pending {
+    structures: Vec<OwnedStructure>,
+    rows: Vec<(WidgetId, Vec<RowInfo>)>,
+    by_parent: HashMap<WidgetId, Structure>,
+    staged: Staged,
+}
+
+impl Pending {
+    fn new(structures: Vec<OwnedStructure>, rows: Vec<(WidgetId, Vec<RowInfo>)>) -> Self {
+        let by_parent = structures
+            .iter()
+            .map(|owned| (owned.structure.parent, owned.structure.clone()))
+            .collect();
+        Self {
+            structures,
+            rows,
+            by_parent,
+            staged: Staged::default(),
+        }
+    }
+
+    fn rebuild(
+        &mut self,
+        parent: WidgetId,
+        tree: &Rc<RefCell<WidgetTree>>,
+        theme: Option<&str>,
+    ) -> bool {
+        let Some(structure) = self.by_parent.get(&parent) else {
+            return false;
+        };
+        if !tree.borrow().contains(parent) {
+            return false;
+        }
+        let old_rows = take_rows(&mut self.rows, parent, structure.each);
+        let Some(Rebuilt {
+            built,
+            rows,
+            structures,
+        }) = rebuild_structure(structure, theme, &old_rows)
+        else {
+            if structure.each {
+                self.rows.push((parent, old_rows));
+            }
+            return false;
+        };
+        let Built {
+            widget,
+            bindings,
+            handlers,
+            props,
+        } = built;
+        let mut tree = tree.borrow_mut();
+        let children = if structure.each {
+            self.rows.push((parent, rows.clone()));
+            reconcile_each(&mut tree, parent, &old_rows, widget, &rows)
+        } else {
+            widget.into_children()
+        };
+        tree.replace_all_children(parent, children);
+        self.staged.bindings.extend(bindings);
+        self.staged.handlers.extend(handlers);
+        self.staged.props.extend(props);
+        self.staged.structures.extend(structures);
+        true
+    }
+}
+
+fn take_rows(
+    rows: &mut Vec<(WidgetId, Vec<RowInfo>)>,
+    parent: WidgetId,
+    each: bool,
+) -> Vec<RowInfo> {
+    if !each {
+        return Vec::new();
+    }
+    rows.iter()
+        .position(|(id, _)| *id == parent)
+        .map(|at| rows.remove(at).1)
+        .unwrap_or_default()
+}
+
+fn rebuild_structure(
+    structure: &Structure,
+    theme: Option<&str>,
+    old_rows: &[RowInfo],
+) -> Option<Rebuilt> {
+    let component = Rc::clone(&structure.component);
+    let previous = component.borrow().scope().clone();
+    component.borrow_mut().set_scope(structure.scope.clone());
+    let mut build = Build::with_slots(structure.slots.clone());
+    let rebuilt = (structure.rebuild)(theme, &mut build, &component, old_rows);
+    let structures = build.take_structures();
+    component.borrow_mut().set_scope(previous);
+    let (built, rows) = match rebuilt {
+        Ok(result) => result,
+        Err(message) => {
+            tracing::error!(%message, "view rebuild failed");
+            return None;
+        }
+    };
+    Some(Rebuilt {
+        built,
+        rows,
+        structures,
+    })
+}
+
+trait WidgetRef {
+    fn widget(&self) -> Option<WidgetId>;
+}
+
+impl WidgetRef for Owned {
+    fn widget(&self) -> Option<WidgetId> {
+        Some(self.widget)
+    }
+}
+
+impl WidgetRef for OwnedStructure {
+    fn widget(&self) -> Option<WidgetId> {
+        Some(self.structure.parent)
+    }
+}
+
+impl WidgetRef for (WidgetId, Vec<RowInfo>) {
+    fn widget(&self) -> Option<WidgetId> {
+        Some(self.0)
+    }
+}
+
+impl WidgetRef for Handler {
+    fn widget(&self) -> Option<WidgetId> {
+        self.widget
+    }
+}
+
+fn retain_live<T: WidgetRef>(items: &mut Vec<T>, tree: &WidgetTree, replaced: &HashSet<WidgetId>) {
+    items.retain(|item| {
+        item.widget()
+            .is_none_or(|id| tree.contains(id) && !replaced.contains(&id))
+    });
+}
+
 pub(crate) struct CommandHost {
     pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
     pub(crate) app: Option<Box<dyn Host>>,
@@ -324,6 +480,33 @@ impl<T: Theme> Ui<T> {
         }
     }
 
+    fn rebind(&mut self, staged: Staged) {
+        let Staged {
+            bindings,
+            handlers,
+            props,
+            structures,
+        } = staged;
+        let parents: HashSet<WidgetId> = structures.iter().map(|s| s.parent).collect();
+        let widgets: HashSet<WidgetId> = bindings.iter().map(|b| b.widget).collect();
+        let prop_widgets: HashSet<WidgetId> = props.iter().map(|p| p.widget).collect();
+        let none = HashSet::new();
+        // NOTE: bind runs effects immediately, so a live tree borrow here panics on borrow_mut
+        {
+            let tree = self.tree.borrow();
+            retain_live(&mut self.structures, &tree, &parents);
+            retain_live(&mut self.rows, &tree, &none);
+            retain_live(&mut self.bindings, &tree, &widgets);
+            retain_live(&mut self.props, &tree, &prop_widgets);
+            self.handlers.extend(handlers);
+            retain_live(&mut self.handlers, &tree, &none);
+        }
+        self.index_handlers();
+        self.bind(bindings);
+        self.bind_props(props);
+        self.bind_structures(structures);
+    }
+
     fn rebuild(&mut self) -> Result<(), ViewError> {
         let mut build = Build::new();
         let built = (self.view)(self.theme, &mut build, &self.component);
@@ -417,108 +600,25 @@ impl<T: Theme> Ui<T> {
         if requests.is_empty() {
             return;
         }
-        let structures = std::mem::take(&mut self.structures);
-        let mut rows = std::mem::take(&mut self.rows);
-        let mut bindings = Vec::new();
-        let mut handlers = Vec::new();
-        let mut props = Vec::new();
-        let mut added_structures = Vec::new();
+        let mut pending = Pending::new(
+            std::mem::take(&mut self.structures),
+            std::mem::take(&mut self.rows),
+        );
         let mut changed = false;
-        let index: HashMap<WidgetId, usize> = structures
-            .iter()
-            .enumerate()
-            .map(|(at, owned)| (owned.structure.parent, at))
-            .collect();
         for parent in requests {
-            let Some(&at) = index.get(&parent) else {
-                continue;
-            };
-            if !self.tree.borrow().contains(parent) {
-                continue;
-            }
-            let structure = structures[at].structure.clone();
-            let component = Rc::clone(&structure.component);
-            let old_rows = if structure.each {
-                rows.iter()
-                    .position(|(id, _)| *id == parent)
-                    .map(|position| rows.remove(position).1)
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-            let previous = component.borrow().scope().clone();
-            component.borrow_mut().set_scope(structure.scope.clone());
-            let mut build = Build::with_slots(structure.slots.clone());
-            let rebuilt = (structure.rebuild)(
-                self.theme.map(Theme::name),
-                &mut build,
-                &structure.component,
-                &old_rows,
-            );
-            let added = build.take_structures();
-            component.borrow_mut().set_scope(previous);
-            let (built, rebuilt_rows) = match rebuilt {
-                Ok(result) => result,
-                Err(message) => {
-                    tracing::error!(%message, "view rebuild failed");
-                    if structure.each {
-                        rows.push((parent, old_rows));
-                    }
-                    continue;
-                }
-            };
-            let Built {
-                widget,
-                bindings: added_bindings,
-                handlers: added_handlers,
-                props: added_props,
-            } = built;
-            let mut tree = self.tree.borrow_mut();
-            let children = if structure.each {
-                rows.push((parent, rebuilt_rows.clone()));
-                reconcile_each(&mut tree, parent, &old_rows, widget, &rebuilt_rows)
-            } else {
-                widget.into_children()
-            };
-            tree.replace_all_children(parent, children);
-            bindings.extend(added_bindings);
-            handlers.extend(added_handlers);
-            props.extend(added_props);
-            added_structures.extend(added);
-            changed = true;
+            changed |= pending.rebuild(parent, &self.tree, self.theme.map(Theme::name));
         }
+        let Pending {
+            structures,
+            rows,
+            staged,
+            by_parent: _,
+        } = pending;
         self.structures = structures;
         self.rows = rows;
-        if !changed {
-            return;
+        if changed {
+            self.rebind(staged);
         }
-        let parents: HashSet<WidgetId> = added_structures
-            .iter()
-            .map(|structure| structure.parent)
-            .collect();
-        {
-            let tree = self.tree.borrow();
-            self.structures.retain(|owned| {
-                tree.contains(owned.structure.parent) && !parents.contains(&owned.structure.parent)
-            });
-            self.rows.retain(|(id, _)| tree.contains(*id));
-            let widgets: HashSet<WidgetId> =
-                bindings.iter().map(|binding| binding.widget).collect();
-            self.bindings
-                .retain(|owned| tree.contains(owned.widget) && !widgets.contains(&owned.widget));
-            let widgets: HashSet<WidgetId> = props.iter().map(|prop| prop.widget).collect();
-            self.props
-                .retain(|owned| tree.contains(owned.widget) && !widgets.contains(&owned.widget));
-            self.handlers.extend(handlers);
-            self.handlers.retain(|handler| match handler.widget {
-                Some(widget) => tree.contains(widget),
-                None => true,
-            });
-        }
-        self.index_handlers();
-        self.bind(bindings);
-        self.bind_props(props);
-        self.bind_structures(added_structures);
     }
 }
 
