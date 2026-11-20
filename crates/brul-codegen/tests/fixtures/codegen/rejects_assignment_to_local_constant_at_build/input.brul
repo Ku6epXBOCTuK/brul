@@ -1,0 +1,12 @@
+<script>
+    function update(): Void {
+        const fixed: Number = 3;
+        fixed = 4;
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

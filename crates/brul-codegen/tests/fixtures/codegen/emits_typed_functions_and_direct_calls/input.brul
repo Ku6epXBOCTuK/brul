@@ -1,0 +1,10 @@
+<script>
+    function double(value: Number): Number { return value * 2; }
+    function four(): Number { return double(2); }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

@@ -1,0 +1,12 @@
+<script>
+    let count: Number;
+    function run(): Void {
+        count = double("wrong");
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Text { String(count) }
+}
+</markup>

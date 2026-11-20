@@ -1,0 +1,7 @@
+<markup>
+component Badge {
+    prop label: String = "badge";
+    prop size: Number = 10;
+    Text { label }
+}
+</markup>

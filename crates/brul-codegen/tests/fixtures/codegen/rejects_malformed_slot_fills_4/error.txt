@@ -1,0 +1,1 @@
+fill the default slot with plain children

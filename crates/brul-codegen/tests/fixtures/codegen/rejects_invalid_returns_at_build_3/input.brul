@@ -1,0 +1,9 @@
+<script>
+    function done(): Void { return 1; }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

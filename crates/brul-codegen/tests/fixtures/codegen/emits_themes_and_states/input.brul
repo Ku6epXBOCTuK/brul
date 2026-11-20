@@ -1,0 +1,21 @@
+<style>
+theme dark {
+    accent: #6c8cff;
+}
+theme light {
+    accent: #112233;
+}
+.box {
+    width: 10px;
+    background: theme.accent;
+}
+.box:checked {
+    background: #ff0000;
+}
+</style>
+
+<markup>
+window Styled (title: "styled") {
+    View (box) { }
+}
+</markup>

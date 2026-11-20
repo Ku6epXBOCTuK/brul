@@ -12,6 +12,7 @@ use crate::emit::split_module_file_with_commands;
 
 const VIEW: &str = "view.rs";
 const ALLOCATIONS: &str = "allocations.rs";
+const RESOURCES: &str = "resources";
 
 #[derive(thiserror::Error)]
 pub enum Error {
@@ -49,6 +50,14 @@ pub fn app(entry: impl AsRef<Path>) -> Result<(), Error> {
     }
     for file in &module.scripts {
         fs::write(output.join(&file.name), &file.source)?;
+    }
+    if !module.resources.is_empty() {
+        let resources = output.join(RESOURCES);
+        fs::create_dir_all(&resources)?;
+        for resource in &module.resources {
+            fs::copy(&resource.path, resources.join(&resource.name))?;
+            println!("cargo:rerun-if-changed={}", resource.path.display());
+        }
     }
     for file in sources(entry.parent().unwrap_or(&root))? {
         println!("cargo:rerun-if-changed={}", file.display());

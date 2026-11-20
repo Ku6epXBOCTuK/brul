@@ -1,0 +1,9 @@
+<markup>
+window Picker (title: "picker", width: 488, height: 800, frameless: true, transparent: true) {
+    View { }
+}
+
+window Settings (title: "settings", width: 760, height: 560, frameless: false) {
+    Text { "settings" }
+}
+</markup>

@@ -31,11 +31,18 @@ pub struct GeneratedFile {
     pub source: String,
 }
 
+#[derive(Debug)]
+pub struct ResourceFile {
+    pub name: String,
+    pub path: PathBuf,
+}
+
 pub struct Module {
     pub root: String,
     pub files: Vec<GeneratedFile>,
     pub scripts: Vec<GeneratedFile>,
     pub sources: Vec<PathBuf>,
+    pub resources: Vec<ResourceFile>,
     flat: String,
 }
 
@@ -276,11 +283,29 @@ fn module_at(
 
     push_script(&mut scripts, ROOT_SCRIPT.to_owned(), parsed.script.as_ref());
 
+    let mut resource_files = Vec::new();
+    for resource in &registry.resources {
+        resource_files.push(ResourceFile {
+            name: resources::function_name("", &resource.name),
+            path: resource.path.clone(),
+        });
+    }
+    for (index, definition) in registry.definitions.iter().enumerate() {
+        let prefix = format!("{}_", component_bases[index]);
+        for resource in &definition.resources {
+            resource_files.push(ResourceFile {
+                name: resources::function_name(&prefix, &resource.name),
+                path: resource.path.clone(),
+            });
+        }
+    }
+
     Ok(Module {
         root,
         files,
         scripts,
         sources: module_sources(&registry, entry),
+        resources: resource_files,
         flat,
     })
 }

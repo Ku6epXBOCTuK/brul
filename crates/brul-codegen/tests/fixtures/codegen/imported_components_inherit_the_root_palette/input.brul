@@ -1,0 +1,18 @@
+<style>
+theme dark {
+    surface: #101010;
+}
+theme light {
+    surface: #ffffff;
+}
+</style>
+
+<use>
+    import Chip from "./chip.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Chip { }
+}
+</markup>

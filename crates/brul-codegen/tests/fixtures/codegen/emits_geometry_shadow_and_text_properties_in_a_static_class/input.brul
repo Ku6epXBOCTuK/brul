@@ -1,0 +1,17 @@
+<style>
+.a {
+    border-radius: 8px;
+    scroll: true;
+    box-shadow-offset-x: 2px;
+    box-shadow-offset-y: -3px;
+    box-shadow-blur: 4px;
+    font-size: 18px;
+    font-family: "Inter";
+}
+</style>
+
+<markup>
+window Styled (title: "styled") {
+    View (a) { }
+}
+</markup>

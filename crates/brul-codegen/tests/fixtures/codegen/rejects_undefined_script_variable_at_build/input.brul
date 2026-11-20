@@ -1,0 +1,9 @@
+<script>
+    let count: Number = missing;
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

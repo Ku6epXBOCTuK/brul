@@ -1,0 +1,9 @@
+<use>
+    import Label from "./label.brul";
+</use>
+
+<markup>
+component Badge {
+    Label { }
+}
+</markup>

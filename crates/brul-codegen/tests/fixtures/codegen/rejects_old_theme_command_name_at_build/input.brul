@@ -1,0 +1,7 @@
+<script>
+    function apply(): Void { set_theme("dark"); }
+</script>
+
+<markup>
+window Demo (title: "demo") { View { } }
+</markup>

@@ -1,0 +1,1 @@
+property 'label' is given twice

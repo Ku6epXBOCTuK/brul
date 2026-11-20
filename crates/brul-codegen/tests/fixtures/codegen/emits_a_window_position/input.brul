@@ -1,0 +1,5 @@
+<markup>
+window Demo (title: "demo", x: -40, y: 12.5) {
+    View { }
+}
+</markup>

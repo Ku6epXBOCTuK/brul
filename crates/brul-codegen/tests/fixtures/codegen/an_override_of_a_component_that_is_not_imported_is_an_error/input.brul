@@ -1,0 +1,11 @@
+<style>
+override Chip {
+    .chip { background: #ffffff; }
+}
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

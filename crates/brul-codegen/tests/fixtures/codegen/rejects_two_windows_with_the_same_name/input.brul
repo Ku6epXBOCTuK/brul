@@ -1,0 +1,9 @@
+<markup>
+window Picker (title: "one") {
+    View { }
+}
+
+window Picker (title: "two") {
+    View { }
+}
+</markup>

@@ -1,0 +1,1 @@
+themes 'dark' and 'Dark' share the variant ThemeId::Dark

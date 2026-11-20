@@ -1,0 +1,17 @@
+<script>
+    let selected: Number = 0;
+    function bump(step: Number): Void {
+        selected = selected + step;
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        @each (browsers as browser, index (browser.name)) {
+            Text { browser.name }
+        }
+        Text { selected }
+    }
+}
+</markup>

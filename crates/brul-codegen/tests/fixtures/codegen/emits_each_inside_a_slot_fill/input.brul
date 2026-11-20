@@ -1,0 +1,13 @@
+<use>
+    import List from "./list.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        List {
+            @each (items as item) { Text { item.name } }
+        }
+    }
+}
+</markup>

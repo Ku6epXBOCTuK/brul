@@ -1,0 +1,5 @@
+<markup>
+window Demo (title: "demo") {
+    TextInput (field, multiline: draft) { draft }
+}
+</markup>

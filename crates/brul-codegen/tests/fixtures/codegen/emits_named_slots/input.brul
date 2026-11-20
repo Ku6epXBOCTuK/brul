@@ -1,0 +1,14 @@
+<use>
+    import Badge from "./badge.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        Badge {
+            @slot(header) { Text { "head" } }
+            Text { "body" }
+        }
+    }
+}
+</markup>

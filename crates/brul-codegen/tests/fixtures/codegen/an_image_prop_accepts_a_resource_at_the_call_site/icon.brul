@@ -1,0 +1,6 @@
+<markup>
+component Icon {
+    prop icon: Image = null;
+    Image { icon }
+}
+</markup>

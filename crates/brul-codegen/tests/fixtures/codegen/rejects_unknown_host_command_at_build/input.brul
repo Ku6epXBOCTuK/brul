@@ -1,0 +1,11 @@
+<script>
+    function run(): Void {
+        missing();
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

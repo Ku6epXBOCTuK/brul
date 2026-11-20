@@ -1,0 +1,11 @@
+<markup>
+window Demo (title: "demo") {
+    Column {
+        @if (shown) {
+            Text { "a" }
+        } @else {
+            Text { "b" }
+        }
+    }
+}
+</markup>

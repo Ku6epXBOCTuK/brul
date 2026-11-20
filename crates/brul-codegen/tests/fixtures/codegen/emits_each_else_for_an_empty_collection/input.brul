@@ -1,0 +1,7 @@
+<markup>
+window Demo (title: "demo") {
+    Column {
+        @each (items as item) { Text { item.name } } @else { Text { "empty" } }
+    }
+}
+</markup>

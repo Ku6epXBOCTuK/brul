@@ -1,0 +1,9 @@
+<style>
+.a { background: linear-gradient(90deg, #ff0000, #0000ff); }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (a) { }
+}
+</markup>

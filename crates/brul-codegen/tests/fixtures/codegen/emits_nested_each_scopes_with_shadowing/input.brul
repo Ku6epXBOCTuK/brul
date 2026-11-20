@@ -1,0 +1,9 @@
+<markup>
+window Demo (title: "demo") {
+    Column {
+        @each (groups as item) {
+            @each (item.rows as item) { Text { item.name } }
+        }
+    }
+}
+</markup>

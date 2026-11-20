@@ -1,0 +1,9 @@
+<style>
+.list { scroll: true; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (list) { }
+}
+</markup>

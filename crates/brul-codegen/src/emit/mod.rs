@@ -38,8 +38,8 @@ pub use state::State;
 pub use alloc::allocations;
 pub use expression::operation;
 pub use module::{
-    GeneratedFile, Module, component_file, component_file_with_commands, module, module_file,
-    module_file_with_commands, module_with_commands, split_module_file,
+    GeneratedFile, Module, ResourceFile, component_file, component_file_with_commands, module,
+    module_file, module_file_with_commands, module_with_commands, split_module_file,
     split_module_file_with_commands,
 };
 pub(super) use out::Out;

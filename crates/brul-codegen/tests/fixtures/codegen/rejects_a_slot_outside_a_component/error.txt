@@ -1,0 +1,1 @@
+slot is only allowed inside a component

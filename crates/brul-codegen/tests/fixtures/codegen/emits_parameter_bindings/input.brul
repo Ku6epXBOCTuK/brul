@@ -1,0 +1,8 @@
+<markup>
+window Demo (title: "demo") {
+    View {
+        View (checked: on, selected: on, disabled: off, visible: shown) { }
+        View (x: left, y: top) { }
+    }
+}
+</markup>

@@ -1,0 +1,9 @@
+<style>
+.tone { background: linear-gradient(135deg, #fb923c, #ef4444); }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (class: tone) { }
+}
+</markup>

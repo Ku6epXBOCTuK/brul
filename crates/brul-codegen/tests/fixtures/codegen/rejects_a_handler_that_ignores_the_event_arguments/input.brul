@@ -1,0 +1,9 @@
+<script>
+    function edited(value: Number, caret: Number): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    TextInput (field, on input: edited) { draft }
+}
+</markup>

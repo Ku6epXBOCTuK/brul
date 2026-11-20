@@ -1,0 +1,51 @@
+<script>
+    let shown: Bool = false;
+    let draft: String = "";
+</script>
+
+<style>
+    theme dark {
+        surface: #1e293b;
+        surface-hover: #273549;
+        accent: #3b82f6;
+        accent-hover: #2563eb;
+        text: #f8fafc;
+        border: #334155;
+        muted: #cbd5e1;
+    }
+    theme light {
+        surface: #f1f5f9;
+        surface-hover: #e2e8f0;
+        accent: #2563eb;
+        accent-hover: #1d4ed8;
+        text: #0f172a;
+        border: #cbd5e1;
+        muted: #475569;
+    }
+</style>
+
+<use>
+    import Button from "brul:button";
+    import Card from "brul:card";
+    import Tooltip from "brul:tooltip";
+    import Checkbox from "brul:checkbox";
+    import Dialog from "brul:dialog";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        Button (label: "Open", variant: "primary") { }
+        Card {
+            @slot(header) { Text { "header" } }
+            Text { "body" }
+            @slot(footer) { Text { "footer" } }
+        }
+        Tooltip (text: "tip") { Text { "trigger" } }
+        Checkbox (label: "Remember") { }
+        Dialog (open: shown, title: "Edit") {
+            TextInput (name) { draft }
+        }
+    }
+}
+</markup>

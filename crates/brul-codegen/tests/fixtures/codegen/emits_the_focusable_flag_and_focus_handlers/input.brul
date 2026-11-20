@@ -1,0 +1,10 @@
+<script>
+    function gained(): Void { }
+    function lost(): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Row (focusable: true, on focus: gained, on blur: lost) { }
+}
+</markup>

@@ -1,0 +1,10 @@
+<script>
+    function double(value: Number): Number { return value; }
+    function bad(): Number { return double("two"); }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

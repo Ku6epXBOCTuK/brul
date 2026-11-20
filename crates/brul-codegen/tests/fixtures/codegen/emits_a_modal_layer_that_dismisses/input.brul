@@ -1,0 +1,11 @@
+<script>
+    function dismiss(): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Layer (modal: true, on dismiss: dismiss) {
+        Text { "x" }
+    }
+}
+</markup>

@@ -1,0 +1,8 @@
+<markup>
+window Demo (title: "demo") {
+    Row {
+        Text { "a" }
+        View { }
+    }
+}
+</markup>

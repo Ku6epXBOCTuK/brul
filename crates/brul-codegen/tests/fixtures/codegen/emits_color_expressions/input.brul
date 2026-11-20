@@ -1,0 +1,10 @@
+<style>
+theme light { accent: #3b82f6; }
+.a { background: alpha(theme.accent, 50%); border-color: mix(#3b82f6, white, 20%); }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (a) { }
+}
+</markup>

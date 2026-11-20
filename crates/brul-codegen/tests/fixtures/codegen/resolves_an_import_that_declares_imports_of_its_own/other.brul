@@ -1,0 +1,6 @@
+<markup>
+component Other {
+    prop note: String = "";
+    Text { note }
+}
+</markup>

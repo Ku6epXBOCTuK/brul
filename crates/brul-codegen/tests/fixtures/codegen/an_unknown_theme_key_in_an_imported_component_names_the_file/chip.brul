@@ -1,0 +1,9 @@
+<markup>
+component Chip {
+    View (chip) { }
+}
+</markup>
+
+<style>
+.chip { background: theme.danger; }
+</style>

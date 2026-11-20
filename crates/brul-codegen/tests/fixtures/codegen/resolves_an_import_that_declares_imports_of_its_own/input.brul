@@ -1,0 +1,12 @@
+<use>
+    import Badge from "./badge.brul";
+    import Other from "./other.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        Other (note: "hi") { }
+    }
+}
+</markup>

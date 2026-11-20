@@ -1,0 +1,1 @@
+window event 'click' is not supported yet

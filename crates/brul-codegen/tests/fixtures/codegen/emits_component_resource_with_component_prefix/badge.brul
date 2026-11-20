@@ -1,0 +1,9 @@
+<use>
+    resource check from "./check.png";
+</use>
+
+<markup>
+component Badge {
+    Image (icon) { check }
+}
+</markup>

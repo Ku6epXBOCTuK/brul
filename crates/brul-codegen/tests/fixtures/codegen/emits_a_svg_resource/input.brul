@@ -1,0 +1,9 @@
+<use>
+    resource icon from "./icon.svg";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Image (icon) { icon }
+}
+</markup>

@@ -1,0 +1,11 @@
+<script>
+    function toggle(): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Column (on drag: dragWindow) {
+        Row (on click: toggle, on enter: toggle) { }
+    }
+}
+</markup>

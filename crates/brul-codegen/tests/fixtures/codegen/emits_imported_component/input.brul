@@ -1,0 +1,11 @@
+<use>
+    import Badge from "./badge.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        Badge { }
+    }
+}
+</markup>

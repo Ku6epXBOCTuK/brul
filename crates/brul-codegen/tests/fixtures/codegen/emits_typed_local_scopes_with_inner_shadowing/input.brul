@@ -1,0 +1,19 @@
+<script>
+    let total: Number = 0;
+
+    function update(): Void {
+        const fixed: Number = 3;
+        let step: Number = 2;
+        if (step > 1) {
+            let step: Number = 5;
+            total = step + fixed;
+        }
+        total = total + step;
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

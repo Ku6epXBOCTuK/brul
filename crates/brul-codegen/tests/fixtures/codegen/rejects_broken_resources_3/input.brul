@@ -1,0 +1,10 @@
+<use>
+    resource check from "./check.png";
+    resource check from "./check.png";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Image { check }
+}
+</markup>

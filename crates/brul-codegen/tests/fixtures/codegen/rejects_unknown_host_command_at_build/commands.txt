@@ -1,0 +1,2 @@
+capitalize|crate::__brul_command_capitalize|String|String
+double|crate::__brul_command_double|Number|Number

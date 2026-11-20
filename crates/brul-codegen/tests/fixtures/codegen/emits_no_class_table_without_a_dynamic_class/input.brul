@@ -1,0 +1,9 @@
+<style>
+.tone { background: #ff0000; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (tone) { }
+}
+</markup>

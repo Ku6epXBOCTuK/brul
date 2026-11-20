@@ -1,0 +1,16 @@
+<script>
+    function launch(i: Number): Void {
+    }
+</script>
+
+<use>
+    import Badge from "./badge.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Column {
+        Badge (on clicked: launch) { }
+    }
+}
+</markup>

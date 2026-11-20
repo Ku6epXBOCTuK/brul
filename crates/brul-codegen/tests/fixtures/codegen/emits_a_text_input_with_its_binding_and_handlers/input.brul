@@ -1,0 +1,10 @@
+<script>
+    function edited(ev: Object): Void { }
+    function submitted(): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    TextInput (field, on input: edited, on submit: submitted) { draft }
+}
+</markup>

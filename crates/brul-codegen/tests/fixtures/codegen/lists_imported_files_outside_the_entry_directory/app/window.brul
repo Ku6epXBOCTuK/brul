@@ -1,0 +1,9 @@
+<use>
+    import Badge from "../shared/badge.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Badge { }
+}
+</markup>

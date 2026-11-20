@@ -1,0 +1,8 @@
+<markup>
+component Badge {
+    View {
+        @slot(header)
+        @slot
+    }
+}
+</markup>

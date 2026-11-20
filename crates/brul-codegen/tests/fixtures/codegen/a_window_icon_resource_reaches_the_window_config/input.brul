@@ -1,0 +1,9 @@
+<use>
+    resource check from "./check.png";
+</use>
+
+<markup>
+window Demo (title: "demo", icon: check) {
+    View { }
+}
+</markup>

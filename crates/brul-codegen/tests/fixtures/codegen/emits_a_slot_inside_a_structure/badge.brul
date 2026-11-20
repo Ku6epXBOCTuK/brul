@@ -1,0 +1,10 @@
+<markup>
+component Badge {
+    prop shown: Bool = false;
+    View {
+        @if (shown) {
+            @slot
+        }
+    }
+}
+</markup>

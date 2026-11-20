@@ -1,0 +1,9 @@
+<script>
+    function quit(ev: Object): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo", on key: quit) {
+    View { }
+}
+</markup>

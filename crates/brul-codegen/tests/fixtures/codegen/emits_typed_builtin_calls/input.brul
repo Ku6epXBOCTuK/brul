@@ -1,0 +1,10 @@
+<script>
+    function apply(): Void {
+        setTheme("dark");
+        let current: String = theme();
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") { View { } }
+</markup>

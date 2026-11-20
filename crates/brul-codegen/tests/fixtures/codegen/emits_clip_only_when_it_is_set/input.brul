@@ -1,0 +1,9 @@
+<style>
+.panel { clip: true; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (panel) { }
+}
+</markup>

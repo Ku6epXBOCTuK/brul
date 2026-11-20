@@ -1,0 +1,9 @@
+<script>
+    function hide(): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo", on close: hide) {
+    View { }
+}
+</markup>

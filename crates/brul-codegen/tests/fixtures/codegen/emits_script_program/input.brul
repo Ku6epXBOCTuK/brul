@@ -1,0 +1,22 @@
+<script>
+    const limit: Number = 2;
+    let count: Number = 0;
+
+    function bump(step: Number): Void {
+        if (step > limit) {
+            count = limit;
+        } else {
+            count = count + step;
+        }
+    }
+
+    function closePanel(): Void {
+        count = 0;
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { Text { count } }
+}
+</markup>

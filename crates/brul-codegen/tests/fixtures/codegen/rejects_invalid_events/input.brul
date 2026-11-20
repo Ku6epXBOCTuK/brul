@@ -1,0 +1,5 @@
+<markup>
+window Demo (title: "demo") {
+    View (on hovered: toggle) { }
+}
+</markup>

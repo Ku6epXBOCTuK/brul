@@ -1,0 +1,11 @@
+<script>
+    function answer(): Number { return 42; }
+    function label(): String { return "ok"; }
+    function done(): Void { return; }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

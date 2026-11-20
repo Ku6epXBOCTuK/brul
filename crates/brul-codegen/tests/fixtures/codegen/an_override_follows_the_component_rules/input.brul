@@ -1,0 +1,16 @@
+<style>
+override Chip {
+    .chip { background: #ffffff; }
+    .chip:hover { background: #efefef; }
+}
+</style>
+
+<use>
+    import Chip from "./chip.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Chip { }
+}
+</markup>

@@ -1,0 +1,9 @@
+<use>
+    import Button from "brul:buton";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Column { Button (label: "x") { } }
+}
+</markup>

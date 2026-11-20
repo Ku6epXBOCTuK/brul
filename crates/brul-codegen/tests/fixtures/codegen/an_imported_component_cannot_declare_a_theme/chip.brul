@@ -1,0 +1,11 @@
+<markup>
+component Chip {
+    View (chip) { }
+}
+</markup>
+
+<style>
+theme dark {
+    surface: #ffffff;
+}
+</style>

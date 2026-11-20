@@ -1,0 +1,9 @@
+<script>
+    function quit(): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo", on key: quit) {
+    View { }
+}
+</markup>

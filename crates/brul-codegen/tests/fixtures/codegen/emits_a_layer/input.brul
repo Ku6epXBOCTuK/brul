@@ -1,0 +1,7 @@
+<markup>
+window Demo (title: "demo") {
+    Layer {
+        Text { "x" }
+    }
+}
+</markup>

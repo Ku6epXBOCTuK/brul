@@ -1,0 +1,9 @@
+<markup>
+component Badge {
+    View {
+        Row {
+            @slot
+        }
+    }
+}
+</markup>

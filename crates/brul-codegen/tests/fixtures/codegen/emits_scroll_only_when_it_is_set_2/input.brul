@@ -1,0 +1,9 @@
+<style>
+.list { border-radius: 4px; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View (list) { }
+}
+</markup>

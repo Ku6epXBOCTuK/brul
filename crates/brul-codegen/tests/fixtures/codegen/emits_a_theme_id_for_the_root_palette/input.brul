@@ -1,0 +1,10 @@
+<style>
+theme dark { accent: #6c8cff; }
+theme high-contrast { accent: #ffffff; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    View { }
+}
+</markup>

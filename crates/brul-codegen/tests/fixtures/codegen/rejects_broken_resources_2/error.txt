@@ -1,0 +1,1 @@
+resource './check.png' is neither PNG nor SVG

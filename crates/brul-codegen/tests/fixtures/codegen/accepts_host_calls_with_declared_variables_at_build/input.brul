@@ -1,0 +1,13 @@
+<script>
+    let label: String;
+
+    function greet(): Void {
+        label = capitalize(label);
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Text { label }
+}
+</markup>

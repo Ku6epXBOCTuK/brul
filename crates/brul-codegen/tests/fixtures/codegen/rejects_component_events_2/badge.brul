@@ -1,0 +1,6 @@
+<markup>
+component Badge {
+    event clicked(i: Number);
+    Text { "badge" }
+}
+</markup>
