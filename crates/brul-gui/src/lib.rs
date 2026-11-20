@@ -132,7 +132,7 @@ pub use draw::{DrawCommand, GlyphCommand, ImageCommand, RectCommand, ShapeComman
 pub use gradient::{Gradient, Paint};
 pub use image::{Image, Vector};
 pub use layout::{
-    Align, Dimension, Direction, Justify, LayoutBox, LayoutError, LayoutNode, LayoutPatch,
+    Align, Dimension, Direction, Display, Justify, LayoutBox, LayoutError, LayoutNode, LayoutPatch,
     LayoutStyle, Offset, Padding, Size, layout,
 };
 pub use paint::Frame;

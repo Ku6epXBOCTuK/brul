@@ -553,6 +553,8 @@ fn mvp_properties_accept_their_types() {
         flex-grow: 2;
         flex-shrink: 0;
         flex-basis: 0px;
+        display: flex;
+        flex-direction: row;
         align-items: stretch;
         font-weight: 700;
         opacity: 1;

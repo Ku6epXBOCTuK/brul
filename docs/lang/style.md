@@ -58,8 +58,10 @@
 | `flex-grow`                                            | число                             | 0                       | ❌ геометрия                    |
 | `flex-shrink`                                          | число                             | 0 (в CSS — 1)           | ❌ геометрия                    |
 | `flex-basis`                                           | px \| %                           | auto                    | ❌ геометрия                    |
+| `display`                                              | flex                              | flex                    | ❌ геометрия                    |
+| `flex-direction`                                       | row\|column                       | row                     | ❌ геометрия                    |
 | `padding` (1–4 значения, `-left/right/top/bottom`)     | px                                | 0                       | ❌ геометрия                    |
-| `gap`                                                  | px                                | 0 (только Row/Column)   | ❌ геометрия                    |
+| `gap`                                                  | px                                | 0                       | ❌ геометрия                    |
 | `justify-content`                                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
 | `align-items`                                          | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
 | `background`                                           | Color \| Gradient                 | transparent             | ✅                              |
@@ -163,8 +165,9 @@ _«Меняется по состоянию?» = разрешено ли сво�
 фиксированного размера — ошибка компиляции. `font-size` и `font-family` в
 состоянии запрещены: размер и гарнитура — свойство компоновки, а не состояния.
 
-Выравнивание внутри Row/Column — имена из CSS flexbox: `justify-content` —
-главная ось, `align-items` — поперечная. Значения:
+Направление потока контейнера задаётся свойством `flex-direction` (дефолт
+`row`), `display` всегда `flex`. Остальные имена выравнивания тоже из CSS
+flexbox: `justify-content` — главная ось, `align-items` — поперечная. Значения:
 `start|center|end|space-between` (justify) и `start|center|end|stretch` (align);
 остальные значения flexbox отложены.
 
@@ -273,12 +276,12 @@ override Button {
 осознанные, и каждое записано здесь.
 
 - **Совпадает:** `width`/`height`, `padding`, `flex-grow`/`flex-shrink`/
-  `flex-basis`, `justify-content`, `align-items`, `gap`, `border-radius`,
-  `background`, `color`, `opacity`.
+  `flex-basis`, `display`, `flex-direction`, `justify-content`, `align-items`,
+  `gap`, `border-radius`, `background`, `color`, `opacity`.
 - **Иначе:** border-box вместо content-box; `flex-shrink` по умолчанию 0, а не
   1; `Column` не растягивает детей по ширине; нет каскада, специфичности,
   наследования и `!important`.
-- **Не берём:** `display`, inline-форматирование, схлопывание margin, `float`,
+- **Не берём:** inline-форматирование, схлопывание margin, `float`,
   `em`/`rem`/`vw`/`vh`/`calc`.
 
 Свойства, чьи имена ещё не совпадают, переименовываются отдельными задачами.

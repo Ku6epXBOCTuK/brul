@@ -10,8 +10,8 @@ use crate::widget::{
     WidgetStylePatch,
 };
 use crate::{
-    Align, Color, Dimension, Gradient, Justify, LayoutPatch, LayoutStyle, Padding, Paint,
-    TextAlign, TextStyle, VerticalAlign,
+    Align, Color, Dimension, Direction, Display, Gradient, Justify, LayoutPatch, LayoutStyle,
+    Padding, Paint, TextAlign, TextStyle, VerticalAlign,
 };
 
 pub struct Resolved {
@@ -292,6 +292,12 @@ fn apply(
         Target::Layout(LayoutField::FlexBasis) => {
             layout.flex_basis = read::<LengthTy>(value, kind)?
         }
+        Target::Layout(LayoutField::Display) => {
+            layout.display = read::<KeywordTy>(value, kind).map(|_| Display::Flex)?
+        }
+        Target::Layout(LayoutField::FlexDirection) => {
+            layout.flex_direction = flex_direction(read::<KeywordTy>(value, kind)?)
+        }
         Target::Layout(LayoutField::Padding(side)) => {
             *edge(&mut layout.padding, side) = read::<PxTy>(value, kind)?;
         }
@@ -339,6 +345,13 @@ fn edge(padding: &mut Padding, side: Side) -> &mut u32 {
         Side::Top => &mut padding.top,
         Side::Right => &mut padding.right,
         Side::Bottom => &mut padding.bottom,
+    }
+}
+
+fn flex_direction(value: &str) -> Direction {
+    match value {
+        "column" => Direction::Column,
+        _ => Direction::Row,
     }
 }
 

@@ -24,16 +24,17 @@ impl Pass<'_> {
 
         let mut keys = Vec::new();
         let (direction, scroll, transparent) = match &node.data {
-            Content::View { direction } => {
+            Content::View => {
                 keys.reserve(node.children.len());
                 for &child in &node.children {
                     keys.push(self.build(child)?);
                 }
+                let direction = layout_style.flex_direction;
                 let scroll = match direction {
                     Direction::Column => node.scroll_offset,
                     Direction::Row => ScrollOffset::ZERO,
                 };
-                (*direction, scroll, false)
+                (direction, scroll, false)
             }
             Content::Structure => {
                 keys.reserve(node.children.len());

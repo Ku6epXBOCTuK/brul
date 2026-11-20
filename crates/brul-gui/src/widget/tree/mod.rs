@@ -258,12 +258,7 @@ impl WidgetTree {
         self.release_transition(slot);
         let node = &mut self.nodes[slot.index()];
         // NOTE: the slot is freed and refilled by insert, so the placeholder never reaches a snapshot
-        let data = std::mem::replace(
-            &mut node.data,
-            Content::View {
-                direction: Direction::Column,
-            },
-        );
+        let data = std::mem::replace(&mut node.data, Content::View);
         let widget = Widget {
             id: node.id,
             data,

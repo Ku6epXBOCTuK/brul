@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::image::Image;
-use crate::layout::{Direction, LayoutStyle, Offset};
+use crate::layout::{Direction, LayoutPatch, LayoutStyle, Offset};
 use crate::text::TextStyle;
 
 static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
@@ -92,9 +92,7 @@ pub struct Widget {
 }
 
 enum Content {
-    View {
-        direction: Direction,
-    },
+    View,
     Structure,
     Text {
         content: String,
@@ -115,7 +113,7 @@ enum Content {
 impl Content {
     fn kind(&self) -> WidgetKind {
         match self {
-            Self::View { .. } => WidgetKind::View,
+            Self::View => WidgetKind::View,
             Self::Structure => WidgetKind::Structure,
             Self::Text { .. } => WidgetKind::Text,
             Self::Input { .. } => WidgetKind::Input,
@@ -124,13 +122,14 @@ impl Content {
     }
 
     fn is_group(&self) -> bool {
-        matches!(self, Self::View { .. } | Self::Structure)
+        matches!(self, Self::View | Self::Structure)
     }
 }
 
 impl Widget {
     pub fn view(direction: Direction, children: Vec<Self>) -> Self {
-        let mut widget = Self::new(Content::View { direction });
+        let mut widget = Self::new(Content::View);
+        widget.layout.flex_direction = direction;
         widget.children = children;
         widget
     }
@@ -242,7 +241,7 @@ impl Widget {
     }
 
     pub fn with_layout(mut self, layout: LayoutStyle) -> Self {
-        self.layout = layout;
+        self.layout.apply(&LayoutPatch::from(&layout));
         self
     }
 
@@ -259,7 +258,7 @@ impl Widget {
             | Content::Input {
                 styles: current, ..
             } => **current = styles,
-            Content::View { .. } | Content::Structure | Content::Image(_) => {}
+            Content::View | Content::Structure | Content::Image(_) => {}
         }
         self
     }
@@ -274,7 +273,7 @@ impl Widget {
             | Content::Input {
                 styles: current, ..
             } => current.apply_layers(&class.text),
-            Content::View { .. } | Content::Structure | Content::Image(_) => {}
+            Content::View | Content::Structure | Content::Image(_) => {}
         }
         self
     }

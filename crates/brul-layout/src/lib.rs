@@ -58,8 +58,15 @@ pub enum Align {
     Stretch,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Display {
+    #[default]
+    Flex,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Direction {
+    #[default]
     Row,
     Column,
 }
@@ -116,6 +123,8 @@ layout_patch! {
     flex_grow: f32,
     flex_shrink: f32,
     flex_basis: Dimension,
+    display: Display,
+    flex_direction: Direction,
     justify: Justify,
     align: Align,
 }

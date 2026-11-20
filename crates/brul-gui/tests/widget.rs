@@ -1096,6 +1096,44 @@ fn a_class_carrying_a_layout_relayouts_the_widget() {
 }
 
 #[test]
+fn a_class_can_turn_a_column_into_a_row() {
+    let first = Widget::column(vec![]).with_layout(fixed(40, 20));
+    let second = Widget::column(vec![]).with_layout(fixed(40, 20));
+    let second_id = second.id();
+    let root = Widget::column(vec![first, second]).with_layout(LayoutStyle {
+        width: Dimension::Px(200),
+        height: Dimension::Px(100),
+        gap: 5,
+        ..LayoutStyle::default()
+    });
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 200,
+        height: 100,
+    };
+
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    assert_eq!(snapshot.node(second_id).expect("second").y, 25);
+
+    let class = Class {
+        layout: LayoutPatch {
+            flex_direction: Some(Direction::Row),
+            ..LayoutPatch::default()
+        },
+        ..Class::default()
+    };
+    assert!(tree.apply_class(root_id, Some(&class)));
+    assert!(tree.layout_dirty());
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let snapshot = tree.snapshot().expect("snapshot");
+    let second = snapshot.node(second_id).expect("second");
+    assert_eq!((second.x, second.y), (45, 0));
+}
+
+#[test]
 fn a_grown_branch_is_laid_out_again_when_its_sibling_shrinks() {
     fn build(left: &str) -> (WidgetTree, WidgetId, WidgetId, WidgetId) {
         let left_widget = Widget::text(left);

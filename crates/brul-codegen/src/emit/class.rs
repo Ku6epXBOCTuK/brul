@@ -63,6 +63,8 @@ fn layout(patch: &LayoutPatch) -> String {
         flex_grow => convert::debug,
         flex_shrink => convert::debug,
         flex_basis => convert::dimension,
+        display => convert::display,
+        flex_direction => convert::direction,
         justify => convert::justify,
         align => convert::align,
     });
@@ -147,7 +149,8 @@ mod convert {
     use std::time::Duration;
 
     use brul_gui::{
-        Align, Color, Dimension, Gradient, Justify, Padding, Paint, TextAlign, VerticalAlign,
+        Align, Color, Dimension, Direction, Display, Gradient, Justify, Padding, Paint, TextAlign,
+        VerticalAlign,
     };
 
     pub(super) fn padding(value: &Padding) -> String {
@@ -163,6 +166,14 @@ mod convert {
             Dimension::Px(px) => format!("brul::gui::Dimension::Px({px})"),
             Dimension::Percent(percent) => format!("brul::gui::Dimension::Percent({percent:?})"),
         }
+    }
+
+    pub(super) fn display(value: &Display) -> String {
+        format!("brul::gui::Display::{value:?}")
+    }
+
+    pub(super) fn direction(value: &Direction) -> String {
+        format!("brul::gui::Direction::{value:?}")
     }
 
     pub(super) fn justify(value: &Justify) -> String {

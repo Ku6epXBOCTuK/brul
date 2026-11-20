@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use brul_codegen::styles::resolve;
-use brul_gui::{Align, Dimension, Gradient, Justify, Paint};
+use brul_gui::{Align, Dimension, Direction, Display, Gradient, Justify, Paint};
 
 fn resolved(style: &str) -> brul_codegen::styles::Resolved {
     let stylesheet = brul_syntax::style::parse_file(style).expect("stylesheet");
@@ -67,6 +67,17 @@ fn align_items_maps_every_keyword() {
         let resolved = resolved(&format!(".a {{ align-items: {keyword}; }}"));
         assert_eq!(resolved.layout.align, expected, "{keyword}");
     }
+}
+
+#[test]
+fn display_and_flex_direction_are_geometry_with_defaults() {
+    let default = resolved(".a { }");
+    assert_eq!(default.layout.display, Display::Flex);
+    assert_eq!(default.layout.flex_direction, Direction::Row);
+
+    let column = resolved(".a { display: flex; flex-direction: column; }");
+    assert_eq!(column.layout.display, Display::Flex);
+    assert_eq!(column.layout.flex_direction, Direction::Column);
 }
 
 #[test]
