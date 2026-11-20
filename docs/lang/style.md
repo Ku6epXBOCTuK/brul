@@ -174,10 +174,11 @@ _«Меняется по состоянию?» = разрешено ли сво�
 — поперечная. Значения: `start|center|end|space-between` (justify) и
 `start|center|end|stretch` (align); остальные значения flexbox отложены.
 
-Для `grid` треки задаются списком `px`, `%`, `fr` и `minmax(a, b)`. Дети
+Для `grid` треки задаются списком `px`, `%`, `fr`, `minmax(a, b)` и
+`repeat(n, ...)` / `repeat(auto-fill, ...)` / `repeat(auto-fit, ...)`. Дети
 привязываются к линиям через `grid-column` / `grid-row` (`auto`, номер линии,
-`span N`, пара через `/`). `repeat()`, именованные линии и `grid-template-areas`
-пока не поддерживаются.
+`span N`, пара через `/`). Именованные линии и `grid-template-areas` пока не
+поддерживаются.
 
 ## Темы
 
@@ -290,8 +291,8 @@ override Button {
   `grid-auto-flow`.
 - **Иначе:** border-box вместо content-box; `flex-shrink` по умолчанию 0, а не
   1; `flex-direction: column` не растягивает детей по ширине; нет каскада,
-  специфичности, наследования и `!important`; в сетке нет `repeat()`,
-  именованных линий и `grid-template-areas`.
+  специфичности, наследования и `!important`; в сетке нет именованных линий и
+  `grid-template-areas`.
 - **Не берём:** inline-форматирование, схлопывание margin, `float`,
   `em`/`rem`/`vw`/`vh`/`calc`.
 
@@ -469,7 +470,7 @@ theme dark {
 ```css
 .grid {
   display: grid;
-  grid-template-columns: 100px 1fr minmax(80px, 2fr);
+  grid-template-columns: repeat(2, 100px) minmax(80px, 2fr);
   grid-template-rows: 40px 1fr;
   grid-auto-flow: row;
 }

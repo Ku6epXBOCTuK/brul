@@ -155,7 +155,7 @@ mod convert {
 
     use brul_gui::{
         Align, Color, Dimension, Direction, Display, Gradient, GridAutoFlow, GridLine, Justify,
-        LinePlacement, Padding, Paint, TextAlign, TrackSize, VerticalAlign,
+        LinePlacement, Padding, Paint, RepeatCount, TextAlign, TrackSize, VerticalAlign,
     };
 
     pub(super) fn padding(value: &Padding) -> String {
@@ -227,6 +227,19 @@ mod convert {
                 track_size(min),
                 track_size(max)
             ),
+            TrackSize::Repeat(count, tracks) => format!(
+                "brul::gui::TrackSize::Repeat({}, vec![{}])",
+                repeat_count(count),
+                tracks.iter().map(track_size).collect::<Vec<_>>().join(", ")
+            ),
+        }
+    }
+
+    fn repeat_count(count: &RepeatCount) -> String {
+        match count {
+            RepeatCount::Count(value) => format!("brul::gui::RepeatCount::Count({value})"),
+            RepeatCount::AutoFill => "brul::gui::RepeatCount::AutoFill".to_owned(),
+            RepeatCount::AutoFit => "brul::gui::RepeatCount::AutoFit".to_owned(),
         }
     }
 
@@ -284,13 +297,18 @@ mod convert {
 #[cfg(test)]
 mod tests {
     use super::layout;
-    use brul_gui::{Display, GridAutoFlow, GridLine, LayoutPatch, LinePlacement, TrackSize};
+    use brul_gui::{
+        Display, GridAutoFlow, GridLine, LayoutPatch, LinePlacement, RepeatCount, TrackSize,
+    };
 
     #[test]
     fn a_layout_patch_emits_its_grid_fields() {
         let patch = LayoutPatch {
             display: Some(Display::Grid),
-            grid_template_columns: Some(vec![TrackSize::Fr(1.0)]),
+            grid_template_columns: Some(vec![
+                TrackSize::Fr(1.0),
+                TrackSize::Repeat(RepeatCount::AutoFill, vec![TrackSize::Px(40.0)]),
+            ]),
             grid_column: Some(GridLine {
                 start: LinePlacement::Span(2),
                 end: None,
@@ -300,9 +318,9 @@ mod tests {
         };
         let emitted = layout(&patch);
         assert!(emitted.contains("display: Some(brul::gui::Display::Grid)"));
-        assert!(
-            emitted.contains("grid_template_columns: Some(vec![brul::gui::TrackSize::Fr(1.0)])")
-        );
+        assert!(emitted.contains(
+            "grid_template_columns: Some(vec![brul::gui::TrackSize::Fr(1.0), brul::gui::TrackSize::Repeat(brul::gui::RepeatCount::AutoFill, vec![brul::gui::TrackSize::Px(40.0)])])"
+        ));
         assert!(emitted.contains(
             "grid_column: Some(brul::gui::GridLine { start: brul::gui::LinePlacement::Span(2), end: None })"
         ));

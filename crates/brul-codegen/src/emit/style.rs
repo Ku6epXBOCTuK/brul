@@ -1,6 +1,6 @@
 use brul_syntax::style::{
-    ClassRule, Color, ColorExpr, ColorValue, Kind, LinePlacement, Stylesheet, Theme, TrackSize,
-    Value,
+    ClassRule, Color, ColorExpr, ColorValue, Kind, LinePlacement, RepeatCount, Stylesheet, Theme,
+    TrackSize, Value,
 };
 
 use super::Out;
@@ -174,6 +174,19 @@ fn track_size(track: &TrackSize) -> String {
             track_size(min),
             track_size(max)
         ),
+        TrackSize::Repeat(count, tracks) => format!(
+            "s::TrackSize::Repeat({}, vec![{}])",
+            repeat_count(count),
+            tracks.iter().map(track_size).collect::<Vec<_>>().join(", ")
+        ),
+    }
+}
+
+fn repeat_count(count: &RepeatCount) -> String {
+    match count {
+        RepeatCount::Count(value) => format!("s::RepeatCount::Count({value})"),
+        RepeatCount::AutoFill => "s::RepeatCount::AutoFill".to_owned(),
+        RepeatCount::AutoFit => "s::RepeatCount::AutoFit".to_owned(),
     }
 }
 
@@ -225,7 +238,7 @@ fn literal(value: Color) -> String {
 #[cfg(test)]
 mod tests {
     use super::{kind, value};
-    use brul_syntax::style::{GridLine, Kind, LinePlacement, Side, TrackSize, Value};
+    use brul_syntax::style::{GridLine, Kind, LinePlacement, RepeatCount, Side, TrackSize, Value};
 
     #[test]
     fn a_padding_side_names_its_side() {
@@ -245,11 +258,15 @@ mod tests {
         let tracks = vec![
             TrackSize::Px(100.0),
             TrackSize::Minmax(Box::new(TrackSize::Fr(1.0)), Box::new(TrackSize::Fr(2.0))),
+            TrackSize::Repeat(
+                RepeatCount::AutoFill,
+                vec![TrackSize::Px(40.0), TrackSize::Fr(1.0)],
+            ),
         ];
         let tracks = value(&Value::TrackList(tracks));
         assert_eq!(
             tracks,
-            "s::Value::TrackList(vec![s::TrackSize::Px(100.0), s::TrackSize::Minmax(Box::new(s::TrackSize::Fr(1.0)), Box::new(s::TrackSize::Fr(2.0)))])"
+            "s::Value::TrackList(vec![s::TrackSize::Px(100.0), s::TrackSize::Minmax(Box::new(s::TrackSize::Fr(1.0)), Box::new(s::TrackSize::Fr(2.0))), s::TrackSize::Repeat(s::RepeatCount::AutoFill, vec![s::TrackSize::Px(40.0), s::TrackSize::Fr(1.0)])])"
         );
         syn::parse_str::<syn::Expr>(&tracks).unwrap();
         let line = GridLine {

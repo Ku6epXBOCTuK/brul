@@ -12,12 +12,37 @@ impl fmt::Display for ParseGridError {
 
 impl std::error::Error for ParseGridError {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepeatCount {
+    Count(u16),
+    AutoFill,
+    AutoFit,
+}
+
+impl FromStr for RepeatCount {
+    type Err = ParseGridError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input.trim() {
+            "auto-fill" => Ok(Self::AutoFill),
+            "auto-fit" => Ok(Self::AutoFit),
+            text => text
+                .parse()
+                .ok()
+                .filter(|&count| count > 0)
+                .map(Self::Count)
+                .ok_or(ParseGridError),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TrackSize {
     Px(f64),
     Percent(f64),
     Fr(f64),
     Minmax(Box<TrackSize>, Box<TrackSize>),
+    Repeat(RepeatCount, Vec<TrackSize>),
 }
 
 impl FromStr for TrackSize {
@@ -25,6 +50,15 @@ impl FromStr for TrackSize {
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let text = input.trim();
+        if let Some(inner) = text
+            .strip_prefix("repeat(")
+            .and_then(|s| s.strip_suffix(')'))
+        {
+            let mut parts = split(inner, ',');
+            let count = parts.next().ok_or(ParseGridError)?.parse()?;
+            let tracks = parts.collect::<Vec<_>>().join(" ");
+            return Ok(Self::Repeat(count, parse_tracks(&tracks)?));
+        }
         if let Some(inner) = text
             .strip_prefix("minmax(")
             .and_then(|s| s.strip_suffix(')'))
@@ -136,7 +170,7 @@ fn split(input: &str, separator: char) -> impl Iterator<Item = &str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{GridLine, LinePlacement, TrackSize, parse_tracks};
+    use super::{GridLine, LinePlacement, RepeatCount, TrackSize, parse_tracks};
 
     #[test]
     fn a_track_list_accepts_lengths_fr_and_minmax() {
@@ -150,6 +184,22 @@ mod tests {
                 TrackSize::Percent(25.0),
             ]
         );
+    }
+
+    #[test]
+    fn repeat_accepts_counts_and_auto_modes() {
+        assert_eq!(
+            parse_tracks("repeat(2, 100px 1fr)").unwrap(),
+            [TrackSize::Repeat(
+                RepeatCount::Count(2),
+                vec![TrackSize::Px(100.0), TrackSize::Fr(1.0)]
+            )]
+        );
+        assert_eq!(
+            "repeat(auto-fill, 10px)".parse::<TrackSize>().unwrap(),
+            TrackSize::Repeat(RepeatCount::AutoFill, vec![TrackSize::Px(10.0)])
+        );
+        assert!("repeat(0, 1fr)".parse::<TrackSize>().is_err());
     }
 
     #[test]

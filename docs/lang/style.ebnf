@@ -12,7 +12,9 @@ Value       = Number | Number "px" | Number "%" | Color | String
             | TrackList | GridLine ;
 TrackList   = TrackSize { TrackSize } ;
 TrackSize   = Number "fr" | Number "px" | Number "%"
-            | "minmax" "(" TrackSize "," TrackSize ")" ;
+            | "minmax" "(" TrackSize "," TrackSize ")"
+            | "repeat" "(" RepeatCount "," TrackList ")" ;
+RepeatCount = Number | "auto-fill" | "auto-fit" ;
 GridLine    = LinePlacement [ "/" LinePlacement ] ;
 LinePlacement = "auto" | "span" Number | [ "-" ] Number ;
 Keyword     = Ident ;

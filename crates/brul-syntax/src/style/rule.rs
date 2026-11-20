@@ -13,6 +13,7 @@ rule! {
         Value,
         TrackList,
         TrackSize,
+        RepeatCount,
         GridLine,
         LinePlacement,
         Keyword,

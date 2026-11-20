@@ -1,4 +1,4 @@
-use brul_style::{GridLine, LinePlacement, TrackSize};
+use brul_style::{GridLine, LinePlacement, RepeatCount, TrackSize};
 use brul_syntax::style::{
     Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Kind, Property, State,
     Stylesheet, Theme, ThemeEntry, Value, parse_file, parse_file_in, parse_root,
@@ -1035,6 +1035,31 @@ fn grid_track_lists_parse() {
                     Value::TrackList(vec![TrackSize::Percent(50.0), TrackSize::Fr(2.0)])
                 ),
             ]
+        )])
+    );
+}
+
+#[test]
+fn grid_repeat_tracks_parse() {
+    let source = "\
+.grid {
+    grid-template-columns: repeat(2, 100px 1fr) repeat(auto-fit, 40px);
+}
+";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "grid",
+            vec![property(
+                "grid-template-columns",
+                Value::TrackList(vec![
+                    TrackSize::Repeat(
+                        RepeatCount::Count(2),
+                        vec![TrackSize::Px(100.0), TrackSize::Fr(1.0)]
+                    ),
+                    TrackSize::Repeat(RepeatCount::AutoFit, vec![TrackSize::Px(40.0)]),
+                ])
+            )]
         )])
     );
 }

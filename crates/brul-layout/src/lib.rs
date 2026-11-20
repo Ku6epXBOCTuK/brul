@@ -1,13 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
-pub use brul_style::{GridLine, LinePlacement, TrackSize};
+pub use brul_style::{GridLine, LinePlacement, RepeatCount, TrackSize};
 use taffy::style_helpers::{TaffyAuto, TaffyGridLine};
 use taffy::{
     AlignItems, AvailableSpace, BoxSizing, CheapCloneStr, Dimension as TaffyDimension,
     Display as TaffyDisplay, FlexDirection, GridAutoFlow as TaffyAutoFlow, GridPlacement,
-    GridTemplateComponent, JustifyContent, LengthPercentage, LengthPercentageAuto,
-    Line as TaffyLine, MaxTrackSizingFunction, MinMax, MinTrackSizingFunction, NodeId, Position,
-    Rect as TaffyRect, Size as TaffySize, Style as TaffyStyle, TaffyTree, compute_leaf_layout,
+    GridTemplateComponent, GridTemplateRepetition, JustifyContent, LengthPercentage,
+    LengthPercentageAuto, Line as TaffyLine, MaxTrackSizingFunction, MinMax,
+    MinTrackSizingFunction, NodeId, Position, Rect as TaffyRect,
+    RepetitionCount as TaffyRepetitionCount, Size as TaffySize, Style as TaffyStyle, TaffyTree,
+    compute_leaf_layout,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -805,6 +807,7 @@ fn min_track(size: &TrackSize) -> MinTrackSizingFunction {
         TrackSize::Percent(value) => MinTrackSizingFunction::percent(*value as f32 / 100.0),
         TrackSize::Fr(_) => MinTrackSizingFunction::auto(),
         TrackSize::Minmax(min, _) => min_track(min),
+        TrackSize::Repeat(..) => MinTrackSizingFunction::auto(),
     }
 }
 
@@ -814,14 +817,36 @@ fn max_track(size: &TrackSize) -> MaxTrackSizingFunction {
         TrackSize::Percent(value) => MaxTrackSizingFunction::percent(*value as f32 / 100.0),
         TrackSize::Fr(value) => MaxTrackSizingFunction::fr(*value as f32),
         TrackSize::Minmax(_, max) => max_track(max),
+        TrackSize::Repeat(..) => MaxTrackSizingFunction::auto(),
+    }
+}
+
+fn repetition_count(count: &RepeatCount) -> TaffyRepetitionCount {
+    match count {
+        RepeatCount::Count(value) => TaffyRepetitionCount::Count(*value),
+        RepeatCount::AutoFill => TaffyRepetitionCount::AutoFill,
+        RepeatCount::AutoFit => TaffyRepetitionCount::AutoFit,
     }
 }
 
 fn track_component<S: CheapCloneStr>(size: &TrackSize) -> GridTemplateComponent<S> {
-    GridTemplateComponent::Single(MinMax {
-        min: min_track(size),
-        max: max_track(size),
-    })
+    match size {
+        TrackSize::Repeat(count, tracks) => GridTemplateComponent::Repeat(GridTemplateRepetition {
+            count: repetition_count(count),
+            tracks: tracks
+                .iter()
+                .map(|track| MinMax {
+                    min: min_track(track),
+                    max: max_track(track),
+                })
+                .collect(),
+            line_names: vec![vec![]; tracks.len() + 1],
+        }),
+        _ => GridTemplateComponent::Single(MinMax {
+            min: min_track(size),
+            max: max_track(size),
+        }),
+    }
 }
 
 fn taffy_style(
@@ -1316,6 +1341,69 @@ mod tests {
         };
         assert_eq!(flexible.min, MinTrackSizingFunction::auto());
         assert_eq!(flexible.max, MaxTrackSizingFunction::fr(2.0));
+    }
+
+    #[test]
+    fn grid_repeat_tracks_reach_taffy() {
+        let style = LayoutStyle {
+            display: Display::Grid,
+            grid_template_columns: vec![TrackSize::Repeat(
+                RepeatCount::Count(2),
+                vec![TrackSize::Px(40.0), TrackSize::Fr(1.0)],
+            )],
+            grid_template_rows: vec![TrackSize::Px(20.0)],
+            ..LayoutStyle::default()
+        };
+        let taffy = taffy_style(&style, Direction::Row, None, false);
+        let Some(GridTemplateComponent::Repeat(repeat)) = taffy.grid_template_columns.first()
+        else {
+            panic!("a repeat component");
+        };
+        assert_eq!(repeat.count, TaffyRepetitionCount::Count(2));
+        assert_eq!(repeat.tracks.len(), 2);
+        assert_eq!(repeat.tracks[0].max, MaxTrackSizingFunction::length(40.0));
+        assert_eq!(repeat.line_names.len(), 3);
+
+        let style = LayoutStyle {
+            display: Display::Grid,
+            width: Dimension::Px(200),
+            grid_template_columns: vec![TrackSize::Repeat(
+                RepeatCount::Count(2),
+                vec![TrackSize::Px(80.0)],
+            )],
+            grid_template_rows: vec![TrackSize::Px(10.0)],
+            ..LayoutStyle::default()
+        };
+        let grid = LayoutNode::row(vec![LayoutNode::leaf(10, 10), LayoutNode::leaf(10, 10)])
+            .with_style(style.clone());
+        let placed = layout(
+            &grid,
+            Size {
+                width: 200,
+                height: 200,
+            },
+        )
+        .expect("repeat grid");
+        assert_eq!((placed.children[0].x, placed.children[1].x), (0, 80));
+
+        let style = LayoutStyle {
+            grid_template_columns: vec![TrackSize::Repeat(
+                RepeatCount::AutoFill,
+                vec![TrackSize::Px(80.0)],
+            )],
+            ..style
+        };
+        let grid = LayoutNode::row(vec![LayoutNode::leaf(10, 10), LayoutNode::leaf(10, 10)])
+            .with_style(style);
+        let placed = layout(
+            &grid,
+            Size {
+                width: 200,
+                height: 200,
+            },
+        )
+        .expect("auto-fill grid");
+        assert_eq!((placed.children[0].x, placed.children[1].x), (0, 80));
     }
 
     #[test]
