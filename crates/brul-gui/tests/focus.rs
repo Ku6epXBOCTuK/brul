@@ -1,6 +1,6 @@
 use brul_gui::{
-    Color, Dimension, Direction, KeyModifiers, LayoutStyle, Paint, Size, StyleSet, StyleState,
-    TextEngine, Widget, WidgetEvent, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Color, Dimension, Direction, KeyModifiers, KeyPress, LayoutStyle, Paint, Size, StyleSet,
+    StyleState, TextEngine, Widget, WidgetEvent, WidgetStyle, WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -124,7 +124,7 @@ fn tab_walks_the_focusable_widgets_and_keeps_other_keys_for_the_window() {
     assert_eq!(
         tree.press_key("Escape"),
         vec![WidgetEvent::Key {
-            code: "Escape".to_owned(),
+            key: KeyPress::from("Escape"),
             modifiers: KeyModifiers::default(),
         }]
     );

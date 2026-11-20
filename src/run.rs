@@ -823,7 +823,7 @@ mod tests {
         let commands = runtime.dispatch(
             WindowKey(1),
             &[WidgetEvent::Key {
-                code: "Escape".to_owned(),
+                key: brul_gui::KeyPress::from("Escape"),
                 modifiers: brul_gui::KeyModifiers::default(),
             }],
         );

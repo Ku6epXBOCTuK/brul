@@ -1,5 +1,6 @@
 use brul_gui::{
-    Dimension, KeyModifiers, LayoutStyle, Size, TextEngine, Widget, WidgetEvent, WidgetTree,
+    Dimension, KeyModifiers, KeyPress, LayoutStyle, Size, TextEngine, Widget, WidgetEvent,
+    WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -101,7 +102,7 @@ fn enter_submits_and_escape_and_tab_leave_the_field() {
     assert_eq!(
         tree.press_key("Escape"),
         vec![WidgetEvent::Key {
-            code: "Escape".to_owned(),
+            key: KeyPress::from("Escape"),
             modifiers: KeyModifiers::default(),
         }]
     );
@@ -186,7 +187,25 @@ fn a_key_press_without_a_focused_field_still_reaches_the_window() {
     assert_eq!(
         tree.press_key("a"),
         vec![WidgetEvent::Key {
-            code: "a".to_owned(),
+            key: KeyPress::from("a"),
+            modifiers: KeyModifiers::default(),
+        }]
+    );
+}
+
+#[test]
+fn a_physical_code_reaches_the_window_event() {
+    let plain = Widget::text("x").with_layout(fixed(40, 20));
+    let mut tree = laid_out(Widget::column(vec![plain]).with_layout(fixed(100, 40)));
+    let key = KeyPress {
+        code: "q".to_owned(),
+        physical: Some("KeyQ".to_owned()),
+    };
+
+    assert_eq!(
+        tree.press_key(key.clone()),
+        vec![WidgetEvent::Key {
+            key,
             modifiers: KeyModifiers::default(),
         }]
     );
@@ -500,7 +519,7 @@ fn ctrl_enter_leaves_a_multiline_field_for_the_window() {
     assert_eq!(
         tree.press_key("Enter"),
         vec![WidgetEvent::Key {
-            code: "Enter".to_owned(),
+            key: KeyPress::from("Enter"),
             modifiers: control(),
         }]
     );

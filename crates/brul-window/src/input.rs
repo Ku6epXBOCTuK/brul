@@ -1,6 +1,6 @@
-use brul_gui::KeyModifiers;
+use brul_gui::{KeyModifiers, KeyPress};
 use winit::event::{ButtonSource, ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent};
-use winit::keyboard::{Key, ModifiersState, NamedKey};
+use winit::keyboard::{Key, ModifiersState, NamedKey, PhysicalKey};
 use winit::window::Theme;
 
 use crate::window::ColorScheme;
@@ -20,7 +20,7 @@ pub(crate) enum ImeEvent {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Input {
     Exit,
-    Key(String),
+    Key(KeyPress),
     Modifiers(KeyModifiers),
     Ime(ImeEvent),
     Paste(String),
@@ -66,6 +66,13 @@ pub(crate) fn key_code(key: &Key) -> Option<String> {
             Some(text.to_string())
         }
         _ => None,
+    }
+}
+
+pub(crate) fn physical_code(key: &PhysicalKey) -> Option<String> {
+    match key {
+        PhysicalKey::Code(code) => Some(code.to_string()),
+        PhysicalKey::Unidentified(_) => None,
     }
 }
 
@@ -133,7 +140,10 @@ pub(crate) fn event_input(event: &WindowEvent) -> Option<Input> {
             ..
         } if event.state == ElementState::Pressed => {
             let code = key_code(&event.logical_key)?;
-            Some(Input::Key(code))
+            Some(Input::Key(KeyPress {
+                code,
+                physical: physical_code(&event.physical_key),
+            }))
         }
         WindowEvent::Ime(ime) => Some(Input::Ime(ime_event(ime))),
         WindowEvent::DataTransferReceived { value, .. } => value
@@ -185,11 +195,11 @@ mod tests {
 
     use super::*;
 
-    fn key_event(logical: Key, state: ElementState) -> WindowEvent {
+    fn key_event(logical: Key, state: ElementState, physical: KeyCode) -> WindowEvent {
         WindowEvent::KeyboardInput {
             device_id: None,
             event: KeyEvent {
-                physical_key: PhysicalKey::Code(KeyCode::KeyA),
+                physical_key: PhysicalKey::Code(physical),
                 logical_key: logical.clone(),
                 text: None,
                 location: KeyLocation::Standard,
@@ -301,6 +311,30 @@ mod tests {
     }
 
     #[test]
+    fn a_physical_key_becomes_a_stable_code() {
+        assert_eq!(
+            physical_code(&PhysicalKey::Code(KeyCode::KeyQ)).as_deref(),
+            Some("KeyQ")
+        );
+    }
+
+    #[test]
+    fn a_key_press_carries_both_codes() {
+        let event = key_event(
+            Key::Character("Q".into()),
+            ElementState::Pressed,
+            KeyCode::KeyQ,
+        );
+        assert_eq!(
+            event_input(&event),
+            Some(Input::Key(KeyPress {
+                code: "Q".to_owned(),
+                physical: Some("KeyQ".to_owned()),
+            }))
+        );
+    }
+
+    #[test]
     fn the_two_themes_map_to_their_schemes() {
         assert_eq!(scheme(&Theme::Light), ColorScheme::Light);
         assert_eq!(scheme(&Theme::Dark), ColorScheme::Dark);
@@ -349,9 +383,11 @@ mod tests {
 
     #[test]
     fn a_synthetic_key_press_is_ignored() {
-        let WindowEvent::KeyboardInput { event, .. } =
-            key_event(Key::Character("a".into()), ElementState::Pressed)
-        else {
+        let WindowEvent::KeyboardInput { event, .. } = key_event(
+            Key::Character("a".into()),
+            ElementState::Pressed,
+            KeyCode::KeyA,
+        ) else {
             panic!("a keyboard event");
         };
         let synthetic = WindowEvent::KeyboardInput {
@@ -365,7 +401,11 @@ mod tests {
 
     #[test]
     fn a_released_key_is_ignored() {
-        let event = key_event(Key::Character("a".into()), ElementState::Released);
+        let event = key_event(
+            Key::Character("a".into()),
+            ElementState::Released,
+            KeyCode::KeyA,
+        );
         assert_eq!(event_input(&event), None);
     }
 

@@ -12,6 +12,30 @@ pub struct KeyModifiers {
     pub meta: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KeyPress {
+    pub code: String,
+    pub physical: Option<String>,
+}
+
+impl From<&str> for KeyPress {
+    fn from(code: &str) -> Self {
+        Self {
+            code: code.to_owned(),
+            physical: None,
+        }
+    }
+}
+
+impl From<String> for KeyPress {
+    fn from(code: String) -> Self {
+        Self {
+            code,
+            physical: None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CaretArea {
     pub x: i32,
@@ -29,7 +53,7 @@ pub enum WidgetEvent {
     Click(WidgetId),
     Drag(WidgetId),
     Key {
-        code: String,
+        key: KeyPress,
         modifiers: KeyModifiers,
     },
     Close,

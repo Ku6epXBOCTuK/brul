@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::WidgetEvent;
+use brul_gui::{KeyPress, WidgetEvent};
 use tracing::{debug, trace, warn};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
@@ -63,7 +63,7 @@ impl TreeApp {
             }
         }
         match input {
-            Input::Key(code) => self.press_key(surface, code),
+            Input::Key(key) => self.press_key(surface, key),
             Input::Modifiers(modifiers) => {
                 self.tree.borrow_mut().set_modifiers(modifiers);
                 Step::Continue
@@ -90,8 +90,8 @@ impl TreeApp {
         }
     }
 
-    pub(super) fn press_key(&mut self, surface: &dyn Surface, code: String) -> Step {
-        let events = self.tree.borrow_mut().press_key(&code);
+    pub(super) fn press_key(&mut self, surface: &dyn Surface, key: KeyPress) -> Step {
+        let events = self.tree.borrow_mut().press_key(key);
         self.dispatch_events(surface, events)
     }
 

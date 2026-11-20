@@ -3,7 +3,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{
-    Atlas, Dirty, Size, TextEngine, Widget, WidgetError, WidgetEvent, WidgetSnapshot, WidgetTree,
+    Atlas, Dirty, KeyPress, Size, TextEngine, Widget, WidgetError, WidgetEvent, WidgetSnapshot,
+    WidgetTree,
 };
 use winit::event_loop::ControlFlow;
 
@@ -391,7 +392,10 @@ fn a_key_reaches_the_tree() {
     let mut app = tree_app(commands(Vec::new()));
 
     let code = "Enter".to_owned();
-    assert_eq!(app.handle(&surface, Input::Key(code)), Step::Continue);
+    assert_eq!(
+        app.handle(&surface, Input::Key(KeyPress::from(code))),
+        Step::Continue
+    );
 }
 
 #[test]

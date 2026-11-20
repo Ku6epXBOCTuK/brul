@@ -10,8 +10,12 @@ pub(crate) fn call(component: &ComponentHandle, function: EventCall, arguments: 
 
 pub(crate) fn arguments(event: &WidgetEvent) -> Vec<Dyn> {
     match event {
-        WidgetEvent::Key { code, modifiers } => vec![Dyn::object(vec![
-            ("code".to_owned(), Dyn::text(code.as_str())),
+        WidgetEvent::Key { key, modifiers } => vec![Dyn::object(vec![
+            ("code".to_owned(), Dyn::text(key.code.as_str())),
+            (
+                "physical".to_owned(),
+                key.physical.as_deref().map_or_else(Dyn::null, Dyn::text),
+            ),
             ("ctrl".to_owned(), Dyn::flag(modifiers.control)),
             ("shift".to_owned(), Dyn::flag(modifiers.shift)),
             ("alt".to_owned(), Dyn::flag(modifiers.alt)),
@@ -51,6 +55,7 @@ mod tests {
     use super::*;
 
     use brul_gui::KeyModifiers;
+    use brul_gui::KeyPress;
 
     use brul_gui::Widget;
 
@@ -93,7 +98,10 @@ mod tests {
     #[test]
     fn a_key_event_carries_the_modifiers() {
         let event = WidgetEvent::Key {
-            code: "Enter".to_owned(),
+            key: KeyPress {
+                code: "Enter".to_owned(),
+                physical: Some("KeyQ".to_owned()),
+            },
             modifiers: KeyModifiers {
                 control: true,
                 ..KeyModifiers::default()
@@ -103,7 +111,27 @@ mod tests {
             arguments(&event),
             vec![Dyn::object(vec![
                 ("code".to_owned(), Dyn::text("Enter")),
+                ("physical".to_owned(), Dyn::text("KeyQ")),
                 ("ctrl".to_owned(), Dyn::flag(true)),
+                ("shift".to_owned(), Dyn::flag(false)),
+                ("alt".to_owned(), Dyn::flag(false)),
+                ("meta".to_owned(), Dyn::flag(false)),
+            ])]
+        );
+    }
+
+    #[test]
+    fn a_logical_only_key_event_has_no_physical_code() {
+        let event = WidgetEvent::Key {
+            key: KeyPress::from("a"),
+            modifiers: KeyModifiers::default(),
+        };
+        assert_eq!(
+            arguments(&event),
+            vec![Dyn::object(vec![
+                ("code".to_owned(), Dyn::text("a")),
+                ("physical".to_owned(), Dyn::null()),
+                ("ctrl".to_owned(), Dyn::flag(false)),
                 ("shift".to_owned(), Dyn::flag(false)),
                 ("alt".to_owned(), Dyn::flag(false)),
                 ("meta".to_owned(), Dyn::flag(false)),
@@ -115,7 +143,7 @@ mod tests {
     fn handler_target_names_window_events_without_a_widget() {
         assert_eq!(
             handler_target(&WidgetEvent::Key {
-                code: "Escape".to_owned(),
+                key: KeyPress::from("Escape"),
                 modifiers: KeyModifiers::default(),
             }),
             Some((None, HandlerEvent::Key))

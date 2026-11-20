@@ -102,9 +102,11 @@ window Note (title: "note", width: 520, height: 480, centered: true) {
 Встроенные события:
 
 - `on key: fn` (окно) — клавиатура; функция получает событие с полем `code`
-  (строка: `"Escape"`, `"Enter"`, …) и флагами модификаторов `ctrl`, `shift`,
-  `alt`, `meta`; проверка — в скрипте, без спец-грамматики:
-  `function handleKey(ev: Object): Void { if (ev.ctrl && ev.code == "Enter") { show() } }`
+  (логический код: `"Escape"`, `"Enter"`, буква с учётом регистра и раскладки),
+  полем `physical` (стабильный код клавиши: `"KeyQ"`, или `null`) и флагами
+  модификаторов `ctrl`, `shift`, `alt`, `meta`. Для сочетаний с буквами
+  сравнивайте `physical`, чтобы не дублировать регистры:
+  `function handleKey(ev: Object): Void { if (ev.ctrl && ev.physical == "KeyQ") { show() } }`
 - `on close: fn` (окно) — запрос закрытия от оконной системы: крестик, `Alt+F4`.
   Без обработчика окно закрывается по умолчанию, с обработчиком остаётся
   открытым, пока скрипт не вызовет `exit()` или `closeWindow()`. Закрытие из

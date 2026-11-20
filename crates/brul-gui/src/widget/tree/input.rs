@@ -17,14 +17,20 @@ impl WidgetTree {
         self.modifiers = modifiers;
     }
 
-    pub(super) fn key_event(&self, code: &str) -> WidgetEvent {
+    pub(super) fn key_event(&self, code: &str, physical: Option<&str>) -> WidgetEvent {
         WidgetEvent::Key {
-            code: code.to_owned(),
+            key: KeyPress {
+                code: code.to_owned(),
+                physical: physical.map(str::to_owned),
+            },
             modifiers: self.modifiers,
         }
     }
 
-    pub fn press_key(&mut self, code: &str) -> Vec<WidgetEvent> {
+    pub fn press_key(&mut self, key: impl Into<KeyPress>) -> Vec<WidgetEvent> {
+        let key = key.into();
+        let code = key.code.as_str();
+        let physical = key.physical.as_deref();
         if code == "Escape"
             && let Some(scope) = self.modal_scope()
         {
@@ -57,7 +63,7 @@ impl WidgetTree {
             .focused_slot()
             .filter(|slot| matches!(self.nodes[slot.index()].data, Content::Input { .. }))
         else {
-            return vec![self.key_event(code)];
+            return vec![self.key_event(code, physical)];
         };
         let multiline = matches!(
             self.nodes[slot.index()].data,
@@ -68,12 +74,12 @@ impl WidgetTree {
         );
         let extend = self.modifiers.shift;
         match code {
-            "Escape" => vec![self.key_event(code)],
+            "Escape" => vec![self.key_event(code, physical)],
             "ArrowUp" | "ArrowDown" if multiline => {
                 self.move_caret_line(slot, code == "ArrowUp", extend);
                 Vec::new()
             }
-            "ArrowUp" | "ArrowDown" => vec![self.key_event(code)],
+            "ArrowUp" | "ArrowDown" => vec![self.key_event(code, physical)],
             "ArrowLeft" => {
                 self.move_caret(slot, false, extend);
                 Vec::new()
@@ -99,7 +105,7 @@ impl WidgetTree {
                 self.input_event(slot, changed)
             }
             "Enter" if !multiline => vec![WidgetEvent::Submit(self.nodes[slot.index()].id)],
-            "Enter" if self.modifiers.control => vec![self.key_event(code)],
+            "Enter" if self.modifiers.control => vec![self.key_event(code, physical)],
             _ if self.modifiers.control => match code.to_ascii_uppercase().as_str() {
                 "A" => {
                     self.select_all(slot);

@@ -1569,7 +1569,7 @@ mod tests {
             vec![Handler::new(&component, None, HandlerEvent::Key, key_code)]
         });
         ui.dispatch(&[WidgetEvent::Key {
-            code: "Enter".to_owned(),
+            key: brul_gui::KeyPress::from("Enter"),
             modifiers: brul_gui::KeyModifiers::default(),
         }]);
         let seen = ui.component.borrow().read("seen").expect("seen");
@@ -1578,6 +1578,7 @@ mod tests {
             Value::Object(
                 vec![
                     ("code".to_owned(), Value::String("Enter".into())),
+                    ("physical".to_owned(), Value::Null),
                     ("ctrl".to_owned(), Value::Bool(false)),
                     ("shift".to_owned(), Value::Bool(false)),
                     ("alt".to_owned(), Value::Bool(false)),
