@@ -3,9 +3,11 @@ use std::collections::{HashMap, HashSet};
 pub use brul_style::{GridLine, LinePlacement, TrackSize};
 use taffy::style_helpers::TaffyAuto;
 use taffy::{
-    AlignItems, AvailableSpace, BoxSizing, Dimension as TaffyDimension, FlexDirection,
-    JustifyContent, LengthPercentage, LengthPercentageAuto, NodeId, Position, Rect as TaffyRect,
-    Size as TaffySize, Style as TaffyStyle, TaffyTree, compute_leaf_layout,
+    AlignItems, AvailableSpace, BoxSizing, CheapCloneStr, Dimension as TaffyDimension,
+    Display as TaffyDisplay, FlexDirection, GridAutoFlow as TaffyAutoFlow, GridTemplateComponent,
+    JustifyContent, LengthPercentage, LengthPercentageAuto, MaxTrackSizingFunction, MinMax,
+    MinTrackSizingFunction, NodeId, Position, Rect as TaffyRect, Size as TaffySize,
+    Style as TaffyStyle, TaffyTree, compute_leaf_layout,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -761,6 +763,31 @@ pub fn layout(root: &LayoutNode, viewport: Size) -> Result<LayoutBox, LayoutErro
     Ok(nested[root_key as usize].take().expect("layout root"))
 }
 
+fn min_track(size: &TrackSize) -> MinTrackSizingFunction {
+    match size {
+        TrackSize::Px(value) => MinTrackSizingFunction::length(*value as f32),
+        TrackSize::Percent(value) => MinTrackSizingFunction::percent(*value as f32 / 100.0),
+        TrackSize::Fr(_) => MinTrackSizingFunction::auto(),
+        TrackSize::Minmax(min, _) => min_track(min),
+    }
+}
+
+fn max_track(size: &TrackSize) -> MaxTrackSizingFunction {
+    match size {
+        TrackSize::Px(value) => MaxTrackSizingFunction::length(*value as f32),
+        TrackSize::Percent(value) => MaxTrackSizingFunction::percent(*value as f32 / 100.0),
+        TrackSize::Fr(value) => MaxTrackSizingFunction::fr(*value as f32),
+        TrackSize::Minmax(_, max) => max_track(max),
+    }
+}
+
+fn track_component<S: CheapCloneStr>(size: &TrackSize) -> GridTemplateComponent<S> {
+    GridTemplateComponent::Single(MinMax {
+        min: min_track(size),
+        max: max_track(size),
+    })
+}
+
 fn taffy_style(
     style: &LayoutStyle,
     direction: Direction,
@@ -770,6 +797,24 @@ fn taffy_style(
     let length = |value: u32| LengthPercentage::length(value as f32);
     let mut output = TaffyStyle {
         box_sizing: BoxSizing::BorderBox,
+        display: match style.display {
+            Display::Flex => TaffyDisplay::Flex,
+            Display::Grid => TaffyDisplay::Grid,
+        },
+        grid_template_columns: style
+            .grid_template_columns
+            .iter()
+            .map(track_component)
+            .collect(),
+        grid_template_rows: style
+            .grid_template_rows
+            .iter()
+            .map(track_component)
+            .collect(),
+        grid_auto_flow: match style.grid_auto_flow {
+            GridAutoFlow::Row => TaffyAutoFlow::Row,
+            GridAutoFlow::Column => TaffyAutoFlow::Column,
+        },
         size: TaffySize {
             width: dimension(style.width),
             height: dimension(style.height),
@@ -1196,5 +1241,70 @@ mod tests {
         assert_eq!(placed.children[1].x, 245);
         assert_eq!(placed.children[0].children[0].width, 235);
         assert_eq!(placed.children[1].children[0].width, 235);
+    }
+
+    #[test]
+    fn grid_tracks_reach_taffy() {
+        let style = LayoutStyle {
+            display: Display::Grid,
+            grid_template_columns: vec![
+                TrackSize::Px(60.0),
+                TrackSize::Fr(2.0),
+                TrackSize::Minmax(Box::new(TrackSize::Px(10.0)), Box::new(TrackSize::Px(80.0))),
+                TrackSize::Percent(25.0),
+            ],
+            grid_template_rows: vec![TrackSize::Fr(1.0)],
+            grid_auto_flow: GridAutoFlow::Column,
+            ..LayoutStyle::default()
+        };
+        let taffy = taffy_style(&style, Direction::Row, None, false);
+
+        assert_eq!(taffy.display, TaffyDisplay::Grid);
+        assert_eq!(taffy.grid_auto_flow, TaffyAutoFlow::Column);
+        assert_eq!(taffy.grid_template_columns.len(), 4);
+        assert_eq!(taffy.grid_template_rows.len(), 1);
+        let Some(GridTemplateComponent::Single(first)) = taffy.grid_template_columns.first() else {
+            panic!("a track component");
+        };
+        assert_eq!(first.min, MinTrackSizingFunction::length(60.0));
+        assert_eq!(first.max, MaxTrackSizingFunction::length(60.0));
+        let Some(GridTemplateComponent::Single(flexible)) = taffy.grid_template_columns.get(1)
+        else {
+            panic!("a track component");
+        };
+        assert_eq!(flexible.min, MinTrackSizingFunction::auto());
+        assert_eq!(flexible.max, MaxTrackSizingFunction::fr(2.0));
+    }
+
+    #[test]
+    fn grid_auto_flow_places_children() {
+        let grid = |flow| {
+            LayoutNode::row(vec![
+                LayoutNode::leaf(10, 10),
+                LayoutNode::leaf(10, 10),
+                LayoutNode::leaf(10, 10),
+                LayoutNode::leaf(10, 10),
+            ])
+            .with_style(LayoutStyle {
+                display: Display::Grid,
+                width: Dimension::Px(200),
+                grid_template_columns: vec![TrackSize::Px(80.0), TrackSize::Px(80.0)],
+                grid_template_rows: vec![TrackSize::Px(10.0), TrackSize::Px(10.0)],
+                grid_auto_flow: flow,
+                ..LayoutStyle::default()
+            })
+        };
+        let viewport = Size {
+            width: 200,
+            height: 200,
+        };
+
+        let row = layout(&grid(GridAutoFlow::Row), viewport).expect("row flow");
+        assert_eq!((row.children[1].x, row.children[1].y), (80, 0));
+        assert_eq!((row.children[2].x, row.children[2].y), (0, 10));
+
+        let column = layout(&grid(GridAutoFlow::Column), viewport).expect("column flow");
+        assert_eq!((column.children[1].x, column.children[1].y), (0, 10));
+        assert_eq!((column.children[2].x, column.children[2].y), (80, 0));
     }
 }
