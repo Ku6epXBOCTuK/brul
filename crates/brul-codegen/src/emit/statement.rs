@@ -127,24 +127,20 @@ fn emit_statement(
             then_branch,
             else_branch,
         } => {
-            let typed_condition = typed(condition, names, state, props, scopes)?;
-            if let Some((_, ty)) = &typed_condition
-                && ty != &Type::Bool
-            {
-                return Err(crate::error_at(
-                    condition.position,
-                    format!("if condition expects Bool, found {}", ty.type_name()),
-                ));
-            }
-            let typed_bool = typed_condition.is_some();
-            let value = match typed_condition {
-                Some((code, _)) => code,
-                None => operation_in(condition, names, state, props, scopes)?,
-            };
-            if typed_bool {
-                let _ = writeln!(out, "    if {value} {{");
-            } else {
-                let _ = writeln!(out, "    if ({value}).boolean()? {{");
+            match typed(condition, names, state, props, scopes)? {
+                Some((code, ty)) => {
+                    if ty != Type::Bool {
+                        return Err(crate::error_at(
+                            condition.position,
+                            format!("if condition expects Bool, found {}", ty.type_name()),
+                        ));
+                    }
+                    let _ = writeln!(out, "    if {code} {{");
+                }
+                None => {
+                    let code = operation_in(condition, names, state, props, scopes)?;
+                    let _ = writeln!(out, "    if ({code}).boolean()? {{");
+                }
             }
             scopes.push();
             block_in(then_branch, names, state, props, out, scopes, false)?;

@@ -663,37 +663,9 @@ fn call(
     let ExprKind::Ident(name) = &target.kind else {
         return Ok("{ return Err(brul::Error::Unsupported(\"method call\")) }".to_owned());
     };
-    if name == "every" {
-        return every(arguments, names, state, props, scopes);
-    }
     Ok(format!(
         "{{ let arguments = vec![{}]; brul::Dyn::call(component, {name:?}, arguments)? }}",
         operations(arguments, names, state, props, scopes)?
-    ))
-}
-
-fn every(
-    arguments: &[Expr],
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    scopes: &Scopes,
-) -> Result<String, Error> {
-    let [interval, function] = arguments else {
-        return Ok(
-            "{ return Err(brul::Error::Arity { name: \"every\".to_owned(), expected: \"two\" }) }"
-                .to_owned(),
-        );
-    };
-    let ExprKind::Ident(function) = &function.kind else {
-        return Ok(format!(
-            "{{ return Err(brul::Error::Argument {{ name: \"every\", expected: \"function name\", found: {:?} }}) }}",
-            function.kind.name()
-        ));
-    };
-    Ok(format!(
-        "{{ let interval = ({}).as_number()?; component.every(interval, {function:?})?; brul::Dyn::null() }}",
-        operation_in(interval, names, state, props, scopes)?
     ))
 }
 
