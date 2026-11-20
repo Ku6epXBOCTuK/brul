@@ -224,6 +224,7 @@ name = "brul-codegen"
 version = "0.1.0"
 dependencies = [
  "brul-case",
+ "brul-command",
  "brul-gui",
  "brul-reactive",
  "brul-script",
@@ -232,6 +233,13 @@ dependencies = [
  "syn 2.0.119",
  "thiserror 2.0.21",
  "tracing",
+]
+
+[[package]]
+name = "brul-command"
+version = "0.1.0"
+dependencies = [
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -270,6 +278,7 @@ name = "brul-macros"
 version = "0.1.0"
 dependencies = [
  "brul-case",
+ "brul-command",
  "proc-macro2",
  "quote",
  "syn 2.0.119",

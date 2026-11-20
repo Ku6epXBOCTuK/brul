@@ -3,10 +3,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use brul_case::{camel, snake};
+use brul_command::{Kind, is_command};
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
-use syn::{GenericArgument, Item, PathArguments, ReturnType, Type as SynType};
+use syn::Item;
 
 use crate::error_at;
 
@@ -45,28 +46,23 @@ pub fn collect(root: &Path) -> Result<Commands, Error> {
             let Item::Fn(function) = item else {
                 continue;
             };
-            if !function.attrs.iter().any(|attribute| {
-                attribute
-                    .path()
-                    .segments
-                    .last()
-                    .is_some_and(|segment| segment.ident == "command")
-            }) {
+            if !is_command(function) {
                 continue;
             }
-            let name = function.sig.ident.to_string();
+            let signature = brul_command::parse(function)
+                .map_err(|error| error_at(Position { line: 1, column: 1 }, error.to_string()))?;
+            let name = signature.name.to_string();
             let path = format!("crate::__brul_command_{}", snake(&name));
-            let mut inputs = function.sig.inputs.iter();
-            inputs.next();
-            let params = inputs
-                .filter_map(|input| match input {
-                    syn::FnArg::Typed(argument) => Some(rust_type(&argument.ty)),
-                    syn::FnArg::Receiver(_) => None,
-                })
+            let params = signature
+                .params
+                .iter()
+                .map(|(_, ty)| command_type(brul_command::kind(ty)))
                 .collect();
-            let result = match &function.sig.output {
-                ReturnType::Default => Type::Null,
-                ReturnType::Type(_, ty) => result_type(ty),
+            let result = match signature.output {
+                syn::ReturnType::Default => Type::Null,
+                _ => brul_command::result_type(signature.output)
+                    .map(|ty| command_type(brul_command::kind(ty)))
+                    .unwrap_or(Type::Object),
             };
             let command = Command {
                 name: camel(&name),
@@ -143,45 +139,12 @@ fn rust_sources(dir: &Path) -> Result<Vec<PathBuf>, std::io::Error> {
     Ok(found)
 }
 
-fn result_type(ty: &SynType) -> Type {
-    let SynType::Path(path) = ty else {
-        return rust_type(ty);
-    };
-    let Some(segment) = path.path.segments.last() else {
-        return Type::Object;
-    };
-    if segment.ident != "Result" {
-        return rust_type(ty);
-    }
-    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
-        return Type::Object;
-    };
-    arguments
-        .args
-        .iter()
-        .find_map(|argument| match argument {
-            GenericArgument::Type(ty) => Some(rust_type(ty)),
-            _ => None,
-        })
-        .unwrap_or(Type::Object)
-}
-
-fn rust_type(ty: &SynType) -> Type {
-    match ty {
-        SynType::Reference(reference) => rust_type(&reference.elem),
-        SynType::Path(path) => path
-            .path
-            .segments
-            .last()
-            .map(|segment| match segment.ident.to_string().as_str() {
-                "str" | "String" => Type::String,
-                "f64" | "f32" => Type::Number,
-                "bool" => Type::Bool,
-                "usize" | "u64" | "u32" | "i64" | "i32" => Type::Number,
-                _ => Type::Object,
-            })
-            .unwrap_or(Type::Object),
-        SynType::Tuple(tuple) if tuple.elems.is_empty() => Type::Null,
-        _ => Type::Object,
+fn command_type(kind: Kind) -> Type {
+    match kind {
+        Kind::String => Type::String,
+        Kind::Number => Type::Number,
+        Kind::Bool => Type::Bool,
+        Kind::Null => Type::Null,
+        Kind::Value | Kind::Other => Type::Object,
     }
 }

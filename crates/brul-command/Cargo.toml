@@ -1,0 +1,12 @@
+[package]
+name = "brul-command"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Ku6epXBOCTuK/brul"
+
+[lints]
+workspace = true
+
+[dependencies]
+syn = { workspace = true }

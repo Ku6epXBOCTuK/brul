@@ -1,13 +1,11 @@
 use brul_case::{camel, snake};
+use brul_command::Kind;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{
-    FnArg, GenericArgument, Generics, Ident, ItemFn, Pat, PatType, PathArguments, Result,
-    ReturnType, Token, Type,
-};
+use syn::{Generics, Ident, ItemFn, Result, Token, Type};
 
 #[proc_macro_attribute]
 pub fn command(attribute: TokenStream, item: TokenStream) -> TokenStream {
@@ -31,42 +29,8 @@ pub fn host(input: TokenStream) -> TokenStream {
     commands.expand().into()
 }
 
-struct Signature {
-    host: Pat,
-    host_type: Type,
-    values: Vec<(Ident, Type)>,
-}
-
-fn signature(function: &ItemFn) -> Result<Signature> {
-    let mut inputs = function.sig.inputs.iter();
-    let Some(FnArg::Typed(PatType { pat, ty, .. })) = inputs.next() else {
-        return Err(syn::Error::new_spanned(
-            &function.sig,
-            "a command takes the host as its first argument",
-        ));
-    };
-    let Pat::Ident(host) = &**pat else {
-        return Err(syn::Error::new_spanned(pat, "the host needs a name"));
-    };
-    let mut values = Vec::new();
-    for input in inputs {
-        let FnArg::Typed(PatType { pat, ty, .. }) = input else {
-            return Err(syn::Error::new_spanned(input, "a command has no receiver"));
-        };
-        let Pat::Ident(name) = &**pat else {
-            return Err(syn::Error::new_spanned(pat, "an argument needs a name"));
-        };
-        values.push((name.ident.clone(), (**ty).clone()));
-    }
-    Ok(Signature {
-        host: Pat::Ident(host.clone()),
-        host_type: (**ty).clone(),
-        values,
-    })
-}
-
 fn expand(function: ItemFn) -> Result<TokenStream2> {
-    let signature = signature(&function)?;
+    let signature = brul_command::parse(&function)?;
     let name = &function.sig.ident;
     let hidden = format_ident!("__{}", name);
     let command = camel(&name.to_string());
@@ -76,17 +40,17 @@ fn expand(function: ItemFn) -> Result<TokenStream2> {
     let where_clause = &generics.where_clause;
     let declare = quote! { #generics #where_clause };
     let output = &function.sig.output;
-    let host = &signature.host;
-    let host_type = &signature.host_type;
+    let host = signature.host;
+    let host_type = signature.host_type;
     let body = &function.block;
 
-    let values: Vec<Ident> = (0..signature.values.len())
+    let values: Vec<Ident> = (0..signature.params.len())
         .map(|index| format_ident!("__value{index}"))
         .collect();
-    let names: Vec<&Ident> = signature.values.iter().map(|(name, _)| name).collect();
-    let types: Vec<&Type> = signature.values.iter().map(|(_, ty)| ty).collect();
+    let names: Vec<&Ident> = signature.params.iter().map(|(name, _)| *name).collect();
+    let types: Vec<&Type> = signature.params.iter().map(|(_, ty)| *ty).collect();
     let conversions: Vec<TokenStream2> = signature
-        .values
+        .params
         .iter()
         .enumerate()
         .map(|(index, (name, ty))| {
@@ -134,15 +98,15 @@ fn expand(function: ItemFn) -> Result<TokenStream2> {
 
     let marker = format_ident!("__brul_command_{}", snake(&name.to_string()));
     let marker_types: Vec<TokenStream2> = signature
-        .values
+        .params
         .iter()
         .map(|(_, ty)| marker_type(ty))
         .collect();
-    let argument_names: Vec<Ident> = (0..signature.values.len())
+    let argument_names: Vec<Ident> = (0..signature.params.len())
         .map(|index| format_ident!("__argument{index}"))
         .collect();
     let bindings: Vec<TokenStream2> = signature
-        .values
+        .params
         .iter()
         .zip(&values)
         .zip(&argument_names)
@@ -151,8 +115,8 @@ fn expand(function: ItemFn) -> Result<TokenStream2> {
             quote! { let #value: #ty = #conversion; }
         })
         .collect();
-    let host_owned = owned_type(&signature.host_type);
-    let result = result_type(&function.sig.output);
+    let host_owned = owned_type(signature.host_type);
+    let result = brul_command::result_type(signature.output);
     let result_marker = result.map(marker_type).unwrap_or_else(|| quote!(()));
     let result_value = result
         .map(output_value)
@@ -245,60 +209,8 @@ impl Commands {
     }
 }
 
-fn result_type(output: &ReturnType) -> Option<&Type> {
-    let ReturnType::Type(_, ty) = output else {
-        return None;
-    };
-    let Type::Path(path) = &**ty else {
-        return Some(ty);
-    };
-    let Some(segment) = path.path.segments.last() else {
-        return Some(ty);
-    };
-    if segment.ident != "Result" {
-        return Some(ty);
-    }
-    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
-        return Some(ty);
-    };
-    arguments.args.iter().find_map(|argument| match argument {
-        GenericArgument::Type(ty) => Some(ty),
-        _ => None,
-    })
-}
-
-fn kind(ty: &Type) -> Kind {
-    match ty {
-        Type::Reference(reference) => kind(&reference.elem),
-        Type::Path(path) => match path
-            .path
-            .segments
-            .last()
-            .map(|segment| segment.ident.to_string())
-            .as_deref()
-        {
-            Some("str" | "String") => Kind::String,
-            Some("f64" | "f32" | "usize" | "u64" | "u32" | "i64" | "i32") => Kind::Number,
-            Some("bool") => Kind::Bool,
-            Some("Value") => Kind::Value,
-            _ => Kind::Other,
-        },
-        Type::Tuple(tuple) if tuple.elems.is_empty() => Kind::Null,
-        _ => Kind::Other,
-    }
-}
-
-enum Kind {
-    String,
-    Number,
-    Bool,
-    Value,
-    Null,
-    Other,
-}
-
 fn marker_type(ty: &Type) -> TokenStream2 {
-    match kind(ty) {
+    match brul_command::kind(ty) {
         Kind::String => quote!(::std::string::String),
         Kind::Number => quote!(f64),
         Kind::Bool => quote!(bool),
@@ -308,7 +220,7 @@ fn marker_type(ty: &Type) -> TokenStream2 {
 }
 
 fn argument_value(argument: &Ident, ty: &Type, command: &str) -> TokenStream2 {
-    match kind(ty) {
+    match brul_command::kind(ty) {
         Kind::String if matches!(ty, Type::Reference(_)) => quote!(#argument.as_str()),
         Kind::String | Kind::Bool | Kind::Null | Kind::Value => quote!(#argument),
         Kind::Number => quote!(#argument as #ty),
@@ -326,7 +238,7 @@ fn argument_value(argument: &Ident, ty: &Type, command: &str) -> TokenStream2 {
 }
 
 fn output_value(ty: &Type) -> TokenStream2 {
-    match kind(ty) {
+    match brul_command::kind(ty) {
         Kind::String if matches!(ty, Type::Reference(_)) => quote!(Ok(value.to_owned())),
         _ => quote!(Ok(value)),
     }
@@ -359,7 +271,7 @@ mod tests {
     fn an_argument_of_any_named_type_is_accepted() {
         let function: ItemFn =
             syn::parse_str("fn act(host: &mut Host, draft: Draft) {}").expect("fn");
-        let signature = signature(&function).expect("signature");
-        assert_eq!(signature.values.len(), 1);
+        let signature = brul_command::parse(&function).expect("signature");
+        assert_eq!(signature.params.len(), 1);
     }
 }
