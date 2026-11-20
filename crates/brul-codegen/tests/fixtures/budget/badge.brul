@@ -10,9 +10,9 @@
         prop active: Bool = false;
         event clicked();
 
-        Row (badge, on click: pick, selected: active) {
+        Container (badge, on click: pick, selected: active) {
             Text (badge-label) { label }
-            View (dot) { }
+            Container (dot) { }
             @slot(extra)
         }
     }

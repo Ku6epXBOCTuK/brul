@@ -1,6 +1,6 @@
 <markup>
 component Chip {
-    View (chip) { }
+    Container (chip) { }
 }
 </markup>
 

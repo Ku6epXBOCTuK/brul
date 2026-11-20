@@ -106,7 +106,7 @@ pub fn chip_view(theme: Option<&str>, build: &mut brul::Build, component: &brul:
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        chip_styled(brul::gui::Widget::column(vec![]), &[0], theme)
+        chip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[0], theme)
     };
     Ok(brul::Built {
         widget,

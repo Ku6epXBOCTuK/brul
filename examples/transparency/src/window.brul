@@ -20,8 +20,8 @@
         centered: true,
         on key: closeOnEscape
     ) {
-        Column (root) {
-            Column (card) {
+        Container (root) {
+            Container (card) {
                 Text (label) { "Semi-transparent card" }
                 Text (hint) { "Esc to exit" }
             }

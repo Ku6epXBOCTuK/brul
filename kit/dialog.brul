@@ -25,11 +25,11 @@
         event closed(result: Bool);
 
         Layer (dialog-layer, visible: open, modal: true, on dismiss: dismissDialog) {
-            View (dialog-scrim, x: 0, y: 0, on click: dismissDialog) { }
-            Column (dialog-card) {
+            Container (dialog-scrim, x: 0, y: 0, on click: dismissDialog) { }
+            Container (dialog-card) {
                 Text (dialog-title) { title }
-                View (dialog-body) { @slot }
-                Row (dialog-actions) {
+                Container (dialog-body) { @slot }
+                Container (dialog-actions) {
                     Button (label: cancel, on clicked: reject) { }
                     Button (label: confirm, variant: "primary", on clicked: accept) { }
                 }

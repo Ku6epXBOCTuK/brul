@@ -1,7 +1,7 @@
 <markup>
 component Badge {
     prop shown: Bool = false;
-    View {
+    Container {
         @if (shown) {
             @slot
         }

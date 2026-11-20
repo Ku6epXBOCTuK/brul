@@ -14,9 +14,9 @@
     component Tooltip {
         prop text: String = "";
 
-        Column (tooltip, on enter: show, on leave: hide) {
+        Container (tooltip, on enter: show, on leave: hide) {
             @slot
-            View (bubble, visible: shown) {
+            Container (bubble, visible: shown) {
                 Text (bubble-text) { text }
             }
         }

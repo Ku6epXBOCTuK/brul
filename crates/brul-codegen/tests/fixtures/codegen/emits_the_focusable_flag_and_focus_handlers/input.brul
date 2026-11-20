@@ -5,6 +5,6 @@
 
 <markup>
 window Demo (title: "demo") {
-    Row (focusable: true, on focus: gained, on blur: lost) { }
+    Container (focusable: true, on focus: gained, on blur: lost) { }
 }
 </markup>

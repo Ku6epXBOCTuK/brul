@@ -4,7 +4,7 @@
 
 <markup>
 window Demo (title: "demo") {
-    Column {
+    Container {
         Badge (label: "hi") { }
     }
 }

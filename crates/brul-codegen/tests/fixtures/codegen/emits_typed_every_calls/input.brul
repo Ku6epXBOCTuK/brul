@@ -4,5 +4,5 @@
 </script>
 
 <markup>
-window Demo (title: "demo") { View { } }
+window Demo (title: "demo") { Container { } }
 </markup>

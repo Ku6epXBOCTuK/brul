@@ -7,9 +7,9 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        brul::gui::Widget::column(vec![
+        brul::gui::Widget::view(brul::gui::Direction::Row, vec![
             {
-                let widget0 = brul::gui::Widget::column(vec![]);
+                let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]);
                 bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Checked(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok((&brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).try_into()?) })));
                 bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Selected(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok((&brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).try_into()?) })));
                 bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok((&brul::Dyn::from(component.read_id(brul::VariableId::from_index(1))?)).try_into()?) })));
@@ -17,7 +17,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 widget0
             },
             {
-                let widget1 = brul::gui::Widget::column(vec![]);
+                let widget1 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]);
                 bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok((&brul::Dyn::from(component.read_id(brul::VariableId::from_index(3))?)).try_into()?) }), y: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok((&brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).try_into()?) }) }));
                 widget1
             },

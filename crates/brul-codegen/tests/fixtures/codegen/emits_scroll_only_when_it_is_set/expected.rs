@@ -7,7 +7,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        styled(brul::gui::Widget::column(vec![]), &[0], theme)
+        styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[0], theme)
     };
     Ok(brul::Built {
         widget,

@@ -14,9 +14,9 @@
         prop disabled: Bool = false;
         event toggled();
 
-        Row (checkbox, disabled: disabled, on click: toggle) {
-            View (box, checked: checked) {
-                View (mark, visible: checked) { }
+        Container (checkbox, disabled: disabled, on click: toggle) {
+            Container (box, checked: checked) {
+                Container (mark, visible: checked) { }
             }
             @if (label != "") {
                 Text (checkbox-label) { label }

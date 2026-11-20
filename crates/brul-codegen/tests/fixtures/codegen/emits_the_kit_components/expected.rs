@@ -7,7 +7,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        brul::gui::Widget::column(vec![
+        brul::gui::Widget::view(brul::gui::Direction::Row, vec![
             {
                 let built = brul::instance(build, component, brul::Instance {
                     theme,
@@ -258,7 +258,7 @@ pub fn button_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = button_styled(brul::gui::Widget::column({
+            let widget0 = button_styled(brul::gui::Widget::view(brul::gui::Direction::Row, {
                 let mut children = Vec::new();
                 {
                     let built = brul::slot(theme, build, "icon")?;
@@ -273,8 +273,8 @@ pub fn button_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                 });
                 children
             }), &[0], theme).focusable(true);
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 66 }))?; value }) })));
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: button_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(3))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 30 }))?; value }); Ok(value) } }));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 71 }))?; value }) })));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: button_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(3))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 35 }))?; value }); Ok(value) } }));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Click, button_script_event_press));
             widget0
         }
@@ -555,7 +555,7 @@ pub fn card_view(theme: Option<&str>, build: &mut brul::Build, component: &brul:
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        card_styled(brul::gui::Widget::column({
+        card_styled(brul::gui::Widget::view(brul::gui::Direction::Row, {
             let mut children = Vec::new();
             {
                 let built = brul::slot(theme, build, "header")?;
@@ -563,7 +563,7 @@ pub fn card_view(theme: Option<&str>, build: &mut brul::Build, component: &brul:
                 handlers.extend(built.handlers);
                 props.extend(built.props);
                 children.extend(built.widget.into_children());
-            }            children.push(card_styled(brul::gui::Widget::column({
+            }            children.push(card_styled(brul::gui::Widget::view(brul::gui::Direction::Row, {
                 let mut children = Vec::new();
                 {
                     let built = brul::slot(theme, build, brul::DEFAULT_SLOT)?;
@@ -711,7 +711,7 @@ pub fn tooltip_view(theme: Option<&str>, build: &mut brul::Build, component: &br
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = tooltip_styled(brul::gui::Widget::column({
+            let widget0 = tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, {
                 let mut children = Vec::new();
                 {
                     let built = brul::slot(theme, build, brul::DEFAULT_SLOT)?;
@@ -720,7 +720,7 @@ pub fn tooltip_view(theme: Option<&str>, build: &mut brul::Build, component: &br
                     props.extend(built.props);
                     children.extend(built.widget.into_children());
                 }                children.push({
-                    let widget1 = tooltip_styled(brul::gui::Widget::column(vec![
+                    let widget1 = tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                         {
                             let widget2 = tooltip_styled(brul::gui::Widget::text(""), &[2], theme);
                             bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(5))?)).map_err(|error| error.at(brul::ast::Position { line: 20, column: 38 }))?; value }) })));
@@ -967,16 +967,16 @@ pub fn checkbox_view(theme: Option<&str>, build: &mut brul::Build, component: &b
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = checkbox_styled(brul::gui::Widget::row(vec![
+            let widget0 = checkbox_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                 {
-                    let widget1 = checkbox_styled(brul::gui::Widget::column(vec![
+                    let widget1 = checkbox_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                         {
-                            let widget2 = checkbox_styled(brul::gui::Widget::column(vec![]), &[2], theme);
-                            bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 19, column: 38 }))?; value }) })));
+                            let widget2 = checkbox_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[2], theme);
+                            bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 19, column: 43 }))?; value }) })));
                             widget2
                         },
                     ]), &[1], theme);
-                    bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Checked(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 18, column: 33 }))?; value }) })));
+                    bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Checked(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 18, column: 38 }))?; value }) })));
                     widget1
                 },
                 {
@@ -989,7 +989,7 @@ pub fn checkbox_view(theme: Option<&str>, build: &mut brul::Build, component: &b
                     widget3
                 },
             ]), &[0], theme);
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 17, column: 34 }))?; value }) })));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 17, column: 40 }))?; value }) })));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Click, checkbox_script_event_toggle));
             widget0
         }
@@ -1241,18 +1241,18 @@ pub fn dialog_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
         {
             let widget0 = dialog_styled(brul::gui::Widget::layer(vec![
                 {
-                    let widget1 = dialog_styled(brul::gui::Widget::column(vec![]), &[1], theme);
+                    let widget1 = dialog_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[1], theme);
                     bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok(0.0_f64) }), y: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok(0.0_f64) }) }));
                     handlers.push(brul::Handler::new(component, Some(widget1.id()), brul::HandlerEvent::Click, dialog_script_event_dismiss_dialog));
                     widget1
                 },
-                dialog_styled(brul::gui::Widget::column(vec![
+                dialog_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                     {
                         let widget2 = dialog_styled(brul::gui::Widget::text(""), &[3], theme);
                         bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(8))?)).map_err(|error| error.at(brul::ast::Position { line: 30, column: 39 }))?; value }) })));
                         widget2
                     },
-                    dialog_styled(brul::gui::Widget::column({
+                    dialog_styled(brul::gui::Widget::view(brul::gui::Direction::Row, {
                         let mut children = Vec::new();
                         {
                             let built = brul::slot(theme, build, brul::DEFAULT_SLOT)?;
@@ -1262,7 +1262,7 @@ pub fn dialog_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                             children.extend(built.widget.into_children());
                         }                        children
                     }), &[4], theme),
-                    dialog_styled(brul::gui::Widget::row(vec![
+                    dialog_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                         {
                             let built = brul::instance(build, component, brul::Instance {
                                 theme,

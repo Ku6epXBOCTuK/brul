@@ -241,15 +241,15 @@ fn declaration_errors_point_at_the_source() {
 
 #[test]
 fn nested_elements_parse() {
-    let source = "component CheckRow { Row { Text { \"hi\" } View { View { } } } }";
+    let source = "component CheckRow { Container { Text { \"hi\" } Container { Container { } } } }";
     let file = parse_file(source).unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
         panic!("expected a component");
     };
     let view = || Element {
         position: Position::default(),
-        name: "View".to_owned(),
-        widget: Some(Widget::View),
+        name: "Container".to_owned(),
+        widget: Some(Widget::Container),
         args: Vec::new(),
         block: Block { items: Vec::new() },
     };
@@ -257,8 +257,8 @@ fn nested_elements_parse() {
         component.members,
         vec![Member::Element(Element {
             position: Position::default(),
-            name: "Row".to_owned(),
-            widget: Some(Widget::Row),
+            name: "Container".to_owned(),
+            widget: Some(Widget::Container),
             args: Vec::new(),
             block: Block {
                 items: vec![
@@ -273,8 +273,8 @@ fn nested_elements_parse() {
                     }),
                     BlockItem::Element(Element {
                         position: Position::default(),
-                        name: "View".to_owned(),
-                        widget: Some(Widget::View),
+                        name: "Container".to_owned(),
+                        widget: Some(Widget::Container),
                         args: Vec::new(),
                         block: Block {
                             items: vec![BlockItem::Element(view())],
@@ -288,13 +288,13 @@ fn nested_elements_parse() {
 
 #[test]
 fn element_errors_point_at_the_source() {
-    let error = parse_file("component A { View }").unwrap_err();
+    let error = parse_file("component A { Container }").unwrap_err();
     assert_eq!(error.message(), "expected '{'");
-    assert_eq!((error.line(), error.column()), (1, 20));
+    assert_eq!((error.line(), error.column()), (1, 25));
 
-    let error = parse_file("component A { View {").unwrap_err();
+    let error = parse_file("component A { Container {").unwrap_err();
     assert_eq!(error.message(), "expected '}'");
-    assert_eq!((error.line(), error.column()), (1, 21));
+    assert_eq!((error.line(), error.column()), (1, 26));
 }
 
 #[test]
@@ -330,8 +330,8 @@ fn member_errors_point_at_the_source() {
 #[test]
 fn if_else_blocks_parse() {
     let source = r#"component CheckRow {
-        Row {
-            @if (done) { Span { } } @else { View { } }
+        Container {
+            @if (done) { Span { } } @else { Container { } }
             @if (failed) { Text { "no" } } @else if (retry) { Span { } }
         }
     }"#;
@@ -350,8 +350,8 @@ fn if_else_blocks_parse() {
         component.members,
         vec![Member::Element(Element {
             position: Position::default(),
-            name: "Row".to_owned(),
-            widget: Some(Widget::Row),
+            name: "Container".to_owned(),
+            widget: Some(Widget::Container),
             args: Vec::new(),
             block: Block {
                 items: vec![
@@ -363,7 +363,7 @@ fn if_else_blocks_parse() {
                             },
                         }],
                         else_block: Some(Block {
-                            items: vec![BlockItem::Element(element("View"))],
+                            items: vec![BlockItem::Element(element("Container"))],
                         }),
                     }),
                     BlockItem::If(IfBlock {
@@ -399,14 +399,15 @@ fn if_else_blocks_parse() {
 
 #[test]
 fn if_errors_point_at_the_source() {
-    let error = parse_file("component A { Row { @if x { } } }").unwrap_err();
+    let error = parse_file("component A { Container { @if x { } } }").unwrap_err();
     assert_eq!(error.message(), "expected '('");
-    assert_eq!((error.line(), error.column()), (1, 25));
+    assert_eq!((error.line(), error.column()), (1, 31));
 
-    let error = parse_file("component A { Row { @if (x) } } }").unwrap_err();
+    let error = parse_file("component A { Container { @if (x) } } }").unwrap_err();
     assert_eq!(error.message(), "expected '{'");
 
-    let error = parse_file("component A { Row { @if (x) { } else View { } } }").unwrap_err();
+    let error =
+        parse_file("component A { Container { @if (x) { } else Container { } } }").unwrap_err();
     assert_eq!(
         error.message(),
         "expected '@else': block constructs start with '@'"
@@ -415,21 +416,21 @@ fn if_errors_point_at_the_source() {
 
 #[test]
 fn block_constructs_require_the_at_marker() {
-    let error = parse_file("component A { Row { if (x) { } } }").unwrap_err();
+    let error = parse_file("component A { Container { if (x) { } } }").unwrap_err();
     assert_eq!(
         error.message(),
         "expected '@if': block constructs start with '@'"
     );
-    assert_eq!((error.line(), error.column()), (1, 21));
+    assert_eq!((error.line(), error.column()), (1, 27));
 
-    let error = parse_file("component A { Row { each (items as item) { } } }").unwrap_err();
+    let error = parse_file("component A { Container { each (items as item) { } } }").unwrap_err();
     assert_eq!(
         error.message(),
         "expected '@each': block constructs start with '@'"
     );
-    assert_eq!((error.line(), error.column()), (1, 21));
+    assert_eq!((error.line(), error.column()), (1, 27));
 
-    let error = parse_file("component A { Row { slot } }").unwrap_err();
+    let error = parse_file("component A { Container { slot } }").unwrap_err();
     assert_eq!(
         error.message(),
         "expected '@slot': block constructs start with '@'"
@@ -438,7 +439,7 @@ fn block_constructs_require_the_at_marker() {
 
 #[test]
 fn slots_parse() {
-    let file = parse_file("component Card { Column { @slot } }").unwrap();
+    let file = parse_file("component Card { Container { @slot } }").unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
         panic!("expected a component");
     };
@@ -451,7 +452,7 @@ fn slots_parse() {
     assert_eq!(slot.name, None);
     assert!(slot.block.is_none());
 
-    let file = parse_file("component Card { Column { @slot(header) } }").unwrap();
+    let file = parse_file("component Card { Container { @slot(header) } }").unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
         panic!("expected a component");
     };
@@ -465,7 +466,7 @@ fn slots_parse() {
     assert!(slot.block.is_none());
 
     let file =
-        parse_file("component Card { Column { @slot(header) { Text { \"x\" } } } }").unwrap();
+        parse_file("component Card { Container { @slot(header) { Text { \"x\" } } } }").unwrap();
     let Declaration::Component(component) = &file.declarations[0] else {
         panic!("expected a component");
     };
@@ -481,27 +482,27 @@ fn slots_parse() {
 
 #[test]
 fn nested_errors_point_at_the_source() {
-    let error = parse_file("component A { Row { View } }").unwrap_err();
+    let error = parse_file("component A { Container { Container } }").unwrap_err();
     assert_eq!(error.message(), "expected '{'");
-    assert_eq!((error.line(), error.column()), (1, 26));
+    assert_eq!((error.line(), error.column()), (1, 37));
 
-    let error = parse_file("component A { Row { View { } }").unwrap_err();
+    let error = parse_file("component A { Container { Container { } }").unwrap_err();
     assert_eq!(error.message(), "expected '}'");
-    assert_eq!((error.line(), error.column()), (1, 31));
+    assert_eq!((error.line(), error.column()), (1, 42));
 
-    let error = parse_file("component A { Row { Text { } } }").unwrap_err();
+    let error = parse_file("component A { Container { Text { } } }").unwrap_err();
     assert_eq!(error.message(), "expected expression");
-    assert_eq!((error.line(), error.column()), (1, 28));
+    assert_eq!((error.line(), error.column()), (1, 34));
 
-    let error = parse_file("component A { Row { Button (on: x) { } } }").unwrap_err();
+    let error = parse_file("component A { Container { Button (on: x) { } } }").unwrap_err();
     assert_eq!(error.message(), "expected name");
-    assert_eq!((error.line(), error.column()), (1, 31));
+    assert_eq!((error.line(), error.column()), (1, 37));
 }
 
 #[test]
 fn leaf_blocks_hold_one_expression() {
     let source = r#"component Item {
-        Row {
+        Container {
             Text (text-main) { "Hello " + name }
             Image (item-image) { icon }
             Text { `Hi ${name}` }
@@ -524,8 +525,8 @@ fn leaf_blocks_hold_one_expression() {
         component.members,
         vec![Member::Element(Element {
             position: Position::default(),
-            name: "Row".to_owned(),
-            widget: Some(Widget::Row),
+            name: "Container".to_owned(),
+            widget: Some(Widget::Container),
             args: Vec::new(),
             block: Block {
                 items: vec![
@@ -571,37 +572,37 @@ fn leaf_block_errors_point_at_the_source() {
     let error = parse_file("component A { Text { \"a\" \"b\" } }").unwrap_err();
     assert_eq!(error.message(), "expected '}'");
 
-    let error = parse_file("component A { Text { View { } } }").unwrap_err();
+    let error = parse_file("component A { Text { Container { } } }").unwrap_err();
     assert_eq!(
         error.message(),
         "Text is a leaf widget: nested elements are not allowed"
     );
-    assert_eq!((error.line(), error.column()), (1, 27));
+    assert_eq!((error.line(), error.column()), (1, 32));
 
-    let error = parse_file("component A { Image { Row (item-image) { } } }").unwrap_err();
+    let error = parse_file("component A { Image { Container (item-image) { } } }").unwrap_err();
     assert_eq!(
         error.message(),
         "Image is a leaf widget: nested elements are not allowed"
     );
-    assert_eq!((error.line(), error.column()), (1, 40));
+    assert_eq!((error.line(), error.column()), (1, 46));
 
-    let error = parse_file("component A { Row { Text { Button { } } } }").unwrap_err();
+    let error = parse_file("component A { Container { Text { Button { } } } }").unwrap_err();
     assert_eq!(
         error.message(),
         "Text is a leaf widget: nested elements are not allowed"
     );
-    assert_eq!((error.line(), error.column()), (1, 35));
+    assert_eq!((error.line(), error.column()), (1, 41));
 }
 
 #[test]
 fn each_blocks_parse() {
     let source = r#"component List {
-        Column {
-            @each (items as item) { Row { } }
-            @each (items as item, idx) { Row (number: idx) { } }
-            @each (items as item (item.id)) { Row { } }
-            @each (groups[0] as item, idx (item.id)) { Row { } }
-            @each (items as item) { Row { } } @else { View { } }
+        Container {
+            @each (items as item) { Container { } }
+            @each (items as item, idx) { Container (number: idx) { } }
+            @each (items as item (item.id)) { Container { } }
+            @each (groups[0] as item, idx (item.id)) { Container { } }
+            @each (items as item) { Container { } } @else { Container { } }
         }
     }"#;
     let file = parse_file(source).unwrap();
@@ -615,7 +616,7 @@ fn each_blocks_parse() {
         args: Vec::new(),
         block: Block { items: Vec::new() },
     };
-    let row = || BlockItem::Element(element("Row"));
+    let row = || BlockItem::Element(element("Container"));
     let key = || {
         Some(expr(ExprKind::Field {
             target: Box::new(ident("item")),
@@ -626,8 +627,8 @@ fn each_blocks_parse() {
         component.members,
         vec![Member::Element(Element {
             position: Position::default(),
-            name: "Column".to_owned(),
-            widget: Some(Widget::Column),
+            name: "Container".to_owned(),
+            widget: Some(Widget::Container),
             args: Vec::new(),
             block: Block {
                 items: vec![
@@ -647,8 +648,8 @@ fn each_blocks_parse() {
                         block: Block {
                             items: vec![BlockItem::Element(Element {
                                 position: Position::default(),
-                                name: "Row".to_owned(),
-                                widget: Some(Widget::Row),
+                                name: "Container".to_owned(),
+                                widget: Some(Widget::Container),
                                 args: vec![Arg::Named {
                                     name: "number".to_owned(),
                                     value: ident("idx"),
@@ -684,7 +685,7 @@ fn each_blocks_parse() {
                         key: None,
                         block: Block { items: vec![row()] },
                         else_block: Some(Block {
-                            items: vec![BlockItem::Element(element("View"))],
+                            items: vec![BlockItem::Element(element("Container"))],
                         }),
                     }),
                 ],
@@ -695,20 +696,21 @@ fn each_blocks_parse() {
 
 #[test]
 fn each_errors_point_at_the_source() {
-    let error = parse_file("component A { Row { @each items as item { } } }").unwrap_err();
+    let error = parse_file("component A { Container { @each items as item { } } }").unwrap_err();
     assert_eq!(error.message(), "expected '('");
-    assert_eq!((error.line(), error.column()), (1, 27));
+    assert_eq!((error.line(), error.column()), (1, 33));
 
-    let error = parse_file("component A { Row { @each (items item) { } } }").unwrap_err();
+    let error = parse_file("component A { Container { @each (items item) { } } }").unwrap_err();
     assert_eq!(error.message(), "expected 'as'");
 
-    let error = parse_file("component A { Row { @each (items as item, ) { } } }").unwrap_err();
+    let error =
+        parse_file("component A { Container { @each (items as item, ) { } } }").unwrap_err();
     assert_eq!(error.message(), "expected name");
 
     let error =
-        parse_file("component A { Row { @each (items as item (item.id { } } }").unwrap_err();
+        parse_file("component A { Container { @each (items as item (item.id { } } }").unwrap_err();
     assert_eq!(error.message(), "expected ')'");
 
-    let error = parse_file("component A { Row { @each (items as item) } }").unwrap_err();
+    let error = parse_file("component A { Container { @each (items as item) } }").unwrap_err();
     assert_eq!(error.message(), "expected '{'");
 }

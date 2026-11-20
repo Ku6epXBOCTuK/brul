@@ -1,8 +1,8 @@
 <markup>
 window Demo (title: "demo") {
-    Row {
+    Container {
         Text { "a" }
-        View { }
+        Container { }
     }
 }
 </markup>

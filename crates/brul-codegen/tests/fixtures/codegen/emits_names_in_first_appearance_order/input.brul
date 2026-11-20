@@ -7,7 +7,7 @@
 
 <markup>
 window Demo (title: "demo") {
-    Column {
+    Container {
         @each (browsers as browser, index (browser.name)) {
             Text { browser.name }
         }

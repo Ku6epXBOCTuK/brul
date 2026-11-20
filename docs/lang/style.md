@@ -279,8 +279,8 @@ override Button {
   `flex-basis`, `display`, `flex-direction`, `justify-content`, `align-items`,
   `gap`, `border-radius`, `background`, `color`, `opacity`.
 - **Иначе:** border-box вместо content-box; `flex-shrink` по умолчанию 0, а не
-  1; `Column` не растягивает детей по ширине; нет каскада, специфичности,
-  наследования и `!important`.
+  1; `flex-direction: column` не растягивает детей по ширине; нет каскада,
+  специфичности, наследования и `!important`.
 - **Не берём:** inline-форматирование, схлопывание margin, `float`,
   `em`/`rem`/`vw`/`vh`/`calc`.
 

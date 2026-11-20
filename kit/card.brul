@@ -1,8 +1,8 @@
 <markup>
     component Card {
-        View (card) {
+        Container (card) {
             @slot(header)
-            View (card-body) {
+            Container (card-body) {
                 @slot
             }
             @slot(footer)

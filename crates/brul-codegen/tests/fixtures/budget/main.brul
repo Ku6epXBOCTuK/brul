@@ -13,10 +13,10 @@
 
 <markup>
     window Picker (title: "picker", width: 800) {
-        Column (root, on drag: dragWindow) {
+        Container (root, on drag: dragWindow) {
             Text (heading) { "picker" }
-            Row (bar) {
-                View (class: kind) { }
+            Container (bar) {
+                Container (class: kind) { }
                 @if (kind != "") {
                     Text (hint) { "on" }
                 } @else {

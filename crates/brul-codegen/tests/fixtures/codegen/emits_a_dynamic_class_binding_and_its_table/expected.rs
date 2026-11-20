@@ -8,7 +8,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = brul::gui::Widget::column(vec![]);
+            let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?); Ok(value) } }));
             widget0
         }

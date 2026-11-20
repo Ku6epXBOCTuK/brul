@@ -33,10 +33,10 @@
         centered: true,
         on key: handleKey
     ) {
-        Column (root) {
+        Container (root) {
             Text (title) { "BRUL hello" }
             TextInput (field, on input: updateName) { name }
-            Row (actions) {
+            Container (actions) {
                 Button (label: "Say hello", variant: "primary", on clicked: sayHello) { }
                 Button (label: "Clear", on clicked: clearGreeting) { }
             }

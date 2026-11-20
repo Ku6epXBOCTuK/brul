@@ -34,7 +34,7 @@
 
 <markup>
 window Demo (title: "demo") {
-    Column {
+    Container {
         Button (label: "Open", variant: "primary") { }
         Card {
             @slot(header) { Text { "header" } }

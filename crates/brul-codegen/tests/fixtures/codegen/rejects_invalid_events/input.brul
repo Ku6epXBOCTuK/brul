@@ -1,5 +1,5 @@
 <markup>
 window Demo (title: "demo") {
-    View (on hovered: toggle) { }
+    Container (on hovered: toggle) { }
 }
 </markup>

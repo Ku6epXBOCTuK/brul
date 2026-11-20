@@ -4,7 +4,7 @@
 
 <markup>
 window Demo (title: "demo") {
-    Column {
+    Container {
         List {
             @each (items as item) { Text { item.name } }
         }

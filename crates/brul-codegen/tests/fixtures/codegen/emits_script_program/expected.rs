@@ -7,7 +7,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        brul::gui::Widget::column(vec![
+        brul::gui::Widget::view(brul::gui::Direction::Row, vec![
             {
                 let widget0 = brul::gui::Widget::text("");
                 bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&brul::Dyn::num(component.state::<ScriptState>().count.get())).try_into()?) })));

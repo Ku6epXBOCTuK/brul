@@ -7,6 +7,6 @@
 
 <markup>
 window Demo (title: "demo") {
-    View { }
+    Container { }
 }
 </markup>

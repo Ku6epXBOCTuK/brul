@@ -12,6 +12,6 @@
 
 <markup>
 window Styled (title: "styled") {
-    View (a) { }
+    Container (a) { }
 }
 </markup>

@@ -1,6 +1,6 @@
 <markup>
 window Demo (title: "demo") {
-    Column {
+    Container {
         @if (shown) {
             Text { "a" }
         } @else if (pending) {

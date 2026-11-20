@@ -9,7 +9,7 @@
 
 <markup>
 window Demo (title: "demo") {
-    Column {
+    Container {
         Badge (on clicked: missing) { }
     }
 }

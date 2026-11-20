@@ -5,6 +5,6 @@ theme high-contrast { accent: #ffffff; }
 
 <markup>
 window Demo (title: "demo") {
-    View { }
+    Container { }
 }
 </markup>

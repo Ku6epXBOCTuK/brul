@@ -4,6 +4,6 @@
 
 <markup>
 window Demo (title: "demo") {
-    Column { Button (label: "x") { } }
+    Container { Button (label: "x") { } }
 }
 </markup>

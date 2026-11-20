@@ -1,8 +1,8 @@
 <markup>
 window Demo (title: "demo") {
-    View {
-        View (checked: on, selected: on, disabled: off, visible: shown) { }
-        View (x: left, y: top) { }
+    Container {
+        Container (checked: on, selected: on, disabled: off, visible: shown) { }
+        Container (x: left, y: top) { }
     }
 }
 </markup>

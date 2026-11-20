@@ -9,8 +9,8 @@ component CheckRow {
     prop checked: Bool = false;
     event toggled();
 
-    Row (check-row) {
-        View (checkbox, checked: checked, on click: toggle) { }
+    Container (check-row) {
+        Container (checkbox, checked: checked, on click: toggle) { }
         Text (text-muted) { label }
     }
 }
@@ -24,19 +24,19 @@ component BrowserItem {
     prop selected: Bool = false;
     event clicked(i: Number);
 
-    View (browser-item) {
-        View (item-panel, selected: selected, on click: itemClicked) {
-            View (item-icon) {
+    Container (browser-item) {
+        Container (item-panel, selected: selected, on click: itemClicked) {
+            Container (item-icon) {
                 if (emoji == "") {
                     Image (item-image) { icon }
                 }
             }
 
-            Column (item-body) {
-                Row (item-title) {
+            Container (item-body) {
+                Container (item-title) {
                     Text (text-main) { name }
                     if (isDefault) {
-                        View (default-badge) {
+                        Container (default-badge) {
                             Text (badge-text) { "По умолчанию" }
                         }
                     }
@@ -48,7 +48,7 @@ component BrowserItem {
 
 window Picker (title: "picker", width: 488, height: 800,
                frameless: true, transparent: true, on key: handleKey) {
-    Column (root) {
+    Container (root) {
         each item, i in browsers {
             BrowserItem (index: i, name: item.name, icon: item.icon,
                          emoji: item.emoji, isDefault: item.isDefault,

@@ -16,6 +16,6 @@ theme light {
 
 <markup>
 window Styled (title: "styled") {
-    View (box) { }
+    Container (box) { }
 }
 </markup>

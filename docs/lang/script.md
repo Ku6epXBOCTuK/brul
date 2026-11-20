@@ -220,7 +220,7 @@ function handleKey(ev: Object): Void {
 Text (url-text) { currentUrl }
 Text (count) { `Выбрано: ${selectedIndex + 1} из ${len(browsers)}` }
 Image (check-icon, visible: selected) { checkSvg }
-View (item-panel, selected: i == selectedIndex) { }
+Container (item-panel, selected: i == selectedIndex) { }
 ```
 
 ### 4. Таймер обновления статусов

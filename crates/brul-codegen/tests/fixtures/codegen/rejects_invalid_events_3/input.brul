@@ -1,5 +1,5 @@
 <markup>
 window Demo (title: "demo") {
-    View (on key: quit) { }
+    Container (on key: quit) { }
 }
 </markup>

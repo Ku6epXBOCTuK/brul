@@ -4,6 +4,6 @@
 
 <markup>
 window Demo (title: "demo", icon: check) {
-    View { }
+    Container { }
 }
 </markup>

@@ -4,8 +4,8 @@
 
 <markup>
 window Demo (title: "demo") {
-    Column (on drag: dragWindow) {
-        Row (on click: toggle, on enter: toggle) { }
+    Container (on drag: dragWindow) {
+        Container (on click: toggle, on enter: toggle) { }
     }
 }
 </markup>

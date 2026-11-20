@@ -11,7 +11,7 @@
 фигурные скобки с содержимым:
 
 ```brul
-View (item-panel, selected: selected, on click: panelClicked) {
+Container (item-panel, selected: selected, on click: panelClicked) {
     Text (text-main) { name }
 }
 ```
@@ -177,9 +177,10 @@ TextInput (note, multiline: true) { draft }
 ### Классы и состояния
 
 Голый идентификатор в скобках — класс стилей. Один элемент — несколько классов:
-`View (item-panel, rounded, elevated) { ... }`.
+`Container (item-panel, rounded, elevated) { ... }`.
 
-Класс может прийти из данных: `View (plate, class: tones[index % 4]) { ... }`.
+Класс может прийти из данных:
+`Container (plate, class: tones[index % 4]) { ... }`.
 
 - Класс из выражения идёт **после** статических классов элемента и меняет только
   свойства, объявленные в его собственном правиле; остальные остаются от
@@ -214,7 +215,7 @@ TextInput (note, multiline: true) { draft }
 Обработчик — только именованная функция, присоединяется в скобках:
 
 ```brul
-View (checkbox, checked: checked, on click: toggle) { }
+Container (checkbox, checked: checked, on click: toggle) { }
 ```
 
 Правила:
@@ -294,7 +295,7 @@ event clicked(i: Number);       // событие с типизированны�
 
 ```brul
 @if (isDefault) {
-    View (default-badge) { Text (badge-text) { "По умолчанию" } }
+    Container (default-badge) { Text (badge-text) { "По умолчанию" } }
 } @else if (isOutdated) {
     Text (hint) { "Устарело" }
 } @else {
@@ -323,7 +324,7 @@ event clicked(i: Number);       // событие с типизированны�
 
 ```brul
 component Card {
-    View (card) {
+    Container (card) {
         @slot(header)
         @slot
     }
@@ -352,18 +353,21 @@ window Demo (title: "demo") {
 - `@slot` можно ставить внутри `@if`/`@each` компонента: при пересборке
   структуры дети вызывающего перерисовываются заново.
 - Корень компонента остаётся элементом, поэтому слот пишут внутри контейнера:
-  `View { @slot }`.
+  `Container { @slot }`.
 
 ## Встроенные виджеты MVP
 
-| Виджет          | Дети      | Назначение                                              |
-| --------------- | --------- | ------------------------------------------------------- |
-| `View`          | контейнер | универсальный контейнер (панели, кнопки, карточки)      |
-| `Row`, `Column` | контейнер | лейаут-строка/столбец (gap/padding — из CSS)            |
-| `Layer`         | контейнер | слой поверх окна, вне потока                            |
-| `Text`          | выражение | текст (стили: цвет, размер, выравнивание)               |
-| `TextInput`     | выражение | поле ввода одной строки с кареткой                      |
-| `Image`         | выражение | картинка (источник — ресурс или `Image`; tint — из CSS) |
+| Виджет      | Дети      | Назначение                                              |
+| ----------- | --------- | ------------------------------------------------------- |
+| `Container` | контейнер | универсальный контейнер (панели, кнопки, карточки)      |
+| `Layer`     | контейнер | слой поверх окна, вне потока                            |
+| `Text`      | выражение | текст (стили: цвет, размер, выравнивание)               |
+| `TextInput` | выражение | поле ввода одной строки с кареткой                      |
+| `Image`     | выражение | картинка (источник — ресурс или `Image`; tint — из CSS) |
+
+`Container` собирает панели, кнопки, карточки и лейаут-строки/столбцы:
+направление потока задаётся свойством `flex-direction` из стиля (по умолчанию
+`row`, как в CSS), gap и padding — тоже из стиля.
 
 `Text`/`TextInput`/`Image` — «листовые»: текст и ресурсы не участвуют в лейауте
 ([лейаут и стили](../dev/architecture.md#лейаут-и-стили) — контейнер не содержит
@@ -393,7 +397,7 @@ window Demo (title: "demo") {
 
 ## MVP-подмножество — итог
 
-- Всё в «Грамматике» выше + 6 встроенных виджетов + 3 параметра-состояния +
+- Всё в «Грамматике» выше + 5 встроенных виджетов + 3 параметра-состояния +
   `class`, `visible`/`x`/`y`, `focusable`, `modal`.
 - Импорт: `import Name from "./path";` или кит через `brul:name`
   ([use.md](use.md)); ресурс: `resource Name from "./path.png";`.
@@ -428,8 +432,8 @@ component CheckRow {
     prop checked: Bool = false;
     event toggled();
 
-    Row (check-row) {
-        View (checkbox, checked: checked, on click: toggle) { }
+    Container (check-row) {
+        Container (checkbox, checked: checked, on click: toggle) { }
         Text (text-muted) { label }
     }
 }
@@ -457,27 +461,27 @@ component BrowserItem {
     prop selected: Bool = false;
     event clicked(i: Number);
 
-    View (browser-item) {
-        View (item-panel, selected: selected, on click: itemClicked) {
+    Container (browser-item) {
+        Container (item-panel, selected: selected, on click: itemClicked) {
 
-            View (item-icon) {
+            Container (item-icon) {
                 @if (emoji == "") {
                     Image (item-image) { icon }
                 }
             }
 
-            Column (item-body) {
-                Row (item-title) {
+            Container (item-body) {
+                Container (item-title) {
                     Text (text-main) { name }
                     @if (isDefault) {
-                        View (default-badge) {
+                        Container (default-badge) {
                             Text (badge-text) { "По умолчанию" }
                         }
                     }
                 }
             }
 
-            Column (item-tail) {
+            Container (item-tail) {
                 Image (check-icon, visible: selected) { checkSvg }
                 Text (arrow, visible: !selected) { "›" }
             }
@@ -492,18 +496,18 @@ component BrowserItem {
 component Header {
     prop url: String = "";
 
-    Column (header, on drag: dragWindow) {
+    Container (header, on drag: dragWindow) {
 
-        Row (header-top) {
-            View (app-icon) { }
-            Column (header-titles) {
+        Container (header-top) {
+            Container (app-icon) { }
+            Container (header-titles) {
                 Text (title) { "Выберите браузер" }
                 Text (subtitle) { "Для открытия ссылки" }
             }
         }
 
-        View (url-field) {
-            Row (url-row) {
+        Container (url-field) {
+            Container (url-row) {
                 Image (url-icon) { externalLinkSvg }
                 Text (url-text) { url }
             }
@@ -517,7 +521,7 @@ component Header {
 ```brul
 window Picker (title: "picker", width: 488, height: 800,
                frameless: true, transparent: true, on key: handleKey) {
-    Column (root) {
+    Container (root) {
         Header (url: currentUrl) { }
         @each (browsers as item, idx (item.index)) {
             BrowserItem (index: idx, name: item.name, icon: item.icon,

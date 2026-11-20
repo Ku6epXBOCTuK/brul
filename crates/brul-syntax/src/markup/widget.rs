@@ -37,9 +37,7 @@ macro_rules! widgets {
 }
 
 widgets! {
-    View => container,
-    Row => container,
-    Column => container,
+    Container => container,
     Text => leaf,
     TextInput => leaf,
     Image => leaf,

@@ -5,7 +5,7 @@
 
 <markup>
 window Demo (title: "demo") {
-    Column {
+    Container {
         Other (note: "hi") { }
     }
 }

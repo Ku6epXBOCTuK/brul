@@ -8,7 +8,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = brul::gui::Widget::row(vec![]).focusable(true);
+            let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]).focusable(true);
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Focus, script_event_gained));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Blur, script_event_lost));
             widget0

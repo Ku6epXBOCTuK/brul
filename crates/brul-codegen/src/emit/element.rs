@@ -105,7 +105,7 @@ fn content_needed(element: &Element, emit: &Emit<'_>) -> bool {
     match element.widget {
         Some(Widget::Text | Widget::TextInput) => !matches!(expression.kind, ExprKind::String(_)),
         Some(Widget::Image) => super::resource(expression, emit.resources).is_none(),
-        Some(Widget::View | Widget::Row | Widget::Column | Widget::Layer) | None => false,
+        Some(Widget::Container | Widget::Layer) | None => false,
     }
 }
 
@@ -134,12 +134,8 @@ fn kind(
     counter: &mut usize,
 ) -> Result<Option<Content>, Error> {
     match element.widget {
-        Some(Widget::Row) => {
-            container(out, element, Group::Row, emit, frame, counter)?;
-            Ok(None)
-        }
-        Some(Widget::View | Widget::Column) => {
-            container(out, element, Group::Column, emit, frame, counter)?;
+        Some(Widget::Container) => {
+            container(out, element, Group::Container, emit, frame, counter)?;
             Ok(None)
         }
         Some(Widget::Layer) => {
@@ -158,24 +154,29 @@ fn kind(
 
 #[derive(Clone, Copy)]
 enum Group {
-    Row,
-    Column,
+    Container,
     Layer,
 }
 
 impl Group {
     fn call(self) -> &'static str {
         match self {
-            Self::Row => "row",
-            Self::Column => "column",
+            Self::Container => "view",
             Self::Layer => "layer",
+        }
+    }
+
+    fn args(self) -> &'static str {
+        match self {
+            Self::Container => "brul::gui::Direction::Row, ",
+            Self::Layer => "",
         }
     }
 
     fn direction(self) -> &'static str {
         match self {
-            Self::Row => "Row",
-            Self::Column | Self::Layer => "Column",
+            Self::Container => "Row",
+            Self::Layer => "Column",
         }
     }
 }
@@ -189,8 +190,9 @@ fn container(
     counter: &mut usize,
 ) -> Result<(), Error> {
     let call = group.call();
+    let args = group.args();
     if element.block.items.is_empty() {
-        out.push(format_args!("brul::gui::Widget::{call}(vec![])"));
+        out.push(format_args!("brul::gui::Widget::{call}({args}vec![])"));
         return Ok(());
     }
     let direction = group.direction();
@@ -200,7 +202,7 @@ fn container(
         .gap;
     let children = frame.inside(direction, gap);
     if contains_slot(&element.block) {
-        out.push(format_args!("brul::gui::Widget::{call}({{"));
+        out.push(format_args!("brul::gui::Widget::{call}({args}{{"));
         out.end();
         out.indented(|out| -> Result<(), Error> {
             out.line(format_args!("let mut children = Vec::new();"));
@@ -211,7 +213,7 @@ fn container(
         out.start(format_args!("}})"));
         return Ok(());
     }
-    out.push(format_args!("brul::gui::Widget::{call}(vec!["));
+    out.push(format_args!("brul::gui::Widget::{call}({args}vec!["));
     out.end();
     out.indented(|out| items(out, &element.block, emit, children, counter))?;
     out.start(format_args!("])"));

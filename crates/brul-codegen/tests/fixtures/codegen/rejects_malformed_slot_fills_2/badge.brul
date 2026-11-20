@@ -1,6 +1,6 @@
 <markup>
 component Badge {
-    View {
+    Container {
         @slot
     }
 }

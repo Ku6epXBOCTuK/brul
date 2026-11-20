@@ -1,6 +1,6 @@
 <markup>
 window Demo (title: "demo") {
-    Column {
+    Container {
         @each (items as item, position (item.name)) { Text { item.name } }
     }
 }

@@ -4,6 +4,6 @@
 
 <markup>
 window Demo (title: "demo") {
-    View (class: tone) { }
+    Container (class: tone) { }
 }
 </markup>

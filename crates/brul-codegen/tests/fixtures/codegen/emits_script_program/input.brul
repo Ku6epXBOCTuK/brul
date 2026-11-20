@@ -17,6 +17,6 @@
 
 <markup>
 window Demo (title: "demo") {
-    View { Text { count } }
+    Container { Text { count } }
 }
 </markup>

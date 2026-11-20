@@ -7,7 +7,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        brul::gui::Widget::column(vec![])
+        brul::gui::Widget::view(brul::gui::Direction::Row, vec![])
     };
     handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::Close, script_event_hide));
     Ok(brul::Built {

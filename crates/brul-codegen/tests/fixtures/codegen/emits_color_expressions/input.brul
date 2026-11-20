@@ -5,6 +5,6 @@ theme light { accent: #3b82f6; }
 
 <markup>
 window Demo (title: "demo") {
-    View (a) { }
+    Container (a) { }
 }
 </markup>

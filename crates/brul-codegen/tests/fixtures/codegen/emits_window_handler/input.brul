@@ -4,6 +4,6 @@
 
 <markup>
 window Demo (title: "demo", on key: quit) {
-    View { }
+    Container { }
 }
 </markup>

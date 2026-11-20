@@ -1,9 +1,9 @@
 <markup>
 window Picker (title: "one") {
-    View { }
+    Container { }
 }
 
 window Picker (title: "two") {
-    View { }
+    Container { }
 }
 </markup>

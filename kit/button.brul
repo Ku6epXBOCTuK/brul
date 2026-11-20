@@ -11,7 +11,7 @@
         prop disabled: Bool = false;
         event clicked();
 
-        View (button, class: variant, focusable: true, disabled: disabled, on click: press) {
+        Container (button, class: variant, focusable: true, disabled: disabled, on click: press) {
             @slot(icon)
             Text (button-label) { label }
         }
