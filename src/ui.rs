@@ -18,19 +18,6 @@ use crate::{
 
 const EVENT_DEPTH: usize = 64;
 
-const BUILTINS: &[&str] = &[
-    "theme",
-    "setTheme",
-    "setAlwaysOnTop",
-    "openWindow",
-    "exit",
-    "closeWindow",
-    "dragWindow",
-    "showWindow",
-    "hideWindow",
-    "focusWindow",
-];
-
 pub struct Ui<T: Theme> {
     pub component: ComponentHandle,
     pub tree: Rc<RefCell<WidgetTree>>,
@@ -148,11 +135,10 @@ impl Host for CommandHost {
     }
 
     fn commands(&self) -> Vec<&'static str> {
-        let mut names = BUILTINS.to_vec();
-        if let Some(app) = &self.app {
-            names.extend(app.commands());
+        match &self.app {
+            Some(app) => app.commands(),
+            None => Vec::new(),
         }
-        names
     }
 }
 
@@ -587,6 +573,7 @@ mod tests {
 
     use brul_gui::{Direction, Size, TextEngine, Texture, Widget};
     use brul_syntax::markup::PropType;
+    use brul_syntax::script::{BUILTINS, BuiltinKind};
     use brul_window::WindowCommand;
 
     use crate::run::generated_built;
@@ -1069,13 +1056,18 @@ mod tests {
     }
 
     #[test]
-    fn every_builtin_is_listed_by_name() {
+    fn every_host_builtin_is_dispatched() {
         let (mut host, _) = command_host(None);
-        assert_eq!(host.commands(), BUILTINS.to_vec());
-        for name in BUILTINS {
+        let names: Vec<_> = BUILTINS
+            .iter()
+            .filter(|builtin| matches!(builtin.kind, BuiltinKind::Host { .. }))
+            .map(|builtin| builtin.name)
+            .collect();
+        assert!(!names.is_empty());
+        for name in names {
             assert!(
                 !matches!(host.call(name, &[]), Err(Error::UnknownFunction(_))),
-                "{name} is dispatched but not listed"
+                "{name} is not dispatched"
             );
         }
     }
