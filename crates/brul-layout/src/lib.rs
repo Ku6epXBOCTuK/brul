@@ -643,65 +643,99 @@ impl<C: PartialEq + Clone> Default for Layouter<C> {
     }
 }
 
-pub fn layout(root: &LayoutNode, viewport: Size) -> Result<LayoutBox, LayoutError> {
-    let mut tree = TaffyTree::<Size>::new();
-    let root_id = build(&mut tree, root)?;
-    compute(&mut tree, root_id, viewport);
-    Ok(collect(&tree, root_id, root, 0, 0))
+struct FlatNode<'a> {
+    style: &'a LayoutStyle,
+    direction: Direction,
+    offset: Option<Offset>,
+    scroll: ScrollOffset,
+    content: Size,
+    children: Vec<u32>,
 }
 
-fn build(tree: &mut TaffyTree<Size>, node: &LayoutNode) -> Result<NodeId, LayoutError> {
+fn flatten<'a>(node: &'a LayoutNode, nodes: &mut Vec<FlatNode<'a>>) -> Result<(), LayoutError> {
     let style = node.style();
     validate(style)?;
 
-    let id = match node {
-        LayoutNode::Leaf { size, offset, .. } => {
-            let taffy = taffy_style(style, Direction::Row, *offset, false);
-            tree.new_leaf_with_context(taffy, *size)
-                .expect("layout tree")
-        }
+    let (direction, offset, scroll, content, children) = match node {
+        LayoutNode::Leaf { size, .. } => (
+            Direction::Row,
+            node.offset(),
+            ScrollOffset::ZERO,
+            *size,
+            Vec::new(),
+        ),
         LayoutNode::Container {
             direction,
             children,
-            offset,
+            scroll_offset,
             ..
         } => {
-            let ids = children
-                .iter()
-                .map(|child| build(tree, child))
-                .collect::<Result<Vec<_>, LayoutError>>()?;
-            let taffy = taffy_style(style, *direction, *offset, false);
-            tree.new_with_children(taffy, &ids).expect("layout tree")
+            let mut keys = Vec::with_capacity(children.len());
+            for child in children {
+                flatten(child, nodes)?;
+                keys.push(nodes.len() as u32);
+            }
+            (
+                *direction,
+                node.offset(),
+                *scroll_offset,
+                Size::default(),
+                keys,
+            )
         }
     };
-
-    Ok(id)
+    nodes.push(FlatNode {
+        style,
+        direction,
+        offset,
+        scroll,
+        content,
+        children,
+    });
+    Ok(())
 }
 
-fn compute(tree: &mut TaffyTree<Size>, root: NodeId, viewport: Size) {
-    // NOTE: taffy only rejects ids it did not create, and every id here comes from this tree
-    tree.compute_layout_with_measure(
-        root,
-        TaffySize {
-            width: AvailableSpace::Definite(viewport.width as f32),
-            height: AvailableSpace::Definite(viewport.height as f32),
-        },
-        |inputs, _node, context, style| {
-            compute_leaf_layout(
-                inputs,
-                style,
-                |_, _| 0.0,
-                |_, _| {
-                    let size = context.map(|size| *size).unwrap_or_default();
-                    TaffySize {
-                        width: size.width as f32,
-                        height: size.height as f32,
-                    }
-                },
-            )
-        },
-    )
-    .expect("layout tree");
+pub fn layout(root: &LayoutNode, viewport: Size) -> Result<LayoutBox, LayoutError> {
+    let mut nodes = Vec::new();
+    flatten(root, &mut nodes)?;
+    let root_key = nodes.len() as u32;
+
+    let mut layouter = Layouter::<Size>::new();
+    layouter.begin();
+    // NOTE: post-order only: `child_nodes` resolves child keys while the parent is registered
+    for (index, node) in nodes.iter().enumerate() {
+        layouter.node(
+            index as u32 + 1,
+            NodeShape {
+                style: node.style,
+                direction: node.direction,
+                offset: node.offset,
+                scroll: node.scroll,
+                content: node.content,
+                children: &node.children,
+                transparent: false,
+                layer: false,
+                constrained: false,
+            },
+        );
+    }
+    layouter.finish();
+    layouter.compute(root_key, viewport, |content, _width| *content);
+
+    let mut flat = vec![LayoutBox::default(); nodes.len() + 1];
+    layouter.collect_into(root_key, &mut flat);
+
+    let mut nested: Vec<Option<LayoutBox>> = (0..nodes.len() + 1).map(|_| None).collect();
+    for (index, node) in nodes.iter().enumerate() {
+        let mut placed = flat[index + 1].clone();
+        placed.children = node
+            .children
+            .iter()
+            .map(|key| nested[*key as usize].take().expect("layout child"))
+            .collect();
+        nested[index + 1] = Some(placed);
+    }
+    Ok(nested[root_key as usize].take().expect("layout root"))
 }
 
 fn taffy_style(
@@ -772,51 +806,6 @@ fn taffy_style(
         if style.flex_grow > 0.0 {
             output.flex_shrink = 1.0;
         }
-    }
-
-    output
-}
-
-fn collect<C>(tree: &TaffyTree<C>, id: NodeId, node: &LayoutNode, x: i32, y: i32) -> LayoutBox {
-    let placed = tree.layout(id).expect("layout tree");
-    let mut output = LayoutBox {
-        x,
-        y,
-        width: placed.size.width.max(0.0) as u32,
-        height: placed.size.height.max(0.0) as u32,
-        children: Vec::new(),
-    };
-
-    let LayoutNode::Container {
-        style,
-        direction,
-        children,
-        scroll_offset,
-        ..
-    } = node
-    else {
-        return output;
-    };
-
-    let ids = tree.children(id).expect("layout tree");
-    let origin = (
-        clamp_i32(i64::from(x) + i64::from(style.border_width) + i64::from(style.padding.left)),
-        clamp_i32(i64::from(y) + i64::from(style.border_width) + i64::from(style.padding.top)),
-    );
-    let scroll = scroll_offset.pixels();
-
-    output.children.reserve(children.len());
-    for (child, child_id) in children.iter().zip(ids) {
-        let child_placed = tree.layout(child_id).expect("layout tree");
-        let location = (
-            child_placed.location.x as i32,
-            child_placed.location.y as i32,
-        );
-        let (child_x, child_y) =
-            child_position(*direction, scroll, (x, y), origin, child.offset(), location);
-        output
-            .children
-            .push(collect(tree, child_id, child, child_x, child_y));
     }
 
     output
@@ -1073,6 +1062,39 @@ mod tests {
         let mut second = vec![LayoutBox::default(); 2];
         layouter.collect_into(0, &mut second);
         assert_eq!(second, first);
+    }
+
+    #[test]
+    fn one_shot_forwards_insets_scroll_and_offset() {
+        let viewport = Size {
+            width: 200,
+            height: 120,
+        };
+        let absolute = LayoutNode::row(vec![LayoutNode::leaf(10, 10).with_offset(5, 3)])
+            .with_style(LayoutStyle {
+                border_width: 2,
+                padding: Padding {
+                    left: 10,
+                    top: 4,
+                    right: 1,
+                    bottom: 1,
+                },
+                ..LayoutStyle::default()
+            });
+        let placed = layout(&absolute, viewport).expect("layout");
+        assert_eq!((placed.children[0].x, placed.children[0].y), (17, 9));
+
+        let flowing = |scroll| {
+            LayoutNode::row(vec![LayoutNode::leaf(10, 10), LayoutNode::leaf(10, 10)])
+                .with_style(LayoutStyle {
+                    width: Dimension::Px(200),
+                    ..LayoutStyle::default()
+                })
+                .with_scroll(scroll)
+        };
+        let plain = layout(&flowing(ScrollOffset::ZERO), viewport).expect("layout");
+        let shifted = layout(&flowing(ScrollOffset::new(7)), viewport).expect("layout");
+        assert_eq!(plain.children[1].x - shifted.children[1].x, 7);
     }
 
     fn columns(grow: f32, basis: Dimension) -> LayoutNode {
