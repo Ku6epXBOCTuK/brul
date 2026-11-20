@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
+use brul_case::{ident, snake};
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
-
-use super::script::{ident, snake};
 
 #[derive(Clone)]
 pub(super) struct FunctionSig {

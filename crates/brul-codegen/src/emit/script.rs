@@ -1,25 +1,16 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use brul_case::{ident, pascal, snake};
 use brul_script::Names;
 use brul_syntax::error::Error;
 use brul_syntax::script::Program;
 use brul_syntax::types::Type;
 
-use crate::commands::camel;
-
 use super::expression::{convert, wrap_typed};
 use super::scopes::{FunctionSig, Scopes};
 use super::state::State;
 use super::statement::{block_with_scopes, top_level};
-
-const RESERVED: &[&str] = &[
-    "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "crate",
-    "do", "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "if", "impl", "in",
-    "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref",
-    "return", "static", "struct", "super", "trait", "true", "try", "type", "typeof", "unsafe",
-    "unsized", "use", "virtual", "where", "while", "yield",
-];
 
 pub(super) fn module(
     name: &str,
@@ -292,38 +283,6 @@ pub(super) fn handle(name: &str, program: Option<&Program>) -> String {
     out
 }
 
-fn pascal(name: &str) -> String {
-    let name = camel(name);
-    let mut characters = name.chars();
-    match characters.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
-        None => String::new(),
-    }
-}
-
 pub(super) fn event_call(script: &str, function: &str) -> String {
     format!("{script}_event_{}", ident(&snake(function)))
-}
-
-pub(super) fn snake(name: &str) -> String {
-    let mut output = String::with_capacity(name.len());
-    for (index, character) in name.chars().enumerate() {
-        if character.is_uppercase() {
-            if index > 0 && !output.ends_with('_') {
-                output.push('_');
-            }
-            output.extend(character.to_lowercase());
-        } else {
-            output.push(character);
-        }
-    }
-    output
-}
-
-pub(super) fn ident(name: &str) -> String {
-    if RESERVED.contains(&name) {
-        format!("r#{name}")
-    } else {
-        name.to_owned()
-    }
 }

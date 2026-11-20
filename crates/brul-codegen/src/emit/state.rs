@@ -1,11 +1,11 @@
 use std::fmt::Write;
 
+use brul_case::{ident, snake};
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::script::{Program, Statement};
 use brul_syntax::types::Type;
 
-use super::script::ident;
 use crate::commands::{Command, Commands};
 
 #[derive(Default)]
@@ -41,7 +41,7 @@ impl State {
             if rust_type(ty).is_err() {
                 continue;
             }
-            let ident = ident(&super::script::snake(name));
+            let ident = ident(&snake(name));
             let ident = if state.fields.iter().any(|field| field.ident == ident) {
                 format!("{ident}_{}", state.fields.len())
             } else {

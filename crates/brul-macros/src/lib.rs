@@ -1,3 +1,4 @@
+use brul_case::{camel, snake};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
@@ -336,38 +337,6 @@ fn owned_type(ty: &Type) -> &Type {
         Type::Reference(reference) => &reference.elem,
         _ => ty,
     }
-}
-
-fn snake(name: &str) -> String {
-    let mut output = String::with_capacity(name.len());
-    for (index, character) in name.chars().enumerate() {
-        if character.is_uppercase() {
-            if index > 0 {
-                output.push('_');
-            }
-            output.extend(character.to_lowercase());
-        } else {
-            output.push(character);
-        }
-    }
-    output
-}
-
-fn camel(name: &str) -> String {
-    let name = name.trim_start_matches("r#");
-    let mut output = String::with_capacity(name.len());
-    let mut capitalize = false;
-    for character in name.chars() {
-        if character == '_' {
-            capitalize = true;
-        } else if capitalize {
-            output.extend(character.to_uppercase());
-            capitalize = false;
-        } else {
-            output.push(character);
-        }
-    }
-    output
 }
 
 #[cfg(test)]

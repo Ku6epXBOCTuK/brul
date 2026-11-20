@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use brul_case::{constant as theme_constant, label};
 use brul_syntax::ast::Position;
 use brul_syntax::style::Stylesheet;
 
@@ -109,21 +110,15 @@ fn themes(stylesheet: &Stylesheet) -> Vec<Option<&str>> {
 }
 
 fn constant(prefix: &str, theme: Option<&str>) -> String {
-    let suffix = match theme {
-        Some(theme) => theme
-            .replace(|letter: char| !letter.is_ascii_alphanumeric(), "_")
-            .to_uppercase(),
-        None => "NONE".to_owned(),
-    };
+    let suffix = theme
+        .map(theme_constant)
+        .unwrap_or_else(|| "NONE".to_owned());
     format!("{}CLASSES_{suffix}", prefix.to_uppercase())
 }
 
 pub(super) fn name(prefix: &str, theme: Option<&str>) -> String {
     match theme {
-        Some(theme) => format!(
-            "{prefix}class_{}",
-            theme.replace(|letter: char| !letter.is_ascii_alphanumeric(), "_")
-        ),
+        Some(theme) => format!("{prefix}class_{}", label(theme)),
         None => format!("{prefix}class_none"),
     }
 }

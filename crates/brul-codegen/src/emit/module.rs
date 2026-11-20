@@ -3,6 +3,7 @@ use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use brul_case::{identifier, pascal};
 use brul_script::Names;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
@@ -484,34 +485,8 @@ pub use self::{name}::*;
     }
 }
 
-fn identifier(text: &str) -> String {
-    let mut name: String = text
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if name.is_empty() || name.starts_with(|character: char| character.is_ascii_digit()) {
-        name.insert(0, '_');
-    }
-    name
-}
-
 fn state_type(name: &str) -> String {
-    let mut output = String::new();
-    for part in name.split('_').filter(|part| !part.is_empty()) {
-        let mut characters = part.chars();
-        if let Some(first) = characters.next() {
-            output.extend(first.to_uppercase());
-            output.push_str(characters.as_str());
-        }
-    }
-    output.push_str("State");
-    output
+    format!("{}State", pascal(name))
 }
 
 fn prop_types(members: &[Member]) -> HashMap<String, Type> {

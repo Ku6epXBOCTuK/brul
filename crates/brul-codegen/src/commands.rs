@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use brul_case::{camel, snake};
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
@@ -183,36 +184,4 @@ fn rust_type(ty: &SynType) -> Type {
         SynType::Tuple(tuple) if tuple.elems.is_empty() => Type::Null,
         _ => Type::Object,
     }
-}
-
-pub(crate) fn camel(name: &str) -> String {
-    let name = name.trim_start_matches("r#");
-    let mut output = String::with_capacity(name.len());
-    let mut capitalize = false;
-    for character in name.chars() {
-        if character == '_' {
-            capitalize = true;
-        } else if capitalize {
-            output.extend(character.to_uppercase());
-            capitalize = false;
-        } else {
-            output.push(character);
-        }
-    }
-    output
-}
-
-fn snake(name: &str) -> String {
-    let mut output = String::with_capacity(name.len());
-    for (index, character) in name.chars().enumerate() {
-        if character.is_uppercase() {
-            if index > 0 {
-                output.push('_');
-            }
-            output.extend(character.to_lowercase());
-        } else {
-            output.push(character);
-        }
-    }
-    output
 }

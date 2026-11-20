@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use brul_case::pascal;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::style::Stylesheet;
@@ -11,7 +12,7 @@ pub(super) fn id(out: &mut String, stylesheet: &Stylesheet) -> Result<(), Error>
     let mut variants = Vec::new();
     let mut seen: HashMap<String, &str> = HashMap::new();
     for theme in &stylesheet.themes {
-        let name = variant(&theme.name);
+        let name = pascal(&theme.name);
         if let Some(other) = seen.insert(name.clone(), &theme.name) {
             return Err(error_at(
                 Position { line: 1, column: 1 },
@@ -72,25 +73,13 @@ impl std::str::FromStr for ThemeId {{
     Ok(())
 }
 
-fn variant(name: &str) -> String {
-    let mut variant = String::new();
-    for part in name.split(|letter: char| !letter.is_ascii_alphanumeric()) {
-        let mut letters = part.chars();
-        if let Some(first) = letters.next() {
-            variant.push(first.to_ascii_uppercase());
-            variant.extend(letters);
-        }
-    }
-    variant
-}
-
 #[cfg(test)]
 mod tests {
-    use super::variant;
+    use brul_case::pascal;
 
     #[test]
     fn a_theme_name_becomes_a_variant() {
-        assert_eq!(variant("dark"), "Dark");
-        assert_eq!(variant("high-contrast"), "HighContrast");
+        assert_eq!(pascal("dark"), "Dark");
+        assert_eq!(pascal("high-contrast"), "HighContrast");
     }
 }

@@ -57,6 +57,7 @@ debug = "line-tables-only"
 debug = false
 
 [workspace.dependencies]
+brul-case = { path = 'crates\brul-case' }
 brul-codegen = { path = 'crates\brul-codegen' }
 brul-gpu = { path = 'crates\brul-gpu' }
 brul-gui = { path = 'crates\brul-gui' }
@@ -69,6 +70,7 @@ brul-syntax = { path = 'crates\brul-syntax' }
 brul-window = { path = 'crates\brul-window' }
 cosmic-text = "0.19.0"
 criterion = { version = "0.8.2", default-features = false }
+heck = "0.5.0"
 image = { version = "0.25.10", default-features = false }
 material-colors = "0.5.0"
 pest = "2.9.5"
