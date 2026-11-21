@@ -492,7 +492,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::String,
         D::Default,
         W::None,
-        &[patch("grid_area", 20, Some("family"))],
+        &[patch("grid_area", 20, Some("string"))],
     ),
     field(
         O::Widget,
@@ -590,7 +590,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::OptionString,
         D::None,
         W::None,
-        &[patch("family", 3, Some("family"))],
+        &[patch("family", 3, Some("string"))],
     ),
     field(
         O::Text,

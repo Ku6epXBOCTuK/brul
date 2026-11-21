@@ -94,10 +94,7 @@ mod convert {
     };
 
     pub(super) fn padding(value: &Padding) -> String {
-        format!(
-            "brul::gui::Padding {{ left: {}, top: {}, right: {}, bottom: {} }}",
-            value.left, value.top, value.right, value.bottom
-        )
+        sides(value, "Padding")
     }
 
     pub(super) fn dimension(value: &Dimension) -> String {
@@ -231,8 +228,12 @@ mod convert {
     }
 
     pub(super) fn border_widths(value: &brul_gui::BorderWidths) -> String {
+        sides(value, "BorderWidths")
+    }
+
+    fn sides(value: &brul_gui::Sides<u32>, name: &str) -> String {
         format!(
-            "brul::gui::BorderWidths {{ left: {}, top: {}, right: {}, bottom: {} }}",
+            "brul::gui::{name} {{ left: {}, top: {}, right: {}, bottom: {} }}",
             value.left, value.top, value.right, value.bottom
         )
     }
@@ -241,7 +242,7 @@ mod convert {
         format!("{value:?}")
     }
 
-    pub(super) fn family(value: &String) -> String {
+    pub(super) fn string(value: &String) -> String {
         format!("String::from({value:?})")
     }
 
