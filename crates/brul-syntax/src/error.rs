@@ -106,6 +106,8 @@ pub enum Error {
     MissingMarkup,
     #[error("duplicate window '{0}'")]
     DuplicateWindow(String),
+    #[error("a file can contain only one declaration")]
+    MultipleDeclarations,
     #[error("missing window declaration")]
     MissingWindow,
     #[error("override names '{0}', which is not imported")]

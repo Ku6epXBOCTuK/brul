@@ -1,6 +1,6 @@
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{self, Declaration, Window};
+use brul_syntax::markup::{self, Declaration};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
 use brul_syntax::style::{self, Override, Stylesheet};
@@ -9,7 +9,7 @@ use brul_syntax::uses::{self, Block};
 use crate::{error_at, padded, sfc_error};
 
 pub struct Source {
-    pub windows: Vec<Window>,
+    pub declaration: Option<Declaration>,
     pub stylesheet: Stylesheet,
     pub overrides: Vec<Override>,
     pub uses: Block,
@@ -34,7 +34,7 @@ impl Script {
 impl Source {
     pub fn empty() -> Self {
         Self {
-            windows: Vec::new(),
+            declaration: None,
             stylesheet: Stylesheet {
                 themes: Vec::new(),
                 rules: Vec::new(),
@@ -50,34 +50,12 @@ impl Source {
 pub fn parse(source: &str) -> Result<Source, Error> {
     let sfc = sfc::parse(source).map_err(sfc_error)?;
     let markup = markup::parse_file(&padded(source, sfc.markup))?;
-    let mut windows = Vec::new();
-    let mut components = Vec::new();
-    for declaration in markup.declarations {
-        match declaration {
-            Declaration::Window(window) => {
-                if windows.iter().any(|seen: &Window| seen.name == window.name) {
-                    return Err(error_at(
-                        window.position,
-                        format!("duplicate window '{}'", window.name),
-                    ));
-                }
-                windows.push(window);
-            }
-            Declaration::Component(component) => components.push(component),
-        }
-    }
-    if let (Some(window), Some(_)) = (windows.first(), components.first()) {
-        return Err(error_at(
-            window.position,
-            "a component and a window cannot share one .brul file",
-        ));
-    }
-    if windows.is_empty() {
+    let Some(declaration) = markup.declaration else {
         return Err(error_at(
             Position { line: 1, column: 1 },
-            "missing window declaration",
+            "missing declaration",
         ));
-    }
+    };
     let style = match sfc.style {
         Some(block) => style::parse_root(&padded(source, block))?,
         None => style::Style {
@@ -100,7 +78,7 @@ pub fn parse(source: &str) -> Result<Source, Error> {
         None => (None, None),
     };
     Ok(Source {
-        windows,
+        declaration: Some(declaration),
         stylesheet: style.stylesheet,
         overrides: style.overrides,
         uses,

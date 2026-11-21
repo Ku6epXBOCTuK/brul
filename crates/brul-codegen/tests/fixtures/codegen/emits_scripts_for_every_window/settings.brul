@@ -1,0 +1,10 @@
+<script>
+    function ping(): Void {
+    }
+</script>
+
+<markup>
+window Settings (title: "settings") {
+    Text { "settings" }
+}
+</markup>

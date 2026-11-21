@@ -1,37 +1,5 @@
 include!(concat!(env!("OUT_DIR"), "/allocations.rs"));
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
-    let theme = theme.map(brul::Theme::name);
-    component.borrow_mut().set_names(names());
-    let mut bindings = Vec::new();
-    let mut handlers = Vec::new();
-    let mut props = Vec::new();
-    let widget = {
-        brul::gui::Widget::view(brul::gui::Direction::Row, vec![
-            {
-                let (built, _rows) = demo_each1_rebuild(theme, build, component, &[])?;
-                bindings.extend(built.bindings);
-                handlers.extend(built.handlers);
-                props.extend(built.props);
-                let widget0 = built.widget;
-                brul::register_structure(build, component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);
-                widget0
-            },
-            {
-                let widget1 = brul::gui::Widget::text("");
-                bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&brul::Dyn::num(component.state::<ScriptState>().selected.get())).try_into()?) })));
-                widget1
-            },
-        ])
-    };
-    Ok(brul::Built {
-        widget,
-        bindings,
-        handlers,
-        props,
-    })
-}
-
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeId {
@@ -63,16 +31,49 @@ impl std::str::FromStr for ThemeId {
     }
 }
 
-#[allow(dead_code)]
-static CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
-]);
-
-fn classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
-    &*CLASSES_NONE
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let theme = theme.map(brul::Theme::name);
+    component.borrow_mut().set_names(names());
+    let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
+    let mut props = Vec::new();
+    let widget = {
+        brul::gui::Widget::view(brul::gui::Direction::Row, vec![
+            {
+                let (built, _rows) = demo_each1_rebuild(theme, build, component, &[])?;
+                bindings.extend(built.bindings);
+                handlers.extend(built.handlers);
+                props.extend(built.props);
+                let widget0 = built.widget;
+                brul::register_structure(build, component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);
+                widget0
+            },
+            {
+                let widget1 = brul::gui::Widget::text("");
+                bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&brul::Dyn::num(component.state::<DemoScriptState>().selected.get())).try_into()?) })));
+                widget1
+            },
+        ])
+    };
+    Ok(brul::Built {
+        widget,
+        bindings,
+        handlers,
+        props,
+    })
 }
 
 #[allow(dead_code)]
-fn styles() -> &'static brul::style::Stylesheet {
+static DEMO_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
+]);
+
+fn demo_classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
+    &*DEMO_CLASSES_NONE
+}
+
+#[allow(dead_code)]
+fn demo_styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
     static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
@@ -82,17 +83,100 @@ fn styles() -> &'static brul::style::Stylesheet {
     &STYLES
 }
 
-fn styled(
+fn demo_styled(
     mut widget: brul::gui::Widget,
     indices: &[usize],
     theme: Option<&str>,
 ) -> brul::gui::Widget {
-    let table = classes(theme);
+    let table = demo_classes(theme);
     for index in indices {
         widget = widget.with_class(&table[*index]);
     }
     widget
 }
+
+#[allow(dead_code)]
+pub struct DemoScriptState {
+    pub selected: brul::Signal<f64>,
+}
+
+#[allow(dead_code)]
+fn demo_script_state_init(component: &mut brul::Component) -> Result<(), brul::Error> {
+    let selected: f64 = component.seed("selected", brul::ast::Position { line: 0, column: 0 })?;
+    component.set_state(DemoScriptState { selected: brul::Signal::new(selected) });
+    Ok(())
+}
+
+pub fn demo_script() -> Option<brul::Script> {
+    Some(brul::Script::Typed { init: demo_script_init, call: demo_script_typed_call, dispatch: demo_script_dispatch })
+}
+#[allow(unused_variables)]
+fn demo_script_init(component: &mut brul::Component) -> Result<(), brul::Error> {
+    component.register_event_call("bump", demo_script_event_bump);
+    component.declare("selected", (brul::Dyn::num(0.0_f64)).into(), false)?;
+    demo_script_state_init(component)?;
+    Ok(())
+}
+#[allow(unused_mut, unused_variables)]
+fn demo_script_fn_bump(component: &mut brul::Component, mut step: f64) -> Result<(), brul::Error> {
+    { let value = brul::Dyn::num((component.state::<DemoScriptState>().selected.get()) + (step));
+    component.state::<DemoScriptState>().selected.set((&value).try_into()?);
+
+value };
+    Ok(())
+}
+#[allow(unused_variables)]
+fn demo_script_event_bump(component: &mut brul::Component, arguments: &[brul::Dyn]) -> Result<brul::Dyn, brul::Error> {
+    demo_script_fn_bump(component, (&arguments[0]).try_into()?)?;
+    Ok(brul::Dyn::null())
+}
+
+#[allow(dead_code)]
+pub enum DemoScriptMessage {
+    Bump(f64),
+}
+impl From<DemoScriptMessage> for brul::Message {
+    fn from(message: DemoScriptMessage) -> Self {
+        brul::Message::Invoke(Box::new(message))
+    }
+}
+
+#[allow(unused_variables)]
+fn demo_script_typed_call(component: &mut brul::Component, message: &dyn std::any::Any) -> Result<brul::Dyn, brul::Error> {
+    match message.downcast_ref::<DemoScriptMessage>() {
+        Some(DemoScriptMessage::Bump(argument0)) => { demo_script_fn_bump(component, (argument0).clone())?; Ok(brul::Dyn::null()) }
+        _ => Err(brul::Error::Unsupported("script message")),
+    }
+}
+#[allow(unused_mut)]
+fn demo_script_dispatch(component: &mut brul::Component, name: &str, mut arguments: Vec<brul::Dyn>) -> Result<brul::Dyn, brul::Error> {
+    match name {
+        "bump" => {
+            if arguments.len() != 1 { return Err(brul::Error::FunctionArity { name: name.to_owned(), expected: 1, found: arguments.len() }); }
+            demo_script_fn_bump(component, (&arguments.remove(0)).try_into()?)?;
+            Ok(brul::Dyn::null())
+        }
+        _ => Err(brul::Error::UnknownFunction(name.to_owned())),
+    }
+}
+
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct DemoScript(brul::Handle);
+
+#[allow(dead_code)]
+impl DemoScript {
+    pub fn new(handle: brul::Handle) -> Self {
+        Self(handle)
+    }
+
+    pub fn bump(&self, step: f64) {
+        self.0.send(DemoScriptMessage::Bump(step));
+    }
+}
+
+#[allow(dead_code)]
+pub type Script = DemoScript;
 
 fn demo_each1_value(component: &mut brul::Component) -> Result<brul::Items, brul::Error> {
     Ok(brul::items(&(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?))))
@@ -176,84 +260,8 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
     ]
 }
 
-#[allow(dead_code)]
-pub struct ScriptState {
-    pub selected: brul::Signal<f64>,
-}
-
-#[allow(dead_code)]
-fn script_state_init(component: &mut brul::Component) -> Result<(), brul::Error> {
-    let selected: f64 = component.seed("selected", brul::ast::Position { line: 0, column: 0 })?;
-    component.set_state(ScriptState { selected: brul::Signal::new(selected) });
-    Ok(())
-}
-
 pub fn script() -> Option<brul::Script> {
-    Some(brul::Script::Typed { init: script_init, call: script_typed_call, dispatch: script_dispatch })
-}
-#[allow(unused_variables)]
-fn script_init(component: &mut brul::Component) -> Result<(), brul::Error> {
-    component.register_event_call("bump", script_event_bump);
-    component.declare("selected", (brul::Dyn::num(0.0_f64)).into(), false)?;
-    script_state_init(component)?;
-    Ok(())
-}
-#[allow(unused_mut, unused_variables)]
-fn script_fn_bump(component: &mut brul::Component, mut step: f64) -> Result<(), brul::Error> {
-    { let value = brul::Dyn::num((component.state::<ScriptState>().selected.get()) + (step));
-    component.state::<ScriptState>().selected.set((&value).try_into()?);
-
-value };
-    Ok(())
-}
-#[allow(unused_variables)]
-fn script_event_bump(component: &mut brul::Component, arguments: &[brul::Dyn]) -> Result<brul::Dyn, brul::Error> {
-    script_fn_bump(component, (&arguments[0]).try_into()?)?;
-    Ok(brul::Dyn::null())
-}
-
-#[allow(dead_code)]
-pub enum ScriptMessage {
-    Bump(f64),
-}
-impl From<ScriptMessage> for brul::Message {
-    fn from(message: ScriptMessage) -> Self {
-        brul::Message::Invoke(Box::new(message))
-    }
-}
-
-#[allow(unused_variables)]
-fn script_typed_call(component: &mut brul::Component, message: &dyn std::any::Any) -> Result<brul::Dyn, brul::Error> {
-    match message.downcast_ref::<ScriptMessage>() {
-        Some(ScriptMessage::Bump(argument0)) => { script_fn_bump(component, (argument0).clone())?; Ok(brul::Dyn::null()) }
-        _ => Err(brul::Error::Unsupported("script message")),
-    }
-}
-#[allow(unused_mut)]
-fn script_dispatch(component: &mut brul::Component, name: &str, mut arguments: Vec<brul::Dyn>) -> Result<brul::Dyn, brul::Error> {
-    match name {
-        "bump" => {
-            if arguments.len() != 1 { return Err(brul::Error::FunctionArity { name: name.to_owned(), expected: 1, found: arguments.len() }); }
-            script_fn_bump(component, (&arguments.remove(0)).try_into()?)?;
-            Ok(brul::Dyn::null())
-        }
-        _ => Err(brul::Error::UnknownFunction(name.to_owned())),
-    }
-}
-
-#[derive(Clone)]
-#[allow(dead_code)]
-pub struct Script(brul::Handle);
-
-#[allow(dead_code)]
-impl Script {
-    pub fn new(handle: brul::Handle) -> Self {
-        Self(handle)
-    }
-
-    pub fn bump(&self, step: f64) {
-        self.0.send(ScriptMessage::Bump(step));
-    }
+    demo_script()
 }
 
 pub fn names() -> &'static [&'static str] {

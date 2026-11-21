@@ -54,6 +54,12 @@ pub(super) fn component(
     frame: super::Frame<'_>,
 ) -> Result<(), Error> {
     let definition = &emit.registry.definitions[index];
+    if definition.is_window() {
+        return Err(error_at(
+            element.position,
+            format!("window '{}' cannot be used as a component", definition.name),
+        ));
+    }
     let name = &definition.name;
     let classes = element
         .args
@@ -149,7 +155,7 @@ fn fills<'a>(
 
 fn declared_slots(definition: &Definition) -> Result<Declared<'_>, Error> {
     let mut declared = Declared::default();
-    for member in &definition.component.members {
+    for member in &definition.declaration.members {
         if let Member::Element(root) = member {
             walk_slots(root, definition, &mut declared)?;
         }
@@ -326,7 +332,7 @@ fn property_of<'a>(
 
 fn find_event<'a>(definition: &'a Definition, event: &str) -> Option<&'a Event> {
     definition
-        .component
+        .declaration
         .members
         .iter()
         .find_map(|member| match member {
@@ -337,7 +343,7 @@ fn find_event<'a>(definition: &'a Definition, event: &str) -> Option<&'a Event> 
 
 fn find_property<'a>(definition: &'a Definition, name: &str) -> Option<&'a Prop> {
     definition
-        .component
+        .declaration
         .members
         .iter()
         .find_map(|member| match member {
@@ -353,7 +359,7 @@ fn defaults<'a>(
     props: &Props<'a>,
 ) -> Result<Props<'a>, Error> {
     let mut defaults = Props::new();
-    for member in &definition.component.members {
+    for member in &definition.declaration.members {
         let Member::Prop(prop) = member else {
             continue;
         };

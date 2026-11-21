@@ -34,7 +34,7 @@ fn generates_a_component_file() {
         String::from_utf8_lossy(&result.stderr)
     );
     let generated = fs::read_to_string(&output).unwrap();
-    assert!(generated.contains("pub fn input_view("), "{generated}");
+    assert!(generated.contains("pub fn badge_view("), "{generated}");
 }
 
 #[test]
@@ -80,14 +80,11 @@ fn regenerates_fixtures_and_drops_stale_goldens() {
         String::from_utf8_lossy(&result.stderr)
     );
     let generated = fs::read_to_string(good.join("expected.rs")).unwrap();
-    assert!(generated.contains("pub fn input_view("), "{generated}");
+    assert!(generated.contains("pub fn badge_view("), "{generated}");
     assert!(!good.join("error.txt").exists());
     assert!(!bad.join("expected.rs").exists());
     let error = fs::read_to_string(bad.join("error.txt")).unwrap();
-    assert!(
-        error.contains("file has no component declaration"),
-        "{error}"
-    );
+    assert!(error.contains("missing declaration"), "{error}");
 }
 
 #[test]

@@ -241,9 +241,10 @@ pub(super) fn handle(name: &str, program: Option<&Program>) -> String {
     let Some(program) = program else {
         return String::new();
     };
-    let message = format!("{}Message", pascal(name));
-    let mut out = String::from(
-        "\n#[derive(Clone)]\n#[allow(dead_code)]\npub struct Script(brul::Handle);\n\n#[allow(dead_code)]\nimpl Script {\n",
+    let handle = pascal(name);
+    let message = format!("{handle}Message");
+    let mut out = format!(
+        "\n#[derive(Clone)]\n#[allow(dead_code)]\npub struct {handle}(brul::Handle);\n\n#[allow(dead_code)]\nimpl {handle} {{\n"
     );
     out.push_str("    pub fn new(handle: brul::Handle) -> Self {\n        Self(handle)\n    }\n");
     for function in &program.functions {

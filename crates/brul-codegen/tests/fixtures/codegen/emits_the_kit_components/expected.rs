@@ -1,5 +1,44 @@
 include!(concat!(env!("OUT_DIR"), "/allocations.rs"));
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeId {
+    Dark,
+    Light,
+}
+
+impl ThemeId {
+    pub const ALL: &'static [ThemeId] = &[
+        ThemeId::Dark,
+        ThemeId::Light,
+    ];
+}
+
+impl brul::Theme for ThemeId {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Dark => "dark",
+            Self::Light => "light",
+        }
+    }
+
+    fn parse(name: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|theme| brul::Theme::name(*theme) == name)
+    }
+}
+
+impl std::str::FromStr for ThemeId {
+    type Err = brul::UnknownTheme;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        <Self as brul::Theme>::parse(name).ok_or_else(|| brul::UnknownTheme::new(name))
+    }
+}
+
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
     let theme = theme.map(brul::Theme::name);
     component.borrow_mut().set_names(names());
@@ -113,7 +152,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                     name: "Dialog",
                     names: names(),
                     props: &[
-                        brul::PropArgument { name: "open", ty: brul::PropType::Bool, expression: brul::PropExpression::Flag(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok(component.state::<ScriptState>().shown.get()) }) },
+                        brul::PropArgument { name: "open", ty: brul::PropType::Bool, expression: brul::PropExpression::Flag(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok(component.state::<DemoScriptState>().shown.get()) }) },
                         brul::PropArgument { name: "title", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("Edit".to_owned()) }) },
                     ],
                     defaults: &[
@@ -143,45 +182,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ThemeId {
-    Dark,
-    Light,
-}
-
-impl ThemeId {
-    pub const ALL: &'static [ThemeId] = &[
-        ThemeId::Dark,
-        ThemeId::Light,
-    ];
-}
-
-impl brul::Theme for ThemeId {
-    fn name(self) -> &'static str {
-        match self {
-            Self::Dark => "dark",
-            Self::Light => "light",
-        }
-    }
-
-    fn parse(name: &str) -> Option<Self> {
-        Self::ALL
-            .iter()
-            .copied()
-            .find(|theme| brul::Theme::name(*theme) == name)
-    }
-}
-
-impl std::str::FromStr for ThemeId {
-    type Err = brul::UnknownTheme;
-
-    fn from_str(name: &str) -> Result<Self, Self::Err> {
-        <Self as brul::Theme>::parse(name).ok_or_else(|| brul::UnknownTheme::new(name))
-    }
-}
-
-#[allow(dead_code)]
-static CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
+static DEMO_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
@@ -191,7 +192,7 @@ static CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::Laz
 ]);
 
 #[allow(dead_code)]
-static CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
+static DEMO_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
@@ -200,16 +201,16 @@ static CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::La
     },
 ]);
 
-fn classes(theme: Option<&str>) -> &'static [brul::gui::Class] {
+fn demo_classes(theme: Option<&str>) -> &'static [brul::gui::Class] {
     match theme {
-        None | Some("dark") => &*CLASSES_DARK,
-        Some("light") => &*CLASSES_LIGHT,
-        Some(_) => &*CLASSES_DARK,
+        None | Some("dark") => &*DEMO_CLASSES_DARK,
+        Some("light") => &*DEMO_CLASSES_LIGHT,
+        Some(_) => &*DEMO_CLASSES_DARK,
     }
 }
 
 #[allow(dead_code)]
-fn styles() -> &'static brul::style::Stylesheet {
+fn demo_styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
     static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
@@ -238,17 +239,78 @@ fn styles() -> &'static brul::style::Stylesheet {
     &STYLES
 }
 
-fn styled(
+fn demo_styled(
     mut widget: brul::gui::Widget,
     indices: &[usize],
     theme: Option<&str>,
 ) -> brul::gui::Widget {
-    let table = classes(theme);
+    let table = demo_classes(theme);
     for index in indices {
         widget = widget.with_class(&table[*index]);
     }
     widget
 }
+
+#[allow(dead_code)]
+pub struct DemoScriptState {
+    pub shown: brul::Signal<bool>,
+    pub draft: brul::Signal<String>,
+}
+
+#[allow(dead_code)]
+fn demo_script_state_init(component: &mut brul::Component) -> Result<(), brul::Error> {
+    let shown: bool = component.seed("shown", brul::ast::Position { line: 0, column: 0 })?;
+    let draft: String = component.seed("draft", brul::ast::Position { line: 0, column: 0 })?;
+    component.set_state(DemoScriptState { shown: brul::Signal::new(shown), draft: brul::Signal::new(draft) });
+    Ok(())
+}
+
+pub fn demo_script() -> Option<brul::Script> {
+    Some(brul::Script::Typed { init: demo_script_init, call: demo_script_typed_call, dispatch: demo_script_dispatch })
+}
+#[allow(unused_variables)]
+fn demo_script_init(component: &mut brul::Component) -> Result<(), brul::Error> {
+    component.declare("shown", (brul::Dyn::flag(false)).into(), false)?;
+    component.declare("draft", (brul::Dyn::text("".to_owned())).into(), false)?;
+    demo_script_state_init(component)?;
+    Ok(())
+}
+
+#[allow(dead_code)]
+pub enum DemoScriptMessage {
+}
+impl From<DemoScriptMessage> for brul::Message {
+    fn from(message: DemoScriptMessage) -> Self {
+        brul::Message::Invoke(Box::new(message))
+    }
+}
+
+#[allow(unused_variables)]
+fn demo_script_typed_call(component: &mut brul::Component, message: &dyn std::any::Any) -> Result<brul::Dyn, brul::Error> {
+    match message.downcast_ref::<DemoScriptMessage>() {
+        _ => Err(brul::Error::Unsupported("script message")),
+    }
+}
+#[allow(unused_mut)]
+fn demo_script_dispatch(component: &mut brul::Component, name: &str, mut arguments: Vec<brul::Dyn>) -> Result<brul::Dyn, brul::Error> {
+    match name {
+        _ => Err(brul::Error::UnknownFunction(name.to_owned())),
+    }
+}
+
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct DemoScript(brul::Handle);
+
+#[allow(dead_code)]
+impl DemoScript {
+    pub fn new(handle: brul::Handle) -> Self {
+        Self(handle)
+    }
+}
+
+#[allow(dead_code)]
+pub type Script = DemoScript;
 
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn button_view(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
@@ -285,20 +347,6 @@ pub fn button_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
         handlers,
         props,
     })
-}
-
-#[allow(dead_code)]
-fn button_class_dark(name: &str) -> Option<brul::gui::Class> {
-    brul::gui::style::class(button_styles(), name, Some("dark")).ok()
-}
-
-#[allow(dead_code)]
-fn button_class_light(name: &str) -> Option<brul::gui::Class> {
-    brul::gui::style::class(button_styles(), name, Some("light")).ok()
-}
-
-fn button_class_table(theme: Option<&str>) -> brul::ClassTable {
-    match theme { None | Some("dark") => button_class_dark, Some("light") => button_class_light, Some(_) => button_class_dark }
 }
 
 #[allow(dead_code)]
@@ -345,6 +393,20 @@ fn button_classes(theme: Option<&str>) -> &'static [brul::gui::Class] {
         Some("light") => &*BUTTON_CLASSES_LIGHT,
         Some(_) => &*BUTTON_CLASSES_DARK,
     }
+}
+
+#[allow(dead_code)]
+fn button_class_dark(name: &str) -> Option<brul::gui::Class> {
+    brul::gui::style::class(button_styles(), name, Some("dark")).ok()
+}
+
+#[allow(dead_code)]
+fn button_class_light(name: &str) -> Option<brul::gui::Class> {
+    brul::gui::style::class(button_styles(), name, Some("light")).ok()
+}
+
+fn button_class_table(theme: Option<&str>) -> brul::ClassTable {
+    match theme { None | Some("dark") => button_class_dark, Some("light") => button_class_light, Some(_) => button_class_dark }
 }
 
 #[allow(dead_code)]
@@ -1660,8 +1722,8 @@ fn demo_slot5(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut props = Vec::new();
     let mut children = Vec::new();
     children.push({
-        let widget0 = styled(brul::gui::Widget::input(""), &[0], theme);
-        bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<ScriptState>().draft.get()) })));
+        let widget0 = demo_styled(brul::gui::Widget::input(""), &[0], theme);
+        bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<DemoScriptState>().draft.get()) })));
         widget0
     });
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
@@ -1721,62 +1783,8 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
     ]
 }
 
-#[allow(dead_code)]
-pub struct ScriptState {
-    pub shown: brul::Signal<bool>,
-    pub draft: brul::Signal<String>,
-}
-
-#[allow(dead_code)]
-fn script_state_init(component: &mut brul::Component) -> Result<(), brul::Error> {
-    let shown: bool = component.seed("shown", brul::ast::Position { line: 0, column: 0 })?;
-    let draft: String = component.seed("draft", brul::ast::Position { line: 0, column: 0 })?;
-    component.set_state(ScriptState { shown: brul::Signal::new(shown), draft: brul::Signal::new(draft) });
-    Ok(())
-}
-
 pub fn script() -> Option<brul::Script> {
-    Some(brul::Script::Typed { init: script_init, call: script_typed_call, dispatch: script_dispatch })
-}
-#[allow(unused_variables)]
-fn script_init(component: &mut brul::Component) -> Result<(), brul::Error> {
-    component.declare("shown", (brul::Dyn::flag(false)).into(), false)?;
-    component.declare("draft", (brul::Dyn::text("".to_owned())).into(), false)?;
-    script_state_init(component)?;
-    Ok(())
-}
-
-#[allow(dead_code)]
-pub enum ScriptMessage {
-}
-impl From<ScriptMessage> for brul::Message {
-    fn from(message: ScriptMessage) -> Self {
-        brul::Message::Invoke(Box::new(message))
-    }
-}
-
-#[allow(unused_variables)]
-fn script_typed_call(component: &mut brul::Component, message: &dyn std::any::Any) -> Result<brul::Dyn, brul::Error> {
-    match message.downcast_ref::<ScriptMessage>() {
-        _ => Err(brul::Error::Unsupported("script message")),
-    }
-}
-#[allow(unused_mut)]
-fn script_dispatch(component: &mut brul::Component, name: &str, mut arguments: Vec<brul::Dyn>) -> Result<brul::Dyn, brul::Error> {
-    match name {
-        _ => Err(brul::Error::UnknownFunction(name.to_owned())),
-    }
-}
-
-#[derive(Clone)]
-#[allow(dead_code)]
-pub struct Script(brul::Handle);
-
-#[allow(dead_code)]
-impl Script {
-    pub fn new(handle: brul::Handle) -> Self {
-        Self(handle)
-    }
+    demo_script()
 }
 
 pub fn names() -> &'static [&'static str] {

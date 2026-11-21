@@ -13,7 +13,7 @@ const EXPRESSION: &str = "\u{432}\u{44b}\u{440}\u{430}\u{436}\u{435}\u{43d}\u{43
 fn document_examples_parse() {
     common::assert_document_examples_parse(MARKUP, "brul", parse_file, |example, file| {
         assert!(
-            !file.declarations.is_empty(),
+            file.declaration.is_some(),
             "example at line {} has no declarations",
             example.line
         );

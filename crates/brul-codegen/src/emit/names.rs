@@ -8,14 +8,14 @@ use crate::{Definition, Source, error_at};
 
 pub(super) fn table<'a>(source: &'a Source, definitions: &'a [Definition]) -> Names<'a> {
     let mut names = Names::new();
-    for window in &source.windows {
-        members(&window.members, &mut names);
+    if let Some(declaration) = &source.declaration {
+        members(&declaration.members, &mut names);
     }
     if let Some(program) = &source.program {
         script(program, &mut names);
     }
     for definition in definitions {
-        members(&definition.component.members, &mut names);
+        members(&definition.declaration.members, &mut names);
         if let Some(program) = &definition.program {
             script(program, &mut names);
         }

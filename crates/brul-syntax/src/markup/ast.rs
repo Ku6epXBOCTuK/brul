@@ -6,32 +6,39 @@ use super::widget::Widget;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct File {
-    pub declarations: Vec<Declaration>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Declaration {
-    Component(Component),
-    Window(Window),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Component {
-    pub name: String,
-    pub members: Vec<Member>,
+    pub declaration: Option<Declaration>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Window {
+pub struct Declaration {
     pub name: String,
-    pub args: Vec<Arg>,
     pub members: Vec<Member>,
     pub position: Position,
+    pub kind: DeclarationKind,
 }
 
-impl PartialEq for Window {
+impl PartialEq for Declaration {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.args == other.args && self.members == other.members
+        self.name == other.name && self.members == other.members && self.kind == other.kind
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeclarationKind {
+    Component,
+    Window { args: Vec<Arg> },
+}
+
+impl Declaration {
+    pub fn is_window(&self) -> bool {
+        matches!(self.kind, DeclarationKind::Window { .. })
+    }
+
+    pub fn args(&self) -> &[Arg] {
+        match &self.kind {
+            DeclarationKind::Window { args } => args,
+            DeclarationKind::Component => &[],
+        }
     }
 }
 

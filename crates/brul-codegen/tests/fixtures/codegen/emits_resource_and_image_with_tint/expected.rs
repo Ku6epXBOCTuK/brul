@@ -1,22 +1,5 @@
 include!(concat!(env!("OUT_DIR"), "/allocations.rs"));
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
-    let theme = theme.map(brul::Theme::name);
-    component.borrow_mut().set_names(names());
-    let mut bindings = Vec::new();
-    let mut handlers = Vec::new();
-    let mut props = Vec::new();
-    let widget = {
-        styled(brul::gui::Widget::image(brul::gui::Image::from_bytes(resource_check()).expect("resource 'check' cannot be decoded")), &[0], theme)
-    };
-    Ok(brul::Built {
-        widget,
-        bindings,
-        handlers,
-        props,
-    })
-}
-
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeId {
@@ -48,8 +31,26 @@ impl std::str::FromStr for ThemeId {
     }
 }
 
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let theme = theme.map(brul::Theme::name);
+    component.borrow_mut().set_names(names());
+    let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
+    let mut props = Vec::new();
+    let widget = {
+        demo_styled(brul::gui::Widget::image(brul::gui::Image::from_bytes(demo_resource_check()).expect("resource 'check' cannot be decoded")), &[0], theme)
+    };
+    Ok(brul::Built {
+        widget,
+        bindings,
+        handlers,
+        props,
+    })
+}
+
 #[allow(dead_code)]
-static CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
+static DEMO_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { tint: Some(brul::gui::Color { r: 51, g: 102, b: 153, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT }),
@@ -58,12 +59,12 @@ static CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::Laz
     },
 ]);
 
-fn classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
-    &*CLASSES_NONE
+fn demo_classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
+    &*DEMO_CLASSES_NONE
 }
 
 #[allow(dead_code)]
-fn styles() -> &'static brul::style::Stylesheet {
+fn demo_styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
     static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
@@ -82,20 +83,24 @@ fn styles() -> &'static brul::style::Stylesheet {
     &STYLES
 }
 
-fn styled(
+fn demo_styled(
     mut widget: brul::gui::Widget,
     indices: &[usize],
     theme: Option<&str>,
 ) -> brul::gui::Widget {
-    let table = classes(theme);
+    let table = demo_classes(theme);
     for index in indices {
         widget = widget.with_class(&table[*index]);
     }
     widget
 }
 
-pub fn resource_check() -> &'static [u8] {
-    include_bytes!(concat!(env!("OUT_DIR"), "/resources/resource_check"))
+pub fn demo_resource_check() -> &'static [u8] {
+    include_bytes!(concat!(env!("OUT_DIR"), "/resources/demo_resource_check"))
+}
+
+pub fn demo_script() -> Option<brul::Script> {
+    None
 }
 
 pub fn demo_window() -> brul::WindowConfig {
@@ -123,7 +128,7 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
 }
 
 pub fn script() -> Option<brul::Script> {
-    None
+    demo_script()
 }
 
 pub fn names() -> &'static [&'static str] {

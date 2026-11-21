@@ -1,1 +1,1 @@
-a component and a window cannot share one .brul file
+a file can contain only one declaration

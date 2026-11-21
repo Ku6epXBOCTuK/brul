@@ -1,7 +1,7 @@
 use brul_syntax::ast::{BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::markup::{
-    Arg, Block, BlockItem, Branch, Component, Declaration, EachBlock, Element, Event, EventParam,
-    File, IfBlock, Member, Prop, PropType, Widget, Window, parse_file,
+    Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element, Event,
+    EventParam, File, IfBlock, Member, Prop, PropType, Widget, parse_file,
 };
 
 fn expr(kind: ExprKind) -> Expr {
@@ -24,11 +24,13 @@ fn number(value: f64) -> Expr {
 fn component_with_empty_block_parses() {
     let file = parse_file("component CheckRow { }").unwrap();
     assert_eq!(
-        file.declarations,
-        vec![Declaration::Component(Component {
+        file.declaration,
+        Some(Declaration {
             name: "CheckRow".to_owned(),
             members: Vec::new(),
-        })]
+            position: Position::default(),
+            kind: DeclarationKind::Component,
+        })
     );
 }
 
@@ -37,23 +39,25 @@ fn args_parse_classes_names_and_handlers() {
     let source = r#"window Picker (root, title: "Picker", width: 800) { }"#;
     let file = parse_file(source).unwrap();
     assert_eq!(
-        file.declarations,
-        vec![Declaration::Window(Window {
+        file.declaration,
+        Some(Declaration {
             name: "Picker".to_owned(),
-            args: vec![
-                Arg::Class("root".to_owned()),
-                Arg::Named {
-                    name: "title".to_owned(),
-                    value: string("Picker"),
-                },
-                Arg::Named {
-                    name: "width".to_owned(),
-                    value: number(800.0),
-                },
-            ],
             members: Vec::new(),
             position: Position::default(),
-        })]
+            kind: DeclarationKind::Window {
+                args: vec![
+                    Arg::Class("root".to_owned()),
+                    Arg::Named {
+                        name: "title".to_owned(),
+                        value: string("Picker"),
+                    },
+                    Arg::Named {
+                        name: "width".to_owned(),
+                        value: number(800.0),
+                    },
+                ],
+            },
+        })
     );
 }
 
@@ -63,9 +67,7 @@ fn element_args_parse_handlers_and_expressions() {
         Button (check-row, disabled: !done, on click: toggle) { }
     }"#;
     let file = parse_file(source).unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     assert_eq!(
         component.members,
         vec![Member::Element(Element {
@@ -112,9 +114,7 @@ fn props_with_types_and_defaults_parse() {
         prop plain: Bool;
     }"#;
     let file = parse_file(source).unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     assert_eq!(
         component.members,
         vec![
@@ -150,9 +150,7 @@ fn props_with_types_and_defaults_parse() {
 #[test]
 fn event_without_parentheses_takes_no_params() {
     let file = parse_file("component A { event clicked; }").unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     assert_eq!(
         component.members,
         vec![Member::Event(Event {
@@ -166,9 +164,7 @@ fn event_without_parentheses_takes_no_params() {
 fn events_parse_params() {
     let source = "component A { event clicked(i: Number); event toggled(); event moved(x: Number, y: Number); }";
     let file = parse_file(source).unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     assert_eq!(
         component.members,
         vec![
@@ -201,18 +197,19 @@ fn events_parse_params() {
 }
 
 #[test]
-fn declarations_and_comments_mix() {
+fn a_second_declaration_is_rejected() {
     let source = "// header\ncomponent A { }\n\nwindow B (root) { } // tail\n";
-    assert_eq!(parse_file(source).unwrap().declarations.len(), 2);
+    assert_eq!(
+        parse_file(source).unwrap_err().message(),
+        "a file can contain only one declaration"
+    );
 }
 
 #[test]
 fn empty_input_is_an_empty_file() {
     assert_eq!(
         parse_file("  // only a comment\n").unwrap(),
-        File {
-            declarations: Vec::new(),
-        }
+        File { declaration: None }
     );
 }
 
@@ -243,9 +240,7 @@ fn declaration_errors_point_at_the_source() {
 fn nested_elements_parse() {
     let source = "component CheckRow { Container { Text { \"hi\" } Container { Container { } } } }";
     let file = parse_file(source).unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     let view = || Element {
         position: Position::default(),
         name: "Container".to_owned(),
@@ -336,9 +331,7 @@ fn if_else_blocks_parse() {
         }
     }"#;
     let file = parse_file(source).unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     let element = |name: &str| Element {
         position: Position::default(),
         name: name.to_owned(),
@@ -440,9 +433,7 @@ fn block_constructs_require_the_at_marker() {
 #[test]
 fn slots_parse() {
     let file = parse_file("component Card { Container { @slot } }").unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     let Member::Element(root) = &component.members[0] else {
         panic!("expected a root element");
     };
@@ -453,9 +444,7 @@ fn slots_parse() {
     assert!(slot.block.is_none());
 
     let file = parse_file("component Card { Container { @slot(header) } }").unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     let Member::Element(root) = &component.members[0] else {
         panic!("expected a root element");
     };
@@ -467,9 +456,7 @@ fn slots_parse() {
 
     let file =
         parse_file("component Card { Container { @slot(header) { Text { \"x\" } } } }").unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     let Member::Element(root) = &component.members[0] else {
         panic!("expected a root element");
     };
@@ -509,9 +496,7 @@ fn leaf_blocks_hold_one_expression() {
         }
     }"#;
     let file = parse_file(source).unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     let text = |block: Block| {
         BlockItem::Element(Element {
             position: Position::default(),
@@ -606,9 +591,7 @@ fn each_blocks_parse() {
         }
     }"#;
     let file = parse_file(source).unwrap();
-    let Declaration::Component(component) = &file.declarations[0] else {
-        panic!("expected a component");
-    };
+    let component = file.declaration.as_ref().unwrap();
     let element = |name: &str| Element {
         position: Position::default(),
         name: name.to_owned(),

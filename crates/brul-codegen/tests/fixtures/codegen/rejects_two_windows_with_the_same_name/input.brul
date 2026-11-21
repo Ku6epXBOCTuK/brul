@@ -1,9 +1,10 @@
-<markup>
-window Picker (title: "one") {
-    Container { }
-}
+<use>
+    import First from "./first.brul";
+    import Second from "./second.brul";
+</use>
 
-window Picker (title: "two") {
+<markup>
+window Demo (title: "demo") {
     Container { }
 }
 </markup>

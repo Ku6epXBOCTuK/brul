@@ -7,15 +7,16 @@ use brul_case::{identifier, pascal};
 use brul_script::Names;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Element, Member, Window};
-use brul_syntax::script::validate_build;
+use brul_syntax::markup::{Arg, Declaration, Element, Member};
+use brul_syntax::script::{Program, validate_build};
 use brul_syntax::style::Stylesheet;
 use brul_syntax::types::Type;
 
 use crate::commands::{self, Commands};
 use crate::error_at;
-use crate::kit;
+use crate::loader::Import;
 use crate::runtime::HandlerEvent;
+use crate::source::Script;
 use crate::{Definition, Registry, Resource};
 
 use super::Emit;
@@ -27,7 +28,6 @@ use super::classes::ClassNames;
 use super::{alloc, classes, events, names, resources, script, state, style, theme, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
-const ROOT_SCRIPT: &str = "view.script";
 
 pub struct GeneratedFile {
     pub name: String,
@@ -110,7 +110,7 @@ pub fn split_component_file_with_commands(
     let bases: Vec<String> = registry
         .definitions
         .iter()
-        .map(|definition| unique(&identifier(&stem(&definition.path)), &mut used))
+        .map(|definition| unique(&identifier(&definition.name), &mut used))
         .collect();
     let mut structures = StructureNames::default();
     let mut sinks = ComponentSinks {
@@ -145,80 +145,116 @@ fn module_at(
     commands: &Commands,
 ) -> Result<Module, Error> {
     let parsed = crate::parse_source(source)?;
+    let declaration = parsed
+        .declaration
+        .as_ref()
+        .ok_or_else(|| error_at(Position { line: 1, column: 1 }, "missing declaration"))?;
+    if !declaration.is_window() {
+        return Err(error_at(
+            declaration.position,
+            "entry declaration must be a window",
+        ));
+    }
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
     let names = names::table(&parsed, &registry.definitions);
-    let mut root_props = Vec::new();
-    let mut root_prop_types = HashMap::new();
-    let mut root_external = Vec::new();
-    for window in &parsed.windows {
-        root_props.extend(names::declared(&window.members));
-        root_prop_types.extend(prop_types(&window.members));
-        root_external.extend(names::declared_events(&window.members));
-    }
+    let root_props = names::declared(&declaration.members);
+    let mut root_external = names::declared_events(&declaration.members);
     let command_names = commands::names(commands);
     if let Some(program) = &parsed.program {
         root_external.extend(root_props.iter().copied());
         validate_build(program, &root_external, &command_names)?;
     }
     validate_components(&registry.definitions, &command_names)?;
-    let root_state =
-        state::State::new(parsed.program.as_ref(), &state_type("script"))?.with_commands(commands);
+
     let mut used = HashSet::new();
-    let window_bases: Vec<String> = parsed
-        .windows
-        .iter()
-        .map(|window| unique(&identifier(&window.name), &mut used))
-        .collect();
-    let component_bases: Vec<String> = registry
+    let entry_base = unique(&identifier(&declaration.name), &mut used);
+    let entry_script_name = format!("{entry_base}_script");
+    let definition_bases: Vec<String> = registry
         .definitions
         .iter()
-        .map(|definition| {
-            let stem = stem(&definition.path);
-            unique(&identifier(&stem), &mut used)
-        })
+        .map(|definition| unique(&identifier(&definition.name), &mut used))
         .collect();
+
+    let mut views = vec![WindowView {
+        declaration,
+        stylesheet: &parsed.stylesheet,
+        program: parsed.program.as_ref(),
+        script: parsed.script.as_ref(),
+        imports: &registry.imports,
+        resources: &registry.resources,
+        base: entry_base.clone(),
+    }];
+    for (index, definition) in registry.definitions.iter().enumerate() {
+        if definition.is_window() {
+            views.push(WindowView {
+                declaration: &definition.declaration,
+                stylesheet: &definition.stylesheet,
+                program: definition.program.as_ref(),
+                script: definition.script.as_ref(),
+                imports: &definition.imports,
+                resources: &definition.resources,
+                base: definition_bases[index].clone(),
+            });
+        }
+    }
+    let mut window_names = HashSet::new();
+    for view in &views {
+        if !window_names.insert(view.declaration.name.as_str()) {
+            return Err(error_at(
+                view.declaration.position,
+                format!("duplicate window '{}'", view.declaration.name),
+            ));
+        }
+    }
+
     let mut structures = StructureNames::default();
     let mut head = String::new();
     let mut head_functions = String::new();
+    let mut scripts = Vec::new();
     let mut configs = Vec::new();
     let mut icons = Vec::new();
 
     alloc::include(&mut head);
     head.push_str(HEADER);
-    let mut dynamic_classes = false;
-    let mut class_names = ClassNames::default();
-    for (index, window) in parsed.windows.iter().enumerate() {
-        let (config, window_handlers) = crate::arguments(window)?;
-        icons.push(icon_resource(window, &registry.resources)?);
-        let window_handlers = events::window(&window_handlers, parsed.program.as_ref())?;
-        let root = crate::root(window)?;
-        if index > 0 {
-            head.push('\n');
-            head.push_str(HEADER);
-        }
+    theme::id(&mut head, &parsed.stylesheet)?;
+
+    for (index, view) in views.iter().enumerate() {
+        let (config, window_handlers) = crate::arguments(view.declaration)?;
+        icons.push(icon_resource(view.declaration, view.resources)?);
+        let window_handlers = events::window(&window_handlers, view.program)?;
+        let root = crate::root(view.declaration)?;
+        let script_name = format!("{}_script", view.base);
+        let prefix = format!("{}_", view.base);
+        let view_state =
+            state::State::new(view.program, &state_type(&script_name))?.with_commands(commands);
+        let types = prop_types(&view.declaration.members);
+        head.push('\n');
+        head.push_str(HEADER);
         let mut functions = Vec::new();
+        let mut dynamic_classes = false;
+        let mut class_names = ClassNames::default();
         emit_view(
             &mut head,
-            &format!("{}_view", window_bases[index]),
+            &format!("{}_view", view.base),
             root,
             &window_handlers,
             EmitSources {
-                script_name: "script",
+                script_name: &script_name,
                 registry: &registry,
-                imports: &registry.imports,
-                resources: &registry.resources,
-                stylesheet: &parsed.stylesheet,
+                imports: view.imports,
+                resources: view.resources,
+                stylesheet: view.stylesheet,
                 names: &names,
-                state: &root_state,
-                prop_types: &root_prop_types,
-                program: parsed.program.as_ref(),
-                base: &window_bases[index],
-                resource_prefix: "",
+                state: &view_state,
+                prop_types: &types,
+                program: view.program,
+                base: &view.base,
+                resource_prefix: &prefix,
             },
             EmitOutputs {
                 functions: &mut functions,
-                bases: &component_bases,
+                bases: &definition_bases,
                 structures: &mut structures,
                 dynamic_classes: &mut dynamic_classes,
                 classes: &mut class_names,
@@ -226,32 +262,48 @@ fn module_at(
             ViewKind::Window,
         )?;
         append_functions(&mut head_functions, &functions);
+        emit_tail(
+            &mut head,
+            &prefix,
+            view.stylesheet,
+            &class_names,
+            dynamic_classes,
+        )?;
+        head.push_str(&resources::functions(&prefix, view.resources));
+        head.push_str(&script::module(
+            &script_name,
+            view.program,
+            &names,
+            &view_state,
+            &types,
+        )?);
+        head.push_str(&script::handle(&script_name, view.program));
+        if index == 0 && view.program.is_some() {
+            head.push_str(&format!(
+                "\n#[allow(dead_code)]\npub type Script = {};\n",
+                pascal(&script_name)
+            ));
+        }
+        push_script(&mut scripts, format!("{}.script", view.base), view.script);
         configs.push(config);
     }
-    emit_tail(
-        &mut head,
-        ViewKind::Window,
-        "",
-        &parsed.stylesheet,
-        &class_names,
-        dynamic_classes,
-    )?;
-    head.push_str(&resources::functions("", &registry.resources));
 
     let mut files = Vec::new();
-    let mut scripts = Vec::new();
     let mut component_bodies = Vec::new();
     let mut component_functions = String::new();
     for (index, definition) in registry.definitions.iter().enumerate() {
+        if definition.is_window() {
+            continue;
+        }
         let mut sinks = ComponentSinks {
             structures: &mut structures,
             scripts: Some(&mut scripts),
         };
         let emitted = emit_component(
             definition,
-            &component_bases[index],
+            &definition_bases[index],
             &registry,
-            &component_bases,
+            &definition_bases,
             &names,
             commands,
             &mut sinks,
@@ -263,18 +315,14 @@ fn module_at(
 
     let mut tail = String::new();
     for (index, config) in configs.iter().enumerate() {
-        window_config(&mut tail, &window_bases[index], config, icons[index]);
+        let prefix = format!("{}_", views[index].base);
+        window_config(&mut tail, &views[index].base, &prefix, config, icons[index]);
     }
     tail.push('\n');
-    window_table(&mut tail, &parsed.windows, &window_bases);
-    tail.push_str(&script::module(
-        "script",
-        parsed.program.as_ref(),
-        &names,
-        &root_state,
-        &root_prop_types,
-    )?);
-    tail.push_str(&script::handle("script", parsed.program.as_ref()));
+    window_table(&mut tail, &views);
+    tail.push_str(&format!(
+        "\npub fn script() -> Option<brul::Script> {{\n    {entry_script_name}()\n}}\n"
+    ));
     tail.push_str(&names::output(&names));
 
     let mut root = head.clone();
@@ -294,17 +342,21 @@ fn module_at(
     flat.push('\n');
     flat.push_str(&tail);
 
-    push_script(&mut scripts, ROOT_SCRIPT.to_owned(), parsed.script.as_ref());
-
     let mut resource_files = Vec::new();
-    for resource in &registry.resources {
-        resource_files.push(ResourceFile {
-            name: resources::function_name("", &resource.name),
-            path: resource.path.clone(),
-        });
+    for view in &views {
+        let prefix = format!("{}_", view.base);
+        for resource in view.resources {
+            resource_files.push(ResourceFile {
+                name: resources::function_name(&prefix, &resource.name),
+                path: resource.path.clone(),
+            });
+        }
     }
     for (index, definition) in registry.definitions.iter().enumerate() {
-        let prefix = format!("{}_", component_bases[index]);
+        if definition.is_window() {
+            continue;
+        }
+        let prefix = format!("{}_", definition_bases[index]);
         for resource in &definition.resources {
             resource_files.push(ResourceFile {
                 name: resources::function_name(&prefix, &resource.name),
@@ -323,6 +375,16 @@ fn module_at(
     })
 }
 
+struct WindowView<'a> {
+    declaration: &'a Declaration,
+    stylesheet: &'a Stylesheet,
+    program: Option<&'a Program>,
+    script: Option<&'a Script>,
+    imports: &'a [Import],
+    resources: &'a [Resource],
+    base: String,
+}
+
 struct ComponentOutput {
     file: GeneratedFile,
     body: String,
@@ -334,8 +396,8 @@ fn validate_components(definitions: &[Definition], commands: &[&str]) -> Result<
         let Some(program) = &definition.program else {
             continue;
         };
-        let mut external = names::declared(&definition.component.members);
-        external.extend(names::declared_events(&definition.component.members));
+        let mut external = names::declared(&definition.declaration.members);
+        external.extend(names::declared_events(&definition.declaration.members));
         validate_build(program, &external, commands)?;
     }
     Ok(())
@@ -367,7 +429,7 @@ fn emit_component(
         &state_type(&format!("{prefix}script")),
     )?
     .with_commands(commands);
-    let component_prop_types = prop_types(&definition.component.members);
+    let component_prop_types = prop_types(&definition.declaration.members);
     body.push_str(HEADER);
     emit_view(
         &mut body,
@@ -398,7 +460,6 @@ fn emit_component(
     )?;
     emit_tail(
         &mut body,
-        ViewKind::Component,
         &prefix,
         &definition.stylesheet,
         &class_names,
@@ -468,29 +529,15 @@ fn emit_view(
 
 fn emit_tail(
     out: &mut String,
-    kind: ViewKind,
     prefix: &str,
     stylesheet: &Stylesheet,
     class_names: &ClassNames,
     dynamic: bool,
 ) -> Result<(), Error> {
-    if kind == ViewKind::Window {
-        theme::id(out, stylesheet)?;
-    }
     let mut out = Out::new(out);
-    match kind {
-        ViewKind::Window => {
-            classes::statics(&mut out, prefix, stylesheet, class_names)?;
-            if dynamic {
-                classes::tables(&mut out, prefix, stylesheet);
-            }
-        }
-        ViewKind::Component => {
-            if dynamic {
-                classes::tables(&mut out, prefix, stylesheet);
-            }
-            classes::statics(&mut out, prefix, stylesheet, class_names)?;
-        }
+    classes::statics(&mut out, prefix, stylesheet, class_names)?;
+    if dynamic {
+        classes::tables(&mut out, prefix, stylesheet);
     }
     style::stylesheet(&mut out, prefix, stylesheet);
     Ok(())
@@ -513,8 +560,7 @@ fn module_sources(registry: &crate::Registry, entry: Option<&Path>) -> Vec<PathB
     let mut sources: Vec<PathBuf> = registry
         .definitions
         .iter()
-        .filter(|definition| !kit::is_virtual(&definition.path))
-        .map(|definition| definition.path.clone())
+        .filter_map(|definition| definition.origin.path().map(Path::to_path_buf))
         .collect();
     if let Some(entry) = entry {
         sources.push(fs::canonicalize(entry).unwrap_or_else(|_| entry.to_path_buf()));
@@ -560,17 +606,10 @@ fn unique(name: &str, used: &mut HashSet<String>) -> String {
     candidate
 }
 
-fn stem(path: &Path) -> String {
-    path.file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or("component")
-        .to_owned()
-}
-
 fn definition_root(definition: &Definition) -> Result<&Element, Error> {
     let position = Position { line: 1, column: 1 };
     let mut roots = definition
-        .component
+        .declaration
         .members
         .iter()
         .filter_map(|member| match member {
@@ -595,8 +634,11 @@ fn definition_root(definition: &Definition) -> Result<&Element, Error> {
     Ok(root)
 }
 
-fn icon_resource<'a>(window: &'a Window, resources: &[Resource]) -> Result<Option<&'a str>, Error> {
-    let Some(value) = window.args.iter().find_map(|arg| match arg {
+fn icon_resource<'a>(
+    declaration: &'a Declaration,
+    resources: &[Resource],
+) -> Result<Option<&'a str>, Error> {
+    let Some(value) = declaration.args().iter().find_map(|arg| match arg {
         Arg::Named { name, value } if name == "icon" => Some(value),
         _ => None,
     }) else {
@@ -613,6 +655,7 @@ fn icon_resource<'a>(window: &'a Window, resources: &[Resource]) -> Result<Optio
 fn window_config(
     out: &mut String,
     base: &str,
+    prefix: &str,
     config: &brul_window::WindowConfig,
     icon: Option<&str>,
 ) {
@@ -624,7 +667,7 @@ fn window_config(
         None => String::from("None"),
     };
     let icon = match icon {
-        Some(name) => format!("Some(resource_{name}().into())"),
+        Some(name) => format!("Some({prefix}resource_{name}().into())"),
         None => String::from("None"),
     };
     let _ = write!(
@@ -656,16 +699,16 @@ fn window_config(
     );
 }
 
-fn window_table(out: &mut String, windows: &[Window], bases: &[String]) {
+fn window_table(out: &mut String, views: &[WindowView<'_>]) {
     out.push_str("pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {\n");
     alloc::registration(out);
     out.push_str("    vec![\n");
-    for (index, window) in windows.iter().enumerate() {
-        let base = &bases[index];
+    for view in views {
+        let base = &view.base;
         let _ = writeln!(
             out,
             "        brul::WindowDef {{ name: {:?}, config: {base}_window(), view: {base}_view }},",
-            window.name
+            view.declaration.name
         );
     }
     out.push_str("    ]\n}\n");

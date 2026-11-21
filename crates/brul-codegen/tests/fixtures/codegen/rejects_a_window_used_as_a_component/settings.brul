@@ -1,0 +1,5 @@
+<markup>
+window Settings (title: "settings") {
+    Text { "settings" }
+}
+</markup>

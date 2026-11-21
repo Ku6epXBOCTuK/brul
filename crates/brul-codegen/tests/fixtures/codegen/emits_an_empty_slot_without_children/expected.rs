@@ -1,5 +1,37 @@
 include!(concat!(env!("OUT_DIR"), "/allocations.rs"));
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeId {
+}
+
+impl ThemeId {
+    pub const ALL: &'static [ThemeId] = &[
+    ];
+}
+
+impl brul::Theme for ThemeId {
+    fn name(self) -> &'static str {
+        match self {}
+    }
+
+    fn parse(name: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|theme| brul::Theme::name(*theme) == name)
+    }
+}
+
+impl std::str::FromStr for ThemeId {
+    type Err = brul::UnknownTheme;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        <Self as brul::Theme>::parse(name).ok_or_else(|| brul::UnknownTheme::new(name))
+    }
+}
+
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
 pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
     let theme = theme.map(brul::Theme::name);
     component.borrow_mut().set_names(names());
@@ -40,46 +72,15 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ThemeId {
-}
-
-impl ThemeId {
-    pub const ALL: &'static [ThemeId] = &[
-    ];
-}
-
-impl brul::Theme for ThemeId {
-    fn name(self) -> &'static str {
-        match self {}
-    }
-
-    fn parse(name: &str) -> Option<Self> {
-        Self::ALL
-            .iter()
-            .copied()
-            .find(|theme| brul::Theme::name(*theme) == name)
-    }
-}
-
-impl std::str::FromStr for ThemeId {
-    type Err = brul::UnknownTheme;
-
-    fn from_str(name: &str) -> Result<Self, Self::Err> {
-        <Self as brul::Theme>::parse(name).ok_or_else(|| brul::UnknownTheme::new(name))
-    }
-}
-
-#[allow(dead_code)]
-static CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
+static DEMO_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
 ]);
 
-fn classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
-    &*CLASSES_NONE
+fn demo_classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
+    &*DEMO_CLASSES_NONE
 }
 
 #[allow(dead_code)]
-fn styles() -> &'static brul::style::Stylesheet {
+fn demo_styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
     static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
@@ -89,16 +90,20 @@ fn styles() -> &'static brul::style::Stylesheet {
     &STYLES
 }
 
-fn styled(
+fn demo_styled(
     mut widget: brul::gui::Widget,
     indices: &[usize],
     theme: Option<&str>,
 ) -> brul::gui::Widget {
-    let table = classes(theme);
+    let table = demo_classes(theme);
     for index in indices {
         widget = widget.with_class(&table[*index]);
     }
     widget
+}
+
+pub fn demo_script() -> Option<brul::Script> {
+    None
 }
 
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
@@ -187,7 +192,7 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
 }
 
 pub fn script() -> Option<brul::Script> {
-    None
+    demo_script()
 }
 
 pub fn names() -> &'static [&'static str] {

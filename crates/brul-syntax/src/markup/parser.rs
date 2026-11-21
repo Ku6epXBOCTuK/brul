@@ -3,22 +3,25 @@ use crate::cursor::Cursor;
 use crate::error::{Error, Expected};
 use crate::lexer::Span;
 use crate::markup::ast::{
-    Arg, Block, BlockItem, Branch, Component, Declaration, EachBlock, Element, Event, EventParam,
-    File, IfBlock, Member, Prop, PropType, Slot, Window,
+    Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element, Event,
+    EventParam, File, IfBlock, Member, Prop, PropType, Slot,
 };
 use crate::markup::widget::Widget;
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
     let mut cursor = Cursor::new(source);
-    let mut declarations = Vec::new();
+    let mut declaration = None;
     loop {
         cursor.skip_trivia();
         if cursor.peek().is_none() {
             break;
         }
-        declarations.push(cursor.declaration()?);
+        if declaration.is_some() {
+            return Err(cursor.error(Error::MultipleDeclarations));
+        }
+        declaration = Some(cursor.declaration()?);
     }
-    Ok(File { declarations })
+    Ok(File { declaration })
 }
 
 fn position(cursor: &Cursor<'_>, pos: usize) -> Position {
@@ -43,9 +46,15 @@ impl Cursor<'_> {
     }
 
     fn component(&mut self) -> Result<Declaration, Error> {
+        let start = self.pos();
         let name = self.ident()?;
         let members = self.members()?;
-        Ok(Declaration::Component(Component { name, members }))
+        Ok(Declaration {
+            name,
+            members,
+            position: position(self, start),
+            kind: DeclarationKind::Component,
+        })
     }
 
     fn window(&mut self) -> Result<Declaration, Error> {
@@ -53,12 +62,12 @@ impl Cursor<'_> {
         let name = self.ident()?;
         let args = self.arg_list()?;
         let members = self.members()?;
-        Ok(Declaration::Window(Window {
+        Ok(Declaration {
             name,
-            args,
             members,
             position: position(self, start),
-        }))
+            kind: DeclarationKind::Window { args },
+        })
     }
 
     fn members(&mut self) -> Result<Vec<Member>, Error> {

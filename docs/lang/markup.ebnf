@@ -1,4 +1,4 @@
-File          = { ComponentDecl | WindowDecl } ;
+File          = [ ComponentDecl | WindowDecl ] ;
 ComponentDecl = "component" Ident "{" { Member } "}" ;
 WindowDecl    = "window" Ident "(" ArgList ")" "{" { Member } "}" ;
 

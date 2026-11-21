@@ -1,0 +1,14 @@
+<script>
+    function hello(): Void {
+    }
+</script>
+
+<use>
+    import Settings from "./settings.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Container { Text { "demo" } }
+}
+</markup>

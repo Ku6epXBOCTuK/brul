@@ -39,7 +39,7 @@ pub(super) fn id(out: &mut String, stylesheet: &Stylesheet) -> Result<(), Error>
     };
     let _ = write!(
         out,
-        "\n#[allow(dead_code)]
+        "#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeId {{
 {declarations}}}

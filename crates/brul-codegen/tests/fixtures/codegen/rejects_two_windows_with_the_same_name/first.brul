@@ -1,0 +1,5 @@
+<markup>
+window Picker (title: "one") {
+    Container { }
+}
+</markup>

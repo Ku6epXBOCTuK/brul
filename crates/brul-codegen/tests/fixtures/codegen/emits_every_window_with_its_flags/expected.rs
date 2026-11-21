@@ -1,40 +1,5 @@
 include!(concat!(env!("OUT_DIR"), "/allocations.rs"));
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn picker_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
-    let theme = theme.map(brul::Theme::name);
-    component.borrow_mut().set_names(names());
-    let mut bindings = Vec::new();
-    let mut handlers = Vec::new();
-    let mut props = Vec::new();
-    let widget = {
-        brul::gui::Widget::view(brul::gui::Direction::Row, vec![])
-    };
-    Ok(brul::Built {
-        widget,
-        bindings,
-        handlers,
-        props,
-    })
-}
-
-#[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn settings_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
-    let theme = theme.map(brul::Theme::name);
-    component.borrow_mut().set_names(names());
-    let mut bindings = Vec::new();
-    let mut handlers = Vec::new();
-    let mut props = Vec::new();
-    let widget = {
-        brul::gui::Widget::text("settings")
-    };
-    Ok(brul::Built {
-        widget,
-        bindings,
-        handlers,
-        props,
-    })
-}
-
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeId {
@@ -66,16 +31,34 @@ impl std::str::FromStr for ThemeId {
     }
 }
 
-#[allow(dead_code)]
-static CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
-]);
-
-fn classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
-    &*CLASSES_NONE
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+pub fn picker_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let theme = theme.map(brul::Theme::name);
+    component.borrow_mut().set_names(names());
+    let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
+    let mut props = Vec::new();
+    let widget = {
+        brul::gui::Widget::view(brul::gui::Direction::Row, vec![])
+    };
+    Ok(brul::Built {
+        widget,
+        bindings,
+        handlers,
+        props,
+    })
 }
 
 #[allow(dead_code)]
-fn styles() -> &'static brul::style::Stylesheet {
+static PICKER_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
+]);
+
+fn picker_classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
+    &*PICKER_CLASSES_NONE
+}
+
+#[allow(dead_code)]
+fn picker_styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
     static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
@@ -85,16 +68,73 @@ fn styles() -> &'static brul::style::Stylesheet {
     &STYLES
 }
 
-fn styled(
+fn picker_styled(
     mut widget: brul::gui::Widget,
     indices: &[usize],
     theme: Option<&str>,
 ) -> brul::gui::Widget {
-    let table = classes(theme);
+    let table = picker_classes(theme);
     for index in indices {
         widget = widget.with_class(&table[*index]);
     }
     widget
+}
+
+pub fn picker_script() -> Option<brul::Script> {
+    None
+}
+
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+pub fn settings_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let theme = theme.map(brul::Theme::name);
+    component.borrow_mut().set_names(names());
+    let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
+    let mut props = Vec::new();
+    let widget = {
+        brul::gui::Widget::text("settings")
+    };
+    Ok(brul::Built {
+        widget,
+        bindings,
+        handlers,
+        props,
+    })
+}
+
+#[allow(dead_code)]
+static SETTINGS_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
+]);
+
+fn settings_classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
+    &*SETTINGS_CLASSES_NONE
+}
+
+#[allow(dead_code)]
+fn settings_styles() -> &'static brul::style::Stylesheet {
+    use brul::style as s;
+
+    static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
+        themes: vec![],
+        rules: vec![],
+    });
+    &STYLES
+}
+
+fn settings_styled(
+    mut widget: brul::gui::Widget,
+    indices: &[usize],
+    theme: Option<&str>,
+) -> brul::gui::Widget {
+    let table = settings_classes(theme);
+    for index in indices {
+        widget = widget.with_class(&table[*index]);
+    }
+    widget
+}
+
+pub fn settings_script() -> Option<brul::Script> {
+    None
 }
 
 pub fn picker_window() -> brul::WindowConfig {
@@ -138,7 +178,7 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
 }
 
 pub fn script() -> Option<brul::Script> {
-    None
+    picker_script()
 }
 
 pub fn names() -> &'static [&'static str] {

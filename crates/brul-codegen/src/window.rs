@@ -1,6 +1,6 @@
 use brul_syntax::ast::{Expr, ExprKind, Position, UnaryOp};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Element, Member, Window};
+use brul_syntax::markup::{Arg, Declaration, Element, Member};
 use brul_window::{WindowConfig, WindowPosition};
 
 use crate::error_at;
@@ -11,7 +11,7 @@ pub struct HandlerArg {
     pub position: Position,
 }
 
-pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Error> {
+pub fn arguments(declaration: &Declaration) -> Result<(WindowConfig, Vec<HandlerArg>), Error> {
     let mut config = WindowConfig {
         frameless: false,
         transparent: false,
@@ -20,7 +20,7 @@ pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Err
     let mut handlers = Vec::new();
     let mut x = None;
     let mut y = None;
-    for arg in &window.args {
+    for arg in declaration.args() {
         match arg {
             Arg::Named { name, value } => match name.as_str() {
                 "x" => x = Some(coordinate(value, "x")?),
@@ -30,10 +30,13 @@ pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Err
             Arg::Handler { event, handler } => handlers.push(HandlerArg {
                 event: event.clone(),
                 function: handler.clone(),
-                position: window.position,
+                position: declaration.position,
             }),
             Arg::Class(_) => {
-                return Err(error_at(window.position, "window arguments must be named"));
+                return Err(error_at(
+                    declaration.position,
+                    "window arguments must be named",
+                ));
             }
         }
     }
@@ -42,20 +45,20 @@ pub fn arguments(window: &Window) -> Result<(WindowConfig, Vec<HandlerArg>), Err
         (None, None) => None,
         _ => {
             return Err(error_at(
-                window.position,
+                declaration.position,
                 "window position needs both 'x' and 'y'",
             ));
         }
     };
     if config.centered && config.position.is_some() {
         return Err(error_at(
-            window.position,
+            declaration.position,
             "'centered' conflicts with 'x' and 'y'",
         ));
     }
     config.validate().map_err(|error| {
         error_at(
-            window.position,
+            declaration.position,
             format!("window arguments are invalid: {error}"),
         )
     })?;
@@ -111,17 +114,20 @@ fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Erro
     Ok(())
 }
 
-pub fn root(window: &Window) -> Result<&Element, Error> {
-    let mut roots = window.members.iter().filter_map(|member| match member {
-        Member::Element(element) => Some(element),
-        Member::Prop(_) | Member::Event(_) => None,
-    });
+pub fn root(declaration: &Declaration) -> Result<&Element, Error> {
+    let mut roots = declaration
+        .members
+        .iter()
+        .filter_map(|member| match member {
+            Member::Element(element) => Some(element),
+            Member::Prop(_) | Member::Event(_) => None,
+        });
     let root = roots
         .next()
-        .ok_or_else(|| error_at(window.position, "window has no root element"))?;
+        .ok_or_else(|| error_at(declaration.position, "window has no root element"))?;
     if roots.next().is_some() {
         return Err(error_at(
-            window.position,
+            declaration.position,
             "window has more than one root element",
         ));
     }
@@ -167,14 +173,16 @@ fn flag(value: &Expr, name: &str) -> Result<bool, Error> {
 
 #[cfg(test)]
 mod tests {
+    use brul_syntax::markup::DeclarationKind;
+
     use super::*;
 
-    fn window(args: Vec<Arg>) -> Window {
-        Window {
+    fn window(args: Vec<Arg>) -> Declaration {
+        Declaration {
             name: "Demo".to_owned(),
-            args,
             members: Vec::new(),
             position: Position::default(),
+            kind: DeclarationKind::Window { args },
         }
     }
 

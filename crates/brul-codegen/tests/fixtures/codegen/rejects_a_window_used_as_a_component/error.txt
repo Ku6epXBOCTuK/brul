@@ -1,0 +1,1 @@
+window 'Settings' cannot be used as a component

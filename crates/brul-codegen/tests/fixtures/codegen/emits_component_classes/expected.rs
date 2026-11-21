@@ -1,45 +1,5 @@
 include!(concat!(env!("OUT_DIR"), "/allocations.rs"));
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
-pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
-    let theme = theme.map(brul::Theme::name);
-    component.borrow_mut().set_names(names());
-    let mut bindings = Vec::new();
-    let mut handlers = Vec::new();
-    let mut props = Vec::new();
-    let widget = {
-        brul::gui::Widget::view(brul::gui::Direction::Row, vec![
-            {
-                let built = brul::instance(build, component, brul::Instance {
-                    theme,
-                    view: badge_view,
-                    script: badge_script(),
-                    name: "Badge",
-                    names: names(),
-                    props: &[
-                    ],
-                    defaults: &[
-                    ],
-                    events: &[
-                    ],
-                    slots: &[],
-                })?;
-                bindings.extend(built.bindings);
-                handlers.extend(built.handlers);
-                props.extend(built.props);
-                let widget0 = styled(built.widget, &[0], theme);
-                bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text("tone".to_owned()); Ok(value) } }));
-                widget0
-            },
-        ])
-    };
-    Ok(brul::Built {
-        widget,
-        bindings,
-        handlers,
-        props,
-    })
-}
-
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeId {
@@ -71,8 +31,49 @@ impl std::str::FromStr for ThemeId {
     }
 }
 
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let theme = theme.map(brul::Theme::name);
+    component.borrow_mut().set_names(names());
+    let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
+    let mut props = Vec::new();
+    let widget = {
+        brul::gui::Widget::view(brul::gui::Direction::Row, vec![
+            {
+                let built = brul::instance(build, component, brul::Instance {
+                    theme,
+                    view: badge_view,
+                    script: badge_script(),
+                    name: "Badge",
+                    names: names(),
+                    props: &[
+                    ],
+                    defaults: &[
+                    ],
+                    events: &[
+                    ],
+                    slots: &[],
+                })?;
+                bindings.extend(built.bindings);
+                handlers.extend(built.handlers);
+                props.extend(built.props);
+                let widget0 = demo_styled(built.widget, &[0], theme);
+                bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: demo_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text("tone".to_owned()); Ok(value) } }));
+                widget0
+            },
+        ])
+    };
+    Ok(brul::Built {
+        widget,
+        bindings,
+        handlers,
+        props,
+    })
+}
+
 #[allow(dead_code)]
-static CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
+static DEMO_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(10)), ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
@@ -81,21 +82,21 @@ static CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::Laz
     },
 ]);
 
-fn classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
-    &*CLASSES_NONE
+fn demo_classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
+    &*DEMO_CLASSES_NONE
 }
 
 #[allow(dead_code)]
-fn class_none(name: &str) -> Option<brul::gui::Class> {
-    brul::gui::style::class(styles(), name, None).ok()
+fn demo_class_none(name: &str) -> Option<brul::gui::Class> {
+    brul::gui::style::class(demo_styles(), name, None).ok()
 }
 
-fn class_table(_theme: Option<&str>) -> brul::ClassTable {
-    class_none
+fn demo_class_table(_theme: Option<&str>) -> brul::ClassTable {
+    demo_class_none
 }
 
 #[allow(dead_code)]
-fn styles() -> &'static brul::style::Stylesheet {
+fn demo_styles() -> &'static brul::style::Stylesheet {
     use brul::style as s;
 
     static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
@@ -122,16 +123,20 @@ fn styles() -> &'static brul::style::Stylesheet {
     &STYLES
 }
 
-fn styled(
+fn demo_styled(
     mut widget: brul::gui::Widget,
     indices: &[usize],
     theme: Option<&str>,
 ) -> brul::gui::Widget {
-    let table = classes(theme);
+    let table = demo_classes(theme);
     for index in indices {
         widget = widget.with_class(&table[*index]);
     }
     widget
+}
+
+pub fn demo_script() -> Option<brul::Script> {
+    None
 }
 
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
@@ -211,7 +216,7 @@ pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {
 }
 
 pub fn script() -> Option<brul::Script> {
-    None
+    demo_script()
 }
 
 pub fn names() -> &'static [&'static str] {

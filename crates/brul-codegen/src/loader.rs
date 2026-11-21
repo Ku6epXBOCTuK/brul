@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{self, Component as Declaration, Declaration as Item};
+use brul_syntax::markup::{self, Declaration};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
 use brul_syntax::style::{self, Override, Stylesheet, Theme};
@@ -16,13 +16,34 @@ use crate::{error_at, kit, padded, sfc_error};
 
 pub struct Definition {
     pub name: String,
-    pub path: PathBuf,
-    pub component: Declaration,
+    pub declaration: Declaration,
+    pub origin: Origin,
     pub imports: Vec<Import>,
     pub resources: Vec<Resource>,
     pub stylesheet: Rc<Stylesheet>,
     pub program: Option<Program>,
     pub script: Option<Script>,
+}
+
+impl Definition {
+    pub fn is_window(&self) -> bool {
+        self.declaration.is_window()
+    }
+}
+
+pub enum Origin {
+    Entry,
+    Imported(PathBuf),
+    Kit,
+}
+
+impl Origin {
+    pub fn path(&self) -> Option<&Path> {
+        match self {
+            Self::Imported(path) => Some(path),
+            Self::Entry | Self::Kit => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -72,6 +93,7 @@ pub fn load_entry(path: &Path) -> Result<(Registry, usize), Error> {
         )
     })?;
     let index = loader.file(&path, Some(&path))?;
+    loader.definitions[index].origin = Origin::Entry;
     let imports = loader.definitions[index].imports.clone();
     let registry = Registry {
         definitions: loader.definitions,
@@ -213,7 +235,7 @@ impl Loader<'_> {
         if self.stack.contains(&path) {
             return Err(self.cycle(&path));
         }
-        self.define(path, source.to_owned(), Some(kit::dir()))
+        self.define(path, source.to_owned(), Some(kit::dir()), Origin::Kit)
     }
 
     fn file(&mut self, path: &Path, origin: Option<&Path>) -> Result<usize, Error> {
@@ -228,7 +250,12 @@ impl Loader<'_> {
         let source = fs::read_to_string(&path)
             .map_err(|error| at(origin, format!("cannot read '{}': {error}", path.display())))?;
         let base = path.parent().map(Path::to_path_buf);
-        self.define(path, source, base.as_deref())
+        self.define(
+            path.clone(),
+            source,
+            base.as_deref(),
+            Origin::Imported(path),
+        )
     }
 
     fn define(
@@ -236,6 +263,7 @@ impl Loader<'_> {
         path: PathBuf,
         source: String,
         base: Option<&Path>,
+        origin: Origin,
     ) -> Result<usize, Error> {
         self.stack.push(path.clone());
         let parsed = parse(&source, &path, self.palette)?;
@@ -244,9 +272,9 @@ impl Loader<'_> {
         self.stack.pop();
         let index = self.definitions.len();
         self.definitions.push(Definition {
-            name: parsed.component.name.clone(),
-            path: path.clone(),
-            component: parsed.component,
+            name: parsed.declaration.name.clone(),
+            declaration: parsed.declaration,
+            origin,
             imports,
             resources,
             stylesheet: parsed.stylesheet,
@@ -268,7 +296,7 @@ impl Loader<'_> {
 }
 
 struct Parsed {
-    component: Declaration,
+    declaration: Declaration,
     uses: Block,
     stylesheet: Rc<Stylesheet>,
     program: Option<Program>,
@@ -279,22 +307,12 @@ fn parse(source: &str, path: &Path, palette: &[Theme]) -> Result<Parsed, Error> 
     let sfc = sfc::parse(source).map_err(|error| named(path, sfc_error(error)))?;
     let markup =
         markup::parse_file(&padded(source, sfc.markup)).map_err(|error| named(path, error))?;
-    let component = markup
-        .declarations
-        .into_iter()
-        .find_map(|item| match item {
-            Item::Component(component) => Some(component),
-            Item::Window(_) => None,
-        })
-        .ok_or_else(|| {
-            named(
-                path,
-                error_at(
-                    Position { line: 1, column: 1 },
-                    "file has no component declaration",
-                ),
-            )
-        })?;
+    let declaration = markup.declaration.ok_or_else(|| {
+        named(
+            path,
+            error_at(Position { line: 1, column: 1 }, "file has no declaration"),
+        )
+    })?;
     let uses = match sfc.uses {
         Some(block) => uses::parse(&padded(source, block)).map_err(|error| named(path, error))?,
         None => Block::default(),
@@ -315,7 +333,7 @@ fn parse(source: &str, path: &Path, palette: &[Theme]) -> Result<Parsed, Error> 
         None => (None, None),
     };
     Ok(Parsed {
-        component,
+        declaration,
         uses,
         stylesheet: Rc::new(stylesheet),
         program,
@@ -395,25 +413,20 @@ mod tests {
     }
 
     #[test]
-    fn parse_rejects_a_file_without_a_component() {
+    fn parse_rejects_a_file_without_a_declaration() {
         let source = r#"
 <markup>
-window Picker (title: "x") {
-    Column (root) { Text (text) { "hi" } }
-}
 </markup>
 "#;
-        let error = parse(source, Path::new("window.brul"), &[])
+        let error = parse(source, Path::new("empty.brul"), &[])
             .err()
-            .expect("a file without a component must not parse");
+            .expect("a file without a declaration must not parse");
         assert!(
-            error
-                .message()
-                .contains("file has no component declaration"),
+            error.message().contains("file has no declaration"),
             "{}",
             error.message()
         );
-        assert!(error.message().contains("window.brul"));
+        assert!(error.message().contains("empty.brul"));
     }
 
     #[test]
@@ -465,6 +478,7 @@ component Card {
                 Path::new("kit/card.brul").to_path_buf(),
                 source.to_owned(),
                 Some(&dir),
+                Origin::Imported(Path::new("kit/card.brul").to_path_buf()),
             )
             .unwrap();
         let definition = &loader.definitions[index];

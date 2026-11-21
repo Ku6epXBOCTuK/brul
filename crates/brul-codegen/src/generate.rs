@@ -1,11 +1,14 @@
 //! Единый путь генерации: общий для `build.rs`, CLI и тестов.
 
+use std::fs;
 use std::path::Path;
 
+use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 
 use crate::commands::{self, Commands};
 use crate::emit::{self, Module};
+use crate::{error_at, parse_source};
 
 pub fn generate(entry: &Path, root: &Path) -> Result<Module, Error> {
     let dir = root.join("src");
@@ -18,11 +21,21 @@ pub fn generate(entry: &Path, root: &Path) -> Result<Module, Error> {
 }
 
 pub fn generate_with(entry: &Path, commands: &Commands) -> Result<Module, Error> {
-    match emit::split_module_file_with_commands(entry, commands) {
-        Ok(module) => Ok(module),
-        Err(error) if error.message() == "missing window declaration" => {
-            emit::split_component_file_with_commands(entry, commands)
-        }
-        Err(error) => Err(error),
+    if is_application(entry)? {
+        emit::split_module_file_with_commands(entry, commands)
+    } else {
+        emit::split_component_file_with_commands(entry, commands)
     }
+}
+
+fn is_application(entry: &Path) -> Result<bool, Error> {
+    let source = fs::read_to_string(entry).map_err(|error| {
+        error_at(
+            Position { line: 1, column: 1 },
+            format!("cannot read '{}': {error}", entry.display()),
+        )
+    })?;
+    Ok(parse_source(&source)?
+        .declaration
+        .is_some_and(|declaration| declaration.is_window()))
 }

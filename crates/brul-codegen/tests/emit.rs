@@ -96,6 +96,7 @@ goldens! {
     emits_parameter_bindings,
     emits_resource_and_image_with_tint,
     emits_script_program,
+    emits_scripts_for_every_window,
     emits_scroll_only_when_it_is_set,
     emits_scroll_only_when_it_is_set_2,
     emits_static_tree,
@@ -130,6 +131,7 @@ errors! {
     rejects_a_multiline_that_is_not_a_literal,
     rejects_a_slot_outside_a_component,
     rejects_a_window_handler_that_ignores_the_key,
+    rejects_a_window_used_as_a_component,
     rejects_assignment_to_local_constant_at_build,
     rejects_broken_resources,
     rejects_broken_resources_2,
@@ -211,7 +213,7 @@ fn stages_component_and_root_resources_for_out_dir() {
     assert!(
         root.resources
             .iter()
-            .any(|item| item.name == "resource_check" && item.path.is_file()),
+            .any(|item| item.name == "demo_resource_check" && item.path.is_file()),
         "{:?}",
         root.resources
     );

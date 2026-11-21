@@ -25,10 +25,6 @@ pub fn dir() -> &'static Path {
     Path::new(ROOT)
 }
 
-pub fn is_virtual(path: &Path) -> bool {
-    path.parent().is_some_and(|parent| parent == Path::new(DIR))
-}
-
 #[cfg(test)]
 mod tests {
     use super::{dir, names};
