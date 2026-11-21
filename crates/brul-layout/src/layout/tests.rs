@@ -9,7 +9,7 @@ fn one_shot_forwards_insets_scroll_and_offset() {
     };
     let absolute =
         LayoutNode::row(vec![LayoutNode::leaf(10, 10).with_offset(5, 3)]).with_style(LayoutStyle {
-            border_width: 2,
+            border_width: BorderWidths::all(2),
             padding: Padding {
                 left: 10,
                 top: 4,

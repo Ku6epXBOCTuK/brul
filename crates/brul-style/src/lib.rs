@@ -18,6 +18,7 @@ pub mod ast;
 mod color;
 pub mod grid;
 pub mod properties;
+mod side;
 pub mod snapshot;
 pub mod ty;
 pub mod validate;
@@ -33,6 +34,7 @@ pub use grid::{
 pub use properties::{
     Kind, LayoutField, SPECS, Side, Spec, StatePolicy, StyleField, Target, TextField, ThemeType,
 };
+pub use side::Sides;
 pub use snapshot::{Snapshot, SnapshotError};
 pub use ty::Type;
 pub use validate::ValidationError;

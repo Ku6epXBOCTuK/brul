@@ -164,11 +164,13 @@ pub(super) fn snapshot_node(
     let content_x = layout_box.x.saturating_add(
         layout_style
             .border_width
+            .left
             .saturating_add(layout_style.padding.left) as i32,
     );
     let content_y = layout_box.y.saturating_add(
         layout_style
             .border_width
+            .top
             .saturating_add(layout_style.padding.top) as i32,
     );
     let content_width = layout_box

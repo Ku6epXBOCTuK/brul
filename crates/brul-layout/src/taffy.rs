@@ -155,10 +155,10 @@ pub(crate) fn taffy_style(
             bottom: length(style.padding.bottom),
         },
         border: TaffyRect {
-            left: length(style.border_width),
-            right: length(style.border_width),
-            top: length(style.border_width),
-            bottom: length(style.border_width),
+            left: length(style.border_width.left),
+            right: length(style.border_width.right),
+            top: length(style.border_width.top),
+            bottom: length(style.border_width.bottom),
         },
         gap: TaffySize {
             width: length(style.column_gap()),

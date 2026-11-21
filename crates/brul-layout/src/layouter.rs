@@ -306,12 +306,12 @@ impl<C> Layouter<C> {
                     origin: (
                         clamp_i32(
                             i64::from(x)
-                                + i64::from(entry.layout.border_width)
+                                + i64::from(entry.layout.border_width.left)
                                 + i64::from(entry.layout.padding.left),
                         ),
                         clamp_i32(
                             i64::from(y)
-                                + i64::from(entry.layout.border_width)
+                                + i64::from(entry.layout.border_width.top)
                                 + i64::from(entry.layout.padding.top),
                         ),
                     ),

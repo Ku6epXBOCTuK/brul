@@ -332,7 +332,7 @@ fn align_stretch_fills_cross_axis() {
 fn border_and_padding_are_inside_size() {
     let root = LayoutNode::column(vec![LayoutNode::leaf(10, 10)]).with_style(LayoutStyle {
         padding: Padding::all(5),
-        border_width: 2,
+        border_width: brul_gui::BorderWidths::all(2),
         ..LayoutStyle::default()
     });
 

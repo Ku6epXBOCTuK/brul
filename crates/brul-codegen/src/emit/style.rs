@@ -128,6 +128,9 @@ fn list(out: &mut Out<'_>, empty: bool, body: impl FnOnce(&mut Out<'_>)) {
 fn kind(value: Kind) -> String {
     match value {
         Kind::PaddingSide(side) => format!("s::Kind::PaddingSide(s::Side::{side:?})"),
+        Kind::BorderWidthSide(side) => {
+            format!("s::Kind::BorderWidthSide(s::Side::{side:?})")
+        }
         value => format!("s::Kind::{value:?}"),
     }
 }

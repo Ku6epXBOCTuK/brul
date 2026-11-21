@@ -35,7 +35,7 @@ pub enum LayoutField {
     Gap,
     RowGap,
     ColumnGap,
-    BorderWidth,
+    BorderWidthSide(Side),
     Justify,
     Align,
 }
@@ -85,7 +85,7 @@ pub enum Kind {
     Gap,
     RowGap,
     ColumnGap,
-    BorderWidth,
+    BorderWidthSide(Side),
     BorderRadius,
     FontSize,
     FontFamily,
@@ -108,8 +108,8 @@ pub enum Kind {
 }
 
 macro_rules! target {
-    (layout, Padding($side:expr)) => {
-        Target::Layout(LayoutField::Padding($side))
+    (layout, $field:ident($side:expr)) => {
+        Target::Layout(LayoutField::$field($side))
     };
     (layout, $field:ident) => {
         Target::Layout(LayoutField::$field)
@@ -162,7 +162,10 @@ properties! {
     Kind::Gap => ("gap", Type::Px, Forbidden, layout(Gap)),
     Kind::RowGap => ("row-gap", Type::Px, Forbidden, layout(RowGap)),
     Kind::ColumnGap => ("column-gap", Type::Px, Forbidden, layout(ColumnGap)),
-    Kind::BorderWidth => ("border-width", Type::Px, Forbidden, layout(BorderWidth)),
+    Kind::BorderWidthSide(Side::Left) => ("border-left-width", Type::Px, Forbidden, layout(BorderWidthSide(Side::Left))),
+    Kind::BorderWidthSide(Side::Top) => ("border-top-width", Type::Px, Forbidden, layout(BorderWidthSide(Side::Top))),
+    Kind::BorderWidthSide(Side::Right) => ("border-right-width", Type::Px, Forbidden, layout(BorderWidthSide(Side::Right))),
+    Kind::BorderWidthSide(Side::Bottom) => ("border-bottom-width", Type::Px, Forbidden, layout(BorderWidthSide(Side::Bottom))),
     Kind::BorderRadius => ("border-radius", Type::Px, Forbidden, style(BorderRadius)),
     Kind::FontSize => ("font-size", Type::Px, Forbidden, text(Size)),
     Kind::FontFamily => ("font-family", Type::String, Forbidden, text(Family)),
@@ -329,6 +332,20 @@ mod tests {
         for (side, name) in sides {
             assert_eq!(Kind::from_name(name), Some(Kind::PaddingSide(side)));
             assert_eq!(Kind::PaddingSide(side).name(), name);
+        }
+    }
+
+    #[test]
+    fn every_side_has_its_own_border_width_property() {
+        let names = [
+            (Side::Left, "border-left-width"),
+            (Side::Top, "border-top-width"),
+            (Side::Right, "border-right-width"),
+            (Side::Bottom, "border-bottom-width"),
+        ];
+        for (side, name) in names {
+            assert_eq!(Kind::from_name(name), Some(Kind::BorderWidthSide(side)));
+            assert_eq!(Kind::BorderWidthSide(side).name(), name);
         }
     }
 }

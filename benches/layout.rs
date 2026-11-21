@@ -74,7 +74,7 @@ fn preset(label: u32) -> Tree {
             right: 12,
             ..Padding::default()
         },
-        border_width: 1,
+        border_width: 1.into(),
         align: Align::Center,
         ..LayoutStyle::default()
     };
@@ -110,7 +110,7 @@ fn action(width: u32) -> Tree {
             right: width,
             ..Padding::default()
         },
-        border_width: 1,
+        border_width: 1.into(),
         align: Align::Center,
         justify: Justify::Center,
         ..LayoutStyle::default()
@@ -127,7 +127,7 @@ fn window() -> Tree {
         width: Dimension::Percent(100.0),
         height: Dimension::Percent(100.0),
         padding: Padding::all(18),
-        border_width: 2,
+        border_width: 2.into(),
         gap: 14,
         ..LayoutStyle::default()
     };
@@ -143,7 +143,7 @@ fn window() -> Tree {
         width: Dimension::Percent(100.0),
         height: Dimension::Px(120),
         padding: Padding::all(12),
-        border_width: 1,
+        border_width: 1.into(),
         flex_grow: 1.0,
         ..LayoutStyle::default()
     };
@@ -172,7 +172,7 @@ fn window() -> Tree {
     let afk_box = LayoutStyle {
         width: Dimension::Px(20),
         height: Dimension::Px(20),
-        border_width: 2,
+        border_width: 2.into(),
         align: Align::Center,
         justify: Justify::Center,
         ..LayoutStyle::default()
@@ -184,7 +184,7 @@ fn window() -> Tree {
             right: 10,
             ..Padding::default()
         },
-        border_width: 1,
+        border_width: 1.into(),
         flex_grow: 1.0,
         ..LayoutStyle::default()
     };

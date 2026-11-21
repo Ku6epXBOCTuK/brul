@@ -58,7 +58,7 @@ fn layout(patch: &LayoutPatch) -> String {
         width => convert::dimension,
         height => convert::dimension,
         padding => convert::padding,
-        border_width => convert::decimal,
+        border_width => convert::border_widths,
         gap => convert::decimal,
         row_gap => convert::decimal,
         column_gap => convert::decimal,
@@ -298,6 +298,13 @@ mod convert {
 
     pub(super) fn decimal(value: &u32) -> String {
         value.to_string()
+    }
+
+    pub(super) fn border_widths(value: &brul_gui::BorderWidths) -> String {
+        format!(
+            "brul::gui::BorderWidths {{ left: {}, top: {}, right: {}, bottom: {} }}",
+            value.left, value.top, value.right, value.bottom
+        )
     }
 
     pub(super) fn float(value: &f32) -> String {

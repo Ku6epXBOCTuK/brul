@@ -1,5 +1,5 @@
 use brul_syntax::style::{
-    Animation, ClassRule, Color, ColorValue, Gradient, Kind, Property, SnapshotError, State,
+    Animation, ClassRule, Color, ColorValue, Gradient, Kind, Property, Side, SnapshotError, State,
     Stylesheet, Theme, ThemeEntry, Value, parse_file,
 };
 
@@ -180,7 +180,12 @@ fn border_theme_refs_resolve_to_a_color() {
     .expect("sheet");
     let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
 
-    assert_eq!(snapshot.get(Kind::BorderWidth), Some(&Value::Px(2.0)));
+    for side in [Side::Top, Side::Right, Side::Bottom, Side::Left] {
+        assert_eq!(
+            snapshot.get(Kind::BorderWidthSide(side)),
+            Some(&Value::Px(2.0))
+        );
+    }
     assert_eq!(
         snapshot.get(Kind::BorderColor),
         Some(&Value::Color(Color::rgb(0x11, 0x11, 0x11)))

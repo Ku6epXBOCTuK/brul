@@ -36,6 +36,18 @@ fn property(name: &str, value: Value) -> Property {
     }
 }
 
+fn border_width(value: Value) -> Vec<Property> {
+    [
+        "border-top-width",
+        "border-right-width",
+        "border-bottom-width",
+        "border-left-width",
+    ]
+    .into_iter()
+    .map(|name| property(name, value.clone()))
+    .collect()
+}
+
 fn entry(key: &str, value: Value) -> ThemeEntry {
     ThemeEntry {
         key: key.to_owned(),
@@ -107,26 +119,24 @@ fn properties_parse_with_values_and_order() {
         border-width: 2px;
         background: transparent;
     }"#;
+    let mut properties = vec![
+        property("width", Value::Percent(100.0)),
+        property("padding-top", Value::Px(4.0)),
+        property("padding-right", Value::Px(4.0)),
+        property("padding-bottom", Value::Px(4.0)),
+        property("padding-left", Value::Px(4.0)),
+        property("opacity", Value::Number(0.5)),
+        property("font-family", Value::String("Segoe UI".to_owned())),
+        property(
+            "justify-content",
+            Value::Keyword("space-between".to_owned()),
+        ),
+    ];
+    properties.extend(border_width(Value::Px(2.0)));
+    properties.push(property("background", Value::Color(Color::TRANSPARENT)));
     assert_eq!(
         parse_file(source).unwrap(),
-        sheet(vec![rule(
-            "item",
-            vec![
-                property("width", Value::Percent(100.0)),
-                property("padding-top", Value::Px(4.0)),
-                property("padding-right", Value::Px(4.0)),
-                property("padding-bottom", Value::Px(4.0)),
-                property("padding-left", Value::Px(4.0)),
-                property("opacity", Value::Number(0.5)),
-                property("font-family", Value::String("Segoe UI".to_owned())),
-                property(
-                    "justify-content",
-                    Value::Keyword("space-between".to_owned())
-                ),
-                property("border-width", Value::Px(2.0)),
-                property("background", Value::Color(Color::TRANSPARENT)),
-            ],
-        )])
+        sheet(vec![rule("item", properties)])
     );
 }
 
@@ -151,6 +161,38 @@ fn padding_takes_one_to_four_values_in_css_order() {
 fn padding_rejects_a_fifth_value() {
     let error = parse_file(".a { padding: 1px 2px 3px 4px 5px; }").unwrap_err();
     assert_eq!(error.message(), "expected at most 4 values for 'padding'");
+}
+
+#[test]
+fn border_width_takes_one_to_four_values_in_css_order() {
+    let source = ".a { border-width: 1px 2px 3px; }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "a",
+            vec![
+                property("border-top-width", Value::Px(1.0)),
+                property("border-right-width", Value::Px(2.0)),
+                property("border-bottom-width", Value::Px(3.0)),
+                property("border-left-width", Value::Px(2.0)),
+            ],
+        )])
+    );
+}
+
+#[test]
+fn border_width_longhands_are_independent() {
+    let source = ".a { border-left-width: 1px; border-right-width: 2px; }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "a",
+            vec![
+                property("border-left-width", Value::Px(1.0)),
+                property("border-right-width", Value::Px(2.0)),
+            ],
+        )])
+    );
 }
 
 #[test]
@@ -403,30 +445,24 @@ fn border_shortcut_parses() {
     let source = r#".box { border: 2px #3b82f6; }
 .small { border: 1.5px white; }
 .themed { border: 2px theme.border-main; }"#;
+    let mut box_properties = border_width(Value::Px(2.0));
+    box_properties.push(property(
+        "border-color",
+        Value::Color(Color::rgb(0x3b, 0x82, 0xf6)),
+    ));
+    let mut small_properties = border_width(Value::Px(1.5));
+    small_properties.push(property("border-color", Value::Color(Color::WHITE)));
+    let mut themed_properties = border_width(Value::Px(2.0));
+    themed_properties.push(property(
+        "border-color",
+        Value::ThemeRef("border-main".to_owned()),
+    ));
     assert_eq!(
         parse_file(source).unwrap(),
         sheet(vec![
-            rule(
-                "box",
-                vec![
-                    property("border-width", Value::Px(2.0)),
-                    property("border-color", Value::Color(Color::rgb(0x3b, 0x82, 0xf6)),),
-                ],
-            ),
-            rule(
-                "small",
-                vec![
-                    property("border-width", Value::Px(1.5)),
-                    property("border-color", Value::Color(Color::WHITE)),
-                ],
-            ),
-            rule(
-                "themed",
-                vec![
-                    property("border-width", Value::Px(2.0)),
-                    property("border-color", Value::ThemeRef("border-main".to_owned())),
-                ],
-            ),
+            rule("box", box_properties),
+            rule("small", small_properties),
+            rule("themed", themed_properties),
         ])
     );
 }
@@ -509,7 +545,7 @@ fn border_in_a_state_is_rejected_through_its_width() {
 
     assert_eq!(
         error.message(),
-        "property 'border-width' cannot change in a state"
+        "property 'border-top-width' cannot change in a state"
     );
 }
 

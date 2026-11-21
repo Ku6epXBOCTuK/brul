@@ -7,6 +7,7 @@ struct Instance {
     params: vec4<f32>,
     fill: vec4<f32>,
     border: vec4<f32>,
+    border_widths: vec4<f32>,
     start: vec4<f32>,
     end: vec4<f32>,
     extra: vec4<f32>,
@@ -114,9 +115,22 @@ fn fs(in: Varyings) -> @location(0) vec4<f32> {
         premultiplied = shape.fill.rgb * coverage;
         alpha = coverage;
     } else {
+        let widths = shape.border_widths;
         let d = rounded_distance(in.local, size, shape.params.x, vec2<f32>(0.0));
         let outer = clamp(0.5 - d, 0.0, 1.0);
-        let inner = clamp(0.5 - (d + shape.params.y), 0.0, 1.0);
+        let inner_size = max(
+            size - vec2<f32>(widths.x + widths.z, widths.y + widths.w),
+            vec2<f32>(0.0),
+        );
+        let inner_radius = max(
+            shape.params.x - max(max(widths.x, widths.y), max(widths.z, widths.w)),
+            0.0,
+        );
+        var inner = 0.0;
+        if inner_size.x > 0.0 && inner_size.y > 0.0 {
+            let inner_d = rounded_distance(in.local, inner_size, inner_radius, widths.xy);
+            inner = clamp(0.5 - inner_d, 0.0, 1.0);
+        }
         let border = (outer - inner) * shape.border.a;
         premultiplied = shape.border.rgb * border;
         alpha = border;

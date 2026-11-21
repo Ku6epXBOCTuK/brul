@@ -19,6 +19,7 @@ impl WidgetTree {
         let local_x = x.saturating_sub(boxed.x).saturating_sub(
             layout_style
                 .border_width
+                .left
                 .saturating_add(layout_style.padding.left) as i32,
         );
         let content_height = boxed.height.saturating_sub(layout::inset_y(&layout_style));
@@ -27,6 +28,7 @@ impl WidgetTree {
             .saturating_sub(
                 layout_style
                     .border_width
+                    .top
                     .saturating_add(layout_style.padding.top) as i32,
             )
             .saturating_add(*scroll)
@@ -203,10 +205,10 @@ impl WidgetTree {
         let style = node.layout_style();
         let content_x = placed
             .x
-            .saturating_add(style.border_width.saturating_add(style.padding.left) as i32);
+            .saturating_add(style.border_width.left.saturating_add(style.padding.left) as i32);
         let content_y = placed
             .y
-            .saturating_add(style.border_width.saturating_add(style.padding.top) as i32);
+            .saturating_add(style.border_width.top.saturating_add(style.padding.top) as i32);
         let content_height = placed.height.saturating_sub(layout::inset_y(&style));
         let offset = node
             .styles

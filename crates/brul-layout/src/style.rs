@@ -1,3 +1,5 @@
+use brul_style::Sides;
+
 use crate::{AreaTemplate, GridLine, TrackSize};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -14,24 +16,9 @@ pub struct Size {
     pub height: u32,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct Padding {
-    pub left: u32,
-    pub top: u32,
-    pub right: u32,
-    pub bottom: u32,
-}
+pub type Padding = Sides<u32>;
 
-impl Padding {
-    pub const fn all(value: u32) -> Self {
-        Self {
-            left: value,
-            top: value,
-            right: value,
-            bottom: value,
-        }
-    }
-}
+pub type BorderWidths = Sides<u32>;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Justify {
@@ -127,7 +114,7 @@ layout_patch! {
     width: Dimension,
     height: Dimension,
     padding: Padding,
-    border_width: u32,
+    border_width: BorderWidths,
     gap: u32,
     row_gap: u32,
     column_gap: u32,
@@ -288,7 +275,8 @@ pub enum LayoutError {
 pub fn inset_x(style: &LayoutStyle) -> u32 {
     style
         .border_width
-        .saturating_mul(2)
+        .left
+        .saturating_add(style.border_width.right)
         .saturating_add(style.padding.left)
         .saturating_add(style.padding.right)
 }
@@ -296,7 +284,8 @@ pub fn inset_x(style: &LayoutStyle) -> u32 {
 pub fn inset_y(style: &LayoutStyle) -> u32 {
     style
         .border_width
-        .saturating_mul(2)
+        .top
+        .saturating_add(style.border_width.bottom)
         .saturating_add(style.padding.top)
         .saturating_add(style.padding.bottom)
 }

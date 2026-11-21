@@ -13,8 +13,24 @@ pub struct Shorthand {
 pub static SHORTHANDS: &[Shorthand] = &[
     Shorthand {
         name: "border",
-        kinds: &[Kind::BorderWidth, Kind::BorderColor],
+        kinds: &[
+            Kind::BorderWidthSide(Side::Top),
+            Kind::BorderWidthSide(Side::Right),
+            Kind::BorderWidthSide(Side::Bottom),
+            Kind::BorderWidthSide(Side::Left),
+            Kind::BorderColor,
+        ],
         parse: border_values,
+    },
+    Shorthand {
+        name: "border-width",
+        kinds: &[
+            Kind::BorderWidthSide(Side::Top),
+            Kind::BorderWidthSide(Side::Right),
+            Kind::BorderWidthSide(Side::Bottom),
+            Kind::BorderWidthSide(Side::Left),
+        ],
+        parse: box_values,
     },
     Shorthand {
         name: "padding",
@@ -56,7 +72,13 @@ impl Shorthand {
 fn border_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
     let width = value::value(cursor, true, Type::Px, name)?;
     let color = value::value(cursor, true, Type::Color, name)?;
-    Ok(vec![width, color])
+    Ok(vec![
+        width.clone(),
+        width.clone(),
+        width.clone(),
+        width,
+        color,
+    ])
 }
 
 fn shadow_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {

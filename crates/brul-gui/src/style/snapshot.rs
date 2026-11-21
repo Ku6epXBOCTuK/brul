@@ -9,7 +9,7 @@ use super::value::{
 };
 use crate::widget::{TextStylePatch, Transitions, WidgetStyle, WidgetStylePatch};
 use crate::{
-    Align, Direction, Display, GridAutoFlow, Justify, LayoutStyle, Padding, TextAlign, TextStyle,
+    Align, Direction, Display, GridAutoFlow, Justify, LayoutStyle, Sides, TextAlign, TextStyle,
     VerticalAlign,
 };
 
@@ -136,8 +136,8 @@ fn apply(
         Target::Layout(LayoutField::Gap) => layout.gap = read::<PxTy>(value, kind)?,
         Target::Layout(LayoutField::RowGap) => layout.row_gap = read::<PxTy>(value, kind)?,
         Target::Layout(LayoutField::ColumnGap) => layout.column_gap = read::<PxTy>(value, kind)?,
-        Target::Layout(LayoutField::BorderWidth) => {
-            layout.border_width = read::<PxTy>(value, kind)?
+        Target::Layout(LayoutField::BorderWidthSide(side)) => {
+            *edge(&mut layout.border_width, side) = read::<PxTy>(value, kind)?;
         }
         Target::Layout(LayoutField::Justify) => {
             layout.justify = justify(read::<KeywordTy>(value, kind)?)
@@ -195,12 +195,12 @@ fn apply(
     Ok(())
 }
 
-fn edge(padding: &mut Padding, side: Side) -> &mut u32 {
+fn edge<T>(sides: &mut Sides<T>, side: Side) -> &mut T {
     match side {
-        Side::Left => &mut padding.left,
-        Side::Top => &mut padding.top,
-        Side::Right => &mut padding.right,
-        Side::Bottom => &mut padding.bottom,
+        Side::Left => &mut sides.left,
+        Side::Top => &mut sides.top,
+        Side::Right => &mut sides.right,
+        Side::Bottom => &mut sides.bottom,
     }
 }
 

@@ -27,7 +27,7 @@ pub struct WidgetSnapshotNode {
     pub y: i32,
     pub width: u32,
     pub height: u32,
-    pub border_width: u32,
+    pub border_width: crate::BorderWidths,
     pub content_x: i32,
     pub content_y: i32,
     pub content_width: u32,

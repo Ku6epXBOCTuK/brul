@@ -1,4 +1,4 @@
-use crate::{Color, Paint};
+use crate::{BorderWidths, Color, Paint};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
@@ -8,7 +8,7 @@ pub struct Rect {
     pub height: u32,
     pub radius: u32,
     pub fill: Paint,
-    pub border_width: u32,
+    pub border_width: BorderWidths,
     pub border_color: Color,
 }
 
@@ -27,7 +27,7 @@ impl Rect {
             height,
             radius: 0,
             fill: Paint::Color(Color::TRANSPARENT),
-            border_width: 0,
+            border_width: BorderWidths::all(0),
             border_color: Color::TRANSPARENT,
         }
     }
@@ -42,8 +42,8 @@ impl Rect {
         self
     }
 
-    pub const fn with_border(mut self, width: u32, color: Color) -> Self {
-        self.border_width = width;
+    pub const fn with_border(mut self, widths: BorderWidths, color: Color) -> Self {
+        self.border_width = widths;
         self.border_color = color;
         self
     }
@@ -53,16 +53,44 @@ impl Rect {
             return RectSample::default();
         }
 
-        let distance = self.distance(x, y);
-        let outer = (0.5 - distance).clamp(0.0, 1.0);
-        if self.border_width == 0 {
+        let outer = (0.5 - self.distance(x, y)).clamp(0.0, 1.0);
+        let widths = self.border_width;
+        if widths == BorderWidths::all(0) {
             return RectSample {
                 fill_coverage: outer,
                 border_coverage: 0.0,
             };
         }
 
-        let inner = (0.5 - (distance + self.border_width as f32)).clamp(0.0, 1.0);
+        let inner_width = self
+            .width
+            .saturating_sub(widths.left.saturating_add(widths.right));
+        let inner_height = self
+            .height
+            .saturating_sub(widths.top.saturating_add(widths.bottom));
+        if inner_width == 0 || inner_height == 0 {
+            return RectSample {
+                fill_coverage: 0.0,
+                border_coverage: outer,
+            };
+        }
+        let inner_radius = self.radius.saturating_sub(
+            widths
+                .left
+                .max(widths.top)
+                .max(widths.right)
+                .max(widths.bottom),
+        );
+        let inner_distance = rounded_distance(
+            x,
+            y,
+            self.x.saturating_add(widths.left as i32),
+            self.y.saturating_add(widths.top as i32),
+            inner_width,
+            inner_height,
+            inner_radius,
+        );
+        let inner = (0.5 - inner_distance).clamp(0.0, 1.0);
         RectSample {
             fill_coverage: inner,
             border_coverage: outer - inner,

@@ -46,10 +46,19 @@ fn per_axis_gaps_are_resolved_from_their_own_properties() {
 #[test]
 fn border_sets_the_width_from_either_property() {
     let shorthand = resolved(".a { border: 3px #fff; }");
-    assert_eq!(shorthand.layout.border_width, 3);
+    assert_eq!(
+        shorthand.layout.border_width,
+        brul_gui::BorderWidths::all(3)
+    );
 
     let longhand = resolved(".a { border-width: 7px; }");
-    assert_eq!(longhand.layout.border_width, 7);
+    assert_eq!(longhand.layout.border_width, brul_gui::BorderWidths::all(7));
+
+    let sides = resolved(".a { border-width: 1px 2px 3px 4px; }");
+    assert_eq!(
+        sides.layout.border_width,
+        brul_gui::BorderWidths::new(4, 1, 2, 3)
+    );
 }
 
 #[test]

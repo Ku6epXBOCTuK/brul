@@ -1,8 +1,8 @@
 use brul_gpu::{clip_set, decoration_instances, shape_instances};
 use brul_gui::{
-    CaretPosition, ClipRect, Color, Dimension, Dirty, DrawCommand, Gradient, LayoutStyle, Paint,
-    SelectionRect, Shadow, Size, StyleSet, TextEngine, Widget, WidgetKind, WidgetStyle, WidgetTree,
-    draw_commands,
+    BorderWidths, CaretPosition, ClipRect, Color, Dimension, Dirty, DrawCommand, Gradient,
+    LayoutStyle, Paint, SelectionRect, Shadow, Size, StyleSet, TextEngine, Widget, WidgetKind,
+    WidgetStyle, WidgetTree, draw_commands,
 };
 
 fn snapshot(style: WidgetStyle, border_width: u32) -> brul_gui::WidgetSnapshot {
@@ -10,7 +10,7 @@ fn snapshot(style: WidgetStyle, border_width: u32) -> brul_gui::WidgetSnapshot {
         .with_layout(LayoutStyle {
             width: Dimension::Px(20),
             height: Dimension::Px(20),
-            border_width,
+            border_width: BorderWidths::all(border_width),
             ..LayoutStyle::default()
         })
         .with_styles(StyleSet::new(style));
@@ -120,9 +120,10 @@ fn a_solid_node_becomes_one_shape_with_border_coverage() {
     let shapes = shape_instances(&snapshot, &brul_gpu::ClipSet::default(), &Dirty::all());
     assert_eq!(shapes.len(), 1);
     assert_eq!(shapes[0].bounds, [0.0, 0.0, 20.0, 20.0]);
-    assert_eq!(shapes[0].params, [4.0, 2.0, 0.0, 0.5]);
+    assert_eq!(shapes[0].params, [4.0, 0.0, 0.0, 0.5]);
     assert_eq!(shapes[0].fill, [1.0, 0.0, 0.0, 1.0]);
     assert_eq!(shapes[0].border, [0.0, 0.0, 1.0, 1.0]);
+    assert_eq!(shapes[0].border_widths, [2.0, 2.0, 2.0, 2.0]);
     assert_eq!(shapes[0].extra, [0.0, 0.0, 0.0, 0.0]);
 }
 
