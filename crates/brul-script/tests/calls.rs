@@ -5,12 +5,10 @@ use brul_script::{Component, Error, Host, Value, eval};
 use brul_syntax::parser::parse_expression;
 
 type Calls = Rc<RefCell<Vec<(String, Vec<Value>)>>>;
-type Intervals = Rc<RefCell<Vec<(f64, String)>>>;
 
 #[derive(Clone, Default)]
 struct FakeHost {
     calls: Calls,
-    intervals: Intervals,
 }
 
 impl Host for FakeHost {
@@ -23,13 +21,6 @@ impl Host for FakeHost {
             "currentTheme" => Ok(Value::String("dark".into())),
             _ => Err(Error::UnknownFunction(name.to_owned())),
         }
-    }
-
-    fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
-        self.intervals
-            .borrow_mut()
-            .push((interval_ms, function.to_owned()));
-        Ok(())
     }
 }
 
@@ -45,13 +36,6 @@ fn evaluate_with(host: &FakeHost, source: &str) -> Result<Value, Error> {
 
 fn failure(source: &str) -> Error {
     match evaluate(source).unwrap_err() {
-        Error::At(_, error) => *error,
-        error => error,
-    }
-}
-
-fn failure_with(host: &FakeHost, source: &str) -> Error {
-    match evaluate_with(host, source).unwrap_err() {
         Error::At(_, error) => *error,
         error => error,
     }
@@ -182,23 +166,42 @@ fn unknown_function_without_host_is_reported() {
 }
 
 #[test]
-fn every_registers_function_name() {
-    let host = FakeHost::default();
+fn every_registers_function_name_with_a_host() {
+    let mut component = Component::new();
+    component.set_host(FakeHost::default());
     assert_eq!(
-        evaluate_with(&host, "every(3000, refresh)"),
+        eval(
+            &mut component,
+            &parse_expression("every(3000, refresh)").unwrap()
+        ),
         Ok(Value::Null)
     );
+    let timers = component.take_timers();
+    assert_eq!(timers.len(), 1);
+    assert_eq!(timers[0].interval_ms, 3000.0);
+    assert_eq!(timers[0].function.as_str(), "refresh");
+}
+
+#[test]
+fn every_registers_function_name_without_a_host() {
+    let mut component = Component::new();
     assert_eq!(
-        host.intervals.borrow().as_slice(),
-        &[(3000.0, "refresh".into())]
+        eval(
+            &mut component,
+            &parse_expression("every(250, tick)").unwrap()
+        ),
+        Ok(Value::Null)
     );
+    let timers = component.take_timers();
+    assert_eq!(timers.len(), 1);
+    assert_eq!(timers[0].interval_ms, 250.0);
+    assert_eq!(timers[0].function.as_str(), "tick");
 }
 
 #[test]
 fn every_requires_number_and_function_name() {
-    let host = FakeHost::default();
     assert_eq!(
-        failure_with(&host, "every(\"3000\", refresh)"),
+        failure("every(\"3000\", refresh)"),
         Error::Argument {
             name: "every",
             expected: "Number",
@@ -206,7 +209,7 @@ fn every_requires_number_and_function_name() {
         }
     );
     assert_eq!(
-        failure_with(&host, "every(3000, 42)"),
+        failure("every(3000, 42)"),
         Error::Argument {
             name: "every",
             expected: "function name",
@@ -214,7 +217,7 @@ fn every_requires_number_and_function_name() {
         }
     );
     assert_eq!(
-        failure_with(&host, "every(3000)"),
+        failure("every(3000)"),
         Error::Arity {
             name: "every".to_owned(),
             expected: "two",

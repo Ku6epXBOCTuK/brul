@@ -10,7 +10,7 @@ pub mod names;
 pub mod scope;
 pub mod value;
 
-pub use component::Component;
+pub use component::{Component, FunctionName, TimerRequest};
 pub use dynamic::{Dyn, items};
 pub use environment::Environment;
 pub use error::Error;

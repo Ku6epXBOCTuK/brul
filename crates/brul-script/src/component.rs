@@ -34,6 +34,38 @@ impl Hasher for Fnv {
 
 type Index = HashMap<&'static str, VariableId, BuildHasherDefault<Fnv>>;
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct FunctionName(String);
+
+impl FunctionName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&str> for FunctionName {
+    fn from(name: &str) -> Self {
+        Self(name.to_owned())
+    }
+}
+
+impl From<String> for FunctionName {
+    fn from(name: String) -> Self {
+        Self(name)
+    }
+}
+
+impl From<FunctionName> for String {
+    fn from(name: FunctionName) -> Self {
+        name.0
+    }
+}
+
+pub struct TimerRequest {
+    pub interval_ms: f64,
+    pub function: FunctionName,
+}
+
 pub struct Component {
     names: &'static [&'static str],
     index: Index,
@@ -43,7 +75,7 @@ pub struct Component {
     typed_call: Option<crate::ScriptCall>,
     state: Option<Box<dyn Any>>,
     host: Option<Box<dyn AnyHost>>,
-    pending_every: Vec<(f64, String)>,
+    pending_timers: Vec<TimerRequest>,
     event_calls: HashMap<String, crate::EventCall>,
     scope: Scope,
     // NOTE: environment frames and host functions are not signals, so their
@@ -62,7 +94,7 @@ impl Default for Component {
             typed_call: None,
             state: None,
             host: None,
-            pending_every: Vec::new(),
+            pending_timers: Vec::new(),
             event_calls: HashMap::new(),
             scope: Scope::root(),
             external: Signal::new(0),
@@ -152,18 +184,20 @@ impl Component {
         self.external_changed();
     }
 
-    pub fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
-        match &mut self.host {
-            Some(host) => host.every(interval_ms, function),
-            None => {
-                self.pending_every.push((interval_ms, function.to_owned()));
-                Ok(())
-            }
-        }
+    pub fn every(
+        &mut self,
+        interval_ms: f64,
+        function: impl Into<FunctionName>,
+    ) -> Result<(), Error> {
+        self.pending_timers.push(TimerRequest {
+            interval_ms,
+            function: function.into(),
+        });
+        Ok(())
     }
 
-    pub fn take_every(&mut self) -> Vec<(f64, String)> {
-        std::mem::take(&mut self.pending_every)
+    pub fn take_timers(&mut self) -> Vec<TimerRequest> {
+        std::mem::take(&mut self.pending_timers)
     }
 
     pub fn set_scope(&mut self, scope: Scope) {

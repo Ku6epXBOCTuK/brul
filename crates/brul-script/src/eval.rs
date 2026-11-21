@@ -97,7 +97,7 @@ fn call_every(component: &mut Component, arguments: &[Expr]) -> Result<Value, Er
             found: function.kind.name(),
         });
     };
-    component.every(interval, function)?;
+    component.every(interval, function.as_str())?;
     Ok(Value::Null)
 }
 

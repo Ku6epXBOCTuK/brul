@@ -13,7 +13,7 @@ use crate::Host;
 use crate::event::{arguments, call, handler_target};
 use crate::{
     Binding, Build, Built, ComponentHandle, Handler, HandlerEvent, PropBinding, RowInfo, Structure,
-    Theme, Value, ViewError,
+    Theme, TimerRequest, Value, ViewError,
 };
 
 mod host;
@@ -26,6 +26,28 @@ use rebuild::{Pending, Staged, retain_live};
 mod tests;
 
 const EVENT_DEPTH: usize = 64;
+
+fn timer_command(request: TimerRequest) -> Option<WindowCommand> {
+    if request.interval_ms.is_finite() && request.interval_ms > 0.0 {
+        Some(WindowCommand::Every {
+            interval: Duration::from_secs_f64(request.interval_ms / 1000.0),
+            function: request.function.into(),
+        })
+    } else {
+        tracing::error!(
+            interval_ms = request.interval_ms,
+            "every interval must be a positive number"
+        );
+        None
+    }
+}
+
+fn schedule_timers(component: &ComponentHandle, commands: &Rc<RefCell<Vec<WindowCommand>>>) {
+    let timers = component.borrow_mut().take_timers();
+    commands
+        .borrow_mut()
+        .extend(timers.into_iter().filter_map(timer_command));
+}
 pub struct Ui<T: Theme> {
     pub component: ComponentHandle,
     pub tree: Rc<RefCell<WidgetTree>>,
@@ -97,16 +119,7 @@ impl<T: Theme> Ui<T> {
             handlers,
             props,
         } = built;
-        for (interval_ms, function) in component.borrow_mut().take_every() {
-            if interval_ms.is_finite() && interval_ms > 0.0 {
-                commands.borrow_mut().push(WindowCommand::Every {
-                    interval: Duration::from_secs_f64(interval_ms / 1000.0),
-                    function,
-                });
-            } else {
-                tracing::error!(interval_ms, "every interval must be a positive number");
-            }
-        }
+        schedule_timers(&component, &commands);
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         tree.borrow_mut().set_root_scroll(scroll);
         let window_handlers = handlers
@@ -336,6 +349,7 @@ impl<T: Theme> Ui<T> {
     }
 
     fn take_commands(&mut self) -> Vec<WindowCommand> {
+        schedule_timers(&self.component, &self.commands);
         std::mem::take(&mut *self.commands.borrow_mut())
     }
 

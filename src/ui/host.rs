@@ -65,13 +65,6 @@ impl Host for CommandHost {
         Ok(Value::Null)
     }
 
-    fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
-        match &mut self.app {
-            Some(host) => host.every(interval_ms, function),
-            None => Err(Error::Unsupported("every")),
-        }
-    }
-
     fn commands(&self) -> Vec<&'static str> {
         match &self.app {
             Some(app) => app.commands(),

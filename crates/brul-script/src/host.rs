@@ -8,11 +8,6 @@ pub trait Host {
     fn commands(&self) -> Vec<&'static str> {
         Vec::new()
     }
-
-    fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
-        let _ = (interval_ms, function);
-        Err(Error::Unsupported("every"))
-    }
 }
 
 pub trait AnyHost: Host + std::any::Any {}

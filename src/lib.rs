@@ -26,8 +26,8 @@ pub use brul_macros::{command, host};
 pub use brul_reactive::Signal;
 pub use brul_script::eval;
 pub use brul_script::{
-    Component, Dyn, Error, EventCall, Fields, Host, HostCommand, Items, Scope, Script, Value,
-    VariableId, items, noop_event,
+    Component, Dyn, Error, EventCall, Fields, FunctionName, Host, HostCommand, Items, Scope,
+    Script, TimerRequest, Value, VariableId, items, noop_event,
 };
 pub use brul_style as style;
 pub use brul_syntax::ast;

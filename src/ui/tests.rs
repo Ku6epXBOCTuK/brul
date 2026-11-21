@@ -3,6 +3,7 @@ use crate::{Scope, TestTheme};
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use brul_gui::{Direction, Size, TextEngine, Texture, Widget};
 use brul_syntax::markup::PropType;
@@ -426,13 +427,6 @@ impl Host for Recorder {
         self.calls.borrow_mut().push(name.to_owned());
         Ok(Value::Null)
     }
-
-    fn every(&mut self, interval_ms: f64, function: &str) -> Result<(), Error> {
-        self.calls
-            .borrow_mut()
-            .push(format!("{function}@{interval_ms}"));
-        Ok(())
-    }
 }
 
 #[test]
@@ -571,22 +565,17 @@ fn an_unknown_command_without_a_host_is_an_error() {
         host.call("appCommand", &[]),
         Err(Error::UnknownFunction("appCommand".to_owned()))
     );
-    assert_eq!(host.every(16.0, "tick"), Err(Error::Unsupported("every")));
 }
 
 #[test]
-fn commands_and_timers_reach_the_application_host() {
+fn commands_reach_the_application_host() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let recorder = Recorder {
         calls: Rc::clone(&calls),
     };
     let (mut host, _commands) = command_host(Some(Box::new(recorder)));
     assert_eq!(host.call("appCommand", &[]), Ok(Value::Null));
-    assert_eq!(host.every(16.0, "tick"), Ok(()));
-    assert_eq!(
-        *calls.borrow(),
-        vec!["appCommand".to_owned(), "tick@16".to_owned()]
-    );
+    assert_eq!(*calls.borrow(), vec!["appCommand".to_owned()]);
 }
 
 fn themed_view(
@@ -785,6 +774,7 @@ fn component_with(declared: &[&str]) -> ComponentHandle {
     component.set_dispatch(handler_dispatch);
     component.register_event_call("tick", set_ran);
     component.register_event_call("applied", applied_call);
+    component.register_event_call("schedule", schedule_tick);
     Rc::new(RefCell::new(component))
 }
 
@@ -822,6 +812,11 @@ fn applied_dispatch(component: &mut Component, name: &str, _: Vec<Dyn>) -> Resul
 
 fn set_ran(component: &mut Component, _: &[Dyn]) -> Result<Dyn, Error> {
     component.assign("ran", Value::Bool(true))?;
+    Ok(Dyn::null())
+}
+
+fn schedule_tick(component: &mut Component, _: &[Dyn]) -> Result<Dyn, Error> {
+    component.every(1000.0, "tick")?;
     Ok(Dyn::null())
 }
 
@@ -970,6 +965,33 @@ fn dispatch_runs_a_timer() {
     let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
     ui.dispatch(&[WidgetEvent::Timer("tick".into())]);
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+}
+
+#[test]
+fn every_before_assembly_becomes_a_window_command() {
+    let component = component_with(&[]);
+    component.borrow_mut().every(500.0, "tick").expect("every");
+    let (_, ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
+    assert_eq!(
+        *ui.commands.borrow(),
+        vec![WindowCommand::Every {
+            interval: Duration::from_secs_f64(0.5),
+            function: "tick".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn every_from_a_handler_is_scheduled_without_an_app_host() {
+    let component = component_with(&[]);
+    let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
+    assert_eq!(
+        ui.dispatch(&[WidgetEvent::Timer("schedule".into())]),
+        vec![WindowCommand::Every {
+            interval: Duration::from_secs(1),
+            function: "tick".to_owned(),
+        }]
+    );
 }
 
 #[test]
