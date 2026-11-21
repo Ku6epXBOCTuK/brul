@@ -5,15 +5,26 @@ use std::sync::{Arc, Mutex};
 
 use brul_gui::WidgetEvent;
 use brul_window::{
-    ColorScheme, Waker, WindowCommand, WindowError, WindowKey, WindowSpec, run_windows,
+    ColorScheme, ScopedCommand, Waker, WindowCommand, WindowError, WindowKey, WindowSpec,
+    run_windows,
 };
 
-use crate::handle::{Handle, Message, take};
+use crate::handle::{Handle, Message, ScopedMessage, take};
 use crate::ui::CommandHost;
 use crate::{
     Build, Built, Component, ComponentHandle, Host, Script, Theme, Ui, Value, ViewError,
     WindowConfig,
 };
+
+pub(crate) trait CommandSink {
+    fn send(&self, command: ScopedCommand);
+}
+
+impl CommandSink for Waker {
+    fn send(&self, command: ScopedCommand) {
+        Waker::command(self, command.window, command.command);
+    }
+}
 
 pub struct WindowDef<T: Theme> {
     pub name: &'static str,
@@ -70,7 +81,7 @@ pub fn run_generated_with<T: Theme>(
     });
     let pending = std::mem::take(&mut *commands.borrow_mut());
     let runtime = Rc::new(RefCell::new(Runtime::new(
-        windows, component, commands, theme, shown, pending,
+        windows, component, commands, theme, shown, pending, None,
     )));
 
     let creator = Rc::clone(&runtime);
@@ -86,8 +97,8 @@ pub fn run_generated_with<T: Theme>(
         move |key, events| handler.borrow_mut().dispatch(key, events),
         move |key| closed.borrow_mut().close(key),
         move |waker| {
-            attaching.borrow_mut().waker = Some(waker.clone());
-            ready(Handle::new(queue, waker));
+            attaching.borrow_mut().sink = Some(Box::new(waker.clone()));
+            ready(Handle::new(queue, waker, WindowKey(0)));
         },
         move || {
             let messages = take(&waking_queue);
@@ -151,7 +162,7 @@ struct Runtime<T: Theme> {
     theme: Option<T>,
     shown: Rc<RefCell<Option<String>>>,
     pending: Vec<WindowCommand>,
-    waker: Option<Waker>,
+    sink: Option<Box<dyn CommandSink>>,
 }
 
 impl<T: Theme> Runtime<T> {
@@ -162,6 +173,7 @@ impl<T: Theme> Runtime<T> {
         fixed_theme: Option<T>,
         shown: Rc<RefCell<Option<String>>>,
         pending: Vec<WindowCommand>,
+        sink: Option<Box<dyn CommandSink>>,
     ) -> Self {
         let mut runtime = Self {
             defs,
@@ -172,7 +184,7 @@ impl<T: Theme> Runtime<T> {
             theme: None,
             shown,
             pending,
-            waker: None,
+            sink,
         };
         let pending = std::mem::take(&mut runtime.pending);
         runtime.pending = runtime.absorb(pending);
@@ -281,12 +293,13 @@ impl<T: Theme> Runtime<T> {
             return Vec::new();
         };
         tracing::debug!(%key, events = events.len(), "dispatching events");
-        let commands = ui.dispatch(events);
-        tracing::debug!(%key, ?commands, "window commands");
+        let mut commands = ui.dispatch(events);
         brul_reactive::flush();
         for ui in self.uis.values_mut() {
             ui.settle();
         }
+        commands.extend(std::mem::take(&mut *self.commands.borrow_mut()));
+        tracing::debug!(%key, ?commands, "window commands");
         self.absorb(commands)
     }
 
@@ -295,9 +308,10 @@ impl<T: Theme> Runtime<T> {
         self.uis.remove(&key);
     }
 
-    fn apply(&mut self, messages: Vec<Message>) {
-        for message in messages {
-            match message {
+    fn apply(&mut self, messages: Vec<ScopedMessage>) {
+        for scoped in messages {
+            let window = scoped.window;
+            match scoped.message {
                 Message::Set(name, value) => {
                     if let Err(error) = self.component.borrow_mut().assign(&name, value) {
                         tracing::error!(%error, %name, "handle set failed");
@@ -318,20 +332,20 @@ impl<T: Theme> Runtime<T> {
                     }
                 }
             }
+            brul_reactive::flush();
+            for ui in self.uis.values_mut() {
+                ui.settle();
+            }
+            self.drain_commands(window);
         }
-        brul_reactive::flush();
-        for ui in self.uis.values_mut() {
-            ui.settle();
-        }
-        self.drain_commands();
     }
 
-    fn drain_commands(&mut self) {
+    fn drain_commands(&mut self, window: WindowKey) {
         let commands = std::mem::take(&mut *self.commands.borrow_mut());
         let rest = self.absorb(commands);
-        if let Some(waker) = &self.waker {
+        if let Some(sink) = &self.sink {
             for command in rest {
-                waker.command(command);
+                sink.send(ScopedCommand { window, command });
             }
         }
     }
@@ -434,7 +448,15 @@ mod tests {
                 theme.map(crate::Theme::name).map(str::to_owned),
             )),
             Vec::new(),
+            None,
         )
+    }
+
+    fn scoped(message: Message) -> ScopedMessage {
+        ScopedMessage {
+            window: WindowKey(0),
+            message,
+        }
     }
 
     fn assembled(
@@ -562,7 +584,7 @@ mod tests {
             config: WindowConfig::default(),
             view: theme_view,
         }];
-        let mut runtime = Runtime::new(defs, component, commands, None, shown, Vec::new());
+        let mut runtime = Runtime::new(defs, component, commands, None, shown, Vec::new(), None);
 
         runtime
             .create(WindowKey(0), ColorScheme::Dark)
@@ -619,6 +641,7 @@ mod tests {
             None,
             Rc::new(RefCell::new(None)),
             Vec::new(),
+            None,
         );
         runtime
             .create(WindowKey(0), ColorScheme::Dark)
@@ -627,7 +650,7 @@ mod tests {
             .with(|slot| slot.borrow_mut().take())
             .expect("widget");
 
-        runtime.apply(vec![Message::Set("name".to_owned(), "live".into())]);
+        runtime.apply(vec![scoped(Message::Set("name".to_owned(), "live".into()))]);
 
         let tree = &mut runtime.uis[&WindowKey(0)].tree.borrow_mut();
         assert!(!tree.set_text(id, "live".to_owned()));
@@ -653,6 +676,7 @@ mod tests {
             None,
             Rc::new(RefCell::new(None)),
             Vec::new(),
+            None,
         );
         runtime
             .create(WindowKey(0), ColorScheme::Dark)
@@ -661,7 +685,7 @@ mod tests {
             .with(|slot| slot.borrow_mut().take())
             .expect("widget");
 
-        runtime.apply(vec![Message::Call("mark".to_owned(), Vec::new())]);
+        runtime.apply(vec![scoped(Message::Call("mark".to_owned(), Vec::new()))]);
 
         let tree = &mut runtime.uis[&WindowKey(0)].tree.borrow_mut();
         assert!(!tree.set_text(id, "called".to_owned()));
@@ -683,16 +707,108 @@ mod tests {
             None,
             Rc::new(RefCell::new(None)),
             Vec::new(),
+            None,
         );
 
-        runtime.apply(vec![Message::Call(
+        runtime.apply(vec![scoped(Message::Call(
             "mark".to_owned(),
             vec![Value::from("argument")],
-        )]);
+        ))]);
 
         assert_eq!(
             runtime.component.borrow().read("name"),
             Ok(Value::from("argument"))
+        );
+    }
+
+    struct Recorder(Rc<RefCell<Vec<ScopedCommand>>>);
+
+    impl CommandSink for Recorder {
+        fn send(&self, command: ScopedCommand) {
+            self.0.borrow_mut().push(command);
+        }
+    }
+
+    fn empty_view(
+        _theme: Option<TestTheme>,
+        _build: &mut Build,
+        _component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
+        Ok(Built {
+            widget: Widget::text(""),
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    fn hide_dispatch(
+        component: &mut Component,
+        name: &str,
+        _arguments: Vec<Dyn>,
+    ) -> Result<Dyn, crate::Error> {
+        if name != "hide" {
+            return Err(crate::Error::UnknownFunction(name.to_owned()));
+        }
+        crate::eval::call(component, "hideWindow", Vec::new())?;
+        Ok(Dyn::null())
+    }
+
+    #[test]
+    fn a_handle_call_targets_its_window() {
+        const HIDE_NAMES: &[&str] = &["hide"];
+        let script = Script::Generated {
+            init: noop_init,
+            dispatch: hide_dispatch,
+        };
+        let component = generated_component(HIDE_NAMES, Some(script), &[]).expect("component");
+        let commands = Rc::new(RefCell::new(Vec::new()));
+        component.borrow_mut().set_host(CommandHost {
+            commands: Rc::clone(&commands),
+            app: None,
+            windows: Rc::new(HashMap::new()),
+            theme: Rc::new(RefCell::new(None)),
+        });
+        let defs = vec![
+            WindowDef {
+                name: "Main",
+                config: WindowConfig::default(),
+                view: empty_view,
+            },
+            WindowDef {
+                name: "Other",
+                config: WindowConfig::default(),
+                view: empty_view,
+            },
+        ];
+        let recorded = Rc::new(RefCell::new(Vec::new()));
+        let mut runtime = Runtime::new(
+            defs,
+            component,
+            commands,
+            None,
+            Rc::new(RefCell::new(None)),
+            Vec::new(),
+            Some(Box::new(Recorder(Rc::clone(&recorded)))),
+        );
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("main window");
+        runtime
+            .create(WindowKey(1), ColorScheme::Dark)
+            .expect("other window");
+
+        runtime.apply(vec![ScopedMessage {
+            window: WindowKey(1),
+            message: Message::Call("hide".to_owned(), Vec::new()),
+        }]);
+
+        assert_eq!(
+            *recorded.borrow(),
+            vec![ScopedCommand {
+                window: WindowKey(1),
+                command: WindowCommand::Hide,
+            }]
         );
     }
 
@@ -707,10 +823,11 @@ mod tests {
             None,
             Rc::new(RefCell::new(None)),
             Vec::new(),
+            None,
         );
         let rows = Value::Array(vec![Value::from(1.0), Value::from(2.0)].into());
 
-        runtime.apply(vec![Message::Set("name".to_owned(), rows.clone())]);
+        runtime.apply(vec![scoped(Message::Set("name".to_owned(), rows.clone()))]);
 
         assert_eq!(runtime.component.borrow().read("name"), Ok(rows));
     }
@@ -812,6 +929,7 @@ mod tests {
             None,
             Rc::new(RefCell::new(None)),
             Vec::new(),
+            None,
         );
         runtime
             .create(WindowKey(0), ColorScheme::Dark)

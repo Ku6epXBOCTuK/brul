@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use brul_gui::WidgetEvent;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
 use winit::application::ApplicationHandler;
 use winit::data_transfer::{DataTransferSendBuilder, TypeHint};
 use winit::event::WindowEvent;
@@ -148,6 +148,10 @@ where
             .position(|(_, app)| app.window_id() == Some(window_id))
     }
 
+    fn index_of_key(&self, key: WindowKey) -> Option<usize> {
+        self.windows.iter().position(|(open, _)| *open == key)
+    }
+
     fn close(&mut self, event_loop: &dyn ActiveEventLoop, index: usize) {
         let (key, _) = self.windows.remove(index);
         info!(%key, "window closed");
@@ -188,6 +192,30 @@ where
         }
     }
 
+    fn run_step(
+        &mut self,
+        event_loop: &dyn ActiveEventLoop,
+        index: usize,
+        step_of: impl FnOnce(&mut TreeApp) -> Step,
+    ) -> bool {
+        let step = step_of(&mut self.windows[index].1);
+        match step {
+            Step::Close => {
+                self.close(event_loop, index);
+                !self.windows.is_empty()
+            }
+            Step::Open(key) => {
+                self.open(event_loop, key);
+                true
+            }
+            Step::Exit => {
+                event_loop.exit();
+                false
+            }
+            Step::Continue => true,
+        }
+    }
+
     fn run_steps(
         &mut self,
         event_loop: &dyn ActiveEventLoop,
@@ -217,9 +245,17 @@ where
     }
 
     fn pump(&mut self, event_loop: &dyn ActiveEventLoop, now: Instant) {
-        let commands = self.waker.take_commands();
-        if !commands.is_empty() && !self.run_steps(event_loop, |app| app.apply(&commands)) {
-            return;
+        for scoped in self.waker.take_commands() {
+            let Some(index) = self.index_of_key(scoped.window) else {
+                warn!(window = %scoped.window, "command for an unknown window");
+                continue;
+            };
+            let command = scoped.command;
+            if !self.run_step(event_loop, index, |app| {
+                app.apply(std::slice::from_ref(&command))
+            }) {
+                return;
+            }
         }
         if !self.run_steps(event_loop, |app| app.pump(now)) {
             return;

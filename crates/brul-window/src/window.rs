@@ -130,13 +130,19 @@ pub enum ColorScheme {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct WindowKey(pub u64);
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScopedCommand {
+    pub window: WindowKey,
+    pub command: WindowCommand,
+}
+
 /// Будит цикл событий из другого потока: [`Waker::wake`] безопасен после выхода
-/// из цикла и тогда ничего не делает. Команды, поставленные через
-/// [`Waker::command`], применяются ко всем открытым окнам.
+/// из цикла и тогда ничего не делает. [`Waker::command`] адресует команду одному
+/// окну; команда с неизвестным ключом отбрасывается циклом.
 #[derive(Clone, Debug)]
 pub struct Waker {
     proxy: EventLoopProxy,
-    commands: Arc<Mutex<Vec<WindowCommand>>>,
+    commands: Arc<Mutex<Vec<ScopedCommand>>>,
 }
 
 impl Waker {
@@ -151,15 +157,15 @@ impl Waker {
         self.proxy.wake_up();
     }
 
-    pub fn command(&self, command: WindowCommand) {
+    pub fn command(&self, window: WindowKey, command: WindowCommand) {
         self.commands
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .push(command);
+            .push(ScopedCommand { window, command });
         self.wake();
     }
 
-    pub(crate) fn take_commands(&self) -> Vec<WindowCommand> {
+    pub(crate) fn take_commands(&self) -> Vec<ScopedCommand> {
         let mut commands = self.commands.lock().unwrap_or_else(PoisonError::into_inner);
         std::mem::take(&mut *commands)
     }

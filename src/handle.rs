@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex, PoisonError};
 
-use brul_window::Waker;
+use brul_window::{Waker, WindowKey};
 
 use crate::Value;
 
@@ -28,17 +28,39 @@ impl std::fmt::Debug for Message {
     }
 }
 
-/// Путь из фонового потока в DSL: `Handle` клонируется, переживает поток и
-/// безопасен после выхода из цикла событий.
+#[derive(Debug)]
+pub struct ScopedMessage {
+    pub(crate) window: WindowKey,
+    pub(crate) message: Message,
+}
+
+/// Путь из фонового потока в DSL: `Handle` адресован окну, клонируется,
+/// переживает поток и безопасен после выхода из цикла событий.
 #[derive(Clone)]
 pub struct Handle {
-    queue: Arc<Mutex<Vec<Message>>>,
+    queue: Arc<Mutex<Vec<ScopedMessage>>>,
     waker: Waker,
+    window: WindowKey,
 }
 
 impl Handle {
-    pub(crate) fn new(queue: Arc<Mutex<Vec<Message>>>, waker: Waker) -> Self {
-        Self { queue, waker }
+    pub(crate) fn new(
+        queue: Arc<Mutex<Vec<ScopedMessage>>>,
+        waker: Waker,
+        window: WindowKey,
+    ) -> Self {
+        Self {
+            queue,
+            waker,
+            window,
+        }
+    }
+
+    pub fn window(&self, window: WindowKey) -> Self {
+        Self {
+            window,
+            ..self.clone()
+        }
     }
 
     pub fn set(&self, name: &str, value: impl Into<Value>) {
@@ -62,12 +84,15 @@ impl Handle {
         self.queue
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .push(message);
+            .push(ScopedMessage {
+                window: self.window,
+                message,
+            });
         self.waker.wake();
     }
 }
 
-pub(crate) fn take(queue: &Mutex<Vec<Message>>) -> Vec<Message> {
+pub(crate) fn take(queue: &Mutex<Vec<ScopedMessage>>) -> Vec<ScopedMessage> {
     let mut queue = queue.lock().unwrap_or_else(PoisonError::into_inner);
     std::mem::take(&mut queue)
 }
@@ -76,22 +101,28 @@ pub(crate) fn take(queue: &Mutex<Vec<Message>>) -> Vec<Message> {
 mod tests {
     use std::sync::Mutex;
 
-    use super::{Message, take};
+    use brul_window::WindowKey;
+
+    use super::{Message, ScopedMessage, take};
 
     #[test]
     fn a_message_crosses_threads() {
         fn assert_send<T: Send>() {}
-        assert_send::<Message>();
+        assert_send::<ScopedMessage>();
     }
 
     #[test]
     fn taking_drains_the_queue() {
-        let queue = Mutex::new(vec![Message::Call("refresh".to_owned(), Vec::new())]);
+        let queue = Mutex::new(vec![ScopedMessage {
+            window: WindowKey(1),
+            message: Message::Call("refresh".to_owned(), Vec::new()),
+        }]);
 
         let messages = take(&queue);
         assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].window, WindowKey(1));
         assert!(
-            matches!(&messages[0], Message::Call(name, arguments) if name == "refresh" && arguments.is_empty())
+            matches!(&messages[0].message, Message::Call(name, arguments) if name == "refresh" && arguments.is_empty())
         );
         assert!(take(&queue).is_empty());
     }

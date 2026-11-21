@@ -33,7 +33,7 @@ pub use brul_style as style;
 pub use brul_syntax::ast;
 pub use brul_syntax::markup::PropType;
 pub use brul_window::perf;
-pub use brul_window::{Backend, UnknownBackend, WindowConfig, WindowPosition};
+pub use brul_window::{Backend, UnknownBackend, WindowConfig, WindowKey, WindowPosition};
 pub use each::RowMatcher;
 pub use handle::Handle;
 pub use run::{WindowDef, run_generated, run_generated_with};
