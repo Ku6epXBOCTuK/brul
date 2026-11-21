@@ -95,7 +95,7 @@ fn demo_script_fn_tick(component: &mut brul::Component) -> Result<(), brul::Erro
 }
 #[allow(unused_mut, unused_variables)]
 fn demo_script_fn_start(component: &mut brul::Component) -> Result<(), brul::Error> {
-    { let __brul_interval = 100.0_f64; component.every(__brul_interval, "tick")?; };
+    brul::Dyn::from({ let __brul_interval = 100.0_f64; component.every(__brul_interval, "tick")? });
     Ok(())
 }
 #[allow(unused_variables)]

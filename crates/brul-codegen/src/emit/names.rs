@@ -205,9 +205,9 @@ pub(super) fn expression<'a>(expr: &'a Expr, names: &mut Names<'a>) {
 
 fn call<'a>(target: &'a Expr, args: &'a [Expr], names: &mut Names<'a>) {
     if let ExprKind::Ident(name) = &target.kind {
-        let every = name == "every";
+        let timer = name == "every" || name == "after";
         for (index, argument) in args.iter().enumerate() {
-            if every && index == 1 {
+            if timer && index == 1 {
                 continue;
             }
             expression(argument, names);

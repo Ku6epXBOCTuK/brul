@@ -10,7 +10,7 @@ use winit::event_loop::ControlFlow;
 
 use crate::input::Input;
 use crate::surface::{Renderer, Surface, TestRenderer};
-use crate::window::{ColorScheme, WindowCommand, WindowConfig, WindowKey};
+use crate::window::{ColorScheme, TimerCommand, WindowCommand, WindowConfig, WindowKey};
 
 use super::{EventHandler, Step, Timer, TreeApp, wakeup_at};
 
@@ -154,11 +154,13 @@ fn the_initial_timers_are_started_at_launch() {
         Rc::new(Cell::new(None)),
         vec![
             WindowCommand::Exit,
-            WindowCommand::Every {
-                interval: Duration::from_millis(250),
-                function: "tick".into(),
+            WindowCommand::Timer(TimerCommand::Start {
+                id: brul_ident::TimerId::new(1),
                 owner: TimerOwner::new(0),
-            },
+                function: "tick".into(),
+                interval: Duration::from_millis(250),
+                kind: brul_ident::TimerKind::Every,
+            }),
         ],
     );
 
@@ -211,6 +213,8 @@ fn a_window_deadline_is_its_next_timer() {
         interval: Duration::from_secs(1),
         owner: TimerOwner::new(0),
         function: "tick".into(),
+        id: brul_ident::TimerId::new(1),
+        kind: brul_ident::TimerKind::Every,
     });
 
     assert_eq!(app.deadline(), Some(now));
@@ -339,11 +343,13 @@ fn a_focus_command_takes_the_focus() {
 #[test]
 fn a_timer_command_is_kept() {
     let surface = FakeSurface::new(1.0);
-    let mut app = tree_app(commands(vec![WindowCommand::Every {
-        interval: Duration::from_millis(100),
-        function: "tick".into(),
+    let mut app = tree_app(commands(vec![WindowCommand::Timer(TimerCommand::Start {
+        id: brul_ident::TimerId::new(1),
         owner: TimerOwner::new(0),
-    }]));
+        function: "tick".into(),
+        interval: Duration::from_millis(100),
+        kind: brul_ident::TimerKind::Every,
+    })]));
     let widget = Widget::text("x").id();
 
     app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);

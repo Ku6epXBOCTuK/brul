@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use brul_ident::{TimerId, TimerKind};
 use brul_script::{Component, Error, Host, Value, eval};
 use brul_syntax::parser::parse_expression;
 
@@ -174,10 +175,12 @@ fn every_registers_function_name_with_a_host() {
             &mut component,
             &parse_expression("every(3000, refresh)").unwrap()
         ),
-        Ok(Value::Null)
+        Ok(Value::Timer(TimerId::new(0)))
     );
     let timers = component.take_timers();
     assert_eq!(timers.len(), 1);
+    assert_eq!(timers[0].id, TimerId::new(0));
+    assert_eq!(timers[0].kind, TimerKind::Every);
     assert_eq!(timers[0].interval_ms, 3000.0);
     assert_eq!(timers[0].function.as_str(), "refresh");
 }
@@ -190,10 +193,12 @@ fn every_registers_function_name_without_a_host() {
             &mut component,
             &parse_expression("every(250, tick)").unwrap()
         ),
-        Ok(Value::Null)
+        Ok(Value::Timer(TimerId::new(0)))
     );
     let timers = component.take_timers();
     assert_eq!(timers.len(), 1);
+    assert_eq!(timers[0].id, TimerId::new(0));
+    assert_eq!(timers[0].kind, TimerKind::Every);
     assert_eq!(timers[0].interval_ms, 250.0);
     assert_eq!(timers[0].function.as_str(), "tick");
 }
@@ -223,6 +228,37 @@ fn every_requires_number_and_function_name() {
             expected: "two",
         }
     );
+}
+
+#[test]
+fn after_registers_a_one_shot_timer() {
+    let mut component = Component::new();
+    assert_eq!(
+        eval(
+            &mut component,
+            &parse_expression("after(100, tick)").unwrap()
+        ),
+        Ok(Value::Timer(TimerId::new(0)))
+    );
+    let timers = component.take_timers();
+    assert_eq!(timers.len(), 1);
+    assert_eq!(timers[0].id, TimerId::new(0));
+    assert_eq!(timers[0].kind, TimerKind::Once);
+    assert_eq!(timers[0].interval_ms, 100.0);
+}
+
+#[test]
+fn cancel_queues_the_timer_id() {
+    let mut component = Component::new();
+    assert_eq!(
+        eval(
+            &mut component,
+            &parse_expression("cancel(after(100, tick))").unwrap()
+        ),
+        Ok(Value::Null)
+    );
+    assert_eq!(component.take_cancels(), vec![TimerId::new(0)]);
+    assert_eq!(component.take_timers().len(), 1);
 }
 
 #[test]

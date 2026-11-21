@@ -26,7 +26,7 @@ mod tests;
 
 use timer::earliest;
 
-pub(crate) use timer::{Timer, due, wakeup_at};
+pub(crate) use timer::{Timer, cancel, due, wakeup_at};
 
 type EventHandler = Box<dyn FnMut(&[WidgetEvent]) -> Vec<WindowCommand>>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;

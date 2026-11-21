@@ -1,3 +1,4 @@
+use brul_ident::{TimerId, TimerKind};
 use brul_syntax::ast::{AssignOp, BinaryOp, Expr, ExprKind, TemplatePart, UnaryOp};
 
 use crate::component::Component;
@@ -70,7 +71,13 @@ fn eval_call(component: &mut Component, target: &Expr, arguments: &[Expr]) -> Re
         return Err(Error::Unsupported("method call"));
     };
     if name == "every" {
-        return call_every(component, arguments);
+        return call_timer(component, arguments, "every", TimerKind::Every);
+    }
+    if name == "after" {
+        return call_timer(component, arguments, "after", TimerKind::Once);
+    }
+    if name == "cancel" {
+        return call_cancel(component, arguments);
     }
     let mut values = Vec::with_capacity(arguments.len());
     for argument in arguments {
@@ -79,25 +86,46 @@ fn eval_call(component: &mut Component, target: &Expr, arguments: &[Expr]) -> Re
     call(component, name, values)
 }
 
-fn call_every(component: &mut Component, arguments: &[Expr]) -> Result<Value, Error> {
+fn call_timer(
+    component: &mut Component,
+    arguments: &[Expr],
+    name: &'static str,
+    kind: TimerKind,
+) -> Result<Value, Error> {
     let [interval, function] = arguments else {
         return Err(Error::Arity {
-            name: "every".to_owned(),
+            name: name.to_owned(),
             expected: "two",
         });
     };
     let interval = eval(component, interval)?;
     let Value::Number(interval) = interval else {
-        return Err(argument_error("every", "Number", &interval));
+        return Err(argument_error(name, "Number", &interval));
     };
     let ExprKind::Ident(function) = &function.kind else {
         return Err(Error::Argument {
-            name: "every",
+            name,
             expected: "function name",
             found: function.kind.name(),
         });
     };
-    component.every(interval, function.as_str())?;
+    let id = match kind {
+        TimerKind::Once => component.after(interval, function.as_str())?,
+        TimerKind::Every => component.every(interval, function.as_str())?,
+    };
+    Ok(Value::from(id))
+}
+
+fn call_cancel(component: &mut Component, arguments: &[Expr]) -> Result<Value, Error> {
+    let [timer] = arguments else {
+        return Err(Error::Arity {
+            name: "cancel".to_owned(),
+            expected: "one",
+        });
+    };
+    let timer = eval(component, timer)?;
+    let timer = TimerId::try_from(&timer).map_err(|_| argument_error("cancel", "Timer", &timer))?;
+    component.cancel(timer)?;
     Ok(Value::Null)
 }
 

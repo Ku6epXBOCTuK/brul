@@ -14,6 +14,8 @@ pub enum BuiltinKind {
     NumberFn,
     Len,
     Every,
+    After,
+    Cancel,
 }
 
 #[derive(Debug, Clone)]
@@ -120,8 +122,20 @@ pub const BUILTINS: &[Builtin] = &[
     Builtin {
         name: "every",
         arguments: &[Argument::Value(Type::Number), Argument::Function],
-        result: Type::Void,
+        result: Type::Timer,
         kind: BuiltinKind::Every,
+    },
+    Builtin {
+        name: "after",
+        arguments: &[Argument::Value(Type::Number), Argument::Function],
+        result: Type::Timer,
+        kind: BuiltinKind::After,
+    },
+    Builtin {
+        name: "cancel",
+        arguments: &[Argument::Value(Type::Timer)],
+        result: Type::Void,
+        kind: BuiltinKind::Cancel,
     },
 ];
 

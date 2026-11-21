@@ -1,0 +1,11 @@
+<script>
+    function tick(): Void { }
+    function start(): Void {
+        let t: Timer = after(100, tick);
+        cancel(t);
+    }
+</script>
+
+<markup>
+window Demo (title: "demo") { Container { } }
+</markup>

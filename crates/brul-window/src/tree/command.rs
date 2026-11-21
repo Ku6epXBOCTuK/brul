@@ -1,5 +1,5 @@
 use crate::surface::Surface;
-use crate::window::WindowCommand;
+use crate::window::{TimerCommand, WindowCommand};
 
 use super::{Step, Timer, TreeApp};
 
@@ -24,13 +24,18 @@ impl TreeApp {
                     surface.set_visible(false);
                 }
                 WindowCommand::Focus => surface.focus(),
-                WindowCommand::Every {
-                    interval,
-                    function,
+                WindowCommand::Timer(TimerCommand::Start {
+                    id,
                     owner,
-                } => {
+                    function,
+                    interval,
+                    kind,
+                }) => {
                     self.timers
-                        .push(Timer::new(*interval, *owner, function.clone()));
+                        .push(Timer::new(*id, *interval, *owner, function.clone(), *kind));
+                }
+                WindowCommand::Timer(TimerCommand::Cancel { id, owner }) => {
+                    super::cancel(&mut self.timers, *owner, *id);
                 }
                 WindowCommand::SetTheme(_) => {}
                 WindowCommand::AlwaysOnTop(on_top) => surface.set_always_on_top(*on_top),

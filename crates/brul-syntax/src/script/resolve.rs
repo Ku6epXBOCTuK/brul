@@ -199,9 +199,9 @@ fn check_callee(target: &Expr, names: &Names<'_>) -> Result<(), Error> {
 }
 
 fn check_arguments(target: &Expr, args: &[Expr], names: &Names<'_>) -> Result<(), Error> {
-    let every = is_every(target);
+    let timer = is_timer_call(target);
     for (index, argument) in args.iter().enumerate() {
-        check_argument(every && index == 1, argument, names)?;
+        check_argument(timer && index == 1, argument, names)?;
     }
     Ok(())
 }
@@ -217,8 +217,8 @@ fn check_argument(
     check_expression(argument, names)
 }
 
-fn is_every(target: &Expr) -> bool {
-    matches!(&target.kind, ExprKind::Ident(name) if name == "every")
+fn is_timer_call(target: &Expr) -> bool {
+    matches!(&target.kind, ExprKind::Ident(name) if name == "every" || name == "after")
 }
 
 fn check_variable(name: &str, position: Position, names: &Names<'_>) -> Result<(), Error> {

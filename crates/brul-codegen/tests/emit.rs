@@ -338,6 +338,16 @@ fn emits_value_calls() {
 }
 
 #[test]
+fn emits_after_and_cancel_calls() {
+    let dir = fixture("emits_typed_after_and_cancel_calls");
+    let expected = std::fs::read_to_string(dir.join("expected.rs")).unwrap();
+    assert_eq!(
+        generate("emits_typed_after_and_cancel_calls").unwrap(),
+        expected
+    );
+}
+
+#[test]
 fn emits_value_assignments() {
     let source = operated("a.b = 1");
     assert!(

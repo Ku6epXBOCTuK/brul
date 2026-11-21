@@ -172,6 +172,7 @@ impl Scopes {
             Type::String => "String",
             Type::Bool => "bool",
             Type::Null => "()",
+            Type::Timer => "brul::TimerId",
             _ => "brul::Dyn",
         }
     }

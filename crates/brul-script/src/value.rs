@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use brul_ident::TimerId;
 use brul_syntax::TypeName;
 
 use crate::{Error, Items};
@@ -15,6 +16,7 @@ pub enum Value {
     Object(Arc<Vec<(String, Value)>>),
     Image(Arc<str>),
     ImageBytes(Arc<[u8]>),
+    Timer(TimerId),
 }
 
 impl Hash for Value {
@@ -29,6 +31,7 @@ impl Hash for Value {
             Value::Object(entries) => entries.hash(state),
             Value::Image(path) => path.as_ref().hash(state),
             Value::ImageBytes(bytes) => bytes.as_ref().hash(state),
+            Value::Timer(id) => id.hash(state),
         }
     }
 }
@@ -43,6 +46,7 @@ impl TypeName for Value {
             Value::Array(_) => "Array",
             Value::Object(_) => "Object",
             Value::Image(_) | Value::ImageBytes(_) => "Image",
+            Value::Timer(_) => "Timer",
         }
     }
 }
@@ -62,6 +66,13 @@ impl Value {
     pub fn as_image(&self) -> Option<&str> {
         match self {
             Value::Image(path) => Some(path.as_ref()),
+            _ => None,
+        }
+    }
+
+    pub fn as_timer(&self) -> Option<TimerId> {
+        match self {
+            Value::Timer(id) => Some(*id),
             _ => None,
         }
     }
@@ -131,6 +142,12 @@ impl From<bool> for Value {
     }
 }
 
+impl From<TimerId> for Value {
+    fn from(id: TimerId) -> Self {
+        Self::Timer(id)
+    }
+}
+
 impl<'a> TryFrom<&'a Value> for &'a str {
     type Error = Error;
 
@@ -169,6 +186,16 @@ impl TryFrom<&Value> for bool {
         value
             .as_flag()
             .ok_or_else(|| Error::conversion("Bool", value))
+    }
+}
+
+impl TryFrom<&Value> for TimerId {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        value
+            .as_timer()
+            .ok_or_else(|| Error::conversion("Timer", value))
     }
 }
 

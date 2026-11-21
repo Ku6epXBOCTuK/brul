@@ -10,7 +10,7 @@ pub mod names;
 pub mod scope;
 pub mod value;
 
-pub use brul_ident::{FunctionName, TimerOwner};
+pub use brul_ident::{FunctionName, TimerId, TimerKind, TimerOwner};
 pub use component::{Component, TimerRequest};
 pub use dynamic::{Dyn, items};
 pub use environment::Environment;

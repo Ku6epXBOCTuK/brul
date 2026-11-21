@@ -8,7 +8,7 @@ use std::time::Duration;
 use brul_gui::{Direction, Size, TextEngine, Texture, Widget};
 use brul_syntax::markup::PropType;
 use brul_syntax::script::{BUILTINS, BuiltinKind};
-use brul_window::{WindowCommand, WindowKey};
+use brul_window::{TimerCommand, WindowCommand, WindowKey};
 
 use crate::run::generated_built;
 use crate::{Binding, BindingTarget, Component, Dyn, Error, HandlerEvent, Script};
@@ -974,11 +974,13 @@ fn every_before_assembly_becomes_a_window_command() {
     let (_, ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
     assert_eq!(
         *ui.commands.borrow(),
-        vec![WindowCommand::Every {
-            interval: Duration::from_secs_f64(0.5),
-            function: "tick".into(),
+        vec![WindowCommand::Timer(TimerCommand::Start {
+            id: brul_ident::TimerId::new(0),
             owner: TimerOwner::new(0),
-        }]
+            function: "tick".into(),
+            interval: Duration::from_secs_f64(0.5),
+            kind: brul_ident::TimerKind::Every,
+        })]
     );
 }
 
@@ -988,11 +990,13 @@ fn every_from_a_handler_is_scheduled_without_an_app_host() {
     let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
     assert_eq!(
         ui.dispatch(&[WidgetEvent::Timer(TimerOwner::new(0), "schedule".into())]),
-        vec![WindowCommand::Every {
-            interval: Duration::from_secs(1),
-            function: "tick".into(),
+        vec![WindowCommand::Timer(TimerCommand::Start {
+            id: brul_ident::TimerId::new(0),
             owner: TimerOwner::new(0),
-        }]
+            function: "tick".into(),
+            interval: Duration::from_secs(1),
+            kind: brul_ident::TimerKind::Every,
+        })]
     );
 }
 
@@ -1139,7 +1143,8 @@ fn child_timer_view(
 fn schedule_child_tick(component: &mut Component) -> Result<(), Error> {
     component.declare("ran", Value::Bool(false), false)?;
     component.register_event_call("child_tick", set_ran);
-    component.every(500.0, "child_tick")
+    component.every(500.0, "child_tick")?;
+    Ok(())
 }
 
 fn nested_timer_view(
@@ -1193,11 +1198,13 @@ fn a_timer_from_a_nested_component_runs_in_its_component() {
     );
     assert_eq!(
         *commands.borrow(),
-        vec![WindowCommand::Every {
-            interval: Duration::from_secs_f64(0.5),
-            function: "child_tick".into(),
+        vec![WindowCommand::Timer(TimerCommand::Start {
+            id: brul_ident::TimerId::new(0),
             owner: TimerOwner::new(1),
-        }]
+            function: "child_tick".into(),
+            interval: Duration::from_secs_f64(0.5),
+            kind: brul_ident::TimerKind::Every,
+        })]
     );
     let child = Rc::clone(&ui.components[1].1);
     ui.dispatch(&[WidgetEvent::Timer(TimerOwner::new(1), "child_tick".into())]);

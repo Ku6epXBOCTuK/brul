@@ -2,7 +2,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 
-use brul_ident::FunctionName;
+use brul_ident::{FunctionName, TimerId, TimerKind};
 use brul_reactive::Signal;
 use brul_syntax::ast::Position;
 
@@ -36,7 +36,9 @@ impl Hasher for Fnv {
 type Index = HashMap<&'static str, VariableId, BuildHasherDefault<Fnv>>;
 
 pub struct TimerRequest {
+    pub id: TimerId,
     pub interval_ms: f64,
+    pub kind: TimerKind,
     pub function: FunctionName,
 }
 
@@ -50,6 +52,8 @@ pub struct Component {
     state: Option<Box<dyn Any>>,
     host: Option<Box<dyn AnyHost>>,
     pending_timers: Vec<TimerRequest>,
+    pending_cancels: Vec<TimerId>,
+    next_timer: u64,
     event_calls: HashMap<FunctionName, crate::EventCall>,
     scope: Scope,
     // NOTE: environment frames and host functions are not signals, so their
@@ -69,6 +73,8 @@ impl Default for Component {
             state: None,
             host: None,
             pending_timers: Vec::new(),
+            pending_cancels: Vec::new(),
+            next_timer: 0,
             event_calls: HashMap::new(),
             scope: Scope::root(),
             external: Signal::new(0),
@@ -158,20 +164,53 @@ impl Component {
         self.external_changed();
     }
 
+    fn allocate_timer(&mut self) -> TimerId {
+        let id = TimerId::new(self.next_timer);
+        self.next_timer += 1;
+        id
+    }
+
     pub fn every(
         &mut self,
         interval_ms: f64,
         function: impl Into<FunctionName>,
-    ) -> Result<(), Error> {
+    ) -> Result<TimerId, Error> {
+        let id = self.allocate_timer();
         self.pending_timers.push(TimerRequest {
+            id,
             interval_ms,
+            kind: TimerKind::Every,
             function: function.into(),
         });
+        Ok(id)
+    }
+
+    pub fn after(
+        &mut self,
+        interval_ms: f64,
+        function: impl Into<FunctionName>,
+    ) -> Result<TimerId, Error> {
+        let id = self.allocate_timer();
+        self.pending_timers.push(TimerRequest {
+            id,
+            interval_ms,
+            kind: TimerKind::Once,
+            function: function.into(),
+        });
+        Ok(id)
+    }
+
+    pub fn cancel(&mut self, id: TimerId) -> Result<(), Error> {
+        self.pending_cancels.push(id);
         Ok(())
     }
 
     pub fn take_timers(&mut self) -> Vec<TimerRequest> {
         std::mem::take(&mut self.pending_timers)
+    }
+
+    pub fn take_cancels(&mut self) -> Vec<TimerId> {
+        std::mem::take(&mut self.pending_cancels)
     }
 
     pub fn set_scope(&mut self, scope: Scope) {

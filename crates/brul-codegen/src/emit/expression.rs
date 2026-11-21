@@ -75,6 +75,7 @@ pub fn typed_closure(
         Type::Number => "f64",
         Type::String => "String",
         Type::Bool => "bool",
+        Type::Timer => "brul::TimerId",
         _ => "brul::Dyn",
     };
     let body = match typed(value, names, state, props, &scopes)? {
@@ -103,6 +104,7 @@ pub(super) fn wrap_typed(code: String, ty: &Type) -> String {
         Type::Number => format!("brul::Dyn::num({code})"),
         Type::String => format!("brul::Dyn::text({code})"),
         Type::Bool => format!("brul::Dyn::flag({code})"),
+        Type::Timer => format!("brul::Dyn::from({code})"),
         Type::Null | Type::Void => "brul::Dyn::null()".to_owned(),
         _ => code,
     }
@@ -110,7 +112,7 @@ pub(super) fn wrap_typed(code: String, ty: &Type) -> String {
 
 pub(super) fn convert(code: &str, ty: &Type) -> String {
     match ty {
-        Type::Number | Type::String | Type::Bool => format!("(&{code}).try_into()?"),
+        Type::Number | Type::String | Type::Bool | Type::Timer => format!("(&{code}).try_into()?"),
         Type::Null => format!("({code}).unit()?"),
         Type::Object | Type::Image | Type::Array(_) | Type::Void => code.to_owned(),
     }
@@ -385,7 +387,25 @@ fn builtin_call(
             ),
             Type::Number,
         ))),
-        BuiltinKind::Every => every_typed(arguments, names, state, props, scopes),
+        BuiltinKind::Every => timer_typed(
+            "every",
+            "component.every",
+            arguments,
+            names,
+            state,
+            props,
+            scopes,
+        ),
+        BuiltinKind::After => timer_typed(
+            "after",
+            "component.after",
+            arguments,
+            names,
+            state,
+            props,
+            scopes,
+        ),
+        BuiltinKind::Cancel => cancel_typed(arguments, names, state, props, scopes),
     }
 }
 
@@ -402,7 +422,9 @@ fn value_argument(
     }
 }
 
-fn every_typed(
+fn timer_typed(
+    name: &'static str,
+    method: &'static str,
     arguments: &[Expr],
     names: &Names<'_>,
     state: &State,
@@ -421,32 +443,54 @@ fn every_typed(
             operation_in(interval, names, state, props, scopes)?
         ),
     };
-    let ExprKind::Ident(name) = &function.kind else {
+    let ExprKind::Ident(callee) = &function.kind else {
         return Err(crate::error_at(
             function.position,
-            "every expects a function name",
+            format!("{name} expects a function name"),
         ));
     };
-    let arity = if let Some(command) = state.command(name) {
+    let arity = if let Some(command) = state.command(callee) {
         command.params.len()
-    } else if let Some(signature) = scopes.function(name) {
+    } else if let Some(signature) = scopes.function(callee) {
         signature.params.len()
     } else {
         return Err(crate::error_at(
             function.position,
-            format!("function '{name}' is not defined"),
+            format!("function '{callee}' is not defined"),
         ));
     };
     if arity != 0 {
         return Err(crate::error_at(
             function.position,
-            format!("every function '{name}' takes no arguments"),
+            format!("{name} function '{callee}' takes no arguments"),
         ));
     }
     Ok(Some((
         format!(
-            "{{ let __brul_interval = {interval_code}; component.every(__brul_interval, {name:?})?; }}"
+            "{{ let __brul_interval = {interval_code}; {method}(__brul_interval, {callee:?})? }}"
         ),
+        Type::Timer,
+    )))
+}
+
+fn cancel_typed(
+    arguments: &[Expr],
+    names: &Names<'_>,
+    state: &State,
+    props: &HashMap<String, Type>,
+    scopes: &Scopes,
+) -> Result<Option<(String, Type)>, Error> {
+    let timer = &arguments[0];
+    let code = match typed(timer, names, state, props, scopes)? {
+        Some((code, Type::Timer)) => code,
+        Some((_, ty)) => return Err(crate::arg_mismatch(timer.position, &Type::Timer, &ty)),
+        None => format!(
+            "(&{}).try_into()?",
+            operation_in(timer, names, state, props, scopes)?
+        ),
+    };
+    Ok(Some((
+        format!("{{ let __brul_timer = {code}; component.cancel(__brul_timer)?; }}"),
         Type::Void,
     )))
 }

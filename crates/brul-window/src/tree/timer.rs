@@ -1,41 +1,59 @@
 use std::time::{Duration, Instant};
 
 use brul_gui::WidgetEvent;
-use brul_ident::{FunctionName, TimerOwner};
+use brul_ident::{FunctionName, TimerId, TimerKind, TimerOwner};
 use winit::event_loop::ControlFlow;
 
-use crate::window::WindowCommand;
+use crate::window::{TimerCommand, WindowCommand};
 
 pub(crate) struct Timer {
     pub(super) next: Instant,
     pub(super) interval: Duration,
     pub(super) owner: TimerOwner,
     pub(super) function: FunctionName,
+    pub(super) id: TimerId,
+    pub(super) kind: TimerKind,
 }
 
 impl Timer {
-    pub(super) fn new(interval: Duration, owner: TimerOwner, function: FunctionName) -> Self {
+    pub(super) fn new(
+        id: TimerId,
+        interval: Duration,
+        owner: TimerOwner,
+        function: FunctionName,
+        kind: TimerKind,
+    ) -> Self {
         Self {
             next: Instant::now() + interval,
             interval,
             owner,
             function,
+            id,
+            kind,
         }
     }
 }
 
-pub(crate) fn due(timers: &mut [Timer], now: Instant) -> Vec<WidgetEvent> {
+pub(crate) fn due(timers: &mut Vec<Timer>, now: Instant) -> Vec<WidgetEvent> {
     let mut events = Vec::new();
-    for timer in timers {
+    timers.retain_mut(|timer| {
         if timer.next > now {
-            continue;
+            return true;
         }
         events.push(WidgetEvent::Timer(timer.owner, timer.function.clone()));
+        if timer.kind == TimerKind::Once {
+            return false;
+        }
         while timer.next <= now {
             timer.next += timer.interval;
         }
-    }
+        true
+    });
     events
+}
+
+pub(crate) fn cancel(timers: &mut Vec<Timer>, owner: TimerOwner, id: TimerId) {
+    timers.retain(|timer| timer.owner != owner || timer.id != id);
 }
 
 #[cfg(test)]
@@ -63,12 +81,17 @@ pub(super) fn split_initial(commands: Vec<WindowCommand>) -> (Vec<Timer>, Vec<Wi
     let mut rest = Vec::new();
     for command in commands {
         match command {
-            WindowCommand::Every {
-                interval,
-                function,
+            WindowCommand::Timer(TimerCommand::Start {
+                id,
                 owner,
-            } => {
-                timers.push(Timer::new(interval, owner, function));
+                function,
+                interval,
+                kind,
+            }) => {
+                timers.push(Timer::new(id, interval, owner, function, kind));
+            }
+            WindowCommand::Timer(TimerCommand::Cancel { id, owner }) => {
+                cancel(&mut timers, owner, id);
             }
             command => rest.push(command),
         }
@@ -81,14 +104,20 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use brul_gui::WidgetEvent;
-    use brul_ident::TimerOwner;
+    use brul_ident::{TimerId, TimerKind, TimerOwner};
     use winit::event_loop::ControlFlow;
 
     use super::{Timer, due, wakeup};
 
     #[test]
     fn a_new_timer_waits_for_its_interval() {
-        let timer = Timer::new(Duration::from_secs(5), TimerOwner::new(0), "later".into());
+        let timer = Timer::new(
+            TimerId::new(1),
+            Duration::from_secs(5),
+            TimerOwner::new(0),
+            "later".into(),
+            TimerKind::Every,
+        );
         assert!(timer.next > Instant::now());
         assert_eq!(timer.interval, Duration::from_secs(5));
     }
@@ -101,6 +130,8 @@ mod tests {
             interval: Duration::from_millis(10),
             owner: TimerOwner::new(0),
             function: "tick".into(),
+            id: TimerId::new(1),
+            kind: TimerKind::Every,
         }];
 
         let events = due(&mut timers, now);
@@ -119,6 +150,8 @@ mod tests {
             interval: Duration::from_millis(10),
             owner: TimerOwner::new(0),
             function: "tick".into(),
+            id: TimerId::new(1),
+            kind: TimerKind::Every,
         }];
 
         let events = due(&mut timers, now);
@@ -136,6 +169,8 @@ mod tests {
             interval: Duration::from_secs(1),
             owner: TimerOwner::new(0),
             function: "late".into(),
+            id: TimerId::new(1),
+            kind: TimerKind::Every,
         }];
         assert!(due(&mut timers, now).is_empty());
     }
@@ -151,12 +186,16 @@ mod tests {
                 interval: Duration::from_secs(1),
                 owner: TimerOwner::new(0),
                 function: "far".into(),
+                id: TimerId::new(1),
+                kind: TimerKind::Every,
             },
             Timer {
                 next: now + Duration::from_secs(1),
                 interval: Duration::from_secs(1),
                 owner: TimerOwner::new(0),
                 function: "near".into(),
+                id: TimerId::new(2),
+                kind: TimerKind::Every,
             },
         ];
         assert_eq!(
@@ -180,6 +219,8 @@ mod tests {
             interval: Duration::from_secs(1),
             owner: TimerOwner::new(0),
             function: "late".into(),
+            id: TimerId::new(1),
+            kind: TimerKind::Every,
         }];
 
         assert_eq!(wakeup(&timers, Some(frame)), ControlFlow::WaitUntil(frame));

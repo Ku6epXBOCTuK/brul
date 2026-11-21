@@ -58,6 +58,21 @@ impl TimerOwner {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TimerId(u64);
+
+impl TimerId {
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimerKind {
+    Once,
+    Every,
+}
+
 #[cfg(test)]
 mod tests {
     use super::FunctionName;

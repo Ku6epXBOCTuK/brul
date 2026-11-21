@@ -36,7 +36,7 @@ macro_rules! types {
 }
 
 types! {
-    Bool, Number, String, Image, Null, Object, Void;
+    Bool, Number, String, Image, Null, Object, Timer, Void;
     Array(Box<Type>) => "Array",
 }
 
@@ -62,6 +62,7 @@ mod tests {
             Type::Image,
             Type::Null,
             Type::Object,
+            Type::Timer,
             Type::Void,
             Type::Array(Box::new(Type::Void)),
         ]
@@ -84,6 +85,7 @@ mod tests {
             Type::Image,
             Type::Null,
             Type::Object,
+            Type::Timer,
             Type::Void,
         ];
         for ty in simple {

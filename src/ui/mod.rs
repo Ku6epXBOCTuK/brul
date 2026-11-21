@@ -6,7 +6,7 @@ use std::time::Duration;
 use brul_codegen::runtime::{self, accepts_prop};
 use brul_gui::{TimerOwner, WidgetEvent, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
-use brul_window::WindowCommand;
+use brul_window::{TimerCommand, WindowCommand};
 
 #[cfg(test)]
 use crate::Host;
@@ -34,11 +34,13 @@ pub(crate) struct AssemblyParts {
 
 fn timer_command(request: TimerRequest, owner: TimerOwner) -> Option<WindowCommand> {
     if request.interval_ms.is_finite() && request.interval_ms > 0.0 {
-        Some(WindowCommand::Every {
-            interval: Duration::from_secs_f64(request.interval_ms / 1000.0),
-            function: request.function,
+        Some(WindowCommand::Timer(TimerCommand::Start {
+            id: request.id,
             owner,
-        })
+            function: request.function,
+            interval: Duration::from_secs_f64(request.interval_ms / 1000.0),
+            kind: request.kind,
+        }))
     } else {
         tracing::error!(
             interval_ms = request.interval_ms,
@@ -64,11 +66,19 @@ fn schedule_timers(
     commands: &Rc<RefCell<Vec<WindowCommand>>>,
 ) {
     for (owner, component) in components {
-        let timers = component.borrow_mut().take_timers();
+        let (timers, cancels) = {
+            let mut component = component.borrow_mut();
+            (component.take_timers(), component.take_cancels())
+        };
         commands.borrow_mut().extend(
             timers
                 .into_iter()
                 .filter_map(|request| timer_command(request, *owner)),
+        );
+        commands.borrow_mut().extend(
+            cancels
+                .into_iter()
+                .map(|id| WindowCommand::Timer(TimerCommand::Cancel { id, owner: *owner })),
         );
     }
 }

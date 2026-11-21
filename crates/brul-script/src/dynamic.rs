@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use brul_ident::TimerId;
 use brul_syntax::TypeName;
 use brul_syntax::ast::{BinaryOp, UnaryOp};
 
@@ -166,6 +167,12 @@ impl From<bool> for Dyn {
     }
 }
 
+impl From<TimerId> for Dyn {
+    fn from(id: TimerId) -> Self {
+        Self(Value::from(id))
+    }
+}
+
 impl From<()> for Dyn {
     fn from(_: ()) -> Self {
         Self::null()
@@ -193,6 +200,14 @@ impl TryFrom<&Dyn> for bool {
 
     fn try_from(value: &Dyn) -> Result<Self, Self::Error> {
         bool::try_from(&value.0)
+    }
+}
+
+impl TryFrom<&Dyn> for TimerId {
+    type Error = Error;
+
+    fn try_from(value: &Dyn) -> Result<Self, Self::Error> {
+        TimerId::try_from(&value.0)
     }
 }
 
@@ -233,6 +248,14 @@ impl TryFrom<Dyn> for bool {
 
     fn try_from(value: Dyn) -> Result<Self, Self::Error> {
         bool::try_from(&value)
+    }
+}
+
+impl TryFrom<Dyn> for TimerId {
+    type Error = Error;
+
+    fn try_from(value: Dyn) -> Result<Self, Self::Error> {
+        TimerId::try_from(&value)
     }
 }
 

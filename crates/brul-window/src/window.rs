@@ -15,7 +15,7 @@ use winit::icon::{Icon, RgbaIcon};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use brul_gui::{Color, Image, WidgetEvent, WidgetTree};
-use brul_ident::{FunctionName, TimerOwner};
+use brul_ident::{FunctionName, TimerId, TimerKind, TimerOwner};
 
 use crate::input::{Input, event_input, window_input};
 use crate::surface::{Renderer, create_renderer};
@@ -252,6 +252,21 @@ pub fn run(config: WindowConfig) -> Result<(), WindowError> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimerCommand {
+    Start {
+        id: TimerId,
+        owner: TimerOwner,
+        function: FunctionName,
+        interval: Duration,
+        kind: TimerKind,
+    },
+    Cancel {
+        id: TimerId,
+        owner: TimerOwner,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowCommand {
     Exit,
     Close,
@@ -260,11 +275,7 @@ pub enum WindowCommand {
     Show,
     Hide,
     Focus,
-    Every {
-        interval: Duration,
-        function: FunctionName,
-        owner: TimerOwner,
-    },
+    Timer(TimerCommand),
     SetTheme(String),
     AlwaysOnTop(bool),
 }

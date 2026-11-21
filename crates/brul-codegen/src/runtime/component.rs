@@ -196,6 +196,7 @@ pub fn accepts_prop(value: &Value, ty: &PropType) -> bool {
         PropType::Null => matches!(value, Value::Null),
         PropType::Object => matches!(value, Value::Object(_)),
         PropType::Array(_) => matches!(value, Value::Array(_)),
+        PropType::Timer => matches!(value, Value::Timer(_)),
         PropType::Void => false,
     }
 }
