@@ -35,4 +35,5 @@ fn main() {
     table.push_str("];\n");
     let output = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     fs::write(output.join("kit.rs"), table).expect("cannot write the kit table");
+    brul_style_gen::generate(brul_style_gen::Output::Codegen, &output);
 }

@@ -125,18 +125,7 @@ fn list(out: &mut Out<'_>, empty: bool, body: impl FnOnce(&mut Out<'_>)) {
     out.start(format_args!("]"));
 }
 
-fn kind(value: Kind) -> String {
-    match value {
-        Kind::PaddingSide(side) => format!("s::Kind::PaddingSide(s::Side::{side:?})"),
-        Kind::BorderWidthSide(side) => {
-            format!("s::Kind::BorderWidthSide(s::Side::{side:?})")
-        }
-        Kind::BorderColorSide(side) => {
-            format!("s::Kind::BorderColorSide(s::Side::{side:?})")
-        }
-        value => format!("s::Kind::{value:?}"),
-    }
-}
+include!(concat!(env!("OUT_DIR"), "/style_kind.rs"));
 
 fn value(value: &Value) -> String {
     match value {

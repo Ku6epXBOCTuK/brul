@@ -10,62 +10,7 @@ pub struct Shorthand {
     pub parse: fn(&mut Cursor, &str) -> Result<Vec<Value>, Error>,
 }
 
-pub static SHORTHANDS: &[Shorthand] = &[
-    Shorthand {
-        name: "border",
-        kinds: &[
-            Kind::BorderWidthSide(Side::Top),
-            Kind::BorderWidthSide(Side::Right),
-            Kind::BorderWidthSide(Side::Bottom),
-            Kind::BorderWidthSide(Side::Left),
-            Kind::BorderColorSide(Side::Top),
-            Kind::BorderColorSide(Side::Right),
-            Kind::BorderColorSide(Side::Bottom),
-            Kind::BorderColorSide(Side::Left),
-        ],
-        parse: border_values,
-    },
-    Shorthand {
-        name: "border-color",
-        kinds: &[
-            Kind::BorderColorSide(Side::Top),
-            Kind::BorderColorSide(Side::Right),
-            Kind::BorderColorSide(Side::Bottom),
-            Kind::BorderColorSide(Side::Left),
-        ],
-        parse: color_values,
-    },
-    Shorthand {
-        name: "border-width",
-        kinds: &[
-            Kind::BorderWidthSide(Side::Top),
-            Kind::BorderWidthSide(Side::Right),
-            Kind::BorderWidthSide(Side::Bottom),
-            Kind::BorderWidthSide(Side::Left),
-        ],
-        parse: box_values,
-    },
-    Shorthand {
-        name: "padding",
-        kinds: &[
-            Kind::PaddingSide(Side::Top),
-            Kind::PaddingSide(Side::Right),
-            Kind::PaddingSide(Side::Bottom),
-            Kind::PaddingSide(Side::Left),
-        ],
-        parse: box_values,
-    },
-    Shorthand {
-        name: "box-shadow",
-        kinds: &[
-            Kind::ShadowOffsetX,
-            Kind::ShadowOffsetY,
-            Kind::ShadowBlur,
-            Kind::ShadowColor,
-        ],
-        parse: shadow_values,
-    },
-];
+include!(concat!(env!("OUT_DIR"), "/style_shorthands.rs"));
 
 pub fn get(name: &str) -> Option<&'static Shorthand> {
     SHORTHANDS.iter().find(|shorthand| shorthand.name == name)
