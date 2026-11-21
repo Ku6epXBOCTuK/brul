@@ -1,4 +1,4 @@
-use crate::{BorderColors, BorderWidths, Color, Paint};
+use crate::{Border, BorderWidths, Color, Paint};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
@@ -8,8 +8,7 @@ pub struct Rect {
     pub height: u32,
     pub radius: u32,
     pub fill: Paint,
-    pub border_width: BorderWidths,
-    pub border_color: BorderColors,
+    pub border: Border,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -27,8 +26,7 @@ impl Rect {
             height,
             radius: 0,
             fill: Paint::Color(Color::TRANSPARENT),
-            border_width: BorderWidths::all(0),
-            border_color: BorderColors::all(Color::TRANSPARENT),
+            border: Border::empty(),
         }
     }
 
@@ -42,9 +40,8 @@ impl Rect {
         self
     }
 
-    pub const fn with_border(mut self, widths: BorderWidths, colors: BorderColors) -> Self {
-        self.border_width = widths;
-        self.border_color = colors;
+    pub const fn with_border(mut self, border: Border) -> Self {
+        self.border = border;
         self
     }
 
@@ -54,7 +51,7 @@ impl Rect {
         }
 
         let outer = (0.5 - self.distance(x, y)).clamp(0.0, 1.0);
-        let widths = self.border_width;
+        let widths = self.border.widths;
         if widths == BorderWidths::all(0) {
             return RectSample {
                 fill_coverage: outer,
@@ -100,30 +97,30 @@ impl Rect {
     pub fn border_color_at(&self, x: i32, y: i32) -> Color {
         let px = x as f32 + 0.5;
         let py = y as f32 + 0.5;
-        let left = self.x as f32 + self.border_width.left as f32;
-        let top = self.y as f32 + self.border_width.top as f32;
-        let right = (self.x + self.width as i32) as f32 - self.border_width.right as f32;
-        let bottom = (self.y + self.height as i32) as f32 - self.border_width.bottom as f32;
+        let left = self.x as f32 + self.border.widths.left as f32;
+        let top = self.y as f32 + self.border.widths.top as f32;
+        let right = (self.x + self.width as i32) as f32 - self.border.widths.right as f32;
+        let bottom = (self.y + self.height as i32) as f32 - self.border.widths.bottom as f32;
         let mut colors = [Color::TRANSPARENT; 4];
         let mut count = 0;
         if px < left {
-            colors[count] = self.border_color.left;
+            colors[count] = self.border.colors.left;
             count += 1;
         }
         if py < top {
-            colors[count] = self.border_color.top;
+            colors[count] = self.border.colors.top;
             count += 1;
         }
         if px > right {
-            colors[count] = self.border_color.right;
+            colors[count] = self.border.colors.right;
             count += 1;
         }
         if py > bottom {
-            colors[count] = self.border_color.bottom;
+            colors[count] = self.border.colors.bottom;
             count += 1;
         }
         if count == 0 {
-            return self.border_color.top;
+            return self.border.colors.top;
         }
         let share = 1.0 / count as f32;
         let (mut r, mut g, mut b, mut a) = (0.0, 0.0, 0.0, 0.0);

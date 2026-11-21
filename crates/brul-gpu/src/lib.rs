@@ -149,14 +149,11 @@ pub fn shape_instances(
                 ],
             });
         }
-        let colors = rect.border_color;
-        let visible_border = (rect.border_width.left > 0 && colors.left.a > 0)
-            || (rect.border_width.top > 0 && colors.top.a > 0)
-            || (rect.border_width.right > 0 && colors.right.a > 0)
-            || (rect.border_width.bottom > 0 && colors.bottom.a > 0);
+        let visible_border = rect.border.visible();
         if !shape.draw_fill && !visible_border {
             continue;
         }
+        let border = rect.border.flatten();
         let (fill, from, to, angle) = if shape.draw_fill {
             match rect.fill {
                 Paint::Color(color) => (rgba(color), [0.0; 4], [0.0; 4], 0.0),
@@ -171,16 +168,11 @@ pub fn shape_instances(
             bounds,
             params: [rect.radius as f32, 0.0, 0.0, shape.opacity],
             fill,
-            border_widths: [
-                rect.border_width.left as f32,
-                rect.border_width.top as f32,
-                rect.border_width.right as f32,
-                rect.border_width.bottom as f32,
-            ],
-            border_left: rgba(colors.left),
-            border_top: rgba(colors.top),
-            border_right: rgba(colors.right),
-            border_bottom: rgba(colors.bottom),
+            border_widths: border.widths,
+            border_left: border.left,
+            border_top: border.top,
+            border_right: border.right,
+            border_bottom: border.bottom,
             from,
             to,
             extra: [angle, 0.0, 0.0, 0.0],

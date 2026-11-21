@@ -237,7 +237,7 @@ pub(super) fn snapshot_node(
         y: layout_box.y,
         width: layout_box.width,
         height: layout_box.height,
-        border_width: layout_style.border_width,
+        border: crate::Border::new(layout_style.border_width, style.border),
         content_x,
         content_y,
         content_width,

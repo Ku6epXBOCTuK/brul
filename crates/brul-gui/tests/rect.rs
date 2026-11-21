@@ -1,4 +1,4 @@
-use brul_gui::{BorderWidths, Color, Paint, Rect};
+use brul_gui::{Border, BorderColors, BorderWidths, Color, Paint, Rect};
 
 const RED: Color = Color::rgb(255, 0, 0);
 const BLUE: Color = Color::rgb(0, 0, 255);
@@ -43,7 +43,7 @@ fn radius_is_clamped_to_half_size() {
 fn border_sits_inside_the_edges() {
     let rect = Rect::new(0, 0, 10, 10)
         .with_fill(Paint::Color(RED))
-        .with_border(BorderWidths::all(2), BLUE.into());
+        .with_border(Border::new(BorderWidths::all(2), BorderColors::all(BLUE)));
 
     assert_eq!(rect.sample(0, 5).border_coverage, 1.0);
     assert_eq!(rect.sample(1, 5).border_coverage, 1.0);
@@ -55,7 +55,7 @@ fn border_sits_inside_the_edges() {
 fn wide_border_leaves_no_fill() {
     let rect = Rect::new(0, 0, 6, 6)
         .with_fill(Paint::Color(RED))
-        .with_border(BorderWidths::all(4), BLUE.into());
+        .with_border(Border::new(BorderWidths::all(4), BorderColors::all(BLUE)));
 
     assert_eq!(rect.sample(0, 0).border_coverage, 1.0);
     assert_eq!(rect.sample(3, 3).border_coverage, 1.0);
@@ -66,7 +66,10 @@ fn wide_border_leaves_no_fill() {
 fn a_single_side_border_leaves_the_other_edges_filled() {
     let rect = Rect::new(0, 0, 10, 10)
         .with_fill(Paint::Color(RED))
-        .with_border(BorderWidths::new(0, 0, 0, 2), BLUE.into());
+        .with_border(Border::new(
+            BorderWidths::new(0, 0, 0, 2),
+            BorderColors::all(BLUE),
+        ));
 
     assert_eq!(rect.sample(0, 5).fill_coverage, 1.0);
     assert_eq!(rect.sample(5, 9).border_coverage, 1.0);

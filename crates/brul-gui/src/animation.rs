@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crate::Color;
+use brul_style::Side;
+
+use crate::{Color, Sides};
 
 pub fn ease_out(progress: f32) -> f32 {
     let rest = 1.0 - progress.clamp(0.0, 1.0);
@@ -51,6 +53,16 @@ impl Tween for Color {
     }
 }
 
+impl<T: Tween> Tween for Sides<T> {
+    fn tween(self, to: Self, progress: f32) -> Self {
+        let mut value = self;
+        for side in Side::ALL {
+            value[side] = self[side].tween(to[side], progress);
+        }
+        value
+    }
+}
+
 fn progress(elapsed: Duration, duration: Duration) -> f32 {
     if duration.is_zero() {
         return 1.0;
@@ -61,7 +73,8 @@ fn progress(elapsed: Duration, duration: Duration) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{Track, Tween, ease_out};
-    use crate::Color;
+    use crate::{Color, Sides};
+    use brul_style::Side;
     use std::time::Duration;
 
     #[test]
@@ -98,5 +111,17 @@ mod tests {
             Color::BLACK.tween(Color::WHITE, 0.5),
             Color::rgb(112, 112, 111)
         );
+    }
+
+    #[test]
+    fn sides_tween_each_edge() {
+        let from = Sides::new(0.0, 10.0, 20.0, 30.0);
+        let to = Sides::new(40.0, 30.0, 20.0, 10.0);
+        let value = from.tween(to, 0.5);
+
+        assert_eq!(value[Side::Left], 20.0);
+        assert_eq!(value[Side::Top], 20.0);
+        assert_eq!(value[Side::Right], 20.0);
+        assert_eq!(value[Side::Bottom], 20.0);
     }
 }

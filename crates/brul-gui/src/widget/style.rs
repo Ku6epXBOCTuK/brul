@@ -7,6 +7,7 @@ use crate::layout::LayoutPatch;
 use crate::rect::Shadow;
 use crate::text::{TextStylePatch, VerticalAlign};
 use crate::{BorderColors, Color};
+use brul_style::Side;
 
 macro_rules! resolve_layers {
     ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {

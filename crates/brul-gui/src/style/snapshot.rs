@@ -9,8 +9,8 @@ use super::value::{
 };
 use crate::widget::{TextStylePatch, Transitions, WidgetStyle, WidgetStylePatch};
 use crate::{
-    Align, Color, Direction, Display, GridAutoFlow, Justify, LayoutStyle, Sides, TextAlign,
-    TextStyle, VerticalAlign,
+    Align, Color, Direction, Display, GridAutoFlow, Justify, LayoutStyle, TextAlign, TextStyle,
+    VerticalAlign,
 };
 
 pub(super) fn base_styles(
@@ -135,13 +135,13 @@ fn apply(
             layout.flex_direction = flex_direction(read::<KeywordTy>(value, kind)?)
         }
         Target::Layout(LayoutField::Padding(side)) => {
-            *edge(&mut layout.padding, side) = read::<PxTy>(value, kind)?;
+            layout.padding[side] = read::<PxTy>(value, kind)?;
         }
         Target::Layout(LayoutField::Gap) => layout.gap = read::<PxTy>(value, kind)?,
         Target::Layout(LayoutField::RowGap) => layout.row_gap = read::<PxTy>(value, kind)?,
         Target::Layout(LayoutField::ColumnGap) => layout.column_gap = read::<PxTy>(value, kind)?,
         Target::Layout(LayoutField::BorderWidthSide(side)) => {
-            *edge(&mut layout.border_width, side) = read::<PxTy>(value, kind)?;
+            layout.border_width[side] = read::<PxTy>(value, kind)?;
         }
         Target::Layout(LayoutField::Justify) => {
             layout.justify = justify(read::<KeywordTy>(value, kind)?)
@@ -171,7 +171,7 @@ fn apply(
         Target::Layout(LayoutField::Align) => layout.align = align(read::<KeywordTy>(value, kind)?),
         Target::Style(StyleField::Background) => style.background = read::<PaintTy>(value, kind)?,
         Target::Style(StyleField::BorderSide(side)) => {
-            *edge(&mut style.border, side) = read::<ColorTy>(value, kind)?;
+            style.border[side] = read::<ColorTy>(value, kind)?;
         }
         Target::Style(StyleField::Text) => style.text = read::<ColorTy>(value, kind)?,
         Target::Style(StyleField::Tint) => style.tint = Some(read::<ColorTy>(value, kind)?),
@@ -199,15 +199,6 @@ fn apply(
         Target::Text(TextField::Weight) => text.weight = read::<NumberTy>(value, kind)? as u16,
     }
     Ok(())
-}
-
-fn edge<T>(sides: &mut Sides<T>, side: Side) -> &mut T {
-    match side {
-        Side::Left => &mut sides.left,
-        Side::Top => &mut sides.top,
-        Side::Right => &mut sides.right,
-        Side::Bottom => &mut sides.bottom,
-    }
 }
 
 fn set_border_patch(patch: &mut WidgetStylePatch, side: Side, color: Color) {
