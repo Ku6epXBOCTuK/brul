@@ -1,0 +1,476 @@
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Waker};
+
+use winit::window::Window;
+
+use crate::gpu_frame::FrameCache;
+use crate::window::WindowError;
+
+use super::{Gpu, Textures};
+
+fn clear_color(transparent: bool) -> wgpu::Color {
+    if transparent {
+        wgpu::Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 0.0,
+        }
+    } else {
+        crate::window::CLEAR
+    }
+}
+
+fn premultiplied_blend() -> wgpu::BlendState {
+    wgpu::BlendState {
+        color: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+            operation: wgpu::BlendOperation::Add,
+        },
+        alpha: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+            operation: wgpu::BlendOperation::Add,
+        },
+    }
+}
+
+fn size_change(current: (u32, u32), width: u32, height: u32) -> Option<(u32, u32)> {
+    if width == 0 || height == 0 {
+        return None;
+    }
+    (current != (width, height)).then_some((width, height))
+}
+
+fn unorm_format(format: wgpu::TextureFormat) -> wgpu::TextureFormat {
+    match format {
+        wgpu::TextureFormat::Rgba8UnormSrgb => wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Bgra8UnormSrgb => wgpu::TextureFormat::Bgra8Unorm,
+        other => other,
+    }
+}
+
+fn alpha_mode(capabilities: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
+    for mode in [
+        wgpu::CompositeAlphaMode::PreMultiplied,
+        wgpu::CompositeAlphaMode::PostMultiplied,
+        wgpu::CompositeAlphaMode::Inherit,
+        wgpu::CompositeAlphaMode::Auto,
+    ] {
+        if capabilities.alpha_modes.contains(&mode) {
+            return mode;
+        }
+    }
+    capabilities
+        .alpha_modes
+        .first()
+        .copied()
+        .unwrap_or(wgpu::CompositeAlphaMode::Auto)
+}
+
+fn block_on<F: Future>(future: F) -> F::Output {
+    let mut future = pin!(future);
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(value) => return value,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+impl Gpu {
+    pub(crate) fn new(window: &Arc<dyn Window>, transparent: bool) -> Result<Self, WindowError> {
+        // NOTE: the GL backend parks a hidden window on a thread that pumps no messages, and a
+        // keyboard layout switch then waits for it forever (wgpu#10504)
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+        descriptor.backends = wgpu::Backends::PRIMARY;
+        let instance = wgpu::Instance::new(descriptor);
+        let surface = instance
+            .create_surface(Arc::clone(window))
+            .map_err(WindowError::gpu)?;
+        let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::None,
+            force_fallback_adapter: false,
+            compatible_surface: Some(&surface),
+            apply_limit_buckets: false,
+        }))
+        .map_err(WindowError::gpu)?;
+        let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .map_err(WindowError::gpu)?;
+
+        let size = window.surface_size();
+        let capabilities = surface.get_capabilities(&adapter);
+        let mut config = surface
+            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
+            .ok_or(WindowError::NoSurfaceConfig)?;
+        config.alpha_mode = alpha_mode(&capabilities);
+        let unorm = unorm_format(config.format);
+        if capabilities.formats.contains(&unorm) {
+            config.format = unorm;
+        }
+        config.desired_maximum_frame_latency = 1;
+        let mut capture = crate::perf::dump_path().is_some();
+        if capture {
+            if capabilities.usages.contains(wgpu::TextureUsages::COPY_SRC) {
+                config.usage |= wgpu::TextureUsages::COPY_SRC;
+            } else {
+                tracing::warn!("surface cannot be read back, frame dump is disabled");
+                capture = false;
+            }
+        }
+        surface.configure(&device, &config);
+        if capture {
+            tracing::info!("brul capture: surface format {:?}", config.format);
+        }
+
+        let nearest_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("brul-nearest-sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let shape_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("brul-shape-layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+        let shape_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("brul-shape-pipeline-layout"),
+                bind_group_layouts: &[Some(&shape_layout)],
+                immediate_size: 0,
+            });
+        let shape_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("brul-shape-shader"),
+            source: wgpu::ShaderSource::Wgsl(brul_gpu::SHADER.into()),
+        });
+        let shape_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("brul-shape-pipeline"),
+            layout: Some(&shape_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shape_shader,
+                entry_point: Some("vs"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shape_shader,
+                entry_point: Some("fs"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(premultiplied_blend()),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let quad_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("brul-quad-layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let quad_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("brul-quad-pipeline-layout"),
+            bind_group_layouts: &[Some(&quad_layout)],
+            immediate_size: 0,
+        });
+        let quad_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("brul-quad-pipeline"),
+            layout: Some(&quad_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shape_shader,
+                entry_point: Some("vs_quad"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shape_shader,
+                entry_point: Some("fs_quad"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(premultiplied_blend()),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-shape-viewport"),
+            size: 8,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-shape-instances"),
+            size: brul_gpu::INSTANCE_SIZE,
+            usage: brul_gpu::instance_usage(),
+            mapped_at_creation: false,
+        });
+        let clip_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-clips"),
+            size: brul_gpu::CLIP_INSTANCE_SIZE,
+            usage: brul_gpu::instance_usage(),
+            mapped_at_creation: false,
+        });
+        let quad_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-quad-instances"),
+            size: brul_gpu::TEXTURE_INSTANCE_SIZE,
+            usage: brul_gpu::instance_usage(),
+            mapped_at_creation: false,
+        });
+
+        Ok(Self {
+            clear_color: clear_color(transparent),
+            _instance: instance,
+            surface,
+            device,
+            queue,
+            config,
+            shape_layout,
+            shape_pipeline,
+            viewport_buffer,
+            viewport: vec![0; 8],
+            instance_buffer,
+            instance_capacity: 0,
+            clip_buffer,
+            clip_capacity: brul_gpu::CLIP_INSTANCE_SIZE as usize,
+            quad_pipeline,
+            quad_buffer,
+            quad_capacity: brul_gpu::TEXTURE_INSTANCE_SIZE as usize,
+            textures: Textures::new(quad_layout, nearest_sampler),
+            frame: FrameCache::default(),
+            capture,
+            captured: None,
+        })
+    }
+
+    pub(crate) fn resize(&mut self, width: u32, height: u32) {
+        let Some((width, height)) =
+            size_change((self.config.width, self.config.height), width, height)
+        else {
+            return;
+        };
+
+        self.config.width = width;
+        self.config.height = height;
+        self.surface.configure(&self.device, &self.config);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::future::ready;
+    use std::task::Poll;
+    use wgpu::{CompositeAlphaMode, TextureFormat, TextureUsages};
+
+    fn capabilities(alpha_modes: Vec<CompositeAlphaMode>) -> wgpu::SurfaceCapabilities {
+        wgpu::SurfaceCapabilities {
+            formats: vec![TextureFormat::Rgba8UnormSrgb],
+            format_capabilities: Vec::new(),
+            present_modes: Vec::new(),
+            alpha_modes,
+            usages: TextureUsages::RENDER_ATTACHMENT,
+        }
+    }
+
+    #[test]
+    fn a_transparent_window_clears_to_transparent_black() {
+        assert_eq!(
+            clear_color(true),
+            wgpu::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            }
+        );
+    }
+
+    #[test]
+    fn an_opaque_window_keeps_the_regular_clear_color() {
+        assert_eq!(clear_color(false), crate::window::CLEAR);
+    }
+
+    #[test]
+    fn an_srgb_surface_format_becomes_its_unorm_pair() {
+        assert_eq!(
+            unorm_format(wgpu::TextureFormat::Bgra8UnormSrgb),
+            wgpu::TextureFormat::Bgra8Unorm
+        );
+        assert_eq!(
+            unorm_format(wgpu::TextureFormat::Rgba8UnormSrgb),
+            wgpu::TextureFormat::Rgba8Unorm
+        );
+        assert_eq!(
+            unorm_format(wgpu::TextureFormat::Rgba16Float),
+            wgpu::TextureFormat::Rgba16Float
+        );
+    }
+
+    #[test]
+    fn a_size_change_needs_a_size_that_differs() {
+        assert_eq!(size_change((8, 6), 8, 6), None);
+        assert_eq!(size_change((8, 6), 9, 6), Some((9, 6)));
+        assert_eq!(size_change((8, 6), 8, 7), Some((8, 7)));
+    }
+
+    #[test]
+    fn an_empty_size_is_not_a_size_change() {
+        assert_eq!(size_change((8, 6), 0, 6), None);
+        assert_eq!(size_change((8, 6), 8, 0), None);
+    }
+
+    #[test]
+    fn the_first_preferred_alpha_mode_wins() {
+        let modes = vec![
+            CompositeAlphaMode::Inherit,
+            CompositeAlphaMode::PostMultiplied,
+            CompositeAlphaMode::PreMultiplied,
+        ];
+        assert_eq!(
+            alpha_mode(&capabilities(modes)),
+            CompositeAlphaMode::PreMultiplied
+        );
+        assert_eq!(
+            alpha_mode(&capabilities(vec![
+                CompositeAlphaMode::Inherit,
+                CompositeAlphaMode::PostMultiplied,
+            ])),
+            CompositeAlphaMode::PostMultiplied
+        );
+    }
+
+    #[test]
+    fn an_unexpected_set_of_alpha_modes_falls_back_to_the_first() {
+        assert_eq!(
+            alpha_mode(&capabilities(vec![CompositeAlphaMode::Opaque])),
+            CompositeAlphaMode::Opaque
+        );
+        assert_eq!(
+            alpha_mode(&capabilities(Vec::new())),
+            CompositeAlphaMode::Auto
+        );
+    }
+
+    struct PendingOnce(bool);
+
+    impl Future for PendingOnce {
+        type Output = u8;
+
+        fn poll(mut self: std::pin::Pin<&mut Self>, context: &mut Context<'_>) -> Poll<u8> {
+            if self.0 {
+                return Poll::Ready(7);
+            }
+            self.0 = true;
+            context.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+
+    #[test]
+    fn block_on_waits_for_a_future_that_is_ready_at_once() {
+        assert_eq!(block_on(ready(7)), 7);
+    }
+
+    #[test]
+    fn block_on_polls_again_after_pending() {
+        assert_eq!(block_on(PendingOnce(false)), 7);
+    }
+}
