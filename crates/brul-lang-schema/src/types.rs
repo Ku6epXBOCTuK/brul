@@ -60,6 +60,7 @@ pub const TYPES: &[TypeSpec] = &[
         prop_expression: "Flag",
         value_names: &["Bool"],
         literal: "`true`, `false`",
+        note: "boolean flag",
         ..BASE
     },
     TypeSpec {
@@ -186,6 +187,46 @@ mod tests {
             let mut unique = values.clone();
             unique.dedup();
             assert_eq!(unique.len(), values.len());
+        }
+    }
+
+    #[test]
+    fn every_type_has_complete_mappings() {
+        for spec in TYPES {
+            for (field, value) in [
+                ("variant", spec.variant),
+                ("name", spec.name),
+                ("rust", spec.rust),
+                ("local", spec.local),
+                ("dyn_wrap", spec.dyn_wrap),
+                ("dyn_local", spec.dyn_local),
+                ("convert", spec.convert),
+                ("default", spec.default),
+                ("prop_expression", spec.prop_expression),
+                ("literal", spec.literal),
+                ("note", spec.note),
+            ] {
+                assert!(!value.is_empty(), "{} needs {field}", spec.name);
+            }
+            if spec.state {
+                assert!(
+                    !spec.state_read.is_empty(),
+                    "{} needs state_read",
+                    spec.name
+                );
+                assert!(
+                    spec.state_write.contains("{state}") && spec.state_write.contains("{value}"),
+                    "{} has an incomplete state_write",
+                    spec.name
+                );
+            }
+            if spec.name != "Void" {
+                assert!(
+                    !spec.value_names.is_empty(),
+                    "{} needs value names",
+                    spec.name
+                );
+            }
         }
     }
 }

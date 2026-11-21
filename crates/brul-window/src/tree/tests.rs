@@ -357,6 +357,28 @@ fn a_timer_command_is_kept() {
 }
 
 #[test]
+fn a_timer_cancel_removes_the_started_timer() {
+    let surface = FakeSurface::new(1.0);
+    let mut app = tree_app(commands(vec![
+        WindowCommand::Timer(TimerCommand::Start {
+            id: brul_ident::TimerId::new(1),
+            owner: TimerOwner::new(0),
+            function: "tick".into(),
+            interval: Duration::from_millis(100),
+            kind: brul_ident::TimerKind::Every,
+        }),
+        WindowCommand::Timer(TimerCommand::Cancel {
+            id: brul_ident::TimerId::new(1),
+            owner: TimerOwner::new(0),
+        }),
+    ]));
+    let widget = Widget::text("x").id();
+
+    app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    assert!(app.timers.is_empty());
+}
+
+#[test]
 fn a_size_of_zero_is_ignored() {
     let surface = FakeSurface::new(2.0);
     let mut app = tree_app(commands(Vec::new()));

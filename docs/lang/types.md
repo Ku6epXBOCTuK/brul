@@ -6,7 +6,7 @@
 
 | Type | Literals | Note |
 | --- | --- | --- |
-| `Bool` | `true`, `false` |  |
+| `Bool` | `true`, `false` | boolean flag |
 | `Number` | `42`, `3.14`, `-1` | f64 in generated code |
 | `String` | "text", `template ${expr}` | string templates are needed for Text |
 | `Image` | `empty` | empty image; a path creates an application |

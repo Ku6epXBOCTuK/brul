@@ -199,3 +199,79 @@ pub const BUILTINS: &[BuiltinSpec] = &[
         note: "cancel a timer created by every or after",
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::TYPES;
+
+    #[test]
+    fn every_builtin_has_a_complete_spec() {
+        for spec in BUILTINS {
+            assert!(!spec.name.is_empty(), "a builtin needs a name");
+            assert!(!spec.note.is_empty(), "{} needs a spec note", spec.name);
+            assert!(
+                TYPES.iter().any(|ty| ty.name == spec.result),
+                "{} has an unknown result type",
+                spec.name
+            );
+            for argument in spec.arguments {
+                if let ArgSpec::Value(name) = argument {
+                    assert!(
+                        TYPES.iter().any(|ty| ty.name == *name),
+                        "{} has an unknown argument type",
+                        spec.name
+                    );
+                }
+            }
+            match spec.emit {
+                EmitSpec::Function(path) => {
+                    assert!(
+                        path.starts_with("brul::builtins::"),
+                        "{} has a malformed emitter path",
+                        spec.name
+                    );
+                    assert!(
+                        path.rsplit("::")
+                            .next()
+                            .is_some_and(|name| !name.is_empty()),
+                        "{} has no emitter function",
+                        spec.name
+                    );
+                }
+                EmitSpec::Host(host) => {
+                    assert!(!host.marker.is_empty(), "{} has no marker", spec.name);
+                    assert!(
+                        host.command.is_some() != host.special.is_some(),
+                        "{} needs one host route",
+                        spec.name
+                    );
+                    if let Some(argument) = host.argument {
+                        assert!(
+                            matches!(argument, "String" | "Bool" | "Timer"),
+                            "{} has an unsupported host argument",
+                            spec.name
+                        );
+                    }
+                }
+                EmitSpec::Method(name) => {
+                    assert!(
+                        name.strip_prefix("component.")
+                            .is_some_and(|name| !name.is_empty()),
+                        "{} has no emitter method",
+                        spec.name
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn builtin_names_are_unique() {
+        let mut names: Vec<_> = BUILTINS.iter().map(|spec| spec.name).collect();
+        names.sort_unstable();
+        let mut unique = names.clone();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len());
+    }
+}

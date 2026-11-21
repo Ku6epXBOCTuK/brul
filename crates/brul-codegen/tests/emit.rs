@@ -106,7 +106,6 @@ goldens! {
     emits_the_kit_components,
     emits_themes_and_states,
     emits_typed_builtin_calls,
-    emits_typed_every_calls,
     emits_typed_functions_and_direct_calls,
     emits_typed_local_scopes_with_inner_shadowing,
     emits_typed_return_statements,
@@ -270,6 +269,29 @@ fn operated_error(source: &str) -> brul_syntax::error::Error {
     .expect_err("error")
 }
 
+fn operated_with_command(source: &str, name: &str) -> String {
+    let expression = brul_syntax::parser::parse_expression(source).expect("expression parses");
+    let names = emit::identifiers(&expression);
+    let mut commands = commands::Commands::new();
+    commands.insert(
+        name.to_owned(),
+        commands::Command {
+            name: name.to_owned(),
+            path: format!("crate::{name}"),
+            params: Vec::new(),
+            result: brul_syntax::types::Type::Void,
+        },
+    );
+    let state = emit::State::default().with_commands(&commands);
+    emit::operation(
+        &expression,
+        &names,
+        &state,
+        &std::collections::HashMap::new(),
+    )
+    .expect("operation")
+}
+
 #[test]
 fn emits_value_literals_and_reads() {
     assert_eq!(
@@ -335,6 +357,49 @@ fn emits_value_calls() {
     assert!(operated("a.b()").contains("Unsupported(\"method call\")"));
     assert!(operated("a ? b : c").contains(".boolean()?"));
     assert!(!operated("a ? b : c").contains("match ("));
+}
+
+#[test]
+fn emits_typed_builtin_values() {
+    assert_eq!(
+        operated("String(42)"),
+        "brul::Dyn::text(brul::builtins::string(brul::Dyn::num(42.0_f64))?)"
+    );
+    assert_eq!(
+        operated("Number(\"42\")"),
+        "brul::Dyn::num(brul::builtins::number(brul::Dyn::text(\"42\".to_owned()))?)"
+    );
+    assert_eq!(
+        operated("len([1, 2])"),
+        "brul::Dyn::num(brul::builtins::len(brul::Dyn::array(vec![brul::Dyn::num(1.0_f64), brul::Dyn::num(2.0_f64)]))?)"
+    );
+    assert_eq!(
+        operated("theme()"),
+        "brul::Dyn::text(<brul::builtins::Theme as brul::HostCommand>::invoke(component, ())?)"
+    );
+    assert_eq!(operated("setTheme(\"dark\")"), "brul::Dyn::null()");
+}
+
+#[test]
+fn emits_typed_timer_builtins() {
+    assert_eq!(
+        operated_with_command("every(100, tick)", "tick"),
+        "brul::Dyn::from({ let __brul_interval = 100.0_f64; component.every(__brul_interval, \"tick\")? })"
+    );
+    assert_eq!(
+        operated_with_command("after(250, tick)", "tick"),
+        "brul::Dyn::from({ let __brul_interval = 250.0_f64; component.after(__brul_interval, \"tick\")? })"
+    );
+    assert!(
+        operated_error("every(100, tick, more)")
+            .message()
+            .contains("builtin 'every' expects 2 arguments")
+    );
+    assert!(
+        operated_error("every(\"100\", tick)")
+            .message()
+            .contains("argument expects Number, found String")
+    );
 }
 
 #[test]

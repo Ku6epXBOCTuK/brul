@@ -1,8 +1,0 @@
-<script>
-    function tick(): Void { }
-    function start(): Void { every(100, tick); }
-</script>
-
-<markup>
-window Demo (title: "demo") { Container { } }
-</markup>
