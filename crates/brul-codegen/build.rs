@@ -37,4 +37,5 @@ fn main() {
     fs::write(output.join("kit.rs"), table).expect("cannot write the kit table");
     brul_style_gen::generate(brul_style_gen::Output::Codegen, &output);
     brul_style_gen::generate(brul_style_gen::Output::CodegenFields, &output);
+    brul_lang_gen::generate(brul_lang_gen::Output::Dispatch, &output);
 }

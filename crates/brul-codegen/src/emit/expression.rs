@@ -7,7 +7,8 @@ use brul_syntax::ast::{
     AssignOp, BinaryOp, BinaryOpKind, Expr, ExprKind, Position, TemplatePart, UnaryOp,
 };
 use brul_syntax::error::Error;
-use brul_syntax::script::builtins::{self, Argument, Builtin, BuiltinKind};
+use brul_syntax::script::builtins as syntax_builtins;
+use brul_syntax::script::builtins::Builtin;
 use brul_syntax::types::Type;
 
 use super::names;
@@ -255,7 +256,7 @@ pub(super) fn typed(
             let ExprKind::Ident(name) = &target.kind else {
                 return Ok(None);
             };
-            if let Some(builtin) = builtins::builtin(name) {
+            if let Some(builtin) = syntax_builtins::builtin(name) {
                 return builtin_call(
                     builtin,
                     args,
@@ -339,154 +340,10 @@ fn builtin_call(
             ),
         ));
     }
-    match builtin.kind {
-        BuiltinKind::Host { marker } => {
-            let params = builtin
-                .arguments
-                .iter()
-                .map(|argument| match argument {
-                    Argument::Value(ty) => ty.clone(),
-                    Argument::Any | Argument::Function => Type::Object,
-                })
-                .collect();
-            let command = Command {
-                name: builtin.name.to_owned(),
-                path: format!("brul::builtins::{marker}"),
-                params,
-                result: builtin.result.clone(),
-            };
-            host_call(&command, arguments, position, names, state, props, scopes)
-        }
-        BuiltinKind::StringFn => Ok(Some((
-            format!(
-                "brul::builtins::string({})?",
-                value_argument(&arguments[0], names, state, props, scopes)?
-            ),
-            Type::String,
-        ))),
-        BuiltinKind::NumberFn => Ok(Some((
-            format!(
-                "brul::builtins::number({})?",
-                value_argument(&arguments[0], names, state, props, scopes)?
-            ),
-            Type::Number,
-        ))),
-        BuiltinKind::Len => Ok(Some((
-            format!(
-                "brul::builtins::len({})?",
-                value_argument(&arguments[0], names, state, props, scopes)?
-            ),
-            Type::Number,
-        ))),
-        BuiltinKind::Every => timer_typed(
-            "every",
-            "component.every",
-            arguments,
-            names,
-            state,
-            props,
-            scopes,
-        ),
-        BuiltinKind::After => timer_typed(
-            "after",
-            "component.after",
-            arguments,
-            names,
-            state,
-            props,
-            scopes,
-        ),
-        BuiltinKind::Cancel => cancel_typed(arguments, names, state, props, scopes),
-    }
+    super::builtins::emit_builtin(builtin, arguments, position, names, state, props, scopes)
 }
 
-fn value_argument(
-    expression: &Expr,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    scopes: &Scopes,
-) -> Result<String, Error> {
-    match typed(expression, names, state, props, scopes)? {
-        Some((code, ty)) => Ok(wrap_typed(code, &ty)),
-        None => operation_in(expression, names, state, props, scopes),
-    }
-}
-
-fn timer_typed(
-    name: &'static str,
-    method: &'static str,
-    arguments: &[Expr],
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    scopes: &Scopes,
-) -> Result<Option<(String, Type)>, Error> {
-    let interval = &arguments[0];
-    let function = &arguments[1];
-    let interval_code = match typed(interval, names, state, props, scopes)? {
-        Some((code, Type::Number)) => code,
-        Some((_, ty)) => {
-            return Err(crate::arg_mismatch(interval.position, &Type::Number, &ty));
-        }
-        None => format!(
-            "(&{}).try_into()?",
-            operation_in(interval, names, state, props, scopes)?
-        ),
-    };
-    let ExprKind::Ident(callee) = &function.kind else {
-        return Err(crate::error_at(
-            function.position,
-            format!("{name} expects a function name"),
-        ));
-    };
-    let arity = if let Some(command) = state.command(callee) {
-        command.params.len()
-    } else if let Some(signature) = scopes.function(callee) {
-        signature.params.len()
-    } else {
-        return Err(crate::error_at(
-            function.position,
-            format!("function '{callee}' is not defined"),
-        ));
-    };
-    if arity != 0 {
-        return Err(crate::error_at(
-            function.position,
-            format!("{name} function '{callee}' takes no arguments"),
-        ));
-    }
-    Ok(Some((
-        format!(
-            "{{ let __brul_interval = {interval_code}; {method}(__brul_interval, {callee:?})? }}"
-        ),
-        Type::Timer,
-    )))
-}
-
-fn cancel_typed(
-    arguments: &[Expr],
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    scopes: &Scopes,
-) -> Result<Option<(String, Type)>, Error> {
-    let timer = &arguments[0];
-    let code = match typed(timer, names, state, props, scopes)? {
-        Some((code, Type::Timer)) => code,
-        Some((_, ty)) => return Err(crate::arg_mismatch(timer.position, &Type::Timer, &ty)),
-        None => format!(
-            "(&{}).try_into()?",
-            operation_in(timer, names, state, props, scopes)?
-        ),
-    };
-    Ok(Some((
-        format!("{{ let __brul_timer = {code}; component.cancel(__brul_timer)?; }}"),
-        Type::Void,
-    )))
-}
-
-fn host_call(
+pub(super) fn host_call(
     command: &Command,
     arguments: &[Expr],
     position: Position,

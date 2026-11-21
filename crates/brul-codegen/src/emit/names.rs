@@ -2,7 +2,7 @@ use brul_script::{Names, VariableId};
 use brul_syntax::ast::{Expr, ExprKind, Position};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Member, Prop};
-use brul_syntax::script::{Function, Program, Statement};
+use brul_syntax::script::{Builtin, Function, Program, Statement, builtin};
 
 use crate::{Definition, Source, error_at};
 
@@ -205,9 +205,9 @@ pub(super) fn expression<'a>(expr: &'a Expr, names: &mut Names<'a>) {
 
 fn call<'a>(target: &'a Expr, args: &'a [Expr], names: &mut Names<'a>) {
     if let ExprKind::Ident(name) = &target.kind {
-        let timer = name == "every" || name == "after";
+        let function_argument = builtin(name).and_then(Builtin::function_argument);
         for (index, argument) in args.iter().enumerate() {
-            if timer && index == 1 {
+            if function_argument == Some(index) {
                 continue;
             }
             expression(argument, names);

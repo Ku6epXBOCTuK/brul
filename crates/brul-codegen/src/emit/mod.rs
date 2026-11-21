@@ -11,6 +11,7 @@ use crate::{Import, Registry, Resource};
 pub(super) use structure::StructureNames;
 
 mod alloc;
+mod builtins;
 mod class;
 mod classes;
 mod component;

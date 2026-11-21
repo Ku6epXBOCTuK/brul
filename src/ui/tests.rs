@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use brul_gui::{Direction, Size, TextEngine, Texture, Widget};
 use brul_syntax::markup::PropType;
-use brul_syntax::script::{BUILTINS, BuiltinKind};
+use brul_syntax::script::{BUILTINS, BuiltinEmit};
 use brul_window::{TimerCommand, WindowCommand, WindowKey};
 
 use crate::run::generated_built;
@@ -487,7 +487,7 @@ fn every_host_builtin_is_dispatched() {
     let (mut host, _) = command_host(None);
     let names: Vec<_> = BUILTINS
         .iter()
-        .filter(|builtin| matches!(builtin.kind, BuiltinKind::Host { .. }))
+        .filter(|builtin| matches!(builtin.emit, BuiltinEmit::Host { .. }))
         .map(|builtin| builtin.name)
         .collect();
     assert!(!names.is_empty());
@@ -496,6 +496,26 @@ fn every_host_builtin_is_dispatched() {
             !matches!(host.call(name, &[]), Err(Error::UnknownFunction(_))),
             "{name} is not dispatched"
         );
+    }
+}
+
+#[test]
+fn every_host_builtin_has_a_marker() {
+    let names: Vec<_> = BUILTINS
+        .iter()
+        .filter_map(|builtin| match builtin.emit {
+            BuiltinEmit::Host { marker } => Some((builtin.name, marker)),
+            _ => None,
+        })
+        .collect();
+    assert!(!names.is_empty());
+    for (name, marker) in names {
+        let entry = crate::builtins::HOST_MARKERS
+            .iter()
+            .find(|(marker_name, _, _)| *marker_name == name)
+            .unwrap_or_else(|| panic!("{name} has no generated marker"));
+        assert_eq!(entry.1, marker);
+        assert_eq!((entry.2)(), name);
     }
 }
 

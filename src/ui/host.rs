@@ -16,53 +16,10 @@ pub(crate) struct CommandHost {
 impl Host for CommandHost {
     fn call(&mut self, name: &str, arguments: &[Value]) -> Result<Value, Error> {
         tracing::debug!(name, arguments = arguments.len(), "host call");
-        if name == "theme" {
-            no_arguments(arguments, name)?;
-            return Ok(match &*self.theme.borrow() {
-                Some(theme) => Value::String(theme.clone().into()),
-                None => Value::Null,
-            });
+        if let Some(result) = self.framework_call(name, arguments) {
+            return result;
         }
-        let command = match name {
-            "setTheme" => {
-                let theme = one_argument(arguments, "setTheme")?;
-                WindowCommand::SetTheme(theme)
-            }
-            "setAlwaysOnTop" => {
-                let on_top = one_argument(arguments, "setAlwaysOnTop")?;
-                WindowCommand::AlwaysOnTop(on_top)
-            }
-            "openWindow" => {
-                let window: String = one_argument(arguments, "openWindow")?;
-                let Some(key) = self.windows.get(window.as_str()) else {
-                    return Err(Error::UnknownWindow(window));
-                };
-                WindowCommand::Open(*key)
-            }
-            "exit" | "closeWindow" => {
-                no_arguments(arguments, name)?;
-                WindowCommand::Close
-            }
-            "dragWindow" => {
-                no_arguments(arguments, name)?;
-                WindowCommand::Drag
-            }
-            "showWindow" => {
-                no_arguments(arguments, name)?;
-                WindowCommand::Show
-            }
-            "hideWindow" => {
-                no_arguments(arguments, name)?;
-                WindowCommand::Hide
-            }
-            "focusWindow" => {
-                no_arguments(arguments, name)?;
-                WindowCommand::Focus
-            }
-            _ => return self.delegate(name, arguments),
-        };
-        self.commands.borrow_mut().push(command);
-        Ok(Value::Null)
+        self.delegate(name, arguments)
     }
 
     fn commands(&self) -> Vec<&'static str> {
@@ -105,3 +62,5 @@ where
     };
     T::try_from(value).map_err(|error| error.at_command(name))
 }
+
+include!(concat!(env!("OUT_DIR"), "/lang_builtin_host.rs"));

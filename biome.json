@@ -4,6 +4,7 @@
     "includes": [
       "**/*.md",
       "!docs/lang/style_properties.md",
+      "!docs/lang/builtins.md",
       "!docs/lang/types.md"
     ]
   },

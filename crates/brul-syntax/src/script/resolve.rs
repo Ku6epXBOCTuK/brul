@@ -2,7 +2,7 @@ use crate::TypeName;
 use crate::ast::{Expr, ExprKind, Position};
 use crate::error::Error;
 use crate::script::ast::{Program, Statement};
-use crate::script::builtins::{self, Argument};
+use crate::script::builtins::{self, Argument, Builtin};
 use crate::types::Type;
 
 pub fn validate(program: &Program, external: &[&str]) -> Result<(), Error> {
@@ -204,9 +204,12 @@ fn check_callee(target: &Expr, names: &Names<'_>) -> Result<(), Error> {
 }
 
 fn check_arguments(target: &Expr, args: &[Expr], names: &Names<'_>) -> Result<(), Error> {
-    let timer = is_timer_call(target);
+    let function_argument = match &target.kind {
+        ExprKind::Ident(name) => builtins::builtin(name).and_then(Builtin::function_argument),
+        _ => None,
+    };
     for (index, argument) in args.iter().enumerate() {
-        check_argument(timer && index == 1, argument, names)?;
+        check_argument(function_argument == Some(index), argument, names)?;
     }
     Ok(())
 }
@@ -220,10 +223,6 @@ fn check_argument(
         return check_function(name, argument.position, names);
     }
     check_expression(argument, names)
-}
-
-fn is_timer_call(target: &Expr) -> bool {
-    matches!(&target.kind, ExprKind::Ident(name) if name == "every" || name == "after")
 }
 
 fn check_variable(name: &str, position: Position, names: &Names<'_>) -> Result<(), Error> {

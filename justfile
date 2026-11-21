@@ -11,6 +11,9 @@ generate-properties-doc:
 generate-types-doc:
     cargo run -p brul-lang-gen --bin types-doc
 
+generate-builtins-doc:
+    cargo run -p brul-lang-gen --bin builtins-doc
+
 generate-codegen:
     cargo run -p brul-codegen --bin emit -- --fixtures
 

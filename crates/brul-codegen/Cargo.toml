@@ -16,6 +16,7 @@ tracing = { workspace = true }
 syn = { workspace = true }
 
 [build-dependencies]
+brul-lang-gen = { workspace = true }
 brul-style-gen = { workspace = true }
 
 [lints]

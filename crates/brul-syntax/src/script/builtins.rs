@@ -8,14 +8,10 @@ pub enum Argument {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BuiltinKind {
+pub enum BuiltinEmit {
+    Function { path: &'static str },
     Host { marker: &'static str },
-    StringFn,
-    NumberFn,
-    Len,
-    Every,
-    After,
-    Cancel,
+    Method { name: &'static str },
 }
 
 #[derive(Debug, Clone)]
@@ -23,7 +19,15 @@ pub struct Builtin {
     pub name: &'static str,
     pub arguments: &'static [Argument],
     pub result: Type,
-    pub kind: BuiltinKind,
+    pub emit: BuiltinEmit,
+}
+
+impl Builtin {
+    pub fn function_argument(&self) -> Option<usize> {
+        self.arguments
+            .iter()
+            .position(|argument| matches!(argument, Argument::Function))
+    }
 }
 
 include!(concat!(env!("OUT_DIR"), "/lang_builtins.rs"));
