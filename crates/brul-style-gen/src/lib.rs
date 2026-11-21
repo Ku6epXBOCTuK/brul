@@ -1,6 +1,7 @@
 mod codegen;
 mod docs;
 mod layout;
+mod snapshot;
 mod style;
 mod syntax;
 mod text;
@@ -13,6 +14,7 @@ use std::path::Path;
 
 use crate::codegen::codegen_fields;
 use crate::layout::layout_style;
+use crate::snapshot::snapshot;
 use crate::style::codegen;
 use crate::style::style;
 use crate::syntax::syntax;
@@ -27,6 +29,7 @@ pub enum Output {
     Layout,
     Widget,
     Text,
+    Snapshot,
     Codegen,
     CodegenFields,
 }
@@ -38,6 +41,7 @@ pub fn generate(output: Output, out_dir: &Path) {
         Output::Layout => ("style_layout.rs", layout_style()),
         Output::Widget => ("style_widget.rs", widget()),
         Output::Text => ("style_text.rs", text()),
+        Output::Snapshot => ("style_snapshot.rs", snapshot()),
         Output::Codegen => ("style_kind.rs", codegen()),
         Output::CodegenFields => ("style_fields.rs", codegen_fields()),
     };

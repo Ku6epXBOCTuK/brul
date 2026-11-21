@@ -7,6 +7,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Width,
         name: "width",
+        field: "width",
         ty: Type::Length,
         in_state: Forbidden,
         target: Layout(LayoutField::Width),
@@ -16,6 +17,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Height,
         name: "height",
+        field: "height",
         ty: Type::Length,
         in_state: Forbidden,
         target: Layout(LayoutField::Height),
@@ -25,6 +27,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::FlexGrow,
         name: "flex-grow",
+        field: "flex_grow",
         ty: Type::Number,
         in_state: Forbidden,
         target: Layout(LayoutField::FlexGrow),
@@ -34,6 +37,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::FlexShrink,
         name: "flex-shrink",
+        field: "flex_shrink",
         ty: Type::Number,
         in_state: Forbidden,
         target: Layout(LayoutField::FlexShrink),
@@ -43,6 +47,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::FlexBasis,
         name: "flex-basis",
+        field: "flex_basis",
         ty: Type::Length,
         in_state: Forbidden,
         target: Layout(LayoutField::FlexBasis),
@@ -52,6 +57,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Display,
         name: "display",
+        field: "display",
         ty: Type::Keywords(&["flex", "grid"]),
         in_state: Forbidden,
         target: Layout(LayoutField::Display),
@@ -61,6 +67,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::FlexDirection,
         name: "flex-direction",
+        field: "flex_direction",
         ty: Type::Keywords(&["row", "column"]),
         in_state: Forbidden,
         target: Layout(LayoutField::FlexDirection),
@@ -70,6 +77,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::GridTemplateColumns,
         name: "grid-template-columns",
+        field: "grid_template_columns",
         ty: Type::TrackList,
         in_state: Forbidden,
         target: Layout(LayoutField::GridTemplateColumns),
@@ -79,6 +87,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::GridTemplateRows,
         name: "grid-template-rows",
+        field: "grid_template_rows",
         ty: Type::TrackList,
         in_state: Forbidden,
         target: Layout(LayoutField::GridTemplateRows),
@@ -88,6 +97,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::GridColumn,
         name: "grid-column",
+        field: "grid_column",
         ty: Type::GridLine,
         in_state: Forbidden,
         target: Layout(LayoutField::GridColumn),
@@ -97,6 +107,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::GridRow,
         name: "grid-row",
+        field: "grid_row",
         ty: Type::GridLine,
         in_state: Forbidden,
         target: Layout(LayoutField::GridRow),
@@ -106,6 +117,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::GridAutoFlow,
         name: "grid-auto-flow",
+        field: "grid_auto_flow",
         ty: Type::Keywords(&["row", "column"]),
         in_state: Forbidden,
         target: Layout(LayoutField::GridAutoFlow),
@@ -115,6 +127,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::GridTemplateAreas,
         name: "grid-template-areas",
+        field: "grid_template_areas",
         ty: Type::AreaTemplate,
         in_state: Forbidden,
         target: Layout(LayoutField::GridTemplateAreas),
@@ -124,6 +137,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::GridArea,
         name: "grid-area",
+        field: "grid_area",
         ty: Type::GridArea,
         in_state: Forbidden,
         target: Layout(LayoutField::GridArea),
@@ -133,6 +147,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::PaddingSide(Left),
         name: "padding-left",
+        field: "padding",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::Padding(Left)),
@@ -142,6 +157,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::PaddingSide(Right),
         name: "padding-right",
+        field: "padding",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::Padding(Right)),
@@ -151,6 +167,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::PaddingSide(Top),
         name: "padding-top",
+        field: "padding",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::Padding(Top)),
@@ -160,6 +177,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::PaddingSide(Bottom),
         name: "padding-bottom",
+        field: "padding",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::Padding(Bottom)),
@@ -169,6 +187,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Gap,
         name: "gap",
+        field: "gap",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::Gap),
@@ -178,6 +197,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::RowGap,
         name: "row-gap",
+        field: "row_gap",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::RowGap),
@@ -187,6 +207,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::ColumnGap,
         name: "column-gap",
+        field: "column_gap",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::ColumnGap),
@@ -196,6 +217,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderWidthSide(Left),
         name: "border-left-width",
+        field: "border_width",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::BorderWidthSide(Left)),
@@ -205,6 +227,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderWidthSide(Top),
         name: "border-top-width",
+        field: "border_width",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::BorderWidthSide(Top)),
@@ -214,6 +237,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderWidthSide(Right),
         name: "border-right-width",
+        field: "border_width",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::BorderWidthSide(Right)),
@@ -223,6 +247,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderWidthSide(Bottom),
         name: "border-bottom-width",
+        field: "border_width",
         ty: Type::Px,
         in_state: Forbidden,
         target: Layout(LayoutField::BorderWidthSide(Bottom)),
@@ -232,6 +257,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderRadius,
         name: "border-radius",
+        field: "border_radius",
         ty: Type::Px,
         in_state: Forbidden,
         target: Style(StyleField::BorderRadius),
@@ -241,6 +267,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::FontSize,
         name: "font-size",
+        field: "font_size",
         ty: Type::Px,
         in_state: Forbidden,
         target: Text(TextField::Size),
@@ -250,6 +277,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::FontFamily,
         name: "font-family",
+        field: "family",
         ty: Type::String,
         in_state: Forbidden,
         target: Text(TextField::Family),
@@ -259,6 +287,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::JustifyContent,
         name: "justify-content",
+        field: "justify",
         ty: Type::Keywords(&["start", "center", "end", "space-between"]),
         in_state: Forbidden,
         target: Layout(LayoutField::Justify),
@@ -268,6 +297,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::AlignItems,
         name: "align-items",
+        field: "align",
         ty: Type::Keywords(&["start", "center", "end", "stretch"]),
         in_state: Forbidden,
         target: Layout(LayoutField::Align),
@@ -277,6 +307,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Background,
         name: "background",
+        field: "background",
         ty: Type::Paint,
         in_state: Visual,
         target: Style(StyleField::Background),
@@ -286,6 +317,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderColorSide(Left),
         name: "border-left-color",
+        field: "border",
         ty: Type::Color,
         in_state: Visual,
         target: Style(StyleField::BorderSide(Left)),
@@ -295,6 +327,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderColorSide(Top),
         name: "border-top-color",
+        field: "border",
         ty: Type::Color,
         in_state: Visual,
         target: Style(StyleField::BorderSide(Top)),
@@ -304,6 +337,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderColorSide(Right),
         name: "border-right-color",
+        field: "border",
         ty: Type::Color,
         in_state: Visual,
         target: Style(StyleField::BorderSide(Right)),
@@ -313,6 +347,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::BorderColorSide(Bottom),
         name: "border-bottom-color",
+        field: "border",
         ty: Type::Color,
         in_state: Visual,
         target: Style(StyleField::BorderSide(Bottom)),
@@ -322,6 +357,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Color,
         name: "color",
+        field: "text",
         ty: Type::Color,
         in_state: Visual,
         target: Style(StyleField::Text),
@@ -331,6 +367,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Tint,
         name: "tint",
+        field: "tint",
         ty: Type::Color,
         in_state: Visual,
         target: Style(StyleField::Tint),
@@ -340,6 +377,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::TextAlign,
         name: "text-align",
+        field: "align",
         ty: Type::Keywords(&["left", "center", "right"]),
         in_state: Visual,
         target: Text(TextField::Align),
@@ -349,6 +387,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::VerticalAlign,
         name: "vertical-align",
+        field: "vertical_align",
         ty: Type::Keywords(&["top", "center", "bottom"]),
         in_state: Visual,
         target: Text(TextField::VerticalAlign),
@@ -358,6 +397,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::FontWeight,
         name: "font-weight",
+        field: "weight",
         ty: Type::NumberIn(&[400.0, 500.0, 600.0, 700.0]),
         in_state: TextWeight,
         target: Text(TextField::Weight),
@@ -367,6 +407,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Opacity,
         name: "opacity",
+        field: "opacity",
         ty: Type::NumberRange(0.0, 1.0),
         in_state: Visual,
         target: Style(StyleField::Opacity),
@@ -376,6 +417,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Clip,
         name: "clip",
+        field: "clip",
         ty: Type::Bool,
         in_state: Visual,
         target: Style(StyleField::Clip),
@@ -385,6 +427,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Scroll,
         name: "scroll",
+        field: "scroll",
         ty: Type::Bool,
         in_state: Forbidden,
         target: Style(StyleField::Scroll),
@@ -394,6 +437,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::ShadowOffsetX,
         name: "box-shadow-offset-x",
+        field: "shadow",
         ty: Type::SignedPx,
         in_state: Forbidden,
         target: Style(StyleField::ShadowX),
@@ -403,6 +447,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::ShadowOffsetY,
         name: "box-shadow-offset-y",
+        field: "shadow",
         ty: Type::SignedPx,
         in_state: Forbidden,
         target: Style(StyleField::ShadowY),
@@ -412,6 +457,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::ShadowBlur,
         name: "box-shadow-blur",
+        field: "shadow",
         ty: Type::Px,
         in_state: Forbidden,
         target: Style(StyleField::ShadowBlur),
@@ -421,6 +467,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::ShadowColor,
         name: "box-shadow-color",
+        field: "shadow",
         ty: Type::Color,
         in_state: Visual,
         target: Style(StyleField::ShadowColor),

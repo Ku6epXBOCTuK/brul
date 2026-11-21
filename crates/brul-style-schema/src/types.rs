@@ -140,6 +140,7 @@ pub enum PropertyKey {
 pub struct PropertySpec {
     pub key: PropertyKey,
     pub name: &'static str,
+    pub field: &'static str,
     pub ty: Type,
     pub in_state: StatePolicy,
     pub target: Target,
