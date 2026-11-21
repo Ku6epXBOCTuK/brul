@@ -976,7 +976,7 @@ fn every_before_assembly_becomes_a_window_command() {
         *ui.commands.borrow(),
         vec![WindowCommand::Every {
             interval: Duration::from_secs_f64(0.5),
-            function: "tick".to_owned(),
+            function: "tick".into(),
             owner: TimerOwner::new(0),
         }]
     );
@@ -990,7 +990,7 @@ fn every_from_a_handler_is_scheduled_without_an_app_host() {
         ui.dispatch(&[WidgetEvent::Timer(TimerOwner::new(0), "schedule".into())]),
         vec![WindowCommand::Every {
             interval: Duration::from_secs(1),
-            function: "tick".to_owned(),
+            function: "tick".into(),
             owner: TimerOwner::new(0),
         }]
     );
@@ -1195,7 +1195,7 @@ fn a_timer_from_a_nested_component_runs_in_its_component() {
         *commands.borrow(),
         vec![WindowCommand::Every {
             interval: Duration::from_secs_f64(0.5),
-            function: "child_tick".to_owned(),
+            function: "child_tick".into(),
             owner: TimerOwner::new(1),
         }]
     );

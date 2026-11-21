@@ -38,7 +38,8 @@ mod tests;
 mod text;
 mod tree;
 
-pub use event::{CaretArea, Dirty, KeyModifiers, KeyPress, TimerOwner, WidgetError, WidgetEvent};
+pub use brul_ident::{FunctionName, TimerOwner};
+pub use event::{CaretArea, Dirty, KeyModifiers, KeyPress, WidgetError, WidgetEvent};
 pub use snapshot::{WidgetSnapshot, WidgetSnapshotNode};
 pub use style::{Class, Layers, StyleSet, StyleState, Transitions, WidgetStyle, WidgetStylePatch};
 pub use text::{TextStylePatch, TextStyleSet};

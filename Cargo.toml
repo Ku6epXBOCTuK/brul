@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 brul-codegen = { workspace = true }
+brul-ident = { workspace = true }
 brul-gui = { workspace = true }
 brul-macros = { workspace = true }
 brul-reactive = { workspace = true }
@@ -62,6 +63,7 @@ brul-command = { path = 'crates\brul-command' }
 brul-codegen = { path = 'crates\brul-codegen' }
 brul-gpu = { path = 'crates\brul-gpu' }
 brul-gui = { path = 'crates\brul-gui' }
+brul-ident = { path = 'crates\brul-ident' }
 brul-layout = { path = 'crates\brul-layout' }
 brul-macros = { path = 'crates\brul-macros' }
 brul-reactive = { path = 'crates\brul-reactive' }

@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 brul-gpu = { workspace = true }
+brul-ident = { workspace = true }
 brul-gui = { workspace = true }
 brul-reactive = { workspace = true }
 tracing = { workspace = true }

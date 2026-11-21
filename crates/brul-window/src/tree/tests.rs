@@ -156,7 +156,7 @@ fn the_initial_timers_are_started_at_launch() {
             WindowCommand::Exit,
             WindowCommand::Every {
                 interval: Duration::from_millis(250),
-                function: "tick".to_owned(),
+                function: "tick".into(),
                 owner: TimerOwner::new(0),
             },
         ],
@@ -341,7 +341,7 @@ fn a_timer_command_is_kept() {
     let surface = FakeSurface::new(1.0);
     let mut app = tree_app(commands(vec![WindowCommand::Every {
         interval: Duration::from_millis(100),
-        function: "tick".to_owned(),
+        function: "tick".into(),
         owner: TimerOwner::new(0),
     }]));
     let widget = Widget::text("x").id();

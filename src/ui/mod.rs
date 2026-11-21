@@ -36,7 +36,7 @@ fn timer_command(request: TimerRequest, owner: TimerOwner) -> Option<WindowComma
     if request.interval_ms.is_finite() && request.interval_ms > 0.0 {
         Some(WindowCommand::Every {
             interval: Duration::from_secs_f64(request.interval_ms / 1000.0),
-            function: request.function.into(),
+            function: request.function,
             owner,
         })
     } else {
@@ -354,7 +354,7 @@ impl<T: Theme> Ui<T> {
                         .find(|(id, _)| *id == *owner)
                         .map(|(_, component)| Rc::clone(component));
                     if let Some(component) = component {
-                        let call = component.borrow().event_call(function.as_ref());
+                        let call = component.borrow().event_call(function);
                         if let Some(call) = call {
                             let _ = call(&mut component.borrow_mut(), &[]);
                         }

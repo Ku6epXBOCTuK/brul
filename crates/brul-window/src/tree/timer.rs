@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{TimerOwner, WidgetEvent};
+use brul_gui::WidgetEvent;
+use brul_ident::{FunctionName, TimerOwner};
 use winit::event_loop::ControlFlow;
 
 use crate::window::WindowCommand;
@@ -10,11 +10,11 @@ pub(crate) struct Timer {
     pub(super) next: Instant,
     pub(super) interval: Duration,
     pub(super) owner: TimerOwner,
-    pub(super) function: Arc<str>,
+    pub(super) function: FunctionName,
 }
 
 impl Timer {
-    pub(super) fn new(interval: Duration, owner: TimerOwner, function: Arc<str>) -> Self {
+    pub(super) fn new(interval: Duration, owner: TimerOwner, function: FunctionName) -> Self {
         Self {
             next: Instant::now() + interval,
             interval,
@@ -30,7 +30,7 @@ pub(crate) fn due(timers: &mut [Timer], now: Instant) -> Vec<WidgetEvent> {
         if timer.next > now {
             continue;
         }
-        events.push(WidgetEvent::Timer(timer.owner, Arc::clone(&timer.function)));
+        events.push(WidgetEvent::Timer(timer.owner, timer.function.clone()));
         while timer.next <= now {
             timer.next += timer.interval;
         }
@@ -68,7 +68,7 @@ pub(super) fn split_initial(commands: Vec<WindowCommand>) -> (Vec<Timer>, Vec<Wi
                 function,
                 owner,
             } => {
-                timers.push(Timer::new(interval, owner, function.into()));
+                timers.push(Timer::new(interval, owner, function));
             }
             command => rest.push(command),
         }
@@ -78,10 +78,10 @@ pub(super) fn split_initial(commands: Vec<WindowCommand>) -> (Vec<Timer>, Vec<Wi
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
-    use brul_gui::{TimerOwner, WidgetEvent};
+    use brul_gui::WidgetEvent;
+    use brul_ident::TimerOwner;
     use winit::event_loop::ControlFlow;
 
     use super::{Timer, due, wakeup};
@@ -124,7 +124,7 @@ mod tests {
         let events = due(&mut timers, now);
 
         assert!(
-            matches!(&events[0], WidgetEvent::Timer(_, name) if Arc::ptr_eq(name, &timers[0].function))
+            matches!(&events[0], WidgetEvent::Timer(_, name) if name.as_str().as_ptr() == timers[0].function.as_str().as_ptr())
         );
     }
 

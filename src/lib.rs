@@ -27,7 +27,7 @@ pub use brul_reactive::Signal;
 pub use brul_script::eval;
 pub use brul_script::{
     Component, Dyn, Error, EventCall, Fields, FunctionName, Host, HostCommand, Items, Scope,
-    Script, TimerRequest, Value, VariableId, items, noop_event,
+    Script, TimerOwner, TimerRequest, Value, VariableId, items, noop_event,
 };
 pub use brul_style as style;
 pub use brul_syntax::ast;

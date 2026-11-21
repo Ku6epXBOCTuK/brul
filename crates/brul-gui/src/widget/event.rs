@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use brul_ident::{FunctionName, TimerOwner};
 
 use super::WidgetId;
 use crate::layout::LayoutError;
@@ -44,15 +44,6 @@ pub struct CaretArea {
     pub height: u32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct TimerOwner(u64);
-
-impl TimerOwner {
-    pub fn new(id: u64) -> Self {
-        Self(id)
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WidgetEvent {
     PointerEnter(WidgetId),
@@ -66,7 +57,7 @@ pub enum WidgetEvent {
         modifiers: KeyModifiers,
     },
     Close,
-    Timer(TimerOwner, Arc<str>),
+    Timer(TimerOwner, FunctionName),
     Focus(WidgetId),
     Blur(WidgetId),
     Input(WidgetId, String, usize),

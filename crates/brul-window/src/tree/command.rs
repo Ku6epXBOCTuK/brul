@@ -30,7 +30,7 @@ impl TreeApp {
                     owner,
                 } => {
                     self.timers
-                        .push(Timer::new(*interval, *owner, function.as_str().into()));
+                        .push(Timer::new(*interval, *owner, function.clone()));
                 }
                 WindowCommand::SetTheme(_) => {}
                 WindowCommand::AlwaysOnTop(on_top) => surface.set_always_on_top(*on_top),

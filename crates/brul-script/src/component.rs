@@ -2,6 +2,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 
+use brul_ident::FunctionName;
 use brul_reactive::Signal;
 use brul_syntax::ast::Position;
 
@@ -34,33 +35,6 @@ impl Hasher for Fnv {
 
 type Index = HashMap<&'static str, VariableId, BuildHasherDefault<Fnv>>;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct FunctionName(String);
-
-impl FunctionName {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl From<&str> for FunctionName {
-    fn from(name: &str) -> Self {
-        Self(name.to_owned())
-    }
-}
-
-impl From<String> for FunctionName {
-    fn from(name: String) -> Self {
-        Self(name)
-    }
-}
-
-impl From<FunctionName> for String {
-    fn from(name: FunctionName) -> Self {
-        name.0
-    }
-}
-
 pub struct TimerRequest {
     pub interval_ms: f64,
     pub function: FunctionName,
@@ -76,7 +50,7 @@ pub struct Component {
     state: Option<Box<dyn Any>>,
     host: Option<Box<dyn AnyHost>>,
     pending_timers: Vec<TimerRequest>,
-    event_calls: HashMap<String, crate::EventCall>,
+    event_calls: HashMap<FunctionName, crate::EventCall>,
     scope: Scope,
     // NOTE: environment frames and host functions are not signals, so their
     // changes wake every reader of them through this one coarse signal
@@ -134,11 +108,11 @@ impl Component {
             .and_then(|host| (&mut **host as &mut dyn std::any::Any).downcast_mut())
     }
 
-    pub fn register_event_call(&mut self, name: &str, call: crate::EventCall) {
-        self.event_calls.insert(name.to_owned(), call);
+    pub fn register_event_call(&mut self, name: impl Into<FunctionName>, call: crate::EventCall) {
+        self.event_calls.insert(name.into(), call);
     }
 
-    pub fn event_call(&self, name: &str) -> Option<crate::EventCall> {
+    pub fn event_call(&self, name: &FunctionName) -> Option<crate::EventCall> {
         self.event_calls.get(name).copied()
     }
 

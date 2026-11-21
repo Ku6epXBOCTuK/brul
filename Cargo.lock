@@ -201,6 +201,7 @@ version = "0.1.0"
 dependencies = [
  "brul-codegen",
  "brul-gui",
+ "brul-ident",
  "brul-macros",
  "brul-reactive",
  "brul-script",
@@ -255,6 +256,7 @@ dependencies = [
 name = "brul-gui"
 version = "0.1.0"
 dependencies = [
+ "brul-ident",
  "brul-layout",
  "brul-reactive",
  "brul-style",
@@ -263,6 +265,10 @@ dependencies = [
  "resvg",
  "thiserror 2.0.21",
 ]
+
+[[package]]
+name = "brul-ident"
+version = "0.1.0"
 
 [[package]]
 name = "brul-layout"
@@ -295,6 +301,7 @@ dependencies = [
 name = "brul-script"
 version = "0.1.0"
 dependencies = [
+ "brul-ident",
  "brul-reactive",
  "brul-syntax",
  "thiserror 2.0.21",
@@ -325,6 +332,7 @@ version = "0.1.0"
 dependencies = [
  "brul-gpu",
  "brul-gui",
+ "brul-ident",
  "brul-reactive",
  "softbuffer",
  "thiserror 2.0.21",

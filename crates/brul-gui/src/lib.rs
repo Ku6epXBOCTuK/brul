@@ -145,7 +145,8 @@ pub use text::{
 pub use texture::{Texture, TextureError};
 pub use theme::{Theme, UnknownTheme};
 pub use widget::{
-    CaretArea, Class, Dirty, KeyModifiers, KeyPress, Layers, StyleSet, StyleState, TextStylePatch,
-    TextStyleSet, TimerOwner, Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind,
-    WidgetSnapshot, WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    CaretArea, Class, Dirty, FunctionName, KeyModifiers, KeyPress, Layers, StyleSet, StyleState,
+    TextStylePatch, TextStyleSet, TimerOwner, Transitions, Widget, WidgetError, WidgetEvent,
+    WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode, WidgetState, WidgetStyle,
+    WidgetStylePatch, WidgetTree,
 };
