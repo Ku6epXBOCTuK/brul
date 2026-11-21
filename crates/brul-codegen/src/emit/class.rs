@@ -223,10 +223,6 @@ mod convert {
         )
     }
 
-    pub(super) fn decimal(value: &u32) -> String {
-        value.to_string()
-    }
-
     pub(super) fn border_widths(value: &brul_gui::BorderWidths) -> String {
         sides(value, "BorderWidths")
     }
@@ -244,10 +240,6 @@ mod convert {
 
     pub(super) fn string(value: &String) -> String {
         format!("String::from({value:?})")
-    }
-
-    pub(super) fn debug<T: std::fmt::Debug>(value: &T) -> String {
-        format!("{value:?}")
     }
 
     pub(super) fn millis(value: &Duration) -> String {

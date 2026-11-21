@@ -3,9 +3,9 @@ use std::fs;
 use std::path::Path;
 
 use brul_style_schema::{
-    FIELDS, FieldDefault, FieldSpec, FieldType, LayoutField, PROPERTIES, PatchField, PatchTarget,
-    PropertyKey, PropertySpec, SHORTHANDS, ShorthandParser, Side, StatePolicy, StyleField,
-    StyleOwner, Target, TweenKind, Type,
+    Converter, FIELDS, FieldDefault, FieldSpec, FieldType, LayoutField, PROPERTIES, PatchField,
+    PatchTarget, PropertyKey, PropertySpec, SHORTHANDS, ShorthandParser, Side, SidesType,
+    StatePolicy, StyleField, StyleOwner, Target, TweenKind, Type,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -527,11 +527,8 @@ fn codegen_fields() -> TokenStream {
             .iter()
             .map(|patch| {
                 let field = ident(patch.name);
-                match patch.converter {
-                    Some(converter) => {
-                        let converter = ident(converter);
-                        quote!(#field => convert::#converter,)
-                    }
+                match converter(patch.converter) {
+                    Some(converter) => quote!(#field => #converter,),
                     None => quote!(#field,),
                 }
             })
@@ -582,6 +579,32 @@ fn codegen() -> TokenStream {
             }
         }
     }
+}
+
+fn converter(converter: Converter) -> Option<TokenStream> {
+    let name = match converter {
+        Converter::Raw => return None,
+        Converter::Dimension => "dimension",
+        Converter::Sides(SidesType::Padding) => "padding",
+        Converter::Sides(SidesType::BorderWidths) => "border_widths",
+        Converter::Float => "float",
+        Converter::String => "string",
+        Converter::Paint => "paint",
+        Converter::Color => "color",
+        Converter::Duration => "millis",
+        Converter::Tracks => "tracks",
+        Converter::GridLine => "grid_line",
+        Converter::AreaTemplate => "area_template",
+        Converter::Display => "display",
+        Converter::Direction => "direction",
+        Converter::Justify => "justify",
+        Converter::Align => "align",
+        Converter::VerticalAlign => "vertical_align",
+        Converter::TextAlign => "text_align",
+        Converter::AutoFlow => "auto_flow",
+    };
+    let name = ident(name);
+    Some(quote!(convert::#name))
 }
 
 fn fields(owner: StyleOwner) -> Vec<&'static FieldSpec> {

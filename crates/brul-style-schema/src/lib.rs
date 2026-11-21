@@ -233,12 +233,40 @@ pub enum PatchTarget {
     Scaled(&'static str),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SidesType {
+    Padding,
+    BorderWidths,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Converter {
+    Raw,
+    Dimension,
+    Sides(SidesType),
+    Float,
+    String,
+    Paint,
+    Color,
+    Duration,
+    Tracks,
+    GridLine,
+    AreaTemplate,
+    Display,
+    Direction,
+    Justify,
+    Align,
+    VerticalAlign,
+    TextAlign,
+    AutoFlow,
+}
+
 #[derive(Clone, Copy)]
 pub struct PatchField {
     pub name: &'static str,
     pub order: u16,
     pub target: PatchTarget,
-    pub converter: Option<&'static str>,
+    pub converter: Converter,
 }
 
 #[derive(Clone, Copy)]
@@ -251,7 +279,7 @@ pub struct FieldSpec {
     pub patches: &'static [PatchField],
 }
 
-pub const fn patch(name: &'static str, order: u16, converter: Option<&'static str>) -> PatchField {
+pub const fn patch(name: &'static str, order: u16, converter: Converter) -> PatchField {
     PatchField {
         name,
         order,
@@ -264,7 +292,7 @@ pub const fn side_patch(
     name: &'static str,
     order: u16,
     side: Side,
-    converter: Option<&'static str>,
+    converter: Converter,
 ) -> PatchField {
     PatchField {
         name,
@@ -278,7 +306,7 @@ pub const fn sub_patch(
     name: &'static str,
     order: u16,
     subfield: &'static str,
-    converter: Option<&'static str>,
+    converter: Converter,
 ) -> PatchField {
     PatchField {
         name,
@@ -293,7 +321,7 @@ pub const fn scaled_patch(name: &'static str, order: u16, from: &'static str) ->
         name,
         order,
         target: PatchTarget::Scaled(from),
-        converter: Some("float"),
+        converter: Converter::Float,
     }
 }
 
@@ -315,11 +343,13 @@ pub const fn field(
     }
 }
 
+use Converter as C;
 use FieldDefault as D;
 use FieldType as R;
 use LayoutField as L;
 use PropertyKey as K;
 use Side::*;
+use SidesType as ST;
 use StatePolicy::*;
 use StyleOwner as O;
 use Target::*;
@@ -332,7 +362,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Dimension,
         D::Default,
         W::None,
-        &[patch("width", 0, Some("dimension"))],
+        &[patch("width", 0, C::Dimension)],
     ),
     field(
         O::Layout,
@@ -340,7 +370,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Dimension,
         D::Default,
         W::None,
-        &[patch("height", 1, Some("dimension"))],
+        &[patch("height", 1, C::Dimension)],
     ),
     field(
         O::Layout,
@@ -348,7 +378,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::SidesU32,
         D::Default,
         W::None,
-        &[patch("padding", 2, Some("padding"))],
+        &[patch("padding", 2, C::Sides(ST::Padding))],
     ),
     field(
         O::Layout,
@@ -356,7 +386,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::SidesU32,
         D::Default,
         W::None,
-        &[patch("border_width", 3, Some("border_widths"))],
+        &[patch("border_width", 3, C::Sides(ST::BorderWidths))],
     ),
     field(
         O::Layout,
@@ -364,7 +394,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::U32,
         D::Zero,
         W::None,
-        &[patch("gap", 4, Some("decimal"))],
+        &[patch("gap", 4, C::Raw)],
     ),
     field(
         O::Layout,
@@ -372,7 +402,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::U32,
         D::Zero,
         W::None,
-        &[patch("row_gap", 5, Some("decimal"))],
+        &[patch("row_gap", 5, C::Raw)],
     ),
     field(
         O::Layout,
@@ -380,7 +410,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::U32,
         D::Zero,
         W::None,
-        &[patch("column_gap", 6, Some("decimal"))],
+        &[patch("column_gap", 6, C::Raw)],
     ),
     field(
         O::Layout,
@@ -388,7 +418,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::F32,
         D::Zero,
         W::None,
-        &[patch("flex_grow", 7, Some("debug"))],
+        &[patch("flex_grow", 7, C::Float)],
     ),
     field(
         O::Layout,
@@ -396,7 +426,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::F32,
         D::Zero,
         W::None,
-        &[patch("flex_shrink", 8, Some("debug"))],
+        &[patch("flex_shrink", 8, C::Float)],
     ),
     field(
         O::Layout,
@@ -404,7 +434,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Dimension,
         D::Default,
         W::None,
-        &[patch("flex_basis", 9, Some("dimension"))],
+        &[patch("flex_basis", 9, C::Dimension)],
     ),
     field(
         O::Layout,
@@ -412,7 +442,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Display,
         D::Default,
         W::None,
-        &[patch("display", 10, Some("display"))],
+        &[patch("display", 10, C::Display)],
     ),
     field(
         O::Layout,
@@ -420,7 +450,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Direction,
         D::Default,
         W::None,
-        &[patch("flex_direction", 11, Some("direction"))],
+        &[patch("flex_direction", 11, C::Direction)],
     ),
     field(
         O::Layout,
@@ -428,7 +458,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Justify,
         D::Default,
         W::None,
-        &[patch("justify", 12, Some("justify"))],
+        &[patch("justify", 12, C::Justify)],
     ),
     field(
         O::Layout,
@@ -436,7 +466,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Align,
         D::Default,
         W::None,
-        &[patch("align", 13, Some("align"))],
+        &[patch("align", 13, C::Align)],
     ),
     field(
         O::Layout,
@@ -444,7 +474,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::TrackList,
         D::Default,
         W::None,
-        &[patch("grid_template_columns", 14, Some("tracks"))],
+        &[patch("grid_template_columns", 14, C::Tracks)],
     ),
     field(
         O::Layout,
@@ -452,7 +482,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::TrackList,
         D::Default,
         W::None,
-        &[patch("grid_template_rows", 15, Some("tracks"))],
+        &[patch("grid_template_rows", 15, C::Tracks)],
     ),
     field(
         O::Layout,
@@ -460,7 +490,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::GridLine,
         D::Default,
         W::None,
-        &[patch("grid_column", 16, Some("grid_line"))],
+        &[patch("grid_column", 16, C::GridLine)],
     ),
     field(
         O::Layout,
@@ -468,7 +498,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::GridLine,
         D::Default,
         W::None,
-        &[patch("grid_row", 17, Some("grid_line"))],
+        &[patch("grid_row", 17, C::GridLine)],
     ),
     field(
         O::Layout,
@@ -476,7 +506,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::GridAutoFlow,
         D::Default,
         W::None,
-        &[patch("grid_auto_flow", 18, Some("auto_flow"))],
+        &[patch("grid_auto_flow", 18, C::AutoFlow)],
     ),
     field(
         O::Layout,
@@ -484,7 +514,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::AreaTemplate,
         D::Default,
         W::None,
-        &[patch("grid_template_areas", 19, Some("area_template"))],
+        &[patch("grid_template_areas", 19, C::AreaTemplate)],
     ),
     field(
         O::Layout,
@@ -492,7 +522,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::String,
         D::Default,
         W::None,
-        &[patch("grid_area", 20, Some("string"))],
+        &[patch("grid_area", 20, C::String)],
     ),
     field(
         O::Widget,
@@ -500,7 +530,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Paint,
         D::Default,
         W::Paint,
-        &[patch("background", 0, Some("paint"))],
+        &[patch("background", 0, C::Paint)],
     ),
     field(
         O::Widget,
@@ -509,10 +539,10 @@ pub static FIELDS: &[FieldSpec] = &[
         D::TransparentSides,
         W::Color,
         &[
-            side_patch("border_left", 1, Left, Some("color")),
-            side_patch("border_top", 2, Top, Some("color")),
-            side_patch("border_right", 3, Right, Some("color")),
-            side_patch("border_bottom", 4, Bottom, Some("color")),
+            side_patch("border_left", 1, Left, C::Color),
+            side_patch("border_top", 2, Top, C::Color),
+            side_patch("border_right", 3, Right, C::Color),
+            side_patch("border_bottom", 4, Bottom, C::Color),
         ],
     ),
     field(
@@ -521,7 +551,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Color,
         D::Text,
         W::Color,
-        &[patch("text", 5, Some("color"))],
+        &[patch("text", 5, C::Color)],
     ),
     field(
         O::Widget,
@@ -529,7 +559,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::OptionColor,
         D::None,
         W::OptionColor,
-        &[patch("tint", 6, Some("color"))],
+        &[patch("tint", 6, C::Color)],
     ),
     field(
         O::Widget,
@@ -537,7 +567,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::F32,
         D::One,
         W::Float,
-        &[patch("opacity", 7, Some("debug"))],
+        &[patch("opacity", 7, C::Float)],
     ),
     field(
         O::Widget,
@@ -545,7 +575,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::VerticalAlign,
         D::Default,
         W::None,
-        &[patch("vertical_align", 8, Some("vertical_align"))],
+        &[patch("vertical_align", 8, C::VerticalAlign)],
     ),
     field(
         O::Widget,
@@ -553,7 +583,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Bool,
         D::Default,
         W::None,
-        &[patch("clip", 9, None)],
+        &[patch("clip", 9, C::Raw)],
     ),
     field(
         O::Widget,
@@ -562,10 +592,10 @@ pub static FIELDS: &[FieldSpec] = &[
         D::Default,
         W::Color,
         &[
-            sub_patch("shadow", 10, "color", Some("color")),
-            sub_patch("shadow_x", 13, "x", None),
-            sub_patch("shadow_y", 14, "y", None),
-            sub_patch("shadow_blur", 15, "blur", None),
+            sub_patch("shadow", 10, "color", C::Color),
+            sub_patch("shadow_x", 13, "x", C::Raw),
+            sub_patch("shadow_y", 14, "y", C::Raw),
+            sub_patch("shadow_blur", 15, "blur", C::Raw),
         ],
     ),
     field(
@@ -574,7 +604,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::U32,
         D::Zero,
         W::None,
-        &[patch("border_radius", 11, None)],
+        &[patch("border_radius", 11, C::Raw)],
     ),
     field(
         O::Widget,
@@ -582,7 +612,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Bool,
         D::Default,
         W::None,
-        &[patch("scroll", 12, None)],
+        &[patch("scroll", 12, C::Raw)],
     ),
     field(
         O::Text,
@@ -590,7 +620,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::OptionString,
         D::None,
         W::None,
-        &[patch("family", 3, Some("string"))],
+        &[patch("family", 3, C::String)],
     ),
     field(
         O::Text,
@@ -598,7 +628,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::F32,
         D::FontSize,
         W::None,
-        &[patch("size", 2, Some("float"))],
+        &[patch("size", 2, C::Float)],
     ),
     field(
         O::Text,
@@ -614,7 +644,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::U16,
         D::Weight,
         W::None,
-        &[patch("weight", 0, None)],
+        &[patch("weight", 0, C::Raw)],
     ),
     field(
         O::Text,
@@ -622,7 +652,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::TextAlign,
         D::Default,
         W::None,
-        &[patch("align", 1, Some("text_align"))],
+        &[patch("align", 1, C::TextAlign)],
     ),
     field(
         O::Transition,
@@ -630,7 +660,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("background", 0, Some("millis"))],
+        &[patch("background", 0, C::Duration)],
     ),
     field(
         O::Transition,
@@ -638,7 +668,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("border_left", 1, Some("millis"))],
+        &[patch("border_left", 1, C::Duration)],
     ),
     field(
         O::Transition,
@@ -646,7 +676,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("border_top", 2, Some("millis"))],
+        &[patch("border_top", 2, C::Duration)],
     ),
     field(
         O::Transition,
@@ -654,7 +684,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("border_right", 3, Some("millis"))],
+        &[patch("border_right", 3, C::Duration)],
     ),
     field(
         O::Transition,
@@ -662,7 +692,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("border_bottom", 4, Some("millis"))],
+        &[patch("border_bottom", 4, C::Duration)],
     ),
     field(
         O::Transition,
@@ -670,7 +700,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("text", 5, Some("millis"))],
+        &[patch("text", 5, C::Duration)],
     ),
     field(
         O::Transition,
@@ -678,7 +708,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("tint", 6, Some("millis"))],
+        &[patch("tint", 6, C::Duration)],
     ),
     field(
         O::Transition,
@@ -686,7 +716,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("opacity", 7, Some("millis"))],
+        &[patch("opacity", 7, C::Duration)],
     ),
     field(
         O::Transition,
@@ -694,7 +724,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::Duration,
         D::None,
         W::None,
-        &[patch("shadow", 8, Some("millis"))],
+        &[patch("shadow", 8, C::Duration)],
     ),
 ];
 
