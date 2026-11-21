@@ -13,8 +13,7 @@ impl WidgetTree {
         let target = self.hit_scratch.path.iter().rev().copied().find(|slot| {
             let node = &self.nodes[slot.index()];
             matches!(node.data, Content::View)
-                && (node.styles.resolve(node.state).scroll
-                    || (self.root_scroll && *slot == self.root))
+                && (node.style().scroll || (self.root_scroll && *slot == self.root))
         });
         let Some(target) = target.filter(|target| {
             self.modal_scope()

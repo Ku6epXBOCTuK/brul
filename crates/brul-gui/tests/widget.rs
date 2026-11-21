@@ -365,6 +365,37 @@ fn the_wheel_scrolls_the_nearest_scroll_container() {
 }
 
 #[test]
+fn a_class_scroll_is_applied_to_the_wheel() {
+    let first = Widget::text("one").with_layout(fixed(80, 60));
+    let first_id = first.id();
+    let list = Widget::column(vec![first, Widget::text("two").with_layout(fixed(80, 60))])
+        .with_layout(fixed(80, 100));
+    let list_id = list.id();
+    let mut tree = WidgetTree::new(list);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 80,
+        height: 100,
+    };
+
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+
+    let class = Class {
+        style: Layers::new(WidgetStylePatch {
+            scroll: Some(true),
+            ..WidgetStylePatch::default()
+        }),
+        ..Class::default()
+    };
+    assert!(tree.apply_class(list_id, Some(&class)));
+
+    assert!(tree.wheel(10, 10, 50));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+    let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
+    assert_eq!(first.expect("first").y, -20);
+}
+
+#[test]
 fn the_root_scrolls_when_the_window_asks_for_it() {
     fn tall() -> (Widget, WidgetId) {
         let first = Widget::text("one").with_layout(fixed(80, 60));
