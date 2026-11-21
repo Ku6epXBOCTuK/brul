@@ -48,6 +48,7 @@ pub fn instance(
     instance: Instance<'_>,
 ) -> Result<Built, ViewError> {
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    build.register_component(Rc::clone(&component));
     component.borrow_mut().set_names(instance.names);
     start(&component, &instance)?;
     let given = declare_props(&component, parent, instance.props, instance.name)?;

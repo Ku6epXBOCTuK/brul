@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use super::component::ComponentHandle;
 use super::slot::Slots;
 use super::structure::Structure;
 
@@ -7,6 +8,7 @@ use super::structure::Structure;
 pub struct Build {
     slots: Option<Rc<Slots>>,
     structures: Vec<Structure>,
+    components: Vec<ComponentHandle>,
 }
 
 impl Build {
@@ -18,6 +20,7 @@ impl Build {
         Self {
             slots,
             structures: Vec::new(),
+            components: Vec::new(),
         }
     }
 
@@ -35,5 +38,13 @@ impl Build {
 
     pub fn take_structures(&mut self) -> Vec<Structure> {
         std::mem::take(&mut self.structures)
+    }
+
+    pub fn register_component(&mut self, component: ComponentHandle) {
+        self.components.push(component);
+    }
+
+    pub fn take_components(&mut self) -> Vec<ComponentHandle> {
+        std::mem::take(&mut self.components)
     }
 }

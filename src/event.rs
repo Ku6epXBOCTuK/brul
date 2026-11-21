@@ -44,7 +44,7 @@ pub(crate) fn handler_target(event: &WidgetEvent) -> Option<(Option<WidgetId>, H
         WidgetEvent::Key { .. } => Some((None, HandlerEvent::Key)),
         WidgetEvent::Close => Some((None, HandlerEvent::Close)),
         WidgetEvent::Drag(_) => None,
-        WidgetEvent::Timer(_) => None,
+        WidgetEvent::Timer(..) => None,
         WidgetEvent::Copy(_) => None,
         WidgetEvent::Paste => None,
     }
@@ -154,6 +154,12 @@ mod tests {
         );
         let id = Widget::text("x").id();
         assert_eq!(handler_target(&WidgetEvent::Drag(id)), None);
-        assert_eq!(handler_target(&WidgetEvent::Timer("tick".into())), None);
+        assert_eq!(
+            handler_target(&WidgetEvent::Timer(
+                brul_gui::TimerOwner::new(0),
+                "tick".into()
+            )),
+            None
+        );
     }
 }

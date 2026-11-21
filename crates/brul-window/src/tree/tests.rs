@@ -3,8 +3,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{
-    Atlas, Dirty, KeyPress, Size, TextEngine, Widget, WidgetError, WidgetEvent, WidgetSnapshot,
-    WidgetTree,
+    Atlas, Dirty, KeyPress, Size, TextEngine, TimerOwner, Widget, WidgetError, WidgetEvent,
+    WidgetSnapshot, WidgetTree,
 };
 use winit::event_loop::ControlFlow;
 
@@ -157,6 +157,7 @@ fn the_initial_timers_are_started_at_launch() {
             WindowCommand::Every {
                 interval: Duration::from_millis(250),
                 function: "tick".to_owned(),
+                owner: TimerOwner::new(0),
             },
         ],
     );
@@ -208,6 +209,7 @@ fn a_window_deadline_is_its_next_timer() {
     app.timers.push(Timer {
         next: now,
         interval: Duration::from_secs(1),
+        owner: TimerOwner::new(0),
         function: "tick".into(),
     });
 
@@ -340,6 +342,7 @@ fn a_timer_command_is_kept() {
     let mut app = tree_app(commands(vec![WindowCommand::Every {
         interval: Duration::from_millis(100),
         function: "tick".to_owned(),
+        owner: TimerOwner::new(0),
     }]));
     let widget = Widget::text("x").id();
 

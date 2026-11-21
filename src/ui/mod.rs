@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use brul_codegen::runtime::{self, accepts_prop};
-use brul_gui::{WidgetEvent, WidgetId, WidgetTree};
+use brul_gui::{TimerOwner, WidgetEvent, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_window::WindowCommand;
 
@@ -27,11 +27,17 @@ mod tests;
 
 const EVENT_DEPTH: usize = 64;
 
-fn timer_command(request: TimerRequest) -> Option<WindowCommand> {
+pub(crate) struct AssemblyParts {
+    pub(crate) structures: Vec<Structure>,
+    pub(crate) nested: Vec<ComponentHandle>,
+}
+
+fn timer_command(request: TimerRequest, owner: TimerOwner) -> Option<WindowCommand> {
     if request.interval_ms.is_finite() && request.interval_ms > 0.0 {
         Some(WindowCommand::Every {
             interval: Duration::from_secs_f64(request.interval_ms / 1000.0),
             function: request.function.into(),
+            owner,
         })
     } else {
         tracing::error!(
@@ -42,14 +48,33 @@ fn timer_command(request: TimerRequest) -> Option<WindowCommand> {
     }
 }
 
-fn schedule_timers(component: &ComponentHandle, commands: &Rc<RefCell<Vec<WindowCommand>>>) {
-    let timers = component.borrow_mut().take_timers();
-    commands
-        .borrow_mut()
-        .extend(timers.into_iter().filter_map(timer_command));
+fn owner_components(
+    first: u64,
+    components: Vec<ComponentHandle>,
+) -> Vec<(TimerOwner, ComponentHandle)> {
+    components
+        .into_iter()
+        .enumerate()
+        .map(|(offset, component)| (TimerOwner::new(first + offset as u64), component))
+        .collect()
+}
+
+fn schedule_timers(
+    components: &[(TimerOwner, ComponentHandle)],
+    commands: &Rc<RefCell<Vec<WindowCommand>>>,
+) {
+    for (owner, component) in components {
+        let timers = component.borrow_mut().take_timers();
+        commands.borrow_mut().extend(
+            timers
+                .into_iter()
+                .filter_map(|request| timer_command(request, *owner)),
+        );
+    }
 }
 pub struct Ui<T: Theme> {
     pub component: ComponentHandle,
+    components: Vec<(TimerOwner, ComponentHandle)>,
     pub tree: Rc<RefCell<WidgetTree>>,
     handlers: Vec<Handler>,
     window_handlers: Vec<Handler>,
@@ -91,7 +116,10 @@ impl<T: Theme> Ui<T> {
             built,
             view,
             theme,
-            structures,
+            AssemblyParts {
+                structures,
+                nested: Vec::new(),
+            },
             Rc::clone(&commands),
             true,
         );
@@ -109,7 +137,7 @@ impl<T: Theme> Ui<T> {
         built: Built,
         view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
         theme: Option<T>,
-        structures: Vec<Structure>,
+        parts: AssemblyParts,
         commands: Rc<RefCell<Vec<WindowCommand>>>,
         scroll: bool,
     ) -> Self {
@@ -119,7 +147,13 @@ impl<T: Theme> Ui<T> {
             handlers,
             props,
         } = built;
-        schedule_timers(&component, &commands);
+        let components = owner_components(
+            0,
+            std::iter::once(Rc::clone(&component))
+                .chain(parts.nested)
+                .collect(),
+        );
+        schedule_timers(&components, &commands);
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         tree.borrow_mut().set_root_scroll(scroll);
         let window_handlers = handlers
@@ -129,6 +163,7 @@ impl<T: Theme> Ui<T> {
             .collect();
         let mut ui = Self {
             component,
+            components,
             tree,
             handlers,
             window_handlers,
@@ -146,7 +181,7 @@ impl<T: Theme> Ui<T> {
         };
         ui.bind(bindings);
         ui.bind_props(props);
-        ui.bind_structures(structures);
+        ui.bind_structures(parts.structures);
         ui.index_handlers();
         ui
     }
@@ -244,6 +279,7 @@ impl<T: Theme> Ui<T> {
             handlers,
             props,
             structures,
+            components,
         } = staged;
         let parents: HashSet<WidgetId> = structures.iter().map(|s| s.parent).collect();
         let widgets: HashSet<WidgetId> = bindings.iter().map(|b| b.widget).collect();
@@ -259,6 +295,8 @@ impl<T: Theme> Ui<T> {
             self.handlers.extend(handlers);
             retain_live(&mut self.handlers, &tree, &none);
         }
+        let next = self.components.len() as u64;
+        self.components.extend(owner_components(next, components));
         self.index_handlers();
         self.bind(bindings);
         self.bind_props(props);
@@ -269,7 +307,14 @@ impl<T: Theme> Ui<T> {
         let mut build = Build::new();
         let built = (self.view)(self.theme, &mut build, &self.component);
         let structures = build.take_structures();
+        let nested = build.take_components();
         let built = built?;
+        self.components = owner_components(
+            0,
+            std::iter::once(Rc::clone(&self.component))
+                .chain(nested)
+                .collect(),
+        );
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
@@ -302,10 +347,17 @@ impl<T: Theme> Ui<T> {
     pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<WindowCommand> {
         for event in events {
             match event {
-                WidgetEvent::Timer(function) => {
-                    let call = self.component.borrow().event_call(function);
-                    if let Some(call) = call {
-                        let _ = call(&mut self.component.borrow_mut(), &[]);
+                WidgetEvent::Timer(owner, function) => {
+                    let component = self
+                        .components
+                        .iter()
+                        .find(|(id, _)| *id == *owner)
+                        .map(|(_, component)| Rc::clone(component));
+                    if let Some(component) = component {
+                        let call = component.borrow().event_call(function.as_ref());
+                        if let Some(call) = call {
+                            let _ = call(&mut component.borrow_mut(), &[]);
+                        }
                     }
                 }
                 WidgetEvent::Close => self.close(),
@@ -349,7 +401,7 @@ impl<T: Theme> Ui<T> {
     }
 
     fn take_commands(&mut self) -> Vec<WindowCommand> {
-        schedule_timers(&self.component, &self.commands);
+        schedule_timers(&self.components, &self.commands);
         std::mem::take(&mut *self.commands.borrow_mut())
     }
 

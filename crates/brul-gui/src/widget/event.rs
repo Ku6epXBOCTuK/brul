@@ -44,6 +44,15 @@ pub struct CaretArea {
     pub height: u32,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TimerOwner(u64);
+
+impl TimerOwner {
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WidgetEvent {
     PointerEnter(WidgetId),
@@ -57,7 +66,7 @@ pub enum WidgetEvent {
         modifiers: KeyModifiers,
     },
     Close,
-    Timer(Arc<str>),
+    Timer(TimerOwner, Arc<str>),
     Focus(WidgetId),
     Blur(WidgetId),
     Input(WidgetId, String, usize),

@@ -14,7 +14,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::icon::{Icon, RgbaIcon};
 use winit::window::{Window, WindowAttributes, WindowId};
 
-use brul_gui::{Color, Image, WidgetEvent, WidgetTree};
+use brul_gui::{Color, Image, TimerOwner, WidgetEvent, WidgetTree};
 
 use crate::input::{Input, event_input, window_input};
 use crate::surface::{Renderer, create_renderer};
@@ -262,6 +262,7 @@ pub enum WindowCommand {
     Every {
         interval: Duration,
         function: String,
+        owner: TimerOwner,
     },
     SetTheme(String),
     AlwaysOnTop(bool),

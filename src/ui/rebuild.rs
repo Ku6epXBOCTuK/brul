@@ -6,7 +6,7 @@ use brul_gui::{WidgetId, WidgetTree};
 
 use super::{Owned, OwnedStructure};
 use crate::each::reconcile_each;
-use crate::{Binding, Build, Built, Handler, PropBinding, RowInfo, Structure};
+use crate::{Binding, Build, Built, ComponentHandle, Handler, PropBinding, RowInfo, Structure};
 
 #[derive(Default)]
 pub(super) struct Staged {
@@ -14,12 +14,14 @@ pub(super) struct Staged {
     pub(super) handlers: Vec<Handler>,
     pub(super) props: Vec<PropBinding>,
     pub(super) structures: Vec<Structure>,
+    pub(super) components: Vec<ComponentHandle>,
 }
 
 struct Rebuilt {
     built: Built,
     rows: Vec<RowInfo>,
     structures: Vec<Structure>,
+    components: Vec<ComponentHandle>,
 }
 
 pub(super) struct Pending {
@@ -63,6 +65,7 @@ impl Pending {
             built,
             rows,
             structures,
+            components,
         }) = rebuild_structure(structure, theme, &old_rows)
         else {
             if structure.each {
@@ -88,6 +91,7 @@ impl Pending {
         self.staged.handlers.extend(handlers);
         self.staged.props.extend(props);
         self.staged.structures.extend(structures);
+        self.staged.components.extend(components);
         true
     }
 }
@@ -117,6 +121,7 @@ fn rebuild_structure(
     let mut build = Build::with_slots(structure.slots.clone());
     let rebuilt = (structure.rebuild)(theme, &mut build, &component, old_rows);
     let structures = build.take_structures();
+    let components = build.take_components();
     component.borrow_mut().set_scope(previous);
     let (built, rows) = match rebuilt {
         Ok(result) => result,
@@ -129,6 +134,7 @@ fn rebuild_structure(
         built,
         rows,
         structures,
+        components,
     })
 }
 

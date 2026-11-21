@@ -963,7 +963,7 @@ fn a_close_without_a_handler_closes_the_window() {
 fn dispatch_runs_a_timer() {
     let component = component_with(&["ran"]);
     let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
-    ui.dispatch(&[WidgetEvent::Timer("tick".into())]);
+    ui.dispatch(&[WidgetEvent::Timer(TimerOwner::new(0), "tick".into())]);
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
 }
 
@@ -977,6 +977,7 @@ fn every_before_assembly_becomes_a_window_command() {
         vec![WindowCommand::Every {
             interval: Duration::from_secs_f64(0.5),
             function: "tick".to_owned(),
+            owner: TimerOwner::new(0),
         }]
     );
 }
@@ -986,10 +987,11 @@ fn every_from_a_handler_is_scheduled_without_an_app_host() {
     let component = component_with(&[]);
     let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
     assert_eq!(
-        ui.dispatch(&[WidgetEvent::Timer("schedule".into())]),
+        ui.dispatch(&[WidgetEvent::Timer(TimerOwner::new(0), "schedule".into())]),
         vec![WindowCommand::Every {
             interval: Duration::from_secs(1),
             function: "tick".to_owned(),
+            owner: TimerOwner::new(0),
         }]
     );
 }
@@ -1119,4 +1121,86 @@ fn a_handler_event_runs_after_the_handler_returns() {
         Ok(Value::String("after".into()))
     );
     assert!(!ui.tree.borrow_mut().set_text(text, "after".to_owned()));
+}
+
+fn child_timer_view(
+    _theme: Option<&str>,
+    _build: &mut Build,
+    _component: &ComponentHandle,
+) -> Result<Built, ViewError> {
+    Ok(Built {
+        widget: Widget::text("child"),
+        bindings: Vec::new(),
+        handlers: Vec::new(),
+        props: Vec::new(),
+    })
+}
+
+fn schedule_child_tick(component: &mut Component) -> Result<(), Error> {
+    component.declare("ran", Value::Bool(false), false)?;
+    component.register_event_call("child_tick", set_ran);
+    component.every(500.0, "child_tick")
+}
+
+fn nested_timer_view(
+    theme: Option<TestTheme>,
+    build: &mut Build,
+    component: &ComponentHandle,
+) -> Result<Built, ViewError> {
+    if theme.is_some() {
+        return Err(unknown_theme());
+    }
+    let child = runtime::instance(
+        build,
+        component,
+        runtime::Instance {
+            theme: theme.map(Theme::name),
+            view: child_timer_view,
+            script: Some(script_with(schedule_child_tick)),
+            name: "TimerChild",
+            names: NAMES,
+            props: &[],
+            defaults: &[],
+            events: &[],
+            slots: &[],
+        },
+    )?;
+    Ok(Built {
+        widget: child.widget,
+        bindings: Vec::new(),
+        handlers: child.handlers,
+        props: Vec::new(),
+    })
+}
+
+#[test]
+fn a_timer_from_a_nested_component_runs_in_its_component() {
+    let root = component_with(&["ran"]);
+    root.borrow_mut().register_event_call("child_tick", set_ran);
+    let mut build = Build::new();
+    let built = nested_timer_view(None, &mut build, &root).expect("view");
+    let nested = build.take_components();
+    let structures = build.take_structures();
+    let commands = Rc::new(RefCell::new(Vec::new()));
+    let mut ui = Ui::assemble_with(
+        Rc::clone(&root),
+        built,
+        nested_timer_view,
+        None,
+        AssemblyParts { structures, nested },
+        Rc::clone(&commands),
+        true,
+    );
+    assert_eq!(
+        *commands.borrow(),
+        vec![WindowCommand::Every {
+            interval: Duration::from_secs_f64(0.5),
+            function: "child_tick".to_owned(),
+            owner: TimerOwner::new(1),
+        }]
+    );
+    let child = Rc::clone(&ui.components[1].1);
+    ui.dispatch(&[WidgetEvent::Timer(TimerOwner::new(1), "child_tick".into())]);
+    assert_eq!(child.borrow().read("ran"), Ok(Value::Bool(true)));
+    assert_eq!(root.borrow().read("ran"), Ok(Value::Null));
 }

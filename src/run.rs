@@ -10,7 +10,7 @@ use brul_window::{
 };
 
 use crate::handle::{Handle, Message, ScopedMessage, take};
-use crate::ui::CommandHost;
+use crate::ui::{AssemblyParts, CommandHost};
 use crate::{
     Build, Built, Component, ComponentHandle, Host, Script, Theme, Ui, Value, ViewError,
     WindowConfig,
@@ -264,12 +264,16 @@ impl<T: Theme> Runtime<T> {
         let built =
             view(self.fixed_theme, &mut build, &self.component).map_err(WindowError::app)?;
         let structures = build.take_structures();
+        let components = build.take_components();
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
             built,
             view,
             self.fixed_theme,
-            structures,
+            AssemblyParts {
+                structures,
+                nested: components,
+            },
             Rc::clone(&self.commands),
             config.scroll,
         );

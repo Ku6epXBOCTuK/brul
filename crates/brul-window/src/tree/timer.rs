@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::WidgetEvent;
+use brul_gui::{TimerOwner, WidgetEvent};
 use winit::event_loop::ControlFlow;
 
 use crate::window::WindowCommand;
@@ -9,14 +9,16 @@ use crate::window::WindowCommand;
 pub(crate) struct Timer {
     pub(super) next: Instant,
     pub(super) interval: Duration,
+    pub(super) owner: TimerOwner,
     pub(super) function: Arc<str>,
 }
 
 impl Timer {
-    pub(super) fn new(interval: Duration, function: Arc<str>) -> Self {
+    pub(super) fn new(interval: Duration, owner: TimerOwner, function: Arc<str>) -> Self {
         Self {
             next: Instant::now() + interval,
             interval,
+            owner,
             function,
         }
     }
@@ -28,7 +30,7 @@ pub(crate) fn due(timers: &mut [Timer], now: Instant) -> Vec<WidgetEvent> {
         if timer.next > now {
             continue;
         }
-        events.push(WidgetEvent::Timer(Arc::clone(&timer.function)));
+        events.push(WidgetEvent::Timer(timer.owner, Arc::clone(&timer.function)));
         while timer.next <= now {
             timer.next += timer.interval;
         }
@@ -61,8 +63,12 @@ pub(super) fn split_initial(commands: Vec<WindowCommand>) -> (Vec<Timer>, Vec<Wi
     let mut rest = Vec::new();
     for command in commands {
         match command {
-            WindowCommand::Every { interval, function } => {
-                timers.push(Timer::new(interval, function.into()));
+            WindowCommand::Every {
+                interval,
+                function,
+                owner,
+            } => {
+                timers.push(Timer::new(interval, owner, function.into()));
             }
             command => rest.push(command),
         }
@@ -75,14 +81,14 @@ mod tests {
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
-    use brul_gui::WidgetEvent;
+    use brul_gui::{TimerOwner, WidgetEvent};
     use winit::event_loop::ControlFlow;
 
     use super::{Timer, due, wakeup};
 
     #[test]
     fn a_new_timer_waits_for_its_interval() {
-        let timer = Timer::new(Duration::from_secs(5), "later".into());
+        let timer = Timer::new(Duration::from_secs(5), TimerOwner::new(0), "later".into());
         assert!(timer.next > Instant::now());
         assert_eq!(timer.interval, Duration::from_secs(5));
     }
@@ -93,13 +99,14 @@ mod tests {
         let mut timers = vec![Timer {
             next: now,
             interval: Duration::from_millis(10),
+            owner: TimerOwner::new(0),
             function: "tick".into(),
         }];
 
         let events = due(&mut timers, now);
 
         assert_eq!(events.len(), 1);
-        assert!(matches!(&events[0], WidgetEvent::Timer(name) if name.as_ref() == "tick"));
+        assert!(matches!(&events[0], WidgetEvent::Timer(_, name) if name.as_ref() == "tick"));
         assert!(timers[0].next > now);
         assert!(due(&mut timers, now).is_empty());
     }
@@ -110,13 +117,14 @@ mod tests {
         let mut timers = vec![Timer {
             next: now,
             interval: Duration::from_millis(10),
+            owner: TimerOwner::new(0),
             function: "tick".into(),
         }];
 
         let events = due(&mut timers, now);
 
         assert!(
-            matches!(&events[0], WidgetEvent::Timer(name) if Arc::ptr_eq(name, &timers[0].function))
+            matches!(&events[0], WidgetEvent::Timer(_, name) if Arc::ptr_eq(name, &timers[0].function))
         );
     }
 
@@ -126,6 +134,7 @@ mod tests {
         let mut timers = vec![Timer {
             next: now + Duration::from_secs(1),
             interval: Duration::from_secs(1),
+            owner: TimerOwner::new(0),
             function: "late".into(),
         }];
         assert!(due(&mut timers, now).is_empty());
@@ -140,11 +149,13 @@ mod tests {
             Timer {
                 next: now + Duration::from_secs(2),
                 interval: Duration::from_secs(1),
+                owner: TimerOwner::new(0),
                 function: "far".into(),
             },
             Timer {
                 next: now + Duration::from_secs(1),
                 interval: Duration::from_secs(1),
+                owner: TimerOwner::new(0),
                 function: "near".into(),
             },
         ];
@@ -167,6 +178,7 @@ mod tests {
         let timers = vec![Timer {
             next: now + Duration::from_secs(1),
             interval: Duration::from_secs(1),
+            owner: TimerOwner::new(0),
             function: "late".into(),
         }];
 

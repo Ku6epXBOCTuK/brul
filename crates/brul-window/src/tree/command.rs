@@ -24,9 +24,13 @@ impl TreeApp {
                     surface.set_visible(false);
                 }
                 WindowCommand::Focus => surface.focus(),
-                WindowCommand::Every { interval, function } => {
+                WindowCommand::Every {
+                    interval,
+                    function,
+                    owner,
+                } => {
                     self.timers
-                        .push(Timer::new(*interval, function.as_str().into()));
+                        .push(Timer::new(*interval, *owner, function.as_str().into()));
                 }
                 WindowCommand::SetTheme(_) => {}
                 WindowCommand::AlwaysOnTop(on_top) => surface.set_always_on_top(*on_top),
