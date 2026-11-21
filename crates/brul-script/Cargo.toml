@@ -6,6 +6,9 @@ edition = "2024"
 [lints]
 workspace = true
 
+[build-dependencies]
+brul-lang-gen = { workspace = true }
+
 [dependencies]
 brul-ident = { workspace = true }
 brul-reactive = { workspace = true }

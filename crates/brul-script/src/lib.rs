@@ -1,5 +1,6 @@
 //! Исполнение скрипт-блока BRUL: значения и окружение компонента.
 
+pub mod builtins;
 pub mod component;
 pub mod dynamic;
 pub mod environment;
@@ -15,7 +16,6 @@ pub use component::{Component, TimerRequest};
 pub use dynamic::{Dyn, items};
 pub use environment::Environment;
 pub use error::Error;
-pub use eval::eval;
 pub use host::{Host, HostCommand};
 pub use names::{Names, VariableId};
 pub use scope::Scope;

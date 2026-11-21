@@ -20,14 +20,6 @@ pub(super) fn expected(operation: &'static str, expected: &'static str, found: &
     }
 }
 
-pub(super) fn argument_error(name: &'static str, expected: &'static str, found: &Value) -> Error {
-    Error::Argument {
-        name,
-        expected,
-        found: found.type_name(),
-    }
-}
-
 fn op_name(op: BinaryOp) -> &'static str {
     match op {
         BinaryOp::Add => "+",

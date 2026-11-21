@@ -1,128 +1,177 @@
-use brul_script::{Component, Error, Value, eval};
-use brul_syntax::parser::parse_expression;
+use brul_script::eval::{apply_binary, apply_unary, call, template};
+use brul_script::{Component, Error, Value};
+use brul_syntax::ast::{BinaryOp, UnaryOp};
 
-fn evaluate(source: &str) -> Result<Value, Error> {
-    eval(&mut Component::new(), &parse_expression(source).unwrap())
+fn binary(op: BinaryOp, left: Value, right: Value) -> Result<Value, Error> {
+    apply_binary(op, left, right)
 }
 
-fn failure(source: &str) -> Error {
-    match evaluate(source).unwrap_err() {
-        Error::At(_, error) => *error,
-        error => error,
-    }
+fn number(value: f64) -> Value {
+    Value::Number(value)
 }
 
-#[test]
-fn literals_evaluate_to_their_values() {
-    assert_eq!(evaluate("2.5"), Ok(Value::Number(2.5)));
-    assert_eq!(evaluate("\"hi\""), Ok(Value::String("hi".into())));
-    assert_eq!(evaluate("true"), Ok(Value::Bool(true)));
-    assert_eq!(evaluate("false"), Ok(Value::Bool(false)));
-    assert_eq!(evaluate("null"), Ok(Value::Null));
+fn text(value: &str) -> Value {
+    Value::String(value.into())
 }
 
 #[test]
-fn arithmetic_follows_precedence() {
-    assert_eq!(evaluate("1 + 2 * 3"), Ok(Value::Number(7.0)));
-    assert_eq!(evaluate("(1 + 2) * 3"), Ok(Value::Number(9.0)));
-    assert_eq!(evaluate("7 % 4"), Ok(Value::Number(3.0)));
-    assert_eq!(evaluate("-(1 + 2)"), Ok(Value::Number(-3.0)));
+fn arithmetic_follows_the_operator() {
+    assert_eq!(
+        binary(BinaryOp::Add, number(1.0), number(2.0)),
+        Ok(number(3.0))
+    );
+    assert_eq!(
+        binary(BinaryOp::Sub, number(7.0), number(4.0)),
+        Ok(number(3.0))
+    );
+    assert_eq!(
+        binary(BinaryOp::Mul, number(2.0), number(3.0)),
+        Ok(number(6.0))
+    );
+    assert_eq!(
+        binary(BinaryOp::Div, number(6.0), number(2.0)),
+        Ok(number(3.0))
+    );
+    assert_eq!(
+        binary(BinaryOp::Rem, number(7.0), number(4.0)),
+        Ok(number(3.0))
+    );
 }
 
 #[test]
 fn addition_concatenates_strings() {
-    assert_eq!(evaluate("\"a\" + \"b\""), Ok(Value::String("ab".into())));
+    assert_eq!(binary(BinaryOp::Add, text("a"), text("b")), Ok(text("ab")));
 }
 
 #[test]
 fn addition_rejects_mixed_types() {
     assert_eq!(
-        failure("1 + \"a\""),
-        Error::Mismatch {
+        binary(BinaryOp::Add, number(1.0), text("a")),
+        Err(Error::Mismatch {
             operation: "+",
             left: "Number",
             right: "String",
-        }
+        })
     );
 }
 
 #[test]
 fn division_by_zero_is_an_error() {
-    assert_eq!(failure("1 / 0"), Error::DivisionByZero);
-    assert_eq!(failure("1 % 0"), Error::DivisionByZero);
+    assert_eq!(
+        binary(BinaryOp::Div, number(1.0), number(0.0)),
+        Err(Error::DivisionByZero)
+    );
+    assert_eq!(
+        binary(BinaryOp::Rem, number(1.0), number(0.0)),
+        Err(Error::DivisionByZero)
+    );
     assert_eq!(Error::DivisionByZero.to_string(), "division by zero");
 }
 
 #[test]
 fn equality_is_strict() {
-    assert_eq!(evaluate("1 == 1"), Ok(Value::Bool(true)));
-    assert_eq!(evaluate("1 == \"1\""), Ok(Value::Bool(false)));
-    assert_eq!(evaluate("\"a\" != \"b\""), Ok(Value::Bool(true)));
-    assert_eq!(evaluate("null == null"), Ok(Value::Bool(true)));
+    assert_eq!(
+        binary(BinaryOp::Eq, number(1.0), number(1.0)),
+        Ok(Value::Bool(true))
+    );
+    assert_eq!(
+        binary(BinaryOp::Eq, number(1.0), text("1")),
+        Ok(Value::Bool(false))
+    );
+    assert_eq!(
+        binary(BinaryOp::NotEq, text("a"), text("b")),
+        Ok(Value::Bool(true))
+    );
+    assert_eq!(
+        binary(BinaryOp::Eq, Value::Null, Value::Null),
+        Ok(Value::Bool(true))
+    );
 }
 
 #[test]
 fn ordering_compares_numbers() {
-    assert_eq!(evaluate("2 < 3"), Ok(Value::Bool(true)));
-    assert_eq!(evaluate("3 >= 3"), Ok(Value::Bool(true)));
-    assert_eq!(evaluate("2 <= 3"), Ok(Value::Bool(true)));
     assert_eq!(
-        failure("\"a\" < \"b\""),
-        Error::Mismatch {
+        binary(BinaryOp::Lt, number(2.0), number(3.0)),
+        Ok(Value::Bool(true))
+    );
+    assert_eq!(
+        binary(BinaryOp::Ge, number(3.0), number(3.0)),
+        Ok(Value::Bool(true))
+    );
+    assert_eq!(
+        binary(BinaryOp::Le, number(2.0), number(3.0)),
+        Ok(Value::Bool(true))
+    );
+    assert_eq!(
+        binary(BinaryOp::Lt, text("a"), text("b")),
+        Err(Error::Mismatch {
             operation: "<",
             left: "String",
             right: "String",
-        }
+        })
     );
 }
 
 #[test]
 fn negation_requires_a_bool() {
-    assert_eq!(evaluate("!true"), Ok(Value::Bool(false)));
     assert_eq!(
-        failure("!\"a\""),
-        Error::Expected {
+        apply_unary(UnaryOp::Not, Value::Bool(true)),
+        Ok(Value::Bool(false))
+    );
+    assert_eq!(
+        apply_unary(UnaryOp::Not, text("a")),
+        Err(Error::Expected {
             operation: "!",
             expected: "Bool",
             found: "String",
-        }
+        })
     );
 }
 
 #[test]
 fn logic_requires_bools() {
-    assert_eq!(evaluate("true && false"), Ok(Value::Bool(false)));
-    assert_eq!(evaluate("false || true"), Ok(Value::Bool(true)));
     assert_eq!(
-        failure("1 && true"),
-        Error::Mismatch {
+        binary(BinaryOp::And, Value::Bool(true), Value::Bool(false)),
+        Ok(Value::Bool(false))
+    );
+    assert_eq!(
+        binary(BinaryOp::Or, Value::Bool(false), Value::Bool(true)),
+        Ok(Value::Bool(true))
+    );
+    assert_eq!(
+        binary(BinaryOp::And, number(1.0), Value::Bool(true)),
+        Err(Error::Mismatch {
             operation: "&&",
             left: "Number",
             right: "Bool",
-        }
+        })
     );
 }
 
 #[test]
-fn ternary_picks_a_branch_by_bool() {
-    assert_eq!(evaluate("true ? 1 : 2"), Ok(Value::Number(1.0)));
-    assert_eq!(evaluate("false ? 1 : 2"), Ok(Value::Number(2.0)));
+fn templates_concatenate_text_and_numbers() {
     assert_eq!(
-        evaluate("1 < 2 ? \"a\" : \"b\""),
-        Ok(Value::String("a".into()))
+        template(vec![text("x="), number(2.0), text("!")]),
+        Ok("x=2!".to_owned())
     );
     assert_eq!(
-        failure("1 ? 1 : 2"),
-        Error::Expected {
-            operation: "?:",
-            expected: "Bool",
-            found: "Number",
-        }
+        template(vec![Value::Bool(true)]),
+        Err(Error::Expected {
+            operation: "${}",
+            expected: "String or Number",
+            found: "Bool",
+        })
     );
 }
 
 #[test]
-fn unsupported_expressions_report_their_kind() {
-    assert_eq!(failure("browsers"), Error::Undefined("browsers".to_owned()));
-    assert_eq!(failure("f(1)"), Error::UnknownFunction("f".to_owned()));
+fn undefined_names_and_functions_are_reported() {
+    assert_eq!(
+        Component::new().read("browsers"),
+        Err(Error::Undefined("browsers".to_owned()))
+    );
+    assert_eq!(
+        call(&mut Component::new(), "f", vec![]),
+        Err(Error::UnknownFunction("f".to_owned()))
+    );
 }

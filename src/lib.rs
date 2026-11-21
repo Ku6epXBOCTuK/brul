@@ -24,7 +24,6 @@ pub use brul_gui as gui;
 pub use brul_gui::{Theme, UnknownTheme};
 pub use brul_macros::{command, host};
 pub use brul_reactive::Signal;
-pub use brul_script::eval;
 pub use brul_script::{
     Component, Dyn, Error, EventCall, Fields, FunctionName, Host, HostCommand, Items, Scope,
     Script, TimerId, TimerKind, TimerOwner, TimerRequest, Value, VariableId, items, noop_event,

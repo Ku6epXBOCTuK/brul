@@ -322,6 +322,7 @@ name = "brul-script"
 version = "0.1.0"
 dependencies = [
  "brul-ident",
+ "brul-lang-gen",
  "brul-reactive",
  "brul-syntax",
  "thiserror 2.0.21",

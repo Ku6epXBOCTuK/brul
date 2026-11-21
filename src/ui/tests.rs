@@ -813,7 +813,7 @@ fn raise_dispatch(
 ) -> Result<Dyn, Error> {
     if name == "raise" {
         let arguments = arguments.into_iter().map(Value::from).collect();
-        Ok(Dyn::from(crate::eval::call(
+        Ok(Dyn::from(brul_script::eval::call(
             component, "clicked", arguments,
         )?))
     } else {

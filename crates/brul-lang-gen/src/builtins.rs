@@ -43,6 +43,31 @@ pub fn builtins() -> TokenStream {
     }
 }
 
+pub fn script_call() -> TokenStream {
+    let entries = BUILTINS.iter().filter_map(|spec| {
+        let EmitSpec::Function(path) = spec.emit else {
+            return None;
+        };
+        let name = spec.name;
+        let function = path.rsplit("::").next().expect("a function path");
+        let function = type_ident(&format!("{function}_value"));
+        Some(quote! {
+            (#name, crate::builtins::#function),
+        })
+    });
+
+    quote! {
+        type ScriptCall = (
+            &'static str,
+            fn(Vec<crate::Value>) -> Result<crate::Value, crate::Error>,
+        );
+
+        const SCRIPT_CALL: &[ScriptCall] = &[
+            #(#entries)*
+        ];
+    }
+}
+
 pub fn dispatch() -> TokenStream {
     let arms = BUILTINS.iter().map(|spec| {
         let name = spec.name;

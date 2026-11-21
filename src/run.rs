@@ -754,7 +754,7 @@ mod tests {
         if name != "hide" {
             return Err(crate::Error::UnknownFunction(name.to_owned()));
         }
-        crate::eval::call(component, "hideWindow", Vec::new())?;
+        brul_script::eval::call(component, "hideWindow", Vec::new())?;
         Ok(Dyn::null())
     }
 
@@ -887,9 +887,9 @@ mod tests {
         if name != "handleKey" && name != "handleSettingsKey" {
             return Err(crate::Error::UnknownFunction(name.to_owned()));
         }
-        let code = crate::eval::read_field(&Value::from(arguments[0].clone()), "code")?;
+        let code = brul_script::eval::read_field(&Value::from(arguments[0].clone()), "code")?;
         if matches!(code, Value::String(text) if text.as_ref() == "Escape") {
-            crate::eval::call(component, "exit", Vec::new())?;
+            brul_script::eval::call(component, "exit", Vec::new())?;
         }
         Ok(Dyn::null())
     }

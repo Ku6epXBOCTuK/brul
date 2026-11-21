@@ -15,6 +15,7 @@ pub enum Output {
     Dispatch,
     Markers,
     HostDispatch,
+    ScriptCall,
 }
 
 pub fn generate(output: Output, out_dir: &Path) {
@@ -24,6 +25,7 @@ pub fn generate(output: Output, out_dir: &Path) {
         Output::Dispatch => ("lang_builtin_dispatch.rs", builtins::dispatch()),
         Output::Markers => ("lang_builtin_markers.rs", builtins::markers()),
         Output::HostDispatch => ("lang_builtin_host.rs", builtins::host_dispatch()),
+        Output::ScriptCall => ("lang_script_call.rs", builtins::script_call()),
     };
     let parsed = syn::parse2::<syn::File>(tokens).expect("generated language code parses");
     fs::write(out_dir.join(file), prettyplease::unparse(&parsed))
