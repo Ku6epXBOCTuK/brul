@@ -50,52 +50,14 @@
 {{#include style.ebnf}}
 ```
 
-## Свойства MVP
+## Свойства
 
-| Свойство                                               | Тип                               | Дефолт                  | Меняется по состоянию?          |
-| ------------------------------------------------------ | --------------------------------- | ----------------------- | ------------------------------- |
-| `width`, `height`                                      | px \| %                           | auto (от детей/лейаута) | ❌ геометрия                    |
-| `flex-grow`                                            | число                             | 0                       | ❌ геометрия                    |
-| `flex-shrink`                                          | число                             | 0 (в CSS — 1)           | ❌ геометрия                    |
-| `flex-basis`                                           | px \| %                           | auto                    | ❌ геометрия                    |
-| `display`                                              | flex \| grid                      | flex                    | ❌ геометрия                    |
-| `flex-direction`                                       | row\|column                       | row                     | ❌ геометрия                    |
-| `grid-template-columns`, `grid-template-rows`          | px \| % \| fr \| minmax(...)      | — (нет сетки)           | ❌ геометрия                    |
-| `grid-column`, `grid-row`                              | auto \| N \| span N               | auto                    | ❌ геометрия                    |
-| `grid-auto-flow`                                       | row \| column                     | row                     | ❌ геометрия                    |
-| `grid-template-areas`                                  | строки имён                       | — (нет областей)        | ❌ геометрия                    |
-| `grid-area`                                            | имя области \| auto               | auto                    | ❌ геометрия                    |
-| `padding` (1–4 значения, `-left/right/top/bottom`)     | px                                | 0                       | ❌ геометрия                    |
-| `gap`                                                  | px                                | 0                       | ❌ геометрия                    |
-| `row-gap`, `column-gap`                                | px                                | `gap`                   | ❌ геометрия                    |
-| `justify-content`                                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
-| `align-items`                                          | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
-| `background`                                           | Color \| Gradient                 | transparent             | ✅                              |
-| `border` (шорткат: ширина + цвет)                      | px + (Color \| theme.*)           | 0, transparent          | ❌ (цвета по сторонам — ✅)     |
-| `border-width` (1–4 значения)                          | px                                | 0                       | ❌ геометрия                    |
-| `border-left/right/top/bottom-width`                   | px                                | 0                       | ❌ геометрия                    |
-| `border-color` (1–4 значения)                          | Color                             | transparent             | ✅                              |
-| `border-left/right/top/bottom-color`                   | Color                             | transparent             | ✅                              |
-| `border-radius`                                        | px                                | 0                       | ❌ геометрия                    |
-| `color`                                                | Color                             | theme-зависимый         | ✅                              |
-| `font-size`                                            | px                                | 14                      | ❌ (размер текста — компоновка) |
-| `font-family`                                          | String                            | наследуется от окна     | ❌                              |
-| `text-align`                                           | left\|center\|right               | left                    | ✅                              |
-| `vertical-align`                                       | top\|center\|bottom               | top                     | ✅                              |
-| `font-weight`                                          | число (400\|500\|600\|700)        | 400                     | ⚠️ только `Text`, см. ниже      |
-| `tint`                                                 | Color                             | — (без окраски)         | ✅ (только Image)               |
-| `opacity`                                              | 0.0–1.0                           | 1.0                     | ✅                              |
-| `clip`                                                 | Bool                              | false                   | ✅                              |
-| `scroll`                                               | Bool                              | false                   | ❌                              |
-| `box-shadow` (шорткат: offset-x, offset-y, blur, цвет) | px + px + px + Color              | — (нет тени)            | ❌ (только `box-shadow-color`)  |
-| `box-shadow-offset-x`, `box-shadow-offset-y`           | px (может быть отрицательным)     | 0                       | ❌ геометрия                    |
-| `box-shadow-blur`                                      | px                                | 0                       | ❌ геометрия                    |
-| `box-shadow-color`                                     | Color                             | transparent             | ✅                              |
+[Таблица свойств](style_properties.md) генерируется из `brul-style-schema`:
+имена, типы, дефолты, политика состояний, цель и анимируемость.
 
-_«Меняется по состоянию?» = разрешено ли свойство в `.class:state`. Остальные
-там запрещены компилятором: переключение снапшота не должно вызывать релайаут.
-Единственное исключение — `font-weight`: вместо релайаута он перешейпит `Text`,
-правила ниже._
+Колонка `State` таблицы — разрешено ли свойство в `.class:state`. `Forbidden`
+компилятор запрещает: переключение снапшота не должно вызывать релайаут.
+Исключение — `TextWeight`: вместо релайаута он перешейпит `Text`, правила ниже.
 
 `flex-grow` и `flex-shrink` — веса главной оси, `flex-basis` — её база. Без
 `flex-basis` база равна заданному размеру или контенту, поэтому `flex-grow: 1`

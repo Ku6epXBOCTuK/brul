@@ -1,6 +1,6 @@
 use crate::{
-    DefaultValue, LayoutField, PropertyKey, PropertySpec, Side::*, StatePolicy::*, StyleField,
-    Target::*, TextField, Type,
+    LayoutField, PropertyKey, PropertySpec, Side::*, StatePolicy::*, StyleField, Target::*,
+    TextField, Type,
 };
 
 pub static PROPERTIES: &[PropertySpec] = &[
@@ -11,7 +11,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Width),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "auto",
     },
     PropertySpec {
         key: PropertyKey::Height,
@@ -20,7 +20,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Height),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "auto",
     },
     PropertySpec {
         key: PropertyKey::FlexGrow,
@@ -29,7 +29,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::FlexGrow),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::FlexShrink,
@@ -38,7 +38,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::FlexShrink),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::FlexBasis,
@@ -47,7 +47,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::FlexBasis),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "auto",
     },
     PropertySpec {
         key: PropertyKey::Display,
@@ -56,7 +56,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Display),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "flex",
     },
     PropertySpec {
         key: PropertyKey::FlexDirection,
@@ -65,7 +65,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::FlexDirection),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "row",
     },
     PropertySpec {
         key: PropertyKey::GridTemplateColumns,
@@ -74,7 +74,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::GridTemplateColumns),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "none",
     },
     PropertySpec {
         key: PropertyKey::GridTemplateRows,
@@ -83,7 +83,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::GridTemplateRows),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "none",
     },
     PropertySpec {
         key: PropertyKey::GridColumn,
@@ -92,7 +92,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::GridColumn),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "auto",
     },
     PropertySpec {
         key: PropertyKey::GridRow,
@@ -101,7 +101,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::GridRow),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "auto",
     },
     PropertySpec {
         key: PropertyKey::GridAutoFlow,
@@ -110,7 +110,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::GridAutoFlow),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "row",
     },
     PropertySpec {
         key: PropertyKey::GridTemplateAreas,
@@ -119,7 +119,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::GridTemplateAreas),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "none",
     },
     PropertySpec {
         key: PropertyKey::GridArea,
@@ -128,7 +128,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::GridArea),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "auto",
     },
     PropertySpec {
         key: PropertyKey::PaddingSide(Left),
@@ -137,7 +137,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Padding(Left)),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::PaddingSide(Right),
@@ -146,7 +146,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Padding(Right)),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::PaddingSide(Top),
@@ -155,7 +155,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Padding(Top)),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::PaddingSide(Bottom),
@@ -164,7 +164,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Padding(Bottom)),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::Gap,
@@ -173,7 +173,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Gap),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::RowGap,
@@ -182,7 +182,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::RowGap),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "gap",
     },
     PropertySpec {
         key: PropertyKey::ColumnGap,
@@ -191,7 +191,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::ColumnGap),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "gap",
     },
     PropertySpec {
         key: PropertyKey::BorderWidthSide(Left),
@@ -200,7 +200,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::BorderWidthSide(Left)),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::BorderWidthSide(Top),
@@ -209,7 +209,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::BorderWidthSide(Top)),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::BorderWidthSide(Right),
@@ -218,7 +218,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::BorderWidthSide(Right)),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::BorderWidthSide(Bottom),
@@ -227,7 +227,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::BorderWidthSide(Bottom)),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::BorderRadius,
@@ -236,7 +236,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Style(StyleField::BorderRadius),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::FontSize,
@@ -245,7 +245,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Text(TextField::Size),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "14",
     },
     PropertySpec {
         key: PropertyKey::FontFamily,
@@ -254,7 +254,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Text(TextField::Family),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "window",
     },
     PropertySpec {
         key: PropertyKey::JustifyContent,
@@ -263,7 +263,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Justify),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "start",
     },
     PropertySpec {
         key: PropertyKey::AlignItems,
@@ -272,7 +272,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Layout(LayoutField::Align),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "start",
     },
     PropertySpec {
         key: PropertyKey::Background,
@@ -281,7 +281,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::Background),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "transparent",
     },
     PropertySpec {
         key: PropertyKey::BorderColorSide(Left),
@@ -290,7 +290,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::BorderSide(Left)),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "transparent",
     },
     PropertySpec {
         key: PropertyKey::BorderColorSide(Top),
@@ -299,7 +299,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::BorderSide(Top)),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "transparent",
     },
     PropertySpec {
         key: PropertyKey::BorderColorSide(Right),
@@ -308,7 +308,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::BorderSide(Right)),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "transparent",
     },
     PropertySpec {
         key: PropertyKey::BorderColorSide(Bottom),
@@ -317,7 +317,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::BorderSide(Bottom)),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "transparent",
     },
     PropertySpec {
         key: PropertyKey::Color,
@@ -326,7 +326,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::Text),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "theme",
     },
     PropertySpec {
         key: PropertyKey::Tint,
@@ -335,7 +335,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::Tint),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "none",
     },
     PropertySpec {
         key: PropertyKey::TextAlign,
@@ -344,7 +344,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Text(TextField::Align),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "left",
     },
     PropertySpec {
         key: PropertyKey::VerticalAlign,
@@ -353,7 +353,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Text(TextField::VerticalAlign),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "top",
     },
     PropertySpec {
         key: PropertyKey::FontWeight,
@@ -362,7 +362,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: TextWeight,
         target: Text(TextField::Weight),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "400",
     },
     PropertySpec {
         key: PropertyKey::Opacity,
@@ -371,7 +371,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::Opacity),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "1.0",
     },
     PropertySpec {
         key: PropertyKey::Clip,
@@ -380,7 +380,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::Clip),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "false",
     },
     PropertySpec {
         key: PropertyKey::Scroll,
@@ -389,7 +389,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Style(StyleField::Scroll),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "false",
     },
     PropertySpec {
         key: PropertyKey::ShadowOffsetX,
@@ -398,7 +398,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Style(StyleField::ShadowX),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::ShadowOffsetY,
@@ -407,7 +407,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Style(StyleField::ShadowY),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::ShadowBlur,
@@ -416,7 +416,7 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Forbidden,
         target: Style(StyleField::ShadowBlur),
         animatable: false,
-        default: DefaultValue::Default,
+        default: "0",
     },
     PropertySpec {
         key: PropertyKey::ShadowColor,
@@ -425,6 +425,6 @@ pub static PROPERTIES: &[PropertySpec] = &[
         in_state: Visual,
         target: Style(StyleField::ShadowColor),
         animatable: true,
-        default: DefaultValue::Default,
+        default: "transparent",
     },
 ];

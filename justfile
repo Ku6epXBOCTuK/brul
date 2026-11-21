@@ -5,6 +5,9 @@ target_dir := trim(`cargo metadata --format-version 1 --no-deps | ConvertFrom-Js
 generate-rules:
     cargo run -p brul-syntax --bin rules
 
+generate-properties-doc:
+    cargo run -p brul-style-gen --bin properties-doc
+
 generate-codegen:
     cargo run -p brul-codegen --bin emit -- --fixtures
 

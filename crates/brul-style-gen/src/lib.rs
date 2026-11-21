@@ -1,4 +1,5 @@
 mod codegen;
+mod docs;
 mod layout;
 mod style;
 mod syntax;
@@ -17,6 +18,8 @@ use crate::style::style;
 use crate::syntax::syntax;
 use crate::text::text;
 use crate::widget::widget;
+
+pub use docs::properties_doc;
 
 pub enum Output {
     Style,

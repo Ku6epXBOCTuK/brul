@@ -136,11 +136,6 @@ pub enum PropertyKey {
     ShadowColor,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DefaultValue {
-    Default,
-}
-
 #[derive(Clone, Copy)]
 pub struct PropertySpec {
     pub key: PropertyKey,
@@ -149,7 +144,7 @@ pub struct PropertySpec {
     pub in_state: StatePolicy,
     pub target: Target,
     pub animatable: bool,
-    pub default: DefaultValue,
+    pub default: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
