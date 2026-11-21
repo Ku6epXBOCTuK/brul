@@ -6,30 +6,6 @@ use crate::text::TextStyle;
 
 static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
 
-macro_rules! patch {
-    ($vis:vis $name:ident { $($field:ident),+ $(,)? }) => {
-        impl $name {
-            pub const DEFAULT: Self = Self {
-                $($field: None,)+
-            };
-
-            $vis fn merge(&mut self, other: &Self) {
-                $(
-                    if other.$field.is_some() {
-                        self.$field = other.$field;
-                    }
-                )+
-            }
-        }
-    };
-}
-
-fn set_if_some<T>(dst: &mut T, value: Option<T>) {
-    if let Some(value) = value {
-        *dst = value;
-    }
-}
-
 mod event;
 mod snapshot;
 mod style;
@@ -38,11 +14,12 @@ mod tests;
 mod text;
 mod tree;
 
+pub use crate::text::TextStylePatch;
 pub use brul_ident::{FunctionName, TimerOwner};
 pub use event::{CaretArea, Dirty, KeyModifiers, KeyPress, WidgetError, WidgetEvent};
 pub use snapshot::{WidgetSnapshot, WidgetSnapshotNode};
 pub use style::{Class, Layers, StyleSet, StyleState, Transitions, WidgetStyle, WidgetStylePatch};
-pub use text::{TextStylePatch, TextStyleSet};
+pub use text::TextStyleSet;
 pub use tree::WidgetTree;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

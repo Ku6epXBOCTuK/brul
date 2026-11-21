@@ -167,18 +167,536 @@ pub struct ShorthandSpec {
     pub parser: ShorthandParser,
 }
 
-#[derive(Clone, Copy)]
-pub enum FieldSpec {
-    Scalar(PropertyKey),
-    Sides(&'static str, &'static str),
-    Parts(&'static [PropertyKey]),
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StyleOwner {
+    Layout,
+    Widget,
+    Text,
+    Transition,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldType {
+    Dimension,
+    U32,
+    F32,
+    Bool,
+    SidesU32,
+    Display,
+    Direction,
+    Justify,
+    Align,
+    TrackList,
+    GridLine,
+    GridAutoFlow,
+    AreaTemplate,
+    String,
+    Paint,
+    Color,
+    SidesColor,
+    Shadow,
+    VerticalAlign,
+    OptionColor,
+    OptionString,
+    TextAlign,
+    U16,
+    Duration,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldDefault {
+    Default,
+    Zero,
+    One,
+    None,
+    Text,
+    FontSize,
+    LineHeight,
+    Weight,
+    TransparentSides,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TweenKind {
+    None,
+    Paint,
+    Color,
+    OptionColor,
+    Float,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PatchTarget {
+    This,
+    Side(Side),
+    Subfield(&'static str),
+    Scaled(&'static str),
+}
+
+#[derive(Clone, Copy)]
+pub struct PatchField {
+    pub name: &'static str,
+    pub order: u16,
+    pub target: PatchTarget,
+    pub converter: Option<&'static str>,
+}
+
+#[derive(Clone, Copy)]
+pub struct FieldSpec {
+    pub owner: StyleOwner,
+    pub name: &'static str,
+    pub ty: FieldType,
+    pub default: FieldDefault,
+    pub tween: TweenKind,
+    pub patches: &'static [PatchField],
+}
+
+pub const fn patch(name: &'static str, order: u16, converter: Option<&'static str>) -> PatchField {
+    PatchField {
+        name,
+        order,
+        target: PatchTarget::This,
+        converter,
+    }
+}
+
+pub const fn side_patch(
+    name: &'static str,
+    order: u16,
+    side: Side,
+    converter: Option<&'static str>,
+) -> PatchField {
+    PatchField {
+        name,
+        order,
+        target: PatchTarget::Side(side),
+        converter,
+    }
+}
+
+pub const fn sub_patch(
+    name: &'static str,
+    order: u16,
+    subfield: &'static str,
+    converter: Option<&'static str>,
+) -> PatchField {
+    PatchField {
+        name,
+        order,
+        target: PatchTarget::Subfield(subfield),
+        converter,
+    }
+}
+
+pub const fn scaled_patch(name: &'static str, order: u16, from: &'static str) -> PatchField {
+    PatchField {
+        name,
+        order,
+        target: PatchTarget::Scaled(from),
+        converter: Some("float"),
+    }
+}
+
+pub const fn field(
+    owner: StyleOwner,
+    name: &'static str,
+    ty: FieldType,
+    default: FieldDefault,
+    tween: TweenKind,
+    patches: &'static [PatchField],
+) -> FieldSpec {
+    FieldSpec {
+        owner,
+        name,
+        ty,
+        default,
+        tween,
+        patches,
+    }
+}
+
+use FieldDefault as D;
+use FieldType as R;
 use LayoutField as L;
 use PropertyKey as K;
 use Side::*;
 use StatePolicy::*;
+use StyleOwner as O;
 use Target::*;
+use TweenKind as W;
+
+pub static FIELDS: &[FieldSpec] = &[
+    field(
+        O::Layout,
+        "width",
+        R::Dimension,
+        D::Default,
+        W::None,
+        &[patch("width", 0, Some("dimension"))],
+    ),
+    field(
+        O::Layout,
+        "height",
+        R::Dimension,
+        D::Default,
+        W::None,
+        &[patch("height", 1, Some("dimension"))],
+    ),
+    field(
+        O::Layout,
+        "padding",
+        R::SidesU32,
+        D::Default,
+        W::None,
+        &[patch("padding", 2, Some("padding"))],
+    ),
+    field(
+        O::Layout,
+        "border_width",
+        R::SidesU32,
+        D::Default,
+        W::None,
+        &[patch("border_width", 3, Some("border_widths"))],
+    ),
+    field(
+        O::Layout,
+        "gap",
+        R::U32,
+        D::Zero,
+        W::None,
+        &[patch("gap", 4, Some("decimal"))],
+    ),
+    field(
+        O::Layout,
+        "row_gap",
+        R::U32,
+        D::Zero,
+        W::None,
+        &[patch("row_gap", 5, Some("decimal"))],
+    ),
+    field(
+        O::Layout,
+        "column_gap",
+        R::U32,
+        D::Zero,
+        W::None,
+        &[patch("column_gap", 6, Some("decimal"))],
+    ),
+    field(
+        O::Layout,
+        "flex_grow",
+        R::F32,
+        D::Zero,
+        W::None,
+        &[patch("flex_grow", 7, Some("debug"))],
+    ),
+    field(
+        O::Layout,
+        "flex_shrink",
+        R::F32,
+        D::Zero,
+        W::None,
+        &[patch("flex_shrink", 8, Some("debug"))],
+    ),
+    field(
+        O::Layout,
+        "flex_basis",
+        R::Dimension,
+        D::Default,
+        W::None,
+        &[patch("flex_basis", 9, Some("dimension"))],
+    ),
+    field(
+        O::Layout,
+        "display",
+        R::Display,
+        D::Default,
+        W::None,
+        &[patch("display", 10, Some("display"))],
+    ),
+    field(
+        O::Layout,
+        "flex_direction",
+        R::Direction,
+        D::Default,
+        W::None,
+        &[patch("flex_direction", 11, Some("direction"))],
+    ),
+    field(
+        O::Layout,
+        "justify",
+        R::Justify,
+        D::Default,
+        W::None,
+        &[patch("justify", 12, Some("justify"))],
+    ),
+    field(
+        O::Layout,
+        "align",
+        R::Align,
+        D::Default,
+        W::None,
+        &[patch("align", 13, Some("align"))],
+    ),
+    field(
+        O::Layout,
+        "grid_template_columns",
+        R::TrackList,
+        D::Default,
+        W::None,
+        &[patch("grid_template_columns", 14, Some("tracks"))],
+    ),
+    field(
+        O::Layout,
+        "grid_template_rows",
+        R::TrackList,
+        D::Default,
+        W::None,
+        &[patch("grid_template_rows", 15, Some("tracks"))],
+    ),
+    field(
+        O::Layout,
+        "grid_column",
+        R::GridLine,
+        D::Default,
+        W::None,
+        &[patch("grid_column", 16, Some("grid_line"))],
+    ),
+    field(
+        O::Layout,
+        "grid_row",
+        R::GridLine,
+        D::Default,
+        W::None,
+        &[patch("grid_row", 17, Some("grid_line"))],
+    ),
+    field(
+        O::Layout,
+        "grid_auto_flow",
+        R::GridAutoFlow,
+        D::Default,
+        W::None,
+        &[patch("grid_auto_flow", 18, Some("auto_flow"))],
+    ),
+    field(
+        O::Layout,
+        "grid_template_areas",
+        R::AreaTemplate,
+        D::Default,
+        W::None,
+        &[patch("grid_template_areas", 19, Some("area_template"))],
+    ),
+    field(
+        O::Layout,
+        "grid_area",
+        R::String,
+        D::Default,
+        W::None,
+        &[patch("grid_area", 20, Some("family"))],
+    ),
+    field(
+        O::Widget,
+        "background",
+        R::Paint,
+        D::Default,
+        W::Paint,
+        &[patch("background", 0, Some("paint"))],
+    ),
+    field(
+        O::Widget,
+        "border",
+        R::SidesColor,
+        D::TransparentSides,
+        W::Color,
+        &[
+            side_patch("border_left", 1, Left, Some("color")),
+            side_patch("border_top", 2, Top, Some("color")),
+            side_patch("border_right", 3, Right, Some("color")),
+            side_patch("border_bottom", 4, Bottom, Some("color")),
+        ],
+    ),
+    field(
+        O::Widget,
+        "text",
+        R::Color,
+        D::Text,
+        W::Color,
+        &[patch("text", 5, Some("color"))],
+    ),
+    field(
+        O::Widget,
+        "tint",
+        R::OptionColor,
+        D::None,
+        W::OptionColor,
+        &[patch("tint", 6, Some("color"))],
+    ),
+    field(
+        O::Widget,
+        "opacity",
+        R::F32,
+        D::One,
+        W::Float,
+        &[patch("opacity", 7, Some("debug"))],
+    ),
+    field(
+        O::Widget,
+        "vertical_align",
+        R::VerticalAlign,
+        D::Default,
+        W::None,
+        &[patch("vertical_align", 8, Some("vertical_align"))],
+    ),
+    field(
+        O::Widget,
+        "clip",
+        R::Bool,
+        D::Default,
+        W::None,
+        &[patch("clip", 9, None)],
+    ),
+    field(
+        O::Widget,
+        "shadow",
+        R::Shadow,
+        D::Default,
+        W::Color,
+        &[
+            sub_patch("shadow", 10, "color", Some("color")),
+            sub_patch("shadow_x", 13, "x", None),
+            sub_patch("shadow_y", 14, "y", None),
+            sub_patch("shadow_blur", 15, "blur", None),
+        ],
+    ),
+    field(
+        O::Widget,
+        "border_radius",
+        R::U32,
+        D::Zero,
+        W::None,
+        &[patch("border_radius", 11, None)],
+    ),
+    field(
+        O::Widget,
+        "scroll",
+        R::Bool,
+        D::Default,
+        W::None,
+        &[patch("scroll", 12, None)],
+    ),
+    field(
+        O::Text,
+        "family",
+        R::OptionString,
+        D::None,
+        W::None,
+        &[patch("family", 3, Some("family"))],
+    ),
+    field(
+        O::Text,
+        "font_size",
+        R::F32,
+        D::FontSize,
+        W::None,
+        &[patch("size", 2, Some("float"))],
+    ),
+    field(
+        O::Text,
+        "line_height",
+        R::F32,
+        D::LineHeight,
+        W::None,
+        &[scaled_patch("size", 2, "size")],
+    ),
+    field(
+        O::Text,
+        "weight",
+        R::U16,
+        D::Weight,
+        W::None,
+        &[patch("weight", 0, None)],
+    ),
+    field(
+        O::Text,
+        "align",
+        R::TextAlign,
+        D::Default,
+        W::None,
+        &[patch("align", 1, Some("text_align"))],
+    ),
+    field(
+        O::Transition,
+        "background",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("background", 0, Some("millis"))],
+    ),
+    field(
+        O::Transition,
+        "border_left",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("border_left", 1, Some("millis"))],
+    ),
+    field(
+        O::Transition,
+        "border_top",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("border_top", 2, Some("millis"))],
+    ),
+    field(
+        O::Transition,
+        "border_right",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("border_right", 3, Some("millis"))],
+    ),
+    field(
+        O::Transition,
+        "border_bottom",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("border_bottom", 4, Some("millis"))],
+    ),
+    field(
+        O::Transition,
+        "text",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("text", 5, Some("millis"))],
+    ),
+    field(
+        O::Transition,
+        "tint",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("tint", 6, Some("millis"))],
+    ),
+    field(
+        O::Transition,
+        "opacity",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("opacity", 7, Some("millis"))],
+    ),
+    field(
+        O::Transition,
+        "shadow",
+        R::Duration,
+        D::None,
+        W::None,
+        &[patch("shadow", 8, Some("millis"))],
+    ),
+];
 
 pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {

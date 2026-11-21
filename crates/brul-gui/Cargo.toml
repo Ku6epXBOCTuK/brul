@@ -15,5 +15,8 @@ image = { workspace = true, features = ["png"] }
 resvg = { workspace = true }
 thiserror = { workspace = true }
 
+[build-dependencies]
+brul-style-gen = { workspace = true }
+
 [dev-dependencies]
 brul-reactive = { workspace = true }

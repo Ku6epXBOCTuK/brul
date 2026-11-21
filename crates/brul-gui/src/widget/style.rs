@@ -1,12 +1,11 @@
 use std::time::Duration;
 
-use super::text::TextStylePatch;
-use super::{WidgetState, set_if_some};
+use super::WidgetState;
 use crate::animation::{Track, Tween};
 use crate::gradient::Paint;
 use crate::layout::LayoutPatch;
 use crate::rect::Shadow;
-use crate::text::VerticalAlign;
+use crate::text::{TextStylePatch, VerticalAlign};
 use crate::{BorderColors, Color};
 
 macro_rules! resolve_layers {
@@ -45,114 +44,9 @@ impl Relayout {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WidgetStyle {
-    pub background: Paint,
-    pub border: BorderColors,
-    pub text: Color,
-    pub border_radius: u32,
-    pub tint: Option<Color>,
-    pub opacity: f32,
-    pub vertical_align: VerticalAlign,
-    pub clip: bool,
-    pub scroll: bool,
-    pub shadow: Shadow,
-}
-
-impl Default for WidgetStyle {
-    fn default() -> Self {
-        Self {
-            background: Paint::default(),
-            border: BorderColors::all(Color::TRANSPARENT),
-            text: Color::rgb(15, 23, 42),
-            border_radius: 0,
-            tint: None,
-            opacity: 1.0,
-            vertical_align: VerticalAlign::Top,
-            clip: false,
-            scroll: false,
-            shadow: Shadow::default(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct WidgetStylePatch {
-    pub background: Option<Paint>,
-    pub border_left: Option<Color>,
-    pub border_top: Option<Color>,
-    pub border_right: Option<Color>,
-    pub border_bottom: Option<Color>,
-    pub text: Option<Color>,
-    pub tint: Option<Color>,
-    pub opacity: Option<f32>,
-    pub vertical_align: Option<VerticalAlign>,
-    pub clip: Option<bool>,
-    pub shadow: Option<Color>,
-    pub border_radius: Option<u32>,
-    pub scroll: Option<bool>,
-    pub shadow_x: Option<i32>,
-    pub shadow_y: Option<i32>,
-    pub shadow_blur: Option<u32>,
-}
-
-patch!(pub(crate) WidgetStylePatch {
-    background,
-    border_left,
-    border_top,
-    border_right,
-    border_bottom,
-    text,
-    tint,
-    opacity,
-    vertical_align,
-    clip,
-    shadow,
-    border_radius,
-    scroll,
-    shadow_x,
-    shadow_y,
-    shadow_blur,
-});
+include!(concat!(env!("OUT_DIR"), "/style_widget.rs"));
 
 impl WidgetStyle {
-    fn apply(&mut self, patch: &WidgetStylePatch) {
-        let WidgetStylePatch {
-            background,
-            border_left,
-            border_top,
-            border_right,
-            border_bottom,
-            text,
-            tint,
-            opacity,
-            vertical_align,
-            clip,
-            shadow,
-            border_radius,
-            scroll,
-            shadow_x,
-            shadow_y,
-            shadow_blur,
-        } = *patch;
-        set_if_some(&mut self.background, background);
-        set_if_some(&mut self.border.left, border_left);
-        set_if_some(&mut self.border.top, border_top);
-        set_if_some(&mut self.border.right, border_right);
-        set_if_some(&mut self.border.bottom, border_bottom);
-        set_if_some(&mut self.text, text);
-        self.tint = tint.or(self.tint);
-        set_if_some(&mut self.opacity, opacity);
-        set_if_some(&mut self.vertical_align, vertical_align);
-        set_if_some(&mut self.clip, clip);
-        set_if_some(&mut self.shadow.color, shadow);
-        set_if_some(&mut self.border_radius, border_radius);
-        set_if_some(&mut self.scroll, scroll);
-        set_if_some(&mut self.shadow.x, shadow_x);
-        set_if_some(&mut self.shadow.y, shadow_y);
-        set_if_some(&mut self.shadow.blur, shadow_blur);
-    }
-
     pub(crate) fn relayout(&self) -> Relayout {
         Relayout {
             geometry: LayoutGeometry {
@@ -263,37 +157,6 @@ macro_rules! define_style_state {
 
 brul_style::states!(define_style_state);
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct Transitions {
-    pub background: Option<Duration>,
-    pub border_left: Option<Duration>,
-    pub border_top: Option<Duration>,
-    pub border_right: Option<Duration>,
-    pub border_bottom: Option<Duration>,
-    pub text: Option<Duration>,
-    pub tint: Option<Duration>,
-    pub opacity: Option<Duration>,
-    pub shadow: Option<Duration>,
-}
-
-patch!(pub(crate) Transitions {
-    background,
-    border_left,
-    border_top,
-    border_right,
-    border_bottom,
-    text,
-    tint,
-    opacity,
-    shadow,
-});
-
-impl Transitions {
-    pub fn is_empty(&self) -> bool {
-        *self == Self::DEFAULT
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct StyleSet {
     base: WidgetStyle,
@@ -380,110 +243,6 @@ impl StyleSet {
     }
 
     brul_style::states!(resolve_layers);
-}
-
-pub(super) struct Transition {
-    from: WidgetStyle,
-    pub(super) to: WidgetStyle,
-    background: Option<Track>,
-    border_left: Option<Track>,
-    border_top: Option<Track>,
-    border_right: Option<Track>,
-    border_bottom: Option<Track>,
-    text: Option<Track>,
-    tint: Option<Track>,
-    opacity: Option<Track>,
-    shadow: Option<Track>,
-}
-
-impl Transition {
-    pub(super) fn new(from: WidgetStyle, to: WidgetStyle, durations: Transitions) -> Self {
-        Self {
-            from,
-            to,
-            background: durations.background.map(Track::new),
-            border_left: durations.border_left.map(Track::new),
-            border_top: durations.border_top.map(Track::new),
-            border_right: durations.border_right.map(Track::new),
-            border_bottom: durations.border_bottom.map(Track::new),
-            text: durations.text.map(Track::new),
-            tint: durations.tint.map(Track::new),
-            opacity: durations.opacity.map(Track::new),
-            shadow: durations.shadow.map(Track::new),
-        }
-    }
-
-    pub(super) fn style(&self) -> WidgetStyle {
-        let mut style = self.to;
-        if let Some(track) = self.background {
-            let progress = track.value();
-            style.background = tween_paint(self.from.background, self.to.background, progress);
-        }
-        if let Some(track) = self.border_left {
-            style.border.left = self
-                .from
-                .border
-                .left
-                .tween(self.to.border.left, track.value());
-        }
-        if let Some(track) = self.border_top {
-            style.border.top = self
-                .from
-                .border
-                .top
-                .tween(self.to.border.top, track.value());
-        }
-        if let Some(track) = self.border_right {
-            style.border.right = self
-                .from
-                .border
-                .right
-                .tween(self.to.border.right, track.value());
-        }
-        if let Some(track) = self.border_bottom {
-            style.border.bottom = self
-                .from
-                .border
-                .bottom
-                .tween(self.to.border.bottom, track.value());
-        }
-        if let Some(track) = self.text {
-            style.text = self.from.text.tween(self.to.text, track.value());
-        }
-        if let Some(track) = self.tint {
-            style.tint = tween_tint(self.from.tint, self.to.tint, track.value());
-        }
-        if let Some(track) = self.opacity {
-            style.opacity = self.from.opacity.tween(self.to.opacity, track.value());
-        }
-        if let Some(track) = self.shadow {
-            style.shadow.color = self
-                .from
-                .shadow
-                .color
-                .tween(self.to.shadow.color, track.value());
-        }
-        style
-    }
-
-    pub(super) fn advance(&mut self, delta: Duration) -> bool {
-        let tracks = [
-            &mut self.background,
-            &mut self.border_left,
-            &mut self.border_top,
-            &mut self.border_right,
-            &mut self.border_bottom,
-            &mut self.text,
-            &mut self.tint,
-            &mut self.opacity,
-            &mut self.shadow,
-        ];
-        let mut running = false;
-        for track in tracks.into_iter().flatten() {
-            running |= track.advance(delta);
-        }
-        running
-    }
 }
 
 fn tween_paint(from: Paint, to: Paint, progress: f32) -> Paint {

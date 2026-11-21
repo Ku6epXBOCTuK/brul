@@ -2,32 +2,7 @@ use cosmic_text::{Align, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Sw
 
 use crate::atlas::{Atlas, AtlasSlot};
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct TextStyle {
-    pub family: Option<String>,
-    pub font_size: f32,
-    pub line_height: f32,
-    pub weight: u16,
-    pub align: TextAlign,
-}
-
-impl TextStyle {
-    pub fn new(font_size: f32) -> Self {
-        Self {
-            family: None,
-            font_size,
-            line_height: font_size * 1.2,
-            weight: 400,
-            align: TextAlign::Left,
-        }
-    }
-}
-
-impl Default for TextStyle {
-    fn default() -> Self {
-        Self::new(14.0)
-    }
-}
+include!(concat!(env!("OUT_DIR"), "/style_text.rs"));
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum TextAlign {

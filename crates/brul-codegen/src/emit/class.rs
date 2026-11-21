@@ -32,6 +32,8 @@ macro_rules! fields {
     };
 }
 
+include!(concat!(env!("OUT_DIR"), "/style_fields.rs"));
+
 pub(super) fn literal(out: &mut Out<'_>, class: &Class) {
     out.line(format_args!("brul::gui::Class {{"));
     out.indented(|out| {
@@ -50,34 +52,6 @@ pub(super) fn literal(out: &mut Out<'_>, class: &Class) {
         ));
     });
     out.start(format_args!("}}"));
-}
-
-fn layout(patch: &LayoutPatch) -> String {
-    let mut out = String::new();
-    fields!(out, patch, LayoutPatch, {
-        width => convert::dimension,
-        height => convert::dimension,
-        padding => convert::padding,
-        border_width => convert::border_widths,
-        gap => convert::decimal,
-        row_gap => convert::decimal,
-        column_gap => convert::decimal,
-        flex_grow => convert::debug,
-        flex_shrink => convert::debug,
-        flex_basis => convert::dimension,
-        display => convert::display,
-        flex_direction => convert::direction,
-        justify => convert::justify,
-        align => convert::align,
-        grid_template_columns => convert::tracks,
-        grid_template_rows => convert::tracks,
-        grid_column => convert::grid_line,
-        grid_row => convert::grid_line,
-        grid_auto_flow => convert::auto_flow,
-        grid_template_areas => convert::area_template,
-        grid_area => convert::family,
-    });
-    out
 }
 
 fn style(out: &mut Out<'_>, layers: &Layers<WidgetStylePatch>) {
@@ -108,56 +82,6 @@ fn states<T>(out: &mut Out<'_>, layers: &Layers<T>, patch_text: impl Fn(&T) -> S
             });
         }
     }
-}
-
-fn widget_patch(patch: &WidgetStylePatch) -> String {
-    let mut out = String::new();
-    fields!(out, patch, WidgetStylePatch, {
-        background => convert::paint,
-        border_left => convert::color,
-        border_top => convert::color,
-        border_right => convert::color,
-        border_bottom => convert::color,
-        text => convert::color,
-        tint => convert::color,
-        opacity => convert::debug,
-        vertical_align => convert::vertical_align,
-        clip,
-        shadow => convert::color,
-        border_radius,
-        scroll,
-        shadow_x,
-        shadow_y,
-        shadow_blur,
-    });
-    out
-}
-
-fn text_patch(patch: &TextStylePatch) -> String {
-    let mut out = String::new();
-    fields!(out, patch, TextStylePatch, {
-        weight,
-        align => convert::text_align,
-        size => convert::float,
-        family => convert::family,
-    });
-    out
-}
-
-fn transitions(transitions: &Transitions) -> String {
-    let mut out = String::new();
-    fields!(out, transitions, Transitions, {
-        background => convert::millis,
-        border_left => convert::millis,
-        border_top => convert::millis,
-        border_right => convert::millis,
-        border_bottom => convert::millis,
-        text => convert::millis,
-        tint => convert::millis,
-        opacity => convert::millis,
-        shadow => convert::millis,
-    });
-    out
 }
 
 mod convert {

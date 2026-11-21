@@ -1,44 +1,5 @@
-use super::{Layers, StyleState, WidgetState, set_if_some};
-use crate::text::{TextAlign, TextStyle};
-
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct TextStylePatch {
-    pub weight: Option<u16>,
-    pub align: Option<TextAlign>,
-    pub size: Option<f32>,
-    pub family: Option<String>,
-}
-
-impl TextStylePatch {
-    pub const DEFAULT: Self = Self {
-        weight: None,
-        align: None,
-        size: None,
-        family: None,
-    };
-
-    fn merge(&mut self, other: &Self) {
-        if other.weight.is_some() {
-            self.weight = other.weight;
-        }
-        if other.align.is_some() {
-            self.align = other.align;
-        }
-        if other.size.is_some() {
-            self.size = other.size;
-        }
-        if other.family.is_some() {
-            self.family = other.family.clone();
-        }
-    }
-}
-
-fn apply_size(style: &mut TextStyle, size: Option<f32>) {
-    if let Some(size) = size {
-        style.font_size = size;
-        style.line_height = size * 1.2;
-    }
-}
+use super::{Layers, StyleState, WidgetState};
+use crate::text::{TextStyle, TextStylePatch};
 
 macro_rules! define_text_style_set {
     ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {
@@ -90,12 +51,7 @@ macro_rules! define_text_style_set {
                     let Some(patch) = patch.filter(|_| active) else {
                         continue;
                     };
-                    set_if_some(&mut style.weight, patch.weight);
-                    set_if_some(&mut style.align, patch.align);
-                    apply_size(&mut style, patch.size);
-                    if let Some(family) = &patch.family {
-                        style.family = Some(family.clone());
-                    }
+                    style.apply(patch);
                 }
                 style
             }
@@ -107,12 +63,7 @@ brul_style::states!(define_text_style_set);
 
 impl TextStyleSet {
     pub fn merge(&mut self, patch: &TextStylePatch) {
-        set_if_some(&mut self.base.weight, patch.weight);
-        set_if_some(&mut self.base.align, patch.align);
-        apply_size(&mut self.base, patch.size);
-        if let Some(family) = &patch.family {
-            self.base.family = Some(family.clone());
-        }
+        self.base.apply(patch);
     }
 
     pub(crate) fn apply_layers(&mut self, layers: &Layers<TextStylePatch>) {

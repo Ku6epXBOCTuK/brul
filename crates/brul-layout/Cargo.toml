@@ -10,3 +10,6 @@ workspace = true
 brul-style = { workspace = true }
 taffy = { workspace = true }
 thiserror = { workspace = true }
+
+[build-dependencies]
+brul-style-gen = { workspace = true }
