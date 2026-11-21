@@ -117,8 +117,8 @@ pub enum Error {
     #[error("file has no component declaration")]
     NoComponent,
 
-    #[error("color expression is nested deeper than {0}")]
-    NestingDepth(usize),
+    #[error("{what} is nested deeper than {max}")]
+    NestingDepth { what: &'static str, max: usize },
     #[error("theme key '{0}' cannot alias another key; use it in an expression")]
     ThemeAlias(String),
     #[error("theme key '{key}' is a {actual}, but '{name}' expects a {expected}")]

@@ -29,7 +29,7 @@ pub use ast::{
 };
 pub use color::mix;
 pub use grid::{
-    Area, AreaTemplate, GridLine, LinePlacement, ParseGridError, RepeatCount, TrackSize,
+    Area, AreaTemplate, AreaTemplateError, GridLine, LinePlacement, RepeatCount, TrackSize,
 };
 pub use properties::{
     Kind, LayoutField, SPECS, Side, Spec, StatePolicy, StyleField, Target, TextField, ThemeType,

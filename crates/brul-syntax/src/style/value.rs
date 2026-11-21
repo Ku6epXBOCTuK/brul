@@ -1,5 +1,7 @@
-use brul_style::grid::parse_tracks;
-use brul_style::{AreaTemplate, Color, ColorExpr, ColorValue, Gradient, Type, Value};
+use brul_style::{
+    AreaTemplate, Color, ColorExpr, ColorValue, Gradient, GridLine, LinePlacement, RepeatCount,
+    TrackSize, Type, Value,
+};
 
 use crate::cursor::Cursor;
 use crate::error::{Error, Unterminated};
@@ -155,30 +157,125 @@ fn length(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
 }
 
 fn track_list(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
-    let (at, text) = grid_text(cursor);
-    parse_tracks(&text)
-        .map(Value::TrackList)
-        .map_err(|_| Error::at(cursor.source(), at, expected(name, "a track list")))
+    let mut tracks = vec![track_size(cursor, name, 0)?];
+    while starts_track_size(cursor) {
+        tracks.push(track_size(cursor, name, 0)?);
+    }
+    Ok(Value::TrackList(tracks))
+}
+
+fn starts_track_size(cursor: &mut Cursor) -> bool {
+    cursor.skip_trivia();
+    cursor.peek().is_some_and(|ch| ch.is_ascii_digit())
+        || cursor.starts_keyword("minmax")
+        || cursor.starts_keyword("repeat")
+}
+
+fn track_size(cursor: &mut Cursor, name: &str, depth: usize) -> Result<TrackSize, Error> {
+    let at = cursor.value_start();
+    if depth > NESTING {
+        return Err(Error::at(
+            cursor.source(),
+            at,
+            Error::NestingDepth {
+                what: "grid track",
+                max: NESTING,
+            },
+        ));
+    }
+    if cursor.eat_keyword("repeat") {
+        cursor.expect('(')?;
+        let count = repeat_count(cursor, name)?;
+        cursor.expect(',')?;
+        let mut tracks = vec![track_size(cursor, name, depth + 1)?];
+        while starts_track_size(cursor) {
+            tracks.push(track_size(cursor, name, depth + 1)?);
+        }
+        cursor.expect(')')?;
+        return Ok(TrackSize::Repeat(count, tracks));
+    }
+    if cursor.eat_keyword("minmax") {
+        cursor.expect('(')?;
+        let min = track_size(cursor, name, depth + 1)?;
+        cursor.expect(',')?;
+        let max = track_size(cursor, name, depth + 1)?;
+        cursor.expect(')')?;
+        return Ok(TrackSize::Minmax(Box::new(min), Box::new(max)));
+    }
+    let value = number(cursor, &expected(name, "a track size"))?;
+    if cursor.eat_unit("fr") {
+        return Ok(TrackSize::Fr(value));
+    }
+    if cursor.eat_unit("px") {
+        return Ok(TrackSize::Px(value));
+    }
+    if cursor.eat('%') {
+        return Ok(TrackSize::Percent(value));
+    }
+    Err(Error::at(
+        cursor.source(),
+        at,
+        expected(name, "fr, px or %"),
+    ))
+}
+
+fn repeat_count(cursor: &mut Cursor, name: &str) -> Result<RepeatCount, Error> {
+    if cursor.eat_keyword("auto-fill") {
+        return Ok(RepeatCount::AutoFill);
+    }
+    if cursor.eat_keyword("auto-fit") {
+        return Ok(RepeatCount::AutoFit);
+    }
+    let count = grid_integer(cursor, name, 1.0, u16::MAX as f64)?;
+    Ok(RepeatCount::Count(count as u16))
 }
 
 fn grid_line(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
-    let (at, text) = grid_text(cursor);
-    text.parse()
-        .map(Value::GridLine)
-        .map_err(|_| Error::at(cursor.source(), at, expected(name, "a grid line")))
+    let start = line_placement(cursor, name)?;
+    let end = if cursor.eat('/') {
+        Some(line_placement(cursor, name)?)
+    } else {
+        None
+    };
+    Ok(Value::GridLine(GridLine { start, end }))
 }
 
-fn grid_text(cursor: &mut Cursor) -> (usize, String) {
+fn line_placement(cursor: &mut Cursor, name: &str) -> Result<LinePlacement, Error> {
     let at = cursor.value_start();
-    let end = cursor.source()[at..]
-        .find([';', '}'])
-        .map_or(cursor.source().len(), |offset| at + offset);
-    let text = cursor.source()[at..end]
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    cursor.set_pos(end);
-    (at, text)
+    if cursor.eat_keyword("auto") {
+        return Ok(LinePlacement::Auto);
+    }
+    if cursor.eat_keyword("span") {
+        let count = grid_integer(cursor, name, 0.0, u16::MAX as f64)?;
+        return Ok(LinePlacement::Span(count as u16));
+    }
+    let negative = cursor.eat('-');
+    if !cursor.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+        return Err(Error::at(
+            cursor.source(),
+            at,
+            expected(name, "a line placement"),
+        ));
+    }
+    let value = grid_integer(cursor, name, 0.0, i32::MAX as f64)? as i32;
+    Ok(LinePlacement::Line(if negative { -value } else { value }))
+}
+
+fn grid_integer(cursor: &mut Cursor, name: &str, min: f64, max: f64) -> Result<f64, Error> {
+    let at = cursor.value_start();
+    let reason = Error::NumberRange {
+        min,
+        max,
+        name: name.to_owned(),
+    };
+    let value = cursor
+        .number_literal()
+        .map_err(|_| Error::at(cursor.source(), at, reason.clone()))?;
+    if value.fract() == 0.0 && (min..=max).contains(&value) {
+        Ok(value)
+    } else {
+        Err(Error::at(cursor.source(), at, reason))
+    }
 }
 
 fn area_template(cursor: &mut Cursor, name: &str) -> Result<Value, Error> {
@@ -233,7 +330,14 @@ fn color_value(
 ) -> Result<ColorValue, Error> {
     let at = cursor.value_start();
     if depth > NESTING {
-        return Err(Error::at(cursor.source(), at, Error::NestingDepth(NESTING)));
+        return Err(Error::at(
+            cursor.source(),
+            at,
+            Error::NestingDepth {
+                what: "color expression",
+                max: NESTING,
+            },
+        ));
     }
     if cursor.eat_keyword("alpha") {
         let color = first_argument(cursor, theme, name, depth)?;

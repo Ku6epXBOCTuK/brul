@@ -1073,11 +1073,11 @@ fn color_expression_errors_name_the_problem() {
         ),
         (
             ".a { grid-template-columns: red 1fr; }".to_string(),
-            "expected a track list for 'grid-template-columns'",
+            "expected a track size for 'grid-template-columns'",
         ),
         (
             ".a { grid-row: 1 / nope; }".to_string(),
-            "expected a grid line for 'grid-row'",
+            "expected a line placement for 'grid-row'",
         ),
     ];
     for (source, message) in sources {
@@ -1181,6 +1181,81 @@ fn grid_lines_parse() {
                 property("grid-auto-flow", Value::Keyword("column".to_owned())),
             ]
         )])
+    );
+}
+
+#[test]
+fn grid_repeat_accepts_auto_fill() {
+    let source = ".grid { grid-template-columns: repeat(auto-fill, 10px); }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "grid",
+            vec![property(
+                "grid-template-columns",
+                Value::TrackList(vec![TrackSize::Repeat(
+                    RepeatCount::AutoFill,
+                    vec![TrackSize::Px(10.0)]
+                )])
+            )]
+        )])
+    );
+}
+
+#[test]
+fn grid_errors_point_inside_the_value() {
+    let cases = [
+        (
+            ".grid { grid-template-columns: 100px minmax(80px, bogus); }",
+            "bogus",
+            "expected a track size for 'grid-template-columns'",
+        ),
+        (
+            ".grid { grid-template-columns: repeat(0, 1fr); }",
+            "0,",
+            "expected number from 1 to 65535 for 'grid-template-columns'",
+        ),
+        (
+            ".grid { grid-row: 2 / nope; }",
+            "nope",
+            "expected a line placement for 'grid-row'",
+        ),
+        (
+            ".grid { grid-template-columns: 1fr 2fr,; }",
+            ",;",
+            "expected ';'",
+        ),
+    ];
+    for (source, needle, message) in cases {
+        let error = parse_file(source).unwrap_err();
+        assert!(
+            error.message().contains(message),
+            "{source}: expected message containing {message}, got {}",
+            error.message()
+        );
+        assert_eq!(error.line(), 1, "{source}");
+        assert_eq!(
+            error.column(),
+            source.find(needle).unwrap() + 1,
+            "{source}: unexpected column"
+        );
+    }
+}
+
+#[test]
+fn deeply_nested_grid_tracks_are_rejected() {
+    let source = format!(
+        ".grid {{ grid-template-columns: {}1fr{}; }}",
+        "repeat(2, ".repeat(9),
+        ")".repeat(9)
+    );
+    let error = parse_file(&source).unwrap_err();
+    assert!(
+        error
+            .message()
+            .contains("grid track is nested deeper than 8"),
+        "{}",
+        error.message()
     );
 }
 

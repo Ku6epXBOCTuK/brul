@@ -130,14 +130,18 @@ impl<'a> Cursor<'a> {
         }
     }
 
+    pub fn starts_keyword(&self, word: &str) -> bool {
+        self.source[self.pos..].starts_with(word) && !self.is_ident_char(word.len())
+    }
+
     pub fn eat_keyword(&mut self, word: &str) -> bool {
         self.skip_trivia();
-        let rest = &self.source[self.pos..];
-        if !rest.starts_with(word) || self.is_ident_char(word.len()) {
-            return false;
+        if self.starts_keyword(word) {
+            self.pos += word.len();
+            true
+        } else {
+            false
         }
-        self.pos += word.len();
-        true
     }
 
     pub fn peek(&self) -> Option<char> {
