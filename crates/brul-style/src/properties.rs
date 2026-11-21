@@ -43,7 +43,7 @@ pub enum LayoutField {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StyleField {
     Background,
-    Border,
+    BorderSide(Side),
     Text,
     Tint,
     BorderRadius,
@@ -92,7 +92,7 @@ pub enum Kind {
     JustifyContent,
     AlignItems,
     Background,
-    BorderColor,
+    BorderColorSide(Side),
     Color,
     Tint,
     TextAlign,
@@ -113,6 +113,9 @@ macro_rules! target {
     };
     (layout, $field:ident) => {
         Target::Layout(LayoutField::$field)
+    };
+    (style, $field:ident($side:expr)) => {
+        Target::Style(StyleField::$field($side))
     };
     (style, $field:ident) => {
         Target::Style(StyleField::$field)
@@ -172,7 +175,10 @@ properties! {
     Kind::JustifyContent => ("justify-content", Type::Keywords(&["start", "center", "end", "space-between"]), Forbidden, layout(Justify)),
     Kind::AlignItems => ("align-items", Type::Keywords(&["start", "center", "end", "stretch"]), Forbidden, layout(Align)),
     Kind::Background => ("background", Type::Paint, Visual, style(Background)),
-    Kind::BorderColor => ("border-color", Type::Color, Visual, style(Border)),
+    Kind::BorderColorSide(Side::Left) => ("border-left-color", Type::Color, Visual, style(BorderSide(Side::Left))),
+    Kind::BorderColorSide(Side::Top) => ("border-top-color", Type::Color, Visual, style(BorderSide(Side::Top))),
+    Kind::BorderColorSide(Side::Right) => ("border-right-color", Type::Color, Visual, style(BorderSide(Side::Right))),
+    Kind::BorderColorSide(Side::Bottom) => ("border-bottom-color", Type::Color, Visual, style(BorderSide(Side::Bottom))),
     Kind::Color => ("color", Type::Color, Visual, style(Text)),
     Kind::Tint => ("tint", Type::Color, Visual, style(Tint)),
     Kind::TextAlign => ("text-align", Type::Keywords(&["left", "center", "right"]), Visual, text(Align)),
@@ -222,7 +228,7 @@ impl Kind {
         matches!(
             self,
             Kind::Background
-                | Kind::BorderColor
+                | Kind::BorderColorSide(_)
                 | Kind::Color
                 | Kind::Tint
                 | Kind::Opacity
@@ -346,6 +352,21 @@ mod tests {
         for (side, name) in names {
             assert_eq!(Kind::from_name(name), Some(Kind::BorderWidthSide(side)));
             assert_eq!(Kind::BorderWidthSide(side).name(), name);
+        }
+    }
+
+    #[test]
+    fn every_side_has_its_own_border_color_property() {
+        let names = [
+            (Side::Left, "border-left-color"),
+            (Side::Top, "border-top-color"),
+            (Side::Right, "border-right-color"),
+            (Side::Bottom, "border-bottom-color"),
+        ];
+        for (side, name) in names {
+            assert_eq!(Kind::from_name(name), Some(Kind::BorderColorSide(side)));
+            assert_eq!(Kind::BorderColorSide(side).name(), name);
+            assert!(Kind::BorderColorSide(side).animatable());
         }
     }
 }

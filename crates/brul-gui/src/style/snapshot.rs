@@ -9,8 +9,8 @@ use super::value::{
 };
 use crate::widget::{TextStylePatch, Transitions, WidgetStyle, WidgetStylePatch};
 use crate::{
-    Align, Direction, Display, GridAutoFlow, Justify, LayoutStyle, Sides, TextAlign, TextStyle,
-    VerticalAlign,
+    Align, Color, Direction, Display, GridAutoFlow, Justify, LayoutStyle, Sides, TextAlign,
+    TextStyle, VerticalAlign,
 };
 
 pub(super) fn base_styles(
@@ -37,7 +37,9 @@ pub(super) fn state_patch(
             Target::Style(StyleField::Background) => {
                 style.background = Some(read::<PaintTy>(value, kind)?)
             }
-            Target::Style(StyleField::Border) => style.border = Some(read::<ColorTy>(value, kind)?),
+            Target::Style(StyleField::BorderSide(side)) => {
+                set_border_patch(&mut style, side, read::<ColorTy>(value, kind)?)
+            }
             Target::Style(StyleField::Text) => style.text = Some(read::<ColorTy>(value, kind)?),
             Target::Style(StyleField::Tint) => style.tint = Some(read::<ColorTy>(value, kind)?),
             Target::Style(StyleField::Opacity) => {
@@ -84,7 +86,9 @@ pub(super) fn transitions(snapshot: &Snapshot) -> Result<Transitions, StyleError
     for animation in snapshot.animations() {
         let field = match animation.property.target() {
             Target::Style(StyleField::Background) => &mut transitions.background,
-            Target::Style(StyleField::Border) => &mut transitions.border,
+            Target::Style(StyleField::BorderSide(side)) => {
+                border_transition(&mut transitions, side)
+            }
             Target::Style(StyleField::Text) => &mut transitions.text,
             Target::Style(StyleField::Tint) => &mut transitions.tint,
             Target::Style(StyleField::Opacity) => &mut transitions.opacity,
@@ -166,7 +170,9 @@ fn apply(
         }
         Target::Layout(LayoutField::Align) => layout.align = align(read::<KeywordTy>(value, kind)?),
         Target::Style(StyleField::Background) => style.background = read::<PaintTy>(value, kind)?,
-        Target::Style(StyleField::Border) => style.border = read::<ColorTy>(value, kind)?,
+        Target::Style(StyleField::BorderSide(side)) => {
+            *edge(&mut style.border, side) = read::<ColorTy>(value, kind)?;
+        }
         Target::Style(StyleField::Text) => style.text = read::<ColorTy>(value, kind)?,
         Target::Style(StyleField::Tint) => style.tint = Some(read::<ColorTy>(value, kind)?),
         Target::Style(StyleField::BorderRadius) => style.border_radius = read::<PxTy>(value, kind)?,
@@ -201,6 +207,24 @@ fn edge<T>(sides: &mut Sides<T>, side: Side) -> &mut T {
         Side::Top => &mut sides.top,
         Side::Right => &mut sides.right,
         Side::Bottom => &mut sides.bottom,
+    }
+}
+
+fn set_border_patch(patch: &mut WidgetStylePatch, side: Side, color: Color) {
+    match side {
+        Side::Left => patch.border_left = Some(color),
+        Side::Top => patch.border_top = Some(color),
+        Side::Right => patch.border_right = Some(color),
+        Side::Bottom => patch.border_bottom = Some(color),
+    }
+}
+
+fn border_transition(transitions: &mut Transitions, side: Side) -> &mut Option<Duration> {
+    match side {
+        Side::Left => &mut transitions.border_left,
+        Side::Top => &mut transitions.border_top,
+        Side::Right => &mut transitions.border_right,
+        Side::Bottom => &mut transitions.border_bottom,
     }
 }
 

@@ -114,7 +114,10 @@ fn widget_patch(patch: &WidgetStylePatch) -> String {
     let mut out = String::new();
     fields!(out, patch, WidgetStylePatch, {
         background => convert::paint,
-        border => convert::color,
+        border_left => convert::color,
+        border_top => convert::color,
+        border_right => convert::color,
+        border_bottom => convert::color,
         text => convert::color,
         tint => convert::color,
         opacity => convert::debug,
@@ -145,7 +148,10 @@ fn transitions(transitions: &Transitions) -> String {
     let mut out = String::new();
     fields!(out, transitions, Transitions, {
         background => convert::millis,
-        border => convert::millis,
+        border_left => convert::millis,
+        border_top => convert::millis,
+        border_right => convert::millis,
+        border_bottom => convert::millis,
         text => convert::millis,
         tint => convert::millis,
         opacity => convert::millis,

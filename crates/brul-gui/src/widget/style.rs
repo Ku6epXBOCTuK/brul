@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use super::text::TextStylePatch;
 use super::{WidgetState, set_if_some};
-use crate::Color;
 use crate::animation::{Track, Tween};
 use crate::gradient::Paint;
 use crate::layout::LayoutPatch;
 use crate::rect::Shadow;
 use crate::text::VerticalAlign;
+use crate::{BorderColors, Color};
 
 macro_rules! resolve_layers {
     ($(($syntax:ident, $gui:ident, $field:ident, $keyword:literal)),+ $(,)?) => {
@@ -48,7 +48,7 @@ impl Relayout {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WidgetStyle {
     pub background: Paint,
-    pub border: Color,
+    pub border: BorderColors,
     pub text: Color,
     pub border_radius: u32,
     pub tint: Option<Color>,
@@ -63,7 +63,7 @@ impl Default for WidgetStyle {
     fn default() -> Self {
         Self {
             background: Paint::default(),
-            border: Color::TRANSPARENT,
+            border: BorderColors::all(Color::TRANSPARENT),
             text: Color::rgb(15, 23, 42),
             border_radius: 0,
             tint: None,
@@ -79,7 +79,10 @@ impl Default for WidgetStyle {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WidgetStylePatch {
     pub background: Option<Paint>,
-    pub border: Option<Color>,
+    pub border_left: Option<Color>,
+    pub border_top: Option<Color>,
+    pub border_right: Option<Color>,
+    pub border_bottom: Option<Color>,
     pub text: Option<Color>,
     pub tint: Option<Color>,
     pub opacity: Option<f32>,
@@ -95,7 +98,10 @@ pub struct WidgetStylePatch {
 
 patch!(pub(crate) WidgetStylePatch {
     background,
-    border,
+    border_left,
+    border_top,
+    border_right,
+    border_bottom,
     text,
     tint,
     opacity,
@@ -113,7 +119,10 @@ impl WidgetStyle {
     fn apply(&mut self, patch: &WidgetStylePatch) {
         let WidgetStylePatch {
             background,
-            border,
+            border_left,
+            border_top,
+            border_right,
+            border_bottom,
             text,
             tint,
             opacity,
@@ -127,7 +136,10 @@ impl WidgetStyle {
             shadow_blur,
         } = *patch;
         set_if_some(&mut self.background, background);
-        set_if_some(&mut self.border, border);
+        set_if_some(&mut self.border.left, border_left);
+        set_if_some(&mut self.border.top, border_top);
+        set_if_some(&mut self.border.right, border_right);
+        set_if_some(&mut self.border.bottom, border_bottom);
         set_if_some(&mut self.text, text);
         self.tint = tint.or(self.tint);
         set_if_some(&mut self.opacity, opacity);
@@ -254,7 +266,10 @@ brul_style::states!(define_style_state);
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Transitions {
     pub background: Option<Duration>,
-    pub border: Option<Duration>,
+    pub border_left: Option<Duration>,
+    pub border_top: Option<Duration>,
+    pub border_right: Option<Duration>,
+    pub border_bottom: Option<Duration>,
     pub text: Option<Duration>,
     pub tint: Option<Duration>,
     pub opacity: Option<Duration>,
@@ -263,7 +278,10 @@ pub struct Transitions {
 
 patch!(pub(crate) Transitions {
     background,
-    border,
+    border_left,
+    border_top,
+    border_right,
+    border_bottom,
     text,
     tint,
     opacity,
@@ -368,7 +386,10 @@ pub(super) struct Transition {
     from: WidgetStyle,
     pub(super) to: WidgetStyle,
     background: Option<Track>,
-    border: Option<Track>,
+    border_left: Option<Track>,
+    border_top: Option<Track>,
+    border_right: Option<Track>,
+    border_bottom: Option<Track>,
     text: Option<Track>,
     tint: Option<Track>,
     opacity: Option<Track>,
@@ -381,7 +402,10 @@ impl Transition {
             from,
             to,
             background: durations.background.map(Track::new),
-            border: durations.border.map(Track::new),
+            border_left: durations.border_left.map(Track::new),
+            border_top: durations.border_top.map(Track::new),
+            border_right: durations.border_right.map(Track::new),
+            border_bottom: durations.border_bottom.map(Track::new),
             text: durations.text.map(Track::new),
             tint: durations.tint.map(Track::new),
             opacity: durations.opacity.map(Track::new),
@@ -395,8 +419,33 @@ impl Transition {
             let progress = track.value();
             style.background = tween_paint(self.from.background, self.to.background, progress);
         }
-        if let Some(track) = self.border {
-            style.border = self.from.border.tween(self.to.border, track.value());
+        if let Some(track) = self.border_left {
+            style.border.left = self
+                .from
+                .border
+                .left
+                .tween(self.to.border.left, track.value());
+        }
+        if let Some(track) = self.border_top {
+            style.border.top = self
+                .from
+                .border
+                .top
+                .tween(self.to.border.top, track.value());
+        }
+        if let Some(track) = self.border_right {
+            style.border.right = self
+                .from
+                .border
+                .right
+                .tween(self.to.border.right, track.value());
+        }
+        if let Some(track) = self.border_bottom {
+            style.border.bottom = self
+                .from
+                .border
+                .bottom
+                .tween(self.to.border.bottom, track.value());
         }
         if let Some(track) = self.text {
             style.text = self.from.text.tween(self.to.text, track.value());
@@ -420,7 +469,10 @@ impl Transition {
     pub(super) fn advance(&mut self, delta: Duration) -> bool {
         let tracks = [
             &mut self.background,
-            &mut self.border,
+            &mut self.border_left,
+            &mut self.border_top,
+            &mut self.border_right,
+            &mut self.border_bottom,
             &mut self.text,
             &mut self.tint,
             &mut self.opacity,

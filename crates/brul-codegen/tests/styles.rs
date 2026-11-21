@@ -144,7 +144,7 @@ fn paint_covers_background_border_color_tint_and_the_gradient() {
         style.background,
         Paint::Color(brul_gui::Color::rgb(0x10, 0x20, 0x30))
     );
-    assert_eq!(style.border, brul_gui::Color::rgb(0x40, 0x50, 0x60));
+    assert_eq!(style.border, brul_gui::Color::rgb(0x40, 0x50, 0x60).into());
     assert_eq!(style.text, brul_gui::Color::rgb(0x70, 0x80, 0x90));
     assert_eq!(style.tint, Some(brul_gui::Color::rgb(0xa0, 0xb0, 0xc0)));
     assert_eq!(style.border_radius, 6);
@@ -292,7 +292,7 @@ fn states_layer_instead_of_replacing_each_other() {
         style.background,
         brul_gui::Paint::Color(brul_gui::Color::rgba(0, 255, 0, 255))
     );
-    assert_eq!(style.border, brul_gui::Color::rgba(255, 0, 0, 255));
+    assert_eq!(style.border, brul_gui::Color::rgba(255, 0, 0, 255).into());
 }
 
 #[test]
@@ -303,6 +303,9 @@ fn animations_become_transitions_on_the_style_set() {
 
     assert_eq!(transitions.background, Some(Duration::from_millis(300)));
     assert_eq!(transitions.opacity, Some(Duration::from_millis(50)));
-    assert_eq!(transitions.border, None);
+    assert_eq!(transitions.border_left, None);
+    assert_eq!(transitions.border_top, None);
+    assert_eq!(transitions.border_right, None);
+    assert_eq!(transitions.border_bottom, None);
     assert_eq!(transitions.shadow, None);
 }

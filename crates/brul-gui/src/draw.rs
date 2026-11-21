@@ -83,7 +83,12 @@ fn push_shape(index: usize, node: &WidgetSnapshotNode, opacity: f32, out: &mut V
         Paint::Color(color) => color.a > 0,
         Paint::Gradient(Gradient::Linear { angle, from, .. }) => angle != 0.0 && from.a > 0,
     };
-    if shadow.is_none() && !draw_fill {
+    let border = node.style.border;
+    let draw_border = (node.border_width.left > 0 && border.left.a > 0)
+        || (node.border_width.top > 0 && border.top.a > 0)
+        || (node.border_width.right > 0 && border.right.a > 0)
+        || (node.border_width.bottom > 0 && border.bottom.a > 0);
+    if shadow.is_none() && !draw_fill && !draw_border {
         return;
     }
     let rect = Rect::new(node.x, node.y, node.width, node.height)

@@ -109,7 +109,7 @@ fn a_solid_node_becomes_one_shape_with_border_coverage() {
     let snapshot = snapshot(
         WidgetStyle {
             background: Paint::Color(Color::rgb(255, 0, 0)),
-            border: Color::rgb(0, 0, 255),
+            border: Color::rgb(0, 0, 255).into(),
             border_radius: 4,
             opacity: 0.5,
             ..WidgetStyle::default()
@@ -122,7 +122,11 @@ fn a_solid_node_becomes_one_shape_with_border_coverage() {
     assert_eq!(shapes[0].bounds, [0.0, 0.0, 20.0, 20.0]);
     assert_eq!(shapes[0].params, [4.0, 0.0, 0.0, 0.5]);
     assert_eq!(shapes[0].fill, [1.0, 0.0, 0.0, 1.0]);
-    assert_eq!(shapes[0].border, [0.0, 0.0, 1.0, 1.0]);
+    let blue = [0.0, 0.0, 1.0, 1.0];
+    assert_eq!(shapes[0].border_left, blue);
+    assert_eq!(shapes[0].border_top, blue);
+    assert_eq!(shapes[0].border_right, blue);
+    assert_eq!(shapes[0].border_bottom, blue);
     assert_eq!(shapes[0].border_widths, [2.0, 2.0, 2.0, 2.0]);
     assert_eq!(shapes[0].extra, [0.0, 0.0, 0.0, 0.0]);
 }

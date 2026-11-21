@@ -131,6 +131,9 @@ fn kind(value: Kind) -> String {
         Kind::BorderWidthSide(side) => {
             format!("s::Kind::BorderWidthSide(s::Side::{side:?})")
         }
+        Kind::BorderColorSide(side) => {
+            format!("s::Kind::BorderColorSide(s::Side::{side:?})")
+        }
         value => format!("s::Kind::{value:?}"),
     }
 }

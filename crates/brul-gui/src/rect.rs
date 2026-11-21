@@ -1,4 +1,4 @@
-use crate::{BorderWidths, Color, Paint};
+use crate::{BorderColors, BorderWidths, Color, Paint};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
@@ -9,7 +9,7 @@ pub struct Rect {
     pub radius: u32,
     pub fill: Paint,
     pub border_width: BorderWidths,
-    pub border_color: Color,
+    pub border_color: BorderColors,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -28,7 +28,7 @@ impl Rect {
             radius: 0,
             fill: Paint::Color(Color::TRANSPARENT),
             border_width: BorderWidths::all(0),
-            border_color: Color::TRANSPARENT,
+            border_color: BorderColors::all(Color::TRANSPARENT),
         }
     }
 
@@ -42,9 +42,9 @@ impl Rect {
         self
     }
 
-    pub const fn with_border(mut self, widths: BorderWidths, color: Color) -> Self {
+    pub const fn with_border(mut self, widths: BorderWidths, colors: BorderColors) -> Self {
         self.border_width = widths;
-        self.border_color = color;
+        self.border_color = colors;
         self
     }
 
@@ -95,6 +95,50 @@ impl Rect {
             fill_coverage: inner,
             border_coverage: outer - inner,
         }
+    }
+
+    pub fn border_color_at(&self, x: i32, y: i32) -> Color {
+        let px = x as f32 + 0.5;
+        let py = y as f32 + 0.5;
+        let left = self.x as f32 + self.border_width.left as f32;
+        let top = self.y as f32 + self.border_width.top as f32;
+        let right = (self.x + self.width as i32) as f32 - self.border_width.right as f32;
+        let bottom = (self.y + self.height as i32) as f32 - self.border_width.bottom as f32;
+        let mut colors = [Color::TRANSPARENT; 4];
+        let mut count = 0;
+        if px < left {
+            colors[count] = self.border_color.left;
+            count += 1;
+        }
+        if py < top {
+            colors[count] = self.border_color.top;
+            count += 1;
+        }
+        if px > right {
+            colors[count] = self.border_color.right;
+            count += 1;
+        }
+        if py > bottom {
+            colors[count] = self.border_color.bottom;
+            count += 1;
+        }
+        if count == 0 {
+            return self.border_color.top;
+        }
+        let share = 1.0 / count as f32;
+        let (mut r, mut g, mut b, mut a) = (0.0, 0.0, 0.0, 0.0);
+        for color in colors.iter().take(count) {
+            r += color.r as f32 * share;
+            g += color.g as f32 * share;
+            b += color.b as f32 * share;
+            a += color.a as f32 * share;
+        }
+        Color::rgba(
+            r.round() as u8,
+            g.round() as u8,
+            b.round() as u8,
+            a.round() as u8,
+        )
     }
 
     fn distance(&self, x: i32, y: i32) -> f32 {

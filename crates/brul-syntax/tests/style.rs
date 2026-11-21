@@ -1,6 +1,6 @@
 use brul_style::{AreaTemplate, GridLine, LinePlacement, RepeatCount, TrackSize};
 use brul_syntax::style::{
-    Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Kind, Property, State,
+    Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Kind, Property, Side, State,
     Stylesheet, Theme, ThemeEntry, Value, parse_file, parse_file_in, parse_root,
 };
 
@@ -42,6 +42,18 @@ fn border_width(value: Value) -> Vec<Property> {
         "border-right-width",
         "border-bottom-width",
         "border-left-width",
+    ]
+    .into_iter()
+    .map(|name| property(name, value.clone()))
+    .collect()
+}
+
+fn border_color(value: Value) -> Vec<Property> {
+    [
+        "border-top-color",
+        "border-right-color",
+        "border-bottom-color",
+        "border-left-color",
     ]
     .into_iter()
     .map(|name| property(name, value.clone()))
@@ -196,6 +208,48 @@ fn border_width_longhands_are_independent() {
 }
 
 #[test]
+fn border_color_takes_one_to_four_values_in_css_order() {
+    let source = ".a { border-color: #ff0000 #00ff00 #0000ff; }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "a",
+            vec![
+                property("border-top-color", Value::Color(Color::rgb(255, 0, 0))),
+                property("border-right-color", Value::Color(Color::rgb(0, 255, 0))),
+                property("border-bottom-color", Value::Color(Color::rgb(0, 0, 255))),
+                property("border-left-color", Value::Color(Color::rgb(0, 255, 0))),
+            ],
+        )])
+    );
+}
+
+#[test]
+fn border_color_longhands_are_independent() {
+    let source = ".a { border-left-color: #ff0000; border-right-color: #0000ff; }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "a",
+            vec![
+                property("border-left-color", Value::Color(Color::rgb(255, 0, 0))),
+                property("border-right-color", Value::Color(Color::rgb(0, 0, 255))),
+            ],
+        )])
+    );
+}
+
+#[test]
+fn border_color_rejects_a_fifth_value() {
+    let error =
+        parse_file(".a { border-color: #ff0000 #00ff00 #0000ff #000000 #ffffff; }").unwrap_err();
+    assert_eq!(
+        error.message(),
+        "expected at most 4 values for 'border-color'"
+    );
+}
+
+#[test]
 fn comments_and_blank_lines_inside_a_rule_are_ignored() {
     let source = ".a {\n    // geometry\n    width: 12px;\n\n    height: 8px;\n}\n";
     assert_eq!(
@@ -219,18 +273,20 @@ fn colors_parse_hex_and_keywords() {
         tint: white;
         background: transparent;
     }"#;
+    let mut properties = vec![property(
+        "background",
+        Value::Color(Color::rgb(0x3b, 0x82, 0xf6)),
+    )];
+    properties.extend(border_color(Value::Color(Color::rgb(0xff, 0xff, 0xff))));
+    properties.push(property(
+        "color",
+        Value::Color(Color::rgba(0x1e, 0x29, 0x3b, 0x4d)),
+    ));
+    properties.push(property("tint", Value::Color(Color::WHITE)));
+    properties.push(property("background", Value::Color(Color::TRANSPARENT)));
     assert_eq!(
         parse_file(source).unwrap(),
-        sheet(vec![rule(
-            "a",
-            vec![
-                property("background", Value::Color(Color::rgb(0x3b, 0x82, 0xf6))),
-                property("border-color", Value::Color(Color::rgb(0xff, 0xff, 0xff))),
-                property("color", Value::Color(Color::rgba(0x1e, 0x29, 0x3b, 0x4d))),
-                property("tint", Value::Color(Color::WHITE)),
-                property("background", Value::Color(Color::TRANSPARENT)),
-            ],
-        )])
+        sheet(vec![rule("a", properties)])
     );
 }
 
@@ -446,17 +502,11 @@ fn border_shortcut_parses() {
 .small { border: 1.5px white; }
 .themed { border: 2px theme.border-main; }"#;
     let mut box_properties = border_width(Value::Px(2.0));
-    box_properties.push(property(
-        "border-color",
-        Value::Color(Color::rgb(0x3b, 0x82, 0xf6)),
-    ));
+    box_properties.extend(border_color(Value::Color(Color::rgb(0x3b, 0x82, 0xf6))));
     let mut small_properties = border_width(Value::Px(1.5));
-    small_properties.push(property("border-color", Value::Color(Color::WHITE)));
+    small_properties.extend(border_color(Value::Color(Color::WHITE)));
     let mut themed_properties = border_width(Value::Px(2.0));
-    themed_properties.push(property(
-        "border-color",
-        Value::ThemeRef("border-main".to_owned()),
-    ));
+    themed_properties.extend(border_color(Value::ThemeRef("border-main".to_owned())));
     assert_eq!(
         parse_file(source).unwrap(),
         sheet(vec![
@@ -807,7 +857,7 @@ fn errors_point_at_the_source() {
         ),
         (
             "theme light { radius: 4px; }\n.a { border: 2px theme.radius; }",
-            "theme key 'radius' is a px length, but 'border-color' expects a color",
+            "theme key 'radius' is a px length, but 'border-top-color' expects a color",
             2,
             6,
         ),
@@ -966,7 +1016,7 @@ fn color_expressions_parse() {
         })
     );
     assert_eq!(
-        value(0, Kind::BorderColor),
+        value(0, Kind::BorderColorSide(Side::Top)),
         &Value::ColorExpr(ColorExpr::Alpha {
             color: ColorValue::Color(Color::rgb(0x3b, 0x82, 0xf6)),
             amount: 40.0,

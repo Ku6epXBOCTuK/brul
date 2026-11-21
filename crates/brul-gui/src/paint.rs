@@ -158,7 +158,7 @@ impl Frame {
                     self.blend(
                         x as i32,
                         y as i32,
-                        rect.border_color,
+                        rect.border_color_at(x as i32, y as i32),
                         opacity * sample.border_coverage,
                     );
                 }

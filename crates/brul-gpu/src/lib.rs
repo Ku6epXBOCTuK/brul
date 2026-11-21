@@ -19,8 +19,11 @@ pub struct ShapeInstance {
     pub bounds: [f32; 4],
     pub params: [f32; 4],
     pub fill: [f32; 4],
-    pub border: [f32; 4],
     pub border_widths: [f32; 4],
+    pub border_left: [f32; 4],
+    pub border_top: [f32; 4],
+    pub border_right: [f32; 4],
+    pub border_bottom: [f32; 4],
     pub from: [f32; 4],
     pub to: [f32; 4],
     pub extra: [f32; 4],
@@ -130,8 +133,11 @@ pub fn shape_instances(
                 bounds,
                 params: [rect.radius as f32, 0.0, shadow.blur as f32, shape.opacity],
                 fill: rgba(shadow.color),
-                border: [0.0; 4],
                 border_widths: [0.0; 4],
+                border_left: [0.0; 4],
+                border_top: [0.0; 4],
+                border_right: [0.0; 4],
+                border_bottom: [0.0; 4],
                 from: [0.0; 4],
                 to: [0.0; 4],
                 extra: [0.0, shadow.x as f32, shadow.y as f32, 2.0],
@@ -143,26 +149,38 @@ pub fn shape_instances(
                 ],
             });
         }
-        if !shape.draw_fill {
+        let colors = rect.border_color;
+        let visible_border = (rect.border_width.left > 0 && colors.left.a > 0)
+            || (rect.border_width.top > 0 && colors.top.a > 0)
+            || (rect.border_width.right > 0 && colors.right.a > 0)
+            || (rect.border_width.bottom > 0 && colors.bottom.a > 0);
+        if !shape.draw_fill && !visible_border {
             continue;
         }
-        let (fill, from, to, angle) = match rect.fill {
-            Paint::Color(color) => (rgba(color), [0.0; 4], [0.0; 4], 0.0),
-            Paint::Gradient(Gradient::Linear { angle, from, to }) => {
-                ([0.0; 4], rgba(from), rgba(to), angle)
+        let (fill, from, to, angle) = if shape.draw_fill {
+            match rect.fill {
+                Paint::Color(color) => (rgba(color), [0.0; 4], [0.0; 4], 0.0),
+                Paint::Gradient(Gradient::Linear { angle, from, to }) => {
+                    ([0.0; 4], rgba(from), rgba(to), angle)
+                }
             }
+        } else {
+            ([0.0; 4], [0.0; 4], [0.0; 4], 0.0)
         };
         shapes.push(ShapeInstance {
             bounds,
             params: [rect.radius as f32, 0.0, 0.0, shape.opacity],
             fill,
-            border: rgba(rect.border_color),
             border_widths: [
                 rect.border_width.left as f32,
                 rect.border_width.top as f32,
                 rect.border_width.right as f32,
                 rect.border_width.bottom as f32,
             ],
+            border_left: rgba(colors.left),
+            border_top: rgba(colors.top),
+            border_right: rgba(colors.right),
+            border_bottom: rgba(colors.bottom),
             from,
             to,
             extra: [angle, 0.0, 0.0, 0.0],
@@ -278,8 +296,11 @@ fn push_decoration(
         ],
         params: [0.0, 0.0, 0.0, opacity],
         fill: rgba(color),
-        border: [0.0; 4],
         border_widths: [0.0; 4],
+        border_left: [0.0; 4],
+        border_top: [0.0; 4],
+        border_right: [0.0; 4],
+        border_bottom: [0.0; 4],
         from: [0.0; 4],
         to: [0.0; 4],
         extra: [0.0; 4],
@@ -294,8 +315,11 @@ pub fn instance_bytes(instances: &[ShapeInstance]) -> Vec<u8> {
             shape.bounds,
             shape.params,
             shape.fill,
-            shape.border,
             shape.border_widths,
+            shape.border_left,
+            shape.border_top,
+            shape.border_right,
+            shape.border_bottom,
             shape.from,
             shape.to,
             shape.extra,

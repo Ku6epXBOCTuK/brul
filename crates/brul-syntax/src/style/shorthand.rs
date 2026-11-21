@@ -18,9 +18,22 @@ pub static SHORTHANDS: &[Shorthand] = &[
             Kind::BorderWidthSide(Side::Right),
             Kind::BorderWidthSide(Side::Bottom),
             Kind::BorderWidthSide(Side::Left),
-            Kind::BorderColor,
+            Kind::BorderColorSide(Side::Top),
+            Kind::BorderColorSide(Side::Right),
+            Kind::BorderColorSide(Side::Bottom),
+            Kind::BorderColorSide(Side::Left),
         ],
         parse: border_values,
+    },
+    Shorthand {
+        name: "border-color",
+        kinds: &[
+            Kind::BorderColorSide(Side::Top),
+            Kind::BorderColorSide(Side::Right),
+            Kind::BorderColorSide(Side::Bottom),
+            Kind::BorderColorSide(Side::Left),
+        ],
+        parse: color_values,
     },
     Shorthand {
         name: "border-width",
@@ -72,13 +85,38 @@ impl Shorthand {
 fn border_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
     let width = value::value(cursor, true, Type::Px, name)?;
     let color = value::value(cursor, true, Type::Color, name)?;
-    Ok(vec![
-        width.clone(),
-        width.clone(),
-        width.clone(),
-        width,
-        color,
-    ])
+    let mut values = expand_four(vec![width]);
+    values.extend(expand_four(vec![color]));
+    Ok(values)
+}
+
+fn color_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
+    let mut values = vec![value::value(cursor, true, Type::Color, name)?];
+    loop {
+        cursor.skip_trivia();
+        if matches!(cursor.peek(), None | Some(';') | Some('}')) {
+            break;
+        }
+        if values.len() == 4 {
+            return Err(cursor.error(Error::AtMost {
+                max: 4,
+                name: name.to_owned(),
+            }));
+        }
+        values.push(value::value(cursor, true, Type::Color, name)?);
+    }
+    Ok(expand_four(values))
+}
+
+fn expand_four(values: Vec<Value>) -> Vec<Value> {
+    let top = values[0].clone();
+    let (right, bottom, left) = match values.len() {
+        1 => (top.clone(), top.clone(), top.clone()),
+        2 => (values[1].clone(), top.clone(), values[1].clone()),
+        3 => (values[1].clone(), values[2].clone(), values[1].clone()),
+        _ => (values[1].clone(), values[2].clone(), values[3].clone()),
+    };
+    vec![top, right, bottom, left]
 }
 
 fn shadow_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
@@ -104,12 +142,5 @@ fn box_values(cursor: &mut Cursor, name: &str) -> Result<Vec<Value>, Error> {
         }
         values.push(value::value(cursor, true, Type::Px, name)?);
     }
-    let top = values[0].clone();
-    let (right, bottom, left) = match values.len() {
-        1 => (top.clone(), top.clone(), top.clone()),
-        2 => (values[1].clone(), top.clone(), values[1].clone()),
-        3 => (values[1].clone(), values[2].clone(), values[1].clone()),
-        _ => (values[1].clone(), values[2].clone(), values[3].clone()),
-    };
-    Ok(vec![top, right, bottom, left])
+    Ok(expand_four(values))
 }

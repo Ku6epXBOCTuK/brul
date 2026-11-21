@@ -353,9 +353,9 @@ pub fn button_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
 static BUTTON_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 2]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { height: Some(brul::gui::Dimension::Px(32)), padding: Some(brul::gui::Padding { left: 16, top: 0, right: 16, bottom: 0 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), gap: Some(6), justify: Some(brul::gui::Justify::Center), align: Some(brul::gui::Align::Center), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), shadow: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_radius: Some(10), shadow_x: Some(0), shadow_y: Some(0), shadow_blur: Some(4), ..brul::gui::WidgetStylePatch::DEFAULT })
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border_left: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_top: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_right: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_bottom: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), shadow: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_radius: Some(10), shadow_x: Some(0), shadow_y: Some(0), shadow_blur: Some(4), ..brul::gui::WidgetStylePatch::DEFAULT })
             .with(brul::gui::StyleState::Hovered, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 39, g: 53, b: 73, a: 255 })), ..brul::gui::WidgetStylePatch::DEFAULT })
-            .with(brul::gui::StyleState::Focused, brul::gui::WidgetStylePatch { border: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), shadow: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT })
+            .with(brul::gui::StyleState::Focused, brul::gui::WidgetStylePatch { border_left: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), border_top: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), border_right: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), border_bottom: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), shadow: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT })
             .with(brul::gui::StyleState::Disabled, brul::gui::WidgetStylePatch { opacity: Some(0.45), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { background: Some(std::time::Duration::from_millis(200)), ..brul::gui::Transitions::DEFAULT },
@@ -372,9 +372,9 @@ static BUTTON_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 2]> = std::sy
 static BUTTON_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 2]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { height: Some(brul::gui::Dimension::Px(32)), padding: Some(brul::gui::Padding { left: 16, top: 0, right: 16, bottom: 0 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), gap: Some(6), justify: Some(brul::gui::Justify::Center), align: Some(brul::gui::Align::Center), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), shadow: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_radius: Some(10), shadow_x: Some(0), shadow_y: Some(0), shadow_blur: Some(4), ..brul::gui::WidgetStylePatch::DEFAULT })
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border_left: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_top: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_right: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_bottom: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), shadow: Some(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 }), border_radius: Some(10), shadow_x: Some(0), shadow_y: Some(0), shadow_blur: Some(4), ..brul::gui::WidgetStylePatch::DEFAULT })
             .with(brul::gui::StyleState::Hovered, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 226, g: 232, b: 240, a: 255 })), ..brul::gui::WidgetStylePatch::DEFAULT })
-            .with(brul::gui::StyleState::Focused, brul::gui::WidgetStylePatch { border: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), shadow: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT })
+            .with(brul::gui::StyleState::Focused, brul::gui::WidgetStylePatch { border_left: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), border_top: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), border_right: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), border_bottom: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), shadow: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT })
             .with(brul::gui::StyleState::Disabled, brul::gui::WidgetStylePatch { opacity: Some(0.45), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { background: Some(std::time::Duration::from_millis(200)), ..brul::gui::Transitions::DEFAULT },
@@ -449,7 +449,10 @@ fn button_styles() -> &'static brul::style::Stylesheet {
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Right), value: s::Value::Px(1.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Bottom), value: s::Value::Px(1.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Left), value: s::Value::Px(1.0) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
                     s::Property { kind: s::Kind::BorderRadius, value: s::Value::Px(10.0) },
                     s::Property { kind: s::Kind::Background, value: s::Value::ThemeRef("surface".into()) },
                     s::Property { kind: s::Kind::ShadowOffsetX, value: s::Value::Px(0.0) },
@@ -473,7 +476,10 @@ fn button_styles() -> &'static brul::style::Stylesheet {
                 class: "button".into(),
                 state: Some(s::State::Focus),
                 properties: vec![
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ThemeRef("accent".into()) },
                     s::Property { kind: s::Kind::ShadowColor, value: s::Value::ThemeRef("accent".into()) },
                 ],
                 animations: vec![],
@@ -491,7 +497,10 @@ fn button_styles() -> &'static brul::style::Stylesheet {
                 state: None,
                 properties: vec![
                     s::Property { kind: s::Kind::Background, value: s::Value::ThemeRef("surface".into()) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ThemeRef("border".into()) },
                 ],
                 animations: vec![],
             },
@@ -508,7 +517,10 @@ fn button_styles() -> &'static brul::style::Stylesheet {
                 state: None,
                 properties: vec![
                     s::Property { kind: s::Kind::Background, value: s::Value::ThemeRef("accent".into()) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ThemeRef("accent".into()) },
                 ],
                 animations: vec![],
             },
@@ -525,7 +537,10 @@ fn button_styles() -> &'static brul::style::Stylesheet {
                 state: None,
                 properties: vec![
                     s::Property { kind: s::Kind::Background, value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
                 ],
                 animations: vec![],
             },
@@ -659,7 +674,7 @@ pub fn card_view(theme: Option<&str>, build: &mut brul::Build, component: &brul:
 static CARD_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 2]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Percent(100.0)), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), clip: Some(true), border_radius: Some(14), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border_left: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_top: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_right: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_bottom: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), clip: Some(true), border_radius: Some(14), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -675,7 +690,7 @@ static CARD_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 2]> = std::sync
 static CARD_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 2]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Percent(100.0)), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), clip: Some(true), border_radius: Some(14), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border_left: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_top: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_right: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_bottom: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), clip: Some(true), border_radius: Some(14), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -731,7 +746,10 @@ fn card_styles() -> &'static brul::style::Stylesheet {
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Right), value: s::Value::Px(1.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Bottom), value: s::Value::Px(1.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Left), value: s::Value::Px(1.0) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ThemeRef("border".into()) },
                     s::Property { kind: s::Kind::BorderRadius, value: s::Value::Px(14.0) },
                     s::Property { kind: s::Kind::Clip, value: s::Value::Bool(true) },
                 ],
@@ -823,7 +841,7 @@ static TOOLTIP_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 3]> = std::s
     },
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { padding: Some(brul::gui::Padding { left: 12, top: 8, right: 12, bottom: 8 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_radius: Some(8), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border_left: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_top: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_right: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_bottom: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_radius: Some(8), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -845,7 +863,7 @@ static TOOLTIP_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 3]> = std::
     },
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { padding: Some(brul::gui::Padding { left: 12, top: 8, right: 12, bottom: 8 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_radius: Some(8), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border_left: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_top: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_right: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_bottom: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_radius: Some(8), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -913,7 +931,10 @@ fn tooltip_styles() -> &'static brul::style::Stylesheet {
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Right), value: s::Value::Px(1.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Bottom), value: s::Value::Px(1.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Left), value: s::Value::Px(1.0) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ThemeRef("border".into()) },
                     s::Property { kind: s::Kind::BorderRadius, value: s::Value::Px(8.0) },
                 ],
                 animations: vec![],
@@ -1084,8 +1105,8 @@ static CHECKBOX_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 4]> = std::
     },
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(18)), height: Some(brul::gui::Dimension::Px(18)), border_width: Some(brul::gui::BorderWidths { left: 2, top: 2, right: 2, bottom: 2 }), justify: Some(brul::gui::Justify::Center), align: Some(brul::gui::Align::Center), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 })), border: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_radius: Some(5), ..brul::gui::WidgetStylePatch::DEFAULT })
-            .with(brul::gui::StyleState::Checked, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 })), border: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 })), border_left: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_top: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_right: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_bottom: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_radius: Some(5), ..brul::gui::WidgetStylePatch::DEFAULT })
+            .with(brul::gui::StyleState::Checked, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 })), border_left: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), border_top: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), border_right: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), border_bottom: Some(brul::gui::Color { r: 59, g: 130, b: 246, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -1114,8 +1135,8 @@ static CHECKBOX_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 4]> = std:
     },
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(18)), height: Some(brul::gui::Dimension::Px(18)), border_width: Some(brul::gui::BorderWidths { left: 2, top: 2, right: 2, bottom: 2 }), justify: Some(brul::gui::Justify::Center), align: Some(brul::gui::Align::Center), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 })), border: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_radius: Some(5), ..brul::gui::WidgetStylePatch::DEFAULT })
-            .with(brul::gui::StyleState::Checked, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 })), border: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 0, g: 0, b: 0, a: 0 })), border_left: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_top: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_right: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_bottom: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_radius: Some(5), ..brul::gui::WidgetStylePatch::DEFAULT })
+            .with(brul::gui::StyleState::Checked, brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 })), border_left: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), border_top: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), border_right: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), border_bottom: Some(brul::gui::Color { r: 37, g: 99, b: 235, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -1196,7 +1217,10 @@ fn checkbox_styles() -> &'static brul::style::Stylesheet {
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Right), value: s::Value::Px(2.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Bottom), value: s::Value::Px(2.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Left), value: s::Value::Px(2.0) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ThemeRef("border".into()) },
                     s::Property { kind: s::Kind::BorderRadius, value: s::Value::Px(5.0) },
                     s::Property { kind: s::Kind::Background, value: s::Value::Color(s::Color::rgba(0, 0, 0, 0)) },
                     s::Property { kind: s::Kind::AlignItems, value: s::Value::Keyword("center".into()) },
@@ -1209,7 +1233,10 @@ fn checkbox_styles() -> &'static brul::style::Stylesheet {
                 state: Some(s::State::Checked),
                 properties: vec![
                     s::Property { kind: s::Kind::Background, value: s::Value::ThemeRef("accent".into()) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ThemeRef("accent".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ThemeRef("accent".into()) },
                 ],
                 animations: vec![],
             },
@@ -1419,7 +1446,7 @@ static DIALOG_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 6]> = std::sy
     },
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(420)), padding: Some(brul::gui::Padding { left: 20, top: 20, right: 20, bottom: 20 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), gap: Some(16), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_radius: Some(14), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border_left: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_top: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_right: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_bottom: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_radius: Some(14), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -1459,7 +1486,7 @@ static DIALOG_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 6]> = std::s
     },
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(420)), padding: Some(brul::gui::Padding { left: 20, top: 20, right: 20, bottom: 20 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), gap: Some(16), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_radius: Some(14), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border_left: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_top: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_right: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_bottom: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_radius: Some(14), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -1551,7 +1578,10 @@ fn dialog_styles() -> &'static brul::style::Stylesheet {
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Right), value: s::Value::Px(1.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Bottom), value: s::Value::Px(1.0) },
                     s::Property { kind: s::Kind::BorderWidthSide(s::Side::Left), value: s::Value::Px(1.0) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ThemeRef("border".into()) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ThemeRef("border".into()) },
                     s::Property { kind: s::Kind::BorderRadius, value: s::Value::Px(14.0) },
                 ],
                 animations: vec![],

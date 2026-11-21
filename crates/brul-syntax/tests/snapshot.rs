@@ -84,7 +84,7 @@ fn derived_theme_keys_resolve_on_build() {
         .expect("snapshot");
 
     assert_eq!(
-        snapshot.get(Kind::BorderColor),
+        snapshot.get(Kind::BorderColorSide(Side::Top)),
         Some(&Value::Color(Color::rgba(0x3b, 0x82, 0xf6, 102)))
     );
 }
@@ -187,7 +187,7 @@ fn border_theme_refs_resolve_to_a_color() {
         );
     }
     assert_eq!(
-        snapshot.get(Kind::BorderColor),
+        snapshot.get(Kind::BorderColorSide(Side::Top)),
         Some(&Value::Color(Color::rgb(0x11, 0x11, 0x11)))
     );
 }
@@ -199,7 +199,7 @@ fn border_theme_ref_to_a_non_color_is_rejected_at_parse_time() {
 
     assert_eq!(
         error.message(),
-        "theme key 'radius' is a px length, but 'border-color' expects a color"
+        "theme key 'radius' is a px length, but 'border-top-color' expects a color"
     );
 }
 
@@ -209,7 +209,7 @@ fn literals_survive_without_themes() {
     let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
 
     assert!(matches!(
-        snapshot.get(Kind::BorderColor),
+        snapshot.get(Kind::BorderColorSide(Side::Top)),
         Some(Value::Color(_))
     ));
 }
@@ -276,7 +276,7 @@ fn mix_with_transparent_matches_alpha() {
     let snapshot = sheet.snapshot(&["a"], None, None).expect("snapshot");
     assert_eq!(
         snapshot.get(Kind::Background),
-        snapshot.get(Kind::BorderColor)
+        snapshot.get(Kind::BorderColorSide(Side::Top))
     );
 }
 
@@ -295,7 +295,7 @@ fn mix_ends_on_its_operands() {
         Some(&Value::Color(Color::rgb(0x3b, 0x82, 0xf6)))
     );
     assert_eq!(
-        snapshot.get(Kind::BorderColor),
+        snapshot.get(Kind::BorderColorSide(Side::Top)),
         Some(&Value::Color(Color::rgb(0x0f, 0x17, 0x2a)))
     );
 }
@@ -320,7 +320,7 @@ fn lighten_and_darken_move_tone_by_absolute_points() {
     };
     let base = Hct::new(Rgb::new(0x3b, 0x82, 0xf6)).get_tone();
     assert!((tone(Kind::Background) - (base + 20.0)).abs() < 0.5);
-    assert!((tone(Kind::BorderColor) - (base - 10.0)).abs() < 0.5);
+    assert!((tone(Kind::BorderColorSide(Side::Top)) - (base - 10.0)).abs() < 0.5);
 }
 
 #[test]

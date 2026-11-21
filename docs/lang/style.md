@@ -71,9 +71,11 @@
 | `justify-content`                                      | start\|center\|end\|space-between | start                   | ❌ геометрия                    |
 | `align-items`                                          | start\|center\|end\|stretch       | start                   | ❌ геометрия                    |
 | `background`                                           | Color \| Gradient                 | transparent             | ✅                              |
-| `border` (шорткат: ширина+цвет)                        | px + (Color \| theme.*)           | 0, transparent          | ❌ (только `border-color`)      |
-| `border-width`                                         | px                                | 0                       | ❌ геометрия                    |
-| `border-color`                                         | Color                             | transparent             | ✅                              |
+| `border` (шорткат: ширина + цвет)                      | px + (Color \| theme.*)           | 0, transparent          | ❌ (цвета по сторонам — ✅)     |
+| `border-width` (1–4 значения)                          | px                                | 0                       | ❌ геометрия                    |
+| `border-left/right/top/bottom-width`                   | px                                | 0                       | ❌ геометрия                    |
+| `border-color` (1–4 значения)                          | Color                             | transparent             | ✅                              |
+| `border-left/right/top/bottom-color`                   | Color                             | transparent             | ✅                              |
 | `border-radius`                                        | px                                | 0                       | ❌ геометрия                    |
 | `color`                                                | Color                             | theme-зависимый         | ✅                              |
 | `font-size`                                            | px                                | 14                      | ❌ (размер текста — компоновка) |
@@ -109,12 +111,17 @@ _«Меняется по состоянию?» = разрешено ли сво�
 
 `padding` — шорткат как в CSS: одно значение — все стороны, два — вертикаль и
 горизонталь, три — верх, горизонталь, низ, четыре — верх, право, низ, лево.
-`border` — шорткат из ширины и цвета: `border: 2px theme.border-main`. Оба
-раскладываются при парсинге (`padding` — в `padding-top/right/bottom/left`,
-`border` — в `border-width` и `border-color`), поэтому дальше свойства
-неотличимы от написанных по отдельности. Ширина — геометрия, поэтому `border` в
-`.class:state` запрещён, как и `border-width`; менять в состоянии можно только
-`border-color`.
+`border-width` и `border-color` — такие же шорткаты на 1–4 значения в том же
+порядке: верх, право, низ, лево. `border: 2px theme.border-main` — шорткат из
+одной ширины и одного цвета: оба значения раскрываются на все четыре стороны.
+Все шорткаты разворачиваются при парсинге, поэтому длинные свойства
+`border-top-width` / `border-top-color` и остальные по сторонам неотличимы от
+написанных вручную.
+
+Ширины — геометрия: `border-width`, `border-*-width` и `border` в `.class:state`
+запрещены. Цвета — визуальные: `border-color` и `border-*-color` можно менять по
+состоянию; чтобы перекрасить только верхнюю границу, используй
+`border-top-color`.
 
 `box-shadow` — шорткат из смещения по x, смещения по y, размытия и цвета:
 `box-shadow: 0px 10px 15px #3b82f640`. Смещения и размытие — px, смещения могут
@@ -152,8 +159,8 @@ _«Меняется по состоянию?» = разрешено ли сво�
 ```
 
 - Анимируются только цветовые визуальные свойства: `color`, `border-color`,
-  `background` (сплошной цвет), `box-shadow-color`, `tint`, `opacity`. Градиент
-  сменяется мгновенно: промежуточных градиентов нет.
+  `border-*-color`, `background` (сплошной цвет), `box-shadow-color`, `tint`,
+  `opacity`. Градиент сменяется мгновенно: промежуточных градиентов нет.
 - У каждого свойства своя длительность: объявлений `animate` столько, сколько
   свойств. Повтор по тому же свойству в одном классе — выигрывает более позднее
   объявление, между классами — более поздний класс.
@@ -294,14 +301,16 @@ override Button {
 
 - **Совпадает:** `width`/`height`, `padding`, `flex-grow`/`flex-shrink`/
   `flex-basis`, `display`, `flex-direction`, `justify-content`, `align-items`,
-  `gap`/`row-gap`/`column-gap`, `border-radius`, `background`, `color`,
-  `opacity`, `grid-template-columns`/`grid-template-rows`,
+  `gap`/`row-gap`/`column-gap`, `border`, `border-width`/`border-color` (1–4
+  значения), `border-*-width`/`border-*-color`, `border-radius`, `background`,
+  `color`, `opacity`, `grid-template-columns`/`grid-template-rows`,
   `grid-column`/`grid-row`, `grid-auto-flow`, `grid-template-areas`,
   `grid-area`.
 - **Иначе:** border-box вместо content-box; `flex-shrink` по умолчанию 0, а не
-  1; `flex-direction: column` не растягивает детей по ширине; нет каскада,
-  специфичности, наследования и `!important`; нет именованных линий вне
-  `grid-template-areas`.
+  1; `flex-direction: column` не растягивает детей по ширине; `border` и
+  шорткаты раскрываются на четыре стороны, при смене состояния можно менять
+  только цвет; нет каскада, специфичности, наследования и `!important`; нет
+  именованных линий вне `grid-template-areas`.
 - **Не берём:** inline-форматирование, схлопывание margin, `float`,
   `em`/`rem`/`vw`/`vh`/`calc`.
 

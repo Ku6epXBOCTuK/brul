@@ -57,7 +57,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
 static DEMO_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 59, g: 130, b: 246, a: 128 })), border: Some(brul::gui::Color { r: 114, g: 154, b: 233, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 59, g: 130, b: 246, a: 128 })), border_left: Some(brul::gui::Color { r: 114, g: 154, b: 233, a: 255 }), border_top: Some(brul::gui::Color { r: 114, g: 154, b: 233, a: 255 }), border_right: Some(brul::gui::Color { r: 114, g: 154, b: 233, a: 255 }), border_bottom: Some(brul::gui::Color { r: 114, g: 154, b: 233, a: 255 }), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
@@ -86,7 +86,10 @@ fn demo_styles() -> &'static brul::style::Stylesheet {
                 state: None,
                 properties: vec![
                     s::Property { kind: s::Kind::Background, value: s::Value::ColorExpr(s::ColorExpr::Alpha { color: s::ColorValue::Theme("accent".into()), amount: 50.0 }) },
-                    s::Property { kind: s::Kind::BorderColor, value: s::Value::ColorExpr(s::ColorExpr::Mix { from: s::ColorValue::Color(s::Color::rgba(59, 130, 246, 255)), to: s::ColorValue::Color(s::Color::rgba(255, 255, 255, 255)), amount: 20.0 }) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Top), value: s::Value::ColorExpr(s::ColorExpr::Mix { from: s::ColorValue::Color(s::Color::rgba(59, 130, 246, 255)), to: s::ColorValue::Color(s::Color::rgba(255, 255, 255, 255)), amount: 20.0 }) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Right), value: s::Value::ColorExpr(s::ColorExpr::Mix { from: s::ColorValue::Color(s::Color::rgba(59, 130, 246, 255)), to: s::ColorValue::Color(s::Color::rgba(255, 255, 255, 255)), amount: 20.0 }) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Bottom), value: s::Value::ColorExpr(s::ColorExpr::Mix { from: s::ColorValue::Color(s::Color::rgba(59, 130, 246, 255)), to: s::ColorValue::Color(s::Color::rgba(255, 255, 255, 255)), amount: 20.0 }) },
+                    s::Property { kind: s::Kind::BorderColorSide(s::Side::Left), value: s::Value::ColorExpr(s::ColorExpr::Mix { from: s::ColorValue::Color(s::Color::rgba(59, 130, 246, 255)), to: s::ColorValue::Color(s::Color::rgba(255, 255, 255, 255)), amount: 20.0 }) },
                 ],
                 animations: vec![],
             },

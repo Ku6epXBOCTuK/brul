@@ -6,8 +6,11 @@ struct Instance {
     bounds: vec4<f32>,
     params: vec4<f32>,
     fill: vec4<f32>,
-    border: vec4<f32>,
     border_widths: vec4<f32>,
+    border_left: vec4<f32>,
+    border_top: vec4<f32>,
+    border_right: vec4<f32>,
+    border_bottom: vec4<f32>,
     start: vec4<f32>,
     end: vec4<f32>,
     extra: vec4<f32>,
@@ -131,8 +134,30 @@ fn fs(in: Varyings) -> @location(0) vec4<f32> {
             let inner_d = rounded_distance(in.local, inner_size, inner_radius, widths.xy);
             inner = clamp(0.5 - inner_d, 0.0, 1.0);
         }
-        let border = (outer - inner) * shape.border.a;
-        premultiplied = shape.border.rgb * border;
+        var color_sum = vec4<f32>(0.0);
+        var color_count = 0.0;
+        if in.local.x < widths.x {
+            color_sum = color_sum + shape.border_left;
+            color_count = color_count + 1.0;
+        }
+        if in.local.y < widths.y {
+            color_sum = color_sum + shape.border_top;
+            color_count = color_count + 1.0;
+        }
+        if in.local.x > size.x - widths.z {
+            color_sum = color_sum + shape.border_right;
+            color_count = color_count + 1.0;
+        }
+        if in.local.y > size.y - widths.w {
+            color_sum = color_sum + shape.border_bottom;
+            color_count = color_count + 1.0;
+        }
+        var border_color = shape.border_top;
+        if color_count > 0.0 {
+            border_color = color_sum / color_count;
+        }
+        let border = (outer - inner) * border_color.a;
+        premultiplied = border_color.rgb * border;
         alpha = border;
 
         var fill = shape.fill;
