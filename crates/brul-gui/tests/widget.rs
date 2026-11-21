@@ -537,6 +537,39 @@ fn a_clipped_child_is_not_hit() {
 }
 
 #[test]
+fn a_class_clip_is_applied_to_hit_testing() {
+    let child = Widget::column(Vec::new()).with_layout(fixed(32, 16));
+    let child_id = child.id();
+    let parent = Widget::column(vec![child]).with_layout(fixed(16, 16));
+    let parent_id = parent.id();
+    let root = Widget::column(vec![parent]).with_layout(fixed(32, 16));
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    let viewport = Size {
+        width: 32,
+        height: 16,
+    };
+
+    tree.layout(&mut engine, viewport, 1.0).expect("layout");
+
+    let class = Class {
+        style: Layers::new(WidgetStylePatch {
+            clip: Some(true),
+            border_radius: Some(4),
+            ..WidgetStylePatch::default()
+        }),
+        ..Class::default()
+    };
+    assert!(tree.apply_class(parent_id, Some(&class)));
+    tree.layout(&mut engine, viewport, 1.0).expect("relayout");
+
+    assert_eq!(tree.hit(0, 0).expect("hit"), Some(parent_id));
+    assert_ne!(tree.hit(20, 8).expect("hit"), Some(child_id));
+    assert_eq!(tree.hit(20, 8).expect("hit"), Some(root_id));
+}
+
+#[test]
 fn clipped_child_hover_does_not_stick_across_moves() {
     let child = Widget::column(Vec::new()).with_layout(fixed(32, 16));
     let child_id = child.id();

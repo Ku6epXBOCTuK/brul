@@ -271,7 +271,7 @@ pub(super) fn collect_hit(
         return false;
     }
 
-    let style = node.styles.resolve(node.state);
+    let style = node.style();
     let clip = style.clip.then(|| {
         let layout_box = &boxes[slot.index()];
         ClipRect::new(
