@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use brul_codegen::runtime::{self, accepts_prop};
 use brul_gui::{TimerOwner, WidgetEvent, WidgetId, WidgetTree};
+use brul_ident::TimerId;
 use brul_reactive::{Effect, EffectScope};
 use brul_window::{TimerCommand, WindowCommand};
 
@@ -50,41 +51,55 @@ fn timer_command(request: TimerRequest, owner: TimerOwner) -> Option<WindowComma
     }
 }
 
-fn owner_components(
-    first: u64,
-    components: Vec<ComponentHandle>,
-) -> Vec<(TimerOwner, ComponentHandle)> {
-    components
-        .into_iter()
-        .enumerate()
-        .map(|(offset, component)| (TimerOwner::new(first + offset as u64), component))
-        .collect()
-}
+type ActiveTimers = Rc<RefCell<HashMap<TimerOwner, HashSet<TimerId>>>>;
 
 fn schedule_timers(
-    components: &[(TimerOwner, ComponentHandle)],
+    components: &[OwnedComponent],
+    active: &ActiveTimers,
     commands: &Rc<RefCell<Vec<WindowCommand>>>,
 ) {
-    for (owner, component) in components {
+    for owned in components {
         let (timers, cancels) = {
-            let mut component = component.borrow_mut();
+            let mut component = owned.component.borrow_mut();
             (component.take_timers(), component.take_cancels())
         };
-        commands.borrow_mut().extend(
-            timers
-                .into_iter()
-                .filter_map(|request| timer_command(request, *owner)),
-        );
-        commands.borrow_mut().extend(
-            cancels
-                .into_iter()
-                .map(|id| WindowCommand::Timer(TimerCommand::Cancel { id, owner: *owner })),
-        );
+        let starts: Vec<_> = timers
+            .into_iter()
+            .filter_map(|request| timer_command(request, owned.owner))
+            .collect();
+        {
+            let mut active = active.borrow_mut();
+            let ids = active.entry(owned.owner).or_default();
+            for command in &starts {
+                if let WindowCommand::Timer(TimerCommand::Start { id, .. }) = command {
+                    ids.insert(*id);
+                }
+            }
+            for id in &cancels {
+                ids.remove(id);
+            }
+        }
+        commands.borrow_mut().extend(starts);
+        commands.borrow_mut().extend(cancels.into_iter().map(|id| {
+            WindowCommand::Timer(TimerCommand::Cancel {
+                id,
+                owner: owned.owner,
+            })
+        }));
     }
 }
+struct OwnedComponent {
+    owner: TimerOwner,
+    component: ComponentHandle,
+    _scope: EffectScope,
+}
+
 pub struct Ui<T: Theme> {
     pub component: ComponentHandle,
-    components: Vec<(TimerOwner, ComponentHandle)>,
+    components: Vec<OwnedComponent>,
+    active: ActiveTimers,
+    lifecycle: Rc<RefCell<Vec<WindowCommand>>>,
+    next_owner: u64,
     pub tree: Rc<RefCell<WidgetTree>>,
     handlers: Vec<Handler>,
     window_handlers: Vec<Handler>,
@@ -103,11 +118,13 @@ pub struct Ui<T: Theme> {
 
 struct Owned {
     widget: WidgetId,
+    components: Vec<ComponentHandle>,
     _scope: EffectScope,
 }
 
 struct OwnedStructure {
     structure: Structure,
+    components: Vec<ComponentHandle>,
     _scope: EffectScope,
 }
 impl<T: Theme> Ui<T> {
@@ -157,13 +174,6 @@ impl<T: Theme> Ui<T> {
             handlers,
             props,
         } = built;
-        let components = owner_components(
-            0,
-            std::iter::once(Rc::clone(&component))
-                .chain(parts.nested)
-                .collect(),
-        );
-        schedule_timers(&components, &commands);
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         tree.borrow_mut().set_root_scroll(scroll);
         let window_handlers = handlers
@@ -172,8 +182,11 @@ impl<T: Theme> Ui<T> {
             .cloned()
             .collect();
         let mut ui = Self {
-            component,
-            components,
+            component: Rc::clone(&component),
+            components: Vec::new(),
+            active: Rc::new(RefCell::new(HashMap::new())),
+            lifecycle: Rc::new(RefCell::new(Vec::new())),
+            next_owner: 0,
             tree,
             handlers,
             window_handlers,
@@ -189,11 +202,39 @@ impl<T: Theme> Ui<T> {
             textures: runtime::Textures::default(),
             scope: EffectScope::new(),
         };
+        for handle in std::iter::once(component).chain(parts.nested) {
+            let owned = ui.adopt(handle);
+            ui.components.push(owned);
+        }
+        schedule_timers(&ui.components, &ui.active, &ui.commands);
         ui.bind(bindings);
         ui.bind_props(props);
         ui.bind_structures(parts.structures);
         ui.index_handlers();
         ui
+    }
+
+    fn adopt(&mut self, component: ComponentHandle) -> OwnedComponent {
+        let owner = TimerOwner::new(self.next_owner);
+        self.next_owner += 1;
+        let scope = self.scope.child();
+        let active = Rc::clone(&self.active);
+        let lifecycle = Rc::clone(&self.lifecycle);
+        scope.on_cleanup(move || {
+            if let Some(ids) = active.borrow_mut().remove(&owner)
+                && !ids.is_empty()
+            {
+                lifecycle.borrow_mut().extend(
+                    ids.into_iter()
+                        .map(|id| WindowCommand::Timer(TimerCommand::Cancel { id, owner })),
+                );
+            }
+        });
+        OwnedComponent {
+            owner,
+            component,
+            _scope: scope,
+        }
     }
 
     fn index_handlers(&mut self) {
@@ -209,6 +250,7 @@ impl<T: Theme> Ui<T> {
     fn bind(&mut self, bindings: Vec<Binding>) {
         for binding in bindings {
             let widget = binding.widget;
+            let components = vec![Rc::clone(&binding.component)];
             let tree = Rc::clone(&self.tree);
             let textures = Rc::clone(&self.textures);
             let scope = self.scope.child();
@@ -220,6 +262,7 @@ impl<T: Theme> Ui<T> {
             });
             self.bindings.push(Owned {
                 widget,
+                components,
                 _scope: scope,
             });
         }
@@ -228,12 +271,14 @@ impl<T: Theme> Ui<T> {
     fn bind_props(&mut self, props: Vec<PropBinding>) {
         for prop in props {
             let widget = prop.widget;
+            let components = vec![Rc::clone(&prop.component), Rc::clone(&prop.target)];
             let scope = self.scope.child();
             scope.run(|| {
                 Effect::new(move || apply_prop(&prop));
             });
             self.props.push(Owned {
                 widget,
+                components,
                 _scope: scope,
             });
         }
@@ -278,6 +323,7 @@ impl<T: Theme> Ui<T> {
             });
             self.structures.push(OwnedStructure {
                 structure,
+                components: Vec::new(),
                 _scope: scope,
             });
         }
@@ -290,7 +336,13 @@ impl<T: Theme> Ui<T> {
             props,
             structures,
             components,
+            rebuilt,
         } = staged;
+        for owned in &mut self.structures {
+            if rebuilt.contains(&owned.structure.parent) {
+                owned.components.clear();
+            }
+        }
         let parents: HashSet<WidgetId> = structures.iter().map(|s| s.parent).collect();
         let widgets: HashSet<WidgetId> = bindings.iter().map(|b| b.widget).collect();
         let prop_widgets: HashSet<WidgetId> = props.iter().map(|p| p.widget).collect();
@@ -305,12 +357,42 @@ impl<T: Theme> Ui<T> {
             self.handlers.extend(handlers);
             retain_live(&mut self.handlers, &tree, &none);
         }
-        let next = self.components.len() as u64;
-        self.components.extend(owner_components(next, components));
         self.index_handlers();
         self.bind(bindings);
         self.bind_props(props);
         self.bind_structures(structures);
+        for (parent, handle) in components {
+            let owned = self.adopt(handle);
+            if let Some(entry) = self
+                .structures
+                .iter_mut()
+                .find(|entry| entry.structure.parent == parent)
+            {
+                entry.components.push(Rc::clone(&owned.component));
+            }
+            self.components.push(owned);
+        }
+        self.prune_components();
+    }
+
+    fn prune_components(&mut self) {
+        let mut live: HashSet<*const RefCell<crate::Component>> = HashSet::new();
+        live.insert(Rc::as_ptr(&self.component));
+        for owned in &self.bindings {
+            live.extend(owned.components.iter().map(Rc::as_ptr));
+        }
+        for owned in &self.props {
+            live.extend(owned.components.iter().map(Rc::as_ptr));
+        }
+        for handler in self.handlers.iter().chain(&self.window_handlers) {
+            live.insert(Rc::as_ptr(&handler.component));
+        }
+        for owned in &self.structures {
+            live.insert(Rc::as_ptr(&owned.structure.component));
+            live.extend(owned.components.iter().map(Rc::as_ptr));
+        }
+        self.components
+            .retain(|owned| live.contains(&Rc::as_ptr(&owned.component)));
     }
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
@@ -319,12 +401,11 @@ impl<T: Theme> Ui<T> {
         let structures = build.take_structures();
         let nested = build.take_components();
         let built = built?;
-        self.components = owner_components(
-            0,
-            std::iter::once(Rc::clone(&self.component))
-                .chain(nested)
-                .collect(),
-        );
+        self.components.clear();
+        for handle in std::iter::once(Rc::clone(&self.component)).chain(nested) {
+            let owned = self.adopt(handle);
+            self.components.push(owned);
+        }
         self.tree.borrow_mut().replace_root(built.widget);
         let mut handlers = built.handlers;
         handlers.extend(self.window_handlers.iter().cloned());
@@ -361,8 +442,8 @@ impl<T: Theme> Ui<T> {
                     let component = self
                         .components
                         .iter()
-                        .find(|(id, _)| *id == *owner)
-                        .map(|(_, component)| Rc::clone(component));
+                        .find(|owned| owned.owner == *owner)
+                        .map(|owned| Rc::clone(&owned.component));
                     if let Some(component) = component {
                         let call = component.borrow().event_call(function);
                         if let Some(call) = call {
@@ -411,8 +492,10 @@ impl<T: Theme> Ui<T> {
     }
 
     fn take_commands(&mut self) -> Vec<WindowCommand> {
-        schedule_timers(&self.components, &self.commands);
-        std::mem::take(&mut *self.commands.borrow_mut())
+        schedule_timers(&self.components, &self.active, &self.commands);
+        let mut commands = std::mem::take(&mut *self.commands.borrow_mut());
+        commands.extend(std::mem::take(&mut *self.lifecycle.borrow_mut()));
+        commands
     }
 
     pub fn settle(&mut self) {

@@ -14,7 +14,8 @@ pub(super) struct Staged {
     pub(super) handlers: Vec<Handler>,
     pub(super) props: Vec<PropBinding>,
     pub(super) structures: Vec<Structure>,
-    pub(super) components: Vec<ComponentHandle>,
+    pub(super) components: Vec<(WidgetId, ComponentHandle)>,
+    pub(super) rebuilt: Vec<WidgetId>,
 }
 
 struct Rebuilt {
@@ -91,7 +92,10 @@ impl Pending {
         self.staged.handlers.extend(handlers);
         self.staged.props.extend(props);
         self.staged.structures.extend(structures);
-        self.staged.components.extend(components);
+        self.staged
+            .components
+            .extend(components.into_iter().map(|component| (parent, component)));
+        self.staged.rebuilt.push(parent);
         true
     }
 }
