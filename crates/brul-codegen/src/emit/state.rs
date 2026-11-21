@@ -1,7 +1,6 @@
 use std::fmt::Write;
 
 use brul_case::{ident, snake};
-use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::script::{Program, Statement};
 use brul_syntax::types::Type;
@@ -38,7 +37,7 @@ impl State {
             if state.fields.iter().any(|field| field.name == *name) {
                 continue;
             }
-            if rust_type(ty).is_err() {
+            if !ty.supports_state() {
                 continue;
             }
             let ident = ident(&snake(name));
@@ -87,7 +86,7 @@ impl State {
                 out,
                 "    pub {}: brul::Signal<{}>,",
                 field.ident,
-                rust_type(&field.ty).expect("state field type was checked")
+                field.ty.local_type()
             );
         }
         let _ = writeln!(
@@ -95,7 +94,7 @@ impl State {
             "}}\n\n#[allow(dead_code)]\nfn {init_name}(component: &mut brul::Component) -> Result<(), brul::Error> {{"
         );
         for field in &self.fields {
-            let ty = rust_type(&field.ty).expect("state field type was checked");
+            let ty = field.ty.local_type();
             let _ = writeln!(
                 out,
                 "    let {}: {ty} = component.seed({:?}, brul::ast::Position {{ line: 0, column: 0 }})?;",
@@ -128,45 +127,31 @@ impl State {
     pub fn read(&self, name: &str) -> Option<String> {
         let field = self.fields.iter().find(|field| field.name == name)?;
         let state = format!("component.state::<{}>().{}", self.type_name, field.ident);
-        Some(match field.ty {
-            Type::Number => format!("brul::Dyn::num({state}.get())"),
-            Type::Bool => format!("brul::Dyn::flag({state}.get())"),
-            Type::String => format!("brul::Dyn::text({state}.get().as_str())"),
-            Type::Null => "brul::Dyn::null()".to_owned(),
-            _ => unreachable!("state field type was checked"),
-        })
+        Some(
+            field
+                .ty
+                .state_read(&state)
+                .expect("state field type was checked"),
+        )
     }
 
     pub fn read_typed(&self, name: &str) -> Option<(String, Type)> {
         let field = self.fields.iter().find(|field| field.name == name)?;
         let state = format!("component.state::<{}>().{}", self.type_name, field.ident);
-        let code = match field.ty {
-            Type::Number | Type::Bool | Type::Null => format!("{state}.get()"),
-            Type::String => format!("{state}.get()"),
-            _ => return None,
-        };
-        Some((code, field.ty.clone()))
+        if !field.ty.supports_state() {
+            return None;
+        }
+        Some((format!("{state}.get()"), field.ty.clone()))
     }
 
     pub fn write(&self, name: &str, value: &str) -> Option<String> {
         let field = self.fields.iter().find(|field| field.name == name)?;
         let state = format!("component.state::<{}>().{}", self.type_name, field.ident);
-        Some(match field.ty {
-            Type::Null => format!("{{ let _ = &{value}; {state}.set(()); }}"),
-            _ => format!("{state}.set((&{value}).try_into()?);"),
-        })
-    }
-}
-
-fn rust_type(ty: &Type) -> Result<&'static str, Error> {
-    match ty {
-        Type::Number => Ok("f64"),
-        Type::String => Ok("String"),
-        Type::Bool => Ok("bool"),
-        Type::Null => Ok("()"),
-        _ => Err(crate::error_at(
-            Position { line: 0, column: 0 },
-            format!("type {ty} is not supported in application state"),
-        )),
+        Some(
+            field
+                .ty
+                .state_write(&state, value)
+                .expect("state field type was checked"),
+        )
     }
 }

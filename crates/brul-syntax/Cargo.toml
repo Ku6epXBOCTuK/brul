@@ -16,4 +16,5 @@ thiserror = { workspace = true }
 material-colors = { workspace = true }
 
 [build-dependencies]
+brul-lang-gen = { workspace = true }
 brul-style-gen = { workspace = true }

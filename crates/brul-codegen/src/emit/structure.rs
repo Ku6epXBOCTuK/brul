@@ -224,13 +224,7 @@ fn scope_struct(info: &ScopeInfo) -> String {
 }
 
 fn scope_default(ty: &brul_syntax::types::Type) -> &'static str {
-    match ty {
-        brul_syntax::types::Type::Number => "0.0",
-        brul_syntax::types::Type::String => "String::new()",
-        brul_syntax::types::Type::Bool => "false",
-        brul_syntax::types::Type::Null => "()",
-        _ => "brul::Dyn::null()",
-    }
+    ty.scope_default()
 }
 
 fn each_scope(out: &mut Out<'_>, info: &ScopeInfo, emit: &Emit<'_>) -> Result<(), Error> {

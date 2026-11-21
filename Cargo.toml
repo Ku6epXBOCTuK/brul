@@ -65,6 +65,8 @@ brul-gpu = { path = 'crates\brul-gpu' }
 brul-gui = { path = 'crates\brul-gui' }
 brul-ident = { path = 'crates\brul-ident' }
 brul-layout = { path = 'crates\brul-layout' }
+brul-lang-gen = { path = 'crates\brul-lang-gen' }
+brul-lang-schema = { path = 'crates\brul-lang-schema' }
 brul-macros = { path = 'crates\brul-macros' }
 brul-reactive = { path = 'crates\brul-reactive' }
 brul-script = { path = 'crates\brul-script' }

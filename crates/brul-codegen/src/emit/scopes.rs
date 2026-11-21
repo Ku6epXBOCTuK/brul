@@ -127,24 +127,19 @@ impl Scopes {
 
     pub(super) fn read(&self, name: &str) -> Option<String> {
         let binding = self.find(name)?;
-        Some(if is_value(&binding.ty) {
+        Some(if binding.ty.is_value() {
             format!("{}.clone()", binding.access)
         } else {
-            match binding.ty {
-                Type::Number => format!("brul::Dyn::num({})", binding.access),
-                Type::Bool => format!("brul::Dyn::flag({})", binding.access),
-                Type::String => format!("brul::Dyn::text({}.as_str())", binding.access),
-                Type::Null => "brul::Dyn::null()".to_owned(),
-                _ => unreachable!("value type was checked"),
-            }
+            binding.ty.dyn_wrap_local(&binding.access)
         })
     }
 
     pub(super) fn read_typed(&self, name: &str) -> Option<(String, Type)> {
         let binding = self.find(name)?;
-        let code = match binding.ty {
-            Type::String | Type::Array(_) | Type::Object => format!("{}.clone()", binding.access),
-            _ => binding.access.clone(),
+        let code = if binding.ty.clone_on_read() {
+            format!("{}.clone()", binding.access)
+        } else {
+            binding.access.clone()
         };
         Some((code, binding.ty.clone()))
     }
@@ -159,7 +154,7 @@ impl Scopes {
                 format!("cannot assign to constant '{name}'"),
             ));
         }
-        Ok(Some(if is_value(&binding.ty) {
+        Ok(Some(if binding.ty.is_value() {
             format!("{} = {value}.clone();", binding.access)
         } else {
             format!("{} = (&{value}).try_into()?;", binding.access)
@@ -167,18 +162,7 @@ impl Scopes {
     }
 
     pub(super) fn local_type(ty: &Type) -> &'static str {
-        match ty {
-            Type::Number => "f64",
-            Type::String => "String",
-            Type::Bool => "bool",
-            Type::Null => "()",
-            Type::Timer => "brul::TimerId",
-            _ => "brul::Dyn",
-        }
-    }
-
-    pub(super) fn is_value(ty: &Type) -> bool {
-        is_value(ty)
+        ty.local_type()
     }
 
     fn find(&self, name: &str) -> Option<&Binding> {
@@ -187,8 +171,4 @@ impl Scopes {
             .rev()
             .find_map(|frame| frame.iter().rev().find(|binding| binding.name == name))
     }
-}
-
-fn is_value(ty: &Type) -> bool {
-    matches!(ty, Type::Array(_) | Type::Object)
 }

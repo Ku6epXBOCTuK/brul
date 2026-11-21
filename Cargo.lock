@@ -273,6 +273,21 @@ name = "brul-ident"
 version = "0.1.0"
 
 [[package]]
+name = "brul-lang-gen"
+version = "0.1.0"
+dependencies = [
+ "brul-lang-schema",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "brul-lang-schema"
+version = "0.1.0"
+
+[[package]]
 name = "brul-layout"
 version = "0.1.0"
 dependencies = [
@@ -339,6 +354,7 @@ version = "0.1.0"
 name = "brul-syntax"
 version = "0.1.0"
 dependencies = [
+ "brul-lang-gen",
  "brul-style",
  "brul-style-gen",
  "material-colors",

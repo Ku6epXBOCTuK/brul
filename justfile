@@ -8,6 +8,9 @@ generate-rules:
 generate-properties-doc:
     cargo run -p brul-style-gen --bin properties-doc
 
+generate-types-doc:
+    cargo run -p brul-lang-gen --bin types-doc
+
 generate-codegen:
     cargo run -p brul-codegen --bin emit -- --fixtures
 

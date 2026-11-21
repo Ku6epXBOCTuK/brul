@@ -94,7 +94,7 @@ fn emit_statement(
             let local_ty = Scopes::local_type(ty);
             let local = if matches!(ty, brul_syntax::types::Type::Null) {
                 "()".to_owned()
-            } else if Scopes::is_value(ty) {
+            } else if ty.is_value() {
                 match value {
                     Some(value) => operation_in(value, names, state, props, scopes)?,
                     None => "brul::Dyn::null()".to_owned(),

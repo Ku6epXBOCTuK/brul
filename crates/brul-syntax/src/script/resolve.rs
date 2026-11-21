@@ -1,3 +1,4 @@
+use crate::TypeName;
 use crate::ast::{Expr, ExprKind, Position};
 use crate::error::Error;
 use crate::script::ast::{Program, Statement};
@@ -170,7 +171,11 @@ fn check_call(target: &Expr, args: &[Expr], names: &Names<'_>) -> Result<(), Err
             {
                 return Err(Error::at_position(
                     argument.position,
-                    Error::custom(format!("'{name}' expects {ty}, found {found}")),
+                    Error::custom(format!(
+                        "'{name}' expects {}, found {}",
+                        ty.type_name(),
+                        found.type_name()
+                    )),
                 ));
             }
         }

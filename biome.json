@@ -1,7 +1,11 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.6.5/schema.json",
   "files": {
-    "includes": ["**/*.md", "!docs/lang/style_properties.md"]
+    "includes": [
+      "**/*.md",
+      "!docs/lang/style_properties.md",
+      "!docs/lang/types.md"
+    ]
   },
   "formatter": {
     "enabled": true,

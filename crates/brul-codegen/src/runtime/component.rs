@@ -188,15 +188,5 @@ fn assign(
 }
 
 pub fn accepts_prop(value: &Value, ty: &PropType) -> bool {
-    match ty {
-        PropType::Bool => matches!(value, Value::Bool(_)),
-        PropType::Number => matches!(value, Value::Number(_)),
-        PropType::String => matches!(value, Value::String(_)),
-        PropType::Image => matches!(value, Value::Null | Value::Image(_) | Value::ImageBytes(_)),
-        PropType::Null => matches!(value, Value::Null),
-        PropType::Object => matches!(value, Value::Object(_)),
-        PropType::Array(_) => matches!(value, Value::Array(_)),
-        PropType::Timer => matches!(value, Value::Timer(_)),
-        PropType::Void => false,
-    }
+    ty.accepts_value(value.type_name())
 }

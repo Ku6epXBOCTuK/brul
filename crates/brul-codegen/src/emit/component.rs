@@ -449,7 +449,7 @@ fn write(
                 for (event, handler, params) in &events {
                     let params = params
                         .iter()
-                        .map(|ty| format!("brul::{ty}"))
+                        .map(|ty| format!("brul::{}", ty.rust_path()))
                         .collect::<Vec<_>>()
                         .join(", ");
                     let call = super::script::event_call(emit.script_name, handler);
@@ -530,12 +530,7 @@ fn arguments(
                     "brul::PropExpression::Image(|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> {{ Ok(brul::Dyn::image_bytes({prefix}resource_{resource}())) }})"
                 ),
                 _ => {
-                    let variant = match ty {
-                        PropType::Number => "Number",
-                        PropType::String => "Text",
-                        PropType::Bool => "Flag",
-                        _ => "Image",
-                    };
+                    let variant = ty.prop_expression();
                     let closure = expression::typed_closure(
                         value, names, state, props, scopes, scope, ty,
                     )?;
@@ -543,7 +538,8 @@ fn arguments(
                 }
             };
             out.line(format_args!(
-                "brul::PropArgument {{ name: {name:?}, ty: brul::{ty}, expression: {expression} }},"
+                "brul::PropArgument {{ name: {name:?}, ty: brul::{}, expression: {expression} }},",
+                ty.rust_path()
             ));
         }
         Ok(())

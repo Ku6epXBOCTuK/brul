@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use brul_script::Names;
+use brul_syntax::TypeName;
 use brul_syntax::ast::{
     AssignOp, BinaryOp, BinaryOpKind, Expr, ExprKind, Position, TemplatePart, UnaryOp,
 };
@@ -71,13 +72,7 @@ pub fn typed_closure(
     ty: &Type,
 ) -> Result<String, Error> {
     let (locals, scopes) = scope_locals(definitions, current);
-    let rust = match ty {
-        Type::Number => "f64",
-        Type::String => "String",
-        Type::Bool => "bool",
-        Type::Timer => "brul::TimerId",
-        _ => "brul::Dyn",
-    };
+    let rust = ty.rust_type();
     let body = match typed(value, names, state, props, &scopes)? {
         Some((code, found)) if &found == ty => code,
         _ => format!(
@@ -100,22 +95,11 @@ pub fn operation(
 }
 
 pub(super) fn wrap_typed(code: String, ty: &Type) -> String {
-    match ty {
-        Type::Number => format!("brul::Dyn::num({code})"),
-        Type::String => format!("brul::Dyn::text({code})"),
-        Type::Bool => format!("brul::Dyn::flag({code})"),
-        Type::Timer => format!("brul::Dyn::from({code})"),
-        Type::Null | Type::Void => "brul::Dyn::null()".to_owned(),
-        _ => code,
-    }
+    ty.dyn_wrap(&code)
 }
 
 pub(super) fn convert(code: &str, ty: &Type) -> String {
-    match ty {
-        Type::Number | Type::String | Type::Bool | Type::Timer => format!("(&{code}).try_into()?"),
-        Type::Null => format!("({code}).unit()?"),
-        Type::Object | Type::Image | Type::Array(_) | Type::Void => code.to_owned(),
-    }
+    ty.convert(code)
 }
 
 fn prop_typed(
@@ -124,12 +108,8 @@ fn prop_typed(
     position: brul_syntax::ast::Position,
     names: &Names<'_>,
 ) -> Result<Option<(String, Type)>, Error> {
-    let convertor = match ty {
-        Type::Number => "f64::try_from",
-        Type::String => "String::try_from",
-        Type::Bool => "bool::try_from",
-        Type::Null => "<()>::try_from",
-        _ => return Ok(None),
+    let Some(convertor) = ty.from_dyn() else {
+        return Ok(None);
     };
     let id = names::variable_expr(name, position, names)?;
     Ok(Some((
@@ -174,7 +154,7 @@ pub(super) fn typed(
                 _ => {
                     return Err(crate::error_at(
                         expression.position,
-                        format!("operator {op:?} is not defined for {ty}"),
+                        format!("operator {op:?} is not defined for {}", ty.type_name()),
                     ));
                 }
             }
@@ -189,7 +169,11 @@ pub(super) fn typed(
             if left_ty != right_ty {
                 return Err(crate::error_at(
                     expression.position,
-                    format!("operator {op:?} cannot compare {left_ty} and {right_ty}"),
+                    format!(
+                        "operator {op:?} cannot compare {} and {}",
+                        left_ty.type_name(),
+                        right_ty.type_name()
+                    ),
                 ));
             }
             let operator = match op {
@@ -209,7 +193,7 @@ pub(super) fn typed(
                 _ => {
                     return Err(crate::error_at(
                         expression.position,
-                        format!("operator {op:?} is not defined for {left_ty}"),
+                        format!("operator {op:?} is not defined for {}", left_ty.type_name()),
                     ));
                 }
             };
@@ -238,7 +222,10 @@ pub(super) fn typed(
             if condition_ty != Type::Bool {
                 return Err(crate::error_at(
                     expression.position,
-                    format!("?: condition must be Bool, found {condition_ty}"),
+                    format!(
+                        "?: condition must be Bool, found {}",
+                        condition_ty.type_name()
+                    ),
                 ));
             }
             let Some((then_code, then_ty)) = typed(then_branch, names, state, props, scopes)?
@@ -252,7 +239,11 @@ pub(super) fn typed(
             if then_ty != else_ty {
                 return Err(crate::error_at(
                     expression.position,
-                    format!("?: branches have different types: {then_ty} and {else_ty}"),
+                    format!(
+                        "?: branches have different types: {} and {}",
+                        then_ty.type_name(),
+                        else_ty.type_name()
+                    ),
                 ));
             }
             Some((

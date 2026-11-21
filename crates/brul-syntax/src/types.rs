@@ -1,53 +1,8 @@
-use std::fmt;
-
 pub trait TypeName {
     fn type_name(&self) -> &'static str;
 }
 
-macro_rules! types {
-    (
-        $( $simple:ident ),+ $(,)? ;
-        $( $data:ident ($payload:ty) => $name:literal ),+ $(,)?
-    ) => {
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub enum Type {
-            $( $simple, )+
-            $( $data($payload), )+
-        }
-
-        impl Type {
-            pub fn from_name(name: &str) -> Option<Self> {
-                Some(match name {
-                    $( stringify!($simple) => Self::$simple, )+
-                    _ => return None,
-                })
-            }
-        }
-
-        impl TypeName for Type {
-            fn type_name(&self) -> &'static str {
-                match self {
-                    $( Self::$simple => stringify!($simple), )+
-                    $( Self::$data(_) => $name, )+
-                }
-            }
-        }
-    };
-}
-
-types! {
-    Bool, Number, String, Image, Null, Object, Timer, Void;
-    Array(Box<Type>) => "Array",
-}
-
-impl fmt::Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Array(item) => write!(f, "PropType::Array(Box::new({item}))"),
-            other => write!(f, "PropType::{}", other.type_name()),
-        }
-    }
-}
+include!(concat!(env!("OUT_DIR"), "/lang_types.rs"));
 
 #[cfg(test)]
 mod tests {
