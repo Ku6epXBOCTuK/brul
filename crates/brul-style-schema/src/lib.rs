@@ -179,6 +179,7 @@ pub enum StyleOwner {
 pub enum FieldType {
     Dimension,
     U32,
+    I32,
     F32,
     Bool,
     SidesU32,
@@ -226,11 +227,45 @@ pub enum TweenKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShadowPart {
+    X,
+    Y,
+    Blur,
+    Color,
+}
+
+impl ShadowPart {
+    pub const fn name(self) -> &'static str {
+        match self {
+            ShadowPart::X => "x",
+            ShadowPart::Y => "y",
+            ShadowPart::Blur => "blur",
+            ShadowPart::Color => "color",
+        }
+    }
+
+    pub const fn ty(self) -> FieldType {
+        match self {
+            ShadowPart::X | ShadowPart::Y => FieldType::I32,
+            ShadowPart::Blur => FieldType::U32,
+            ShadowPart::Color => FieldType::Color,
+        }
+    }
+
+    pub const fn tween(self) -> TweenKind {
+        match self {
+            ShadowPart::Color => TweenKind::Color,
+            _ => TweenKind::None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PatchTarget {
     This,
     Side(Side),
-    Subfield(&'static str),
-    Scaled(&'static str),
+    Shadow(ShadowPart),
+    Scaled(f32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -305,22 +340,22 @@ pub const fn side_patch(
 pub const fn sub_patch(
     name: &'static str,
     order: u16,
-    subfield: &'static str,
+    part: ShadowPart,
     converter: Converter,
 ) -> PatchField {
     PatchField {
         name,
         order,
-        target: PatchTarget::Subfield(subfield),
+        target: PatchTarget::Shadow(part),
         converter,
     }
 }
 
-pub const fn scaled_patch(name: &'static str, order: u16, from: &'static str) -> PatchField {
+pub const fn scaled_patch(name: &'static str, order: u16, factor: f32) -> PatchField {
     PatchField {
         name,
         order,
-        target: PatchTarget::Scaled(from),
+        target: PatchTarget::Scaled(factor),
         converter: Converter::Float,
     }
 }
@@ -348,6 +383,7 @@ use FieldDefault as D;
 use FieldType as R;
 use LayoutField as L;
 use PropertyKey as K;
+use ShadowPart as SP;
 use Side::*;
 use SidesType as ST;
 use StatePolicy::*;
@@ -592,10 +628,10 @@ pub static FIELDS: &[FieldSpec] = &[
         D::Default,
         W::Color,
         &[
-            sub_patch("shadow", 10, "color", C::Color),
-            sub_patch("shadow_x", 13, "x", C::Raw),
-            sub_patch("shadow_y", 14, "y", C::Raw),
-            sub_patch("shadow_blur", 15, "blur", C::Raw),
+            sub_patch("shadow", 10, SP::Color, C::Color),
+            sub_patch("shadow_x", 13, SP::X, C::Raw),
+            sub_patch("shadow_y", 14, SP::Y, C::Raw),
+            sub_patch("shadow_blur", 15, SP::Blur, C::Raw),
         ],
     ),
     field(
@@ -636,7 +672,7 @@ pub static FIELDS: &[FieldSpec] = &[
         R::F32,
         D::LineHeight,
         W::None,
-        &[scaled_patch("size", 2, "size")],
+        &[scaled_patch("size", 2, 1.2)],
     ),
     field(
         O::Text,

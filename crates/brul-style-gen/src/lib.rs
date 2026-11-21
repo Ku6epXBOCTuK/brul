@@ -718,6 +718,7 @@ fn field_type(ty: FieldType) -> TokenStream {
     match ty {
         FieldType::Dimension => quote!(Dimension),
         FieldType::U32 => quote!(u32),
+        FieldType::I32 => quote!(i32),
         FieldType::F32 => quote!(f32),
         FieldType::Bool => quote!(bool),
         FieldType::SidesU32 => quote!(Sides<u32>),
@@ -775,9 +776,7 @@ fn patch_field_type(spec: &FieldSpec, patch: &PatchField) -> TokenStream {
             ty => field_type(ty),
         },
         PatchTarget::Side(_) => quote!(Color),
-        PatchTarget::Subfield("x") | PatchTarget::Subfield("y") => quote!(i32),
-        PatchTarget::Subfield("blur") => quote!(u32),
-        PatchTarget::Subfield(_) => quote!(Color),
+        PatchTarget::Shadow(part) => field_type(part.ty()),
         PatchTarget::Scaled(_) => quote!(f32),
     }
 }
@@ -792,7 +791,7 @@ fn patch_tween(spec: &FieldSpec, patch: &PatchField) -> TweenKind {
         (FieldType::F32, PatchTarget::This) => TweenKind::Float,
         (FieldType::Color, _) => TweenKind::Color,
         (FieldType::SidesColor, PatchTarget::Side(_)) => TweenKind::Color,
-        (FieldType::Shadow, PatchTarget::Subfield("color")) => TweenKind::Color,
+        (FieldType::Shadow, PatchTarget::Shadow(part)) => part.tween(),
         _ => TweenKind::None,
     }
 }
@@ -805,8 +804,8 @@ fn patch_target(spec: &FieldSpec, patch: &PatchField) -> TokenStream {
             let side = side_ident(side);
             quote!(#field.#side)
         }
-        PatchTarget::Subfield(name) => {
-            let name = ident(name);
+        PatchTarget::Shadow(part) => {
+            let name = ident(part.name());
             quote!(#field.#name)
         }
         PatchTarget::Scaled(_) => quote!(#field),
@@ -830,11 +829,10 @@ fn apply_line(spec: &FieldSpec, patch: &PatchField) -> TokenStream {
     let name = ident(patch.name);
     let target = patch_target(spec, patch);
     match patch.target {
-        PatchTarget::Scaled(from) => {
-            let from = ident(from);
+        PatchTarget::Scaled(factor) => {
             quote! {
-                if let Some(value) = patch.#from {
-                    self.#target = value * 1.2;
+                if let Some(value) = patch.#name {
+                    self.#target = value * #factor;
                 }
             }
         }
