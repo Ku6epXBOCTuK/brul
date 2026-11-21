@@ -1,0 +1,17 @@
+<script>
+    function launch(i: Number): Void {
+    }
+</script>
+
+<markup>
+component Badge {
+    event clicked(i: Number);
+    Text { "badge" }
+}
+
+window Demo (title: "demo") {
+    Container {
+        Badge (on clicked: launch) { }
+    }
+}
+</markup>

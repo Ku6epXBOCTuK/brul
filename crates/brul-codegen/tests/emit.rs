@@ -119,6 +119,7 @@ goldens! {
 }
 
 errors! {
+    a_component_and_a_window_cannot_share_one_file,
     an_imported_component_cannot_declare_a_theme,
     an_override_of_a_component_that_is_not_imported_is_an_error,
     an_override_of_an_unknown_class_is_an_error,

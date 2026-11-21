@@ -51,16 +51,26 @@ pub fn parse(source: &str) -> Result<Source, Error> {
     let sfc = sfc::parse(source).map_err(sfc_error)?;
     let markup = markup::parse_file(&padded(source, sfc.markup))?;
     let mut windows = Vec::new();
+    let mut components = Vec::new();
     for declaration in markup.declarations {
-        if let Declaration::Window(window) = declaration {
-            if windows.iter().any(|seen: &Window| seen.name == window.name) {
-                return Err(error_at(
-                    window.position,
-                    format!("duplicate window '{}'", window.name),
-                ));
+        match declaration {
+            Declaration::Window(window) => {
+                if windows.iter().any(|seen: &Window| seen.name == window.name) {
+                    return Err(error_at(
+                        window.position,
+                        format!("duplicate window '{}'", window.name),
+                    ));
+                }
+                windows.push(window);
             }
-            windows.push(window);
+            Declaration::Component(component) => components.push(component),
         }
+    }
+    if let (Some(window), Some(_)) = (windows.first(), components.first()) {
+        return Err(error_at(
+            window.position,
+            "a component and a window cannot share one .brul file",
+        ));
     }
     if windows.is_empty() {
         return Err(error_at(
