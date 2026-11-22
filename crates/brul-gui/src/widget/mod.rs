@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::effect::EffectSpec;
 use crate::image::Image;
 use crate::layout::{Direction, LayoutPatch, LayoutStyle, Offset};
 use crate::text::TextStyle;
@@ -67,6 +68,7 @@ pub struct Widget {
     focusable: bool,
     layer: bool,
     modal: bool,
+    effect: Option<EffectSpec>,
 }
 
 enum Content {
@@ -146,6 +148,11 @@ impl Widget {
         widget
     }
 
+    pub fn effect(mut self, effect: EffectSpec) -> Self {
+        self.effect = Some(effect);
+        self
+    }
+
     pub fn text(content: impl Into<String>) -> Self {
         Self::styled_text(content, TextStyle::default())
     }
@@ -207,6 +214,7 @@ impl Widget {
             focusable: false,
             layer: false,
             modal: false,
+            effect: None,
         }
     }
 

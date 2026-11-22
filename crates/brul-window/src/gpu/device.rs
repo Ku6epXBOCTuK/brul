@@ -1,13 +1,16 @@
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
+use brul_gpu::effect::{EFFECT_FRAME_SIZE, EFFECT_INSTANCE_SIZE};
 use winit::window::Window;
 
 use crate::gpu_frame::FrameCache;
 use crate::window::WindowError;
 
+use super::effects;
 use super::{Gpu, Textures};
 
 fn clear_color(transparent: bool) -> wgpu::Color {
@@ -23,7 +26,7 @@ fn clear_color(transparent: bool) -> wgpu::Color {
     }
 }
 
-fn premultiplied_blend() -> wgpu::BlendState {
+pub(crate) fn premultiplied_blend() -> wgpu::BlendState {
     wgpu::BlendState {
         color: wgpu::BlendComponent {
             src_factor: wgpu::BlendFactor::One,
@@ -45,7 +48,7 @@ fn size_change(current: (u32, u32), width: u32, height: u32) -> Option<(u32, u32
     (current != (width, height)).then_some((width, height))
 }
 
-fn unorm_format(format: wgpu::TextureFormat) -> wgpu::TextureFormat {
+pub(crate) fn unorm_format(format: wgpu::TextureFormat) -> wgpu::TextureFormat {
     match format {
         wgpu::TextureFormat::Rgba8UnormSrgb => wgpu::TextureFormat::Rgba8Unorm,
         wgpu::TextureFormat::Bgra8UnormSrgb => wgpu::TextureFormat::Bgra8Unorm,
@@ -114,14 +117,18 @@ impl Gpu {
             config.format = unorm;
         }
         config.desired_maximum_frame_latency = 1;
-        let mut capture = crate::perf::dump_path().is_some();
-        if capture {
-            if capabilities.usages.contains(wgpu::TextureUsages::COPY_SRC) {
-                config.usage |= wgpu::TextureUsages::COPY_SRC;
-            } else {
-                tracing::warn!("surface cannot be read back, frame dump is disabled");
-                capture = false;
-            }
+        let surface_copy = capabilities.usages.contains(wgpu::TextureUsages::COPY_SRC);
+        let wants_capture = crate::perf::dump_path().is_some();
+        let capture = wants_capture && surface_copy;
+        if wants_capture && !surface_copy {
+            tracing::warn!("surface cannot be read back, frame dump is disabled");
+        }
+        let effects_enabled = surface_copy;
+        if !effects_enabled {
+            tracing::warn!("surface cannot be copied, GPU effects are disabled");
+        }
+        if surface_copy {
+            config.usage |= wgpu::TextureUsages::COPY_SRC;
         }
         surface.configure(&device, &config);
         if capture {
@@ -314,6 +321,80 @@ impl Gpu {
             usage: brul_gpu::instance_usage(),
             mapped_at_creation: false,
         });
+        let effect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("brul-effect-layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let effect_empty_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("brul-effect-empty-layout"),
+                entries: &[],
+            });
+        let effect_empty_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("brul-effect-empty-group"),
+            layout: &effect_empty_layout,
+            entries: &[],
+        });
+        let effect_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-effect-frame"),
+            size: EFFECT_FRAME_SIZE,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let effect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("brul-effect-instances"),
+            size: EFFECT_INSTANCE_SIZE,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let effect_targets = effects::targets(&device, config.width, config.height, config.format);
 
         Ok(Self {
             clear_color: clear_color(transparent),
@@ -333,8 +414,23 @@ impl Gpu {
             quad_pipeline,
             quad_buffer,
             quad_capacity: brul_gpu::TEXTURE_INSTANCE_SIZE as usize,
-            textures: Textures::new(quad_layout, nearest_sampler),
+            textures: Textures::new(quad_layout, nearest_sampler.clone()),
             frame: FrameCache::default(),
+            effects_enabled,
+            effect_pipelines: HashMap::new(),
+            effect_layout,
+            effect_empty_layout,
+            effect_empty_group,
+            effect_sampler: nearest_sampler,
+            effect_uniform_buffer,
+            effect_uniform: vec![0; EFFECT_FRAME_SIZE as usize],
+            effect_buffer,
+            effect_capacity: EFFECT_INSTANCE_SIZE as usize,
+            effect_backdrop: effect_targets.backdrop,
+            effect_backdrop_view: effect_targets.backdrop_view,
+            effect_history: effect_targets.history,
+            effect_history_views: effect_targets.history_views,
+            effect_history_write: 0,
             capture,
             captured: None,
         })
@@ -350,6 +446,11 @@ impl Gpu {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
+        let targets = effects::targets(&self.device, width, height, self.config.format);
+        self.effect_backdrop = targets.backdrop;
+        self.effect_backdrop_view = targets.backdrop_view;
+        self.effect_history = targets.history;
+        self.effect_history_views = targets.history_views;
     }
 }
 

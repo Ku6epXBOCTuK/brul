@@ -250,6 +250,7 @@ pub(super) fn snapshot_node(
         selection,
         scroll,
         image,
+        effect: node.effect.clone(),
         clips: node_clips,
     }
 }

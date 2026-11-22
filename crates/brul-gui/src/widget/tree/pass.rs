@@ -180,7 +180,13 @@ impl WidgetTree {
     }
 
     pub fn animating(&self) -> bool {
-        self.active_transitions > 0
+        self.active_transitions > 0 || self.animated_effects()
+    }
+
+    fn animated_effects(&self) -> bool {
+        self.nodes
+            .iter()
+            .any(|node| node.effect.as_ref().is_some_and(|effect| effect.animated))
     }
 
     pub fn advance(&mut self, delta: Duration) -> bool {
@@ -188,6 +194,15 @@ impl WidgetTree {
             return self.animating();
         }
         let mut running = false;
+        let animated: Vec<_> = self
+            .nodes
+            .iter()
+            .filter(|node| node.effect.as_ref().is_some_and(|effect| effect.animated))
+            .map(|node| node.id)
+            .collect();
+        for &id in &animated {
+            self.mark_dirty(id);
+        }
         for index in 0..self.nodes.len() {
             let (id, active) = {
                 let node = &mut self.nodes[index];
@@ -206,7 +221,7 @@ impl WidgetTree {
             running |= active;
             self.mark_dirty(id);
         }
-        running
+        running || !animated.is_empty()
     }
 
     pub(super) fn retarget(&mut self, slot: Slot) {

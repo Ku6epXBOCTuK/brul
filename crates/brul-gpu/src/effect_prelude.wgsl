@@ -49,8 +49,8 @@ fn effect_param(input: EffectInput, slot: u32) -> vec4<f32> {
     return input.quad.params[min(slot, 15u)];
 }
 
-fn effect_backdrop_at(input: EffectInput, uv: vec2<f32>) -> vec4<f32> {
-    return textureSampleLevel(effect_backdrop, effect_sampler, uv, 0.0);
+fn effect_backdrop_at(input: EffectInput, screen_uv: vec2<f32>) -> vec4<f32> {
+    return textureSampleLevel(effect_backdrop, effect_sampler, screen_uv, 0.0);
 }
 
 fn effect_history_size() -> vec2<f32> {
@@ -83,7 +83,7 @@ fn effect_make_input(in: EffectVaryings, quad: EffectQuad) -> EffectInput {
     input.opacity = quad.effect_meta.z;
     input.coverage = 1.0;
     input.quad = quad;
-    input.backdrop = textureSampleLevel(effect_backdrop, effect_sampler, in.uv, 0.0);
+    input.backdrop = effect_backdrop_at(input, clamp(input.px / effect_frame.viewport.xy, vec2<f32>(0.0), vec2<f32>(1.0)));
     input.history = effect_history_at(input, input.px);
     return input;
 }

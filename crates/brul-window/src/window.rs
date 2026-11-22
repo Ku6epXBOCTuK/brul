@@ -14,6 +14,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::icon::{Icon, RgbaIcon};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+use brul_gpu::effect::Effects;
 use brul_gui::{Color, Image, WidgetEvent, WidgetTree};
 use brul_ident::{FunctionName, TimerId, TimerKind, TimerOwner};
 
@@ -79,6 +80,7 @@ pub struct WindowConfig {
     pub scroll: bool,
     pub icon: Option<Arc<[u8]>>,
     pub backend: Backend,
+    pub effects: Effects,
 }
 
 impl Default for WindowConfig {
@@ -96,11 +98,17 @@ impl Default for WindowConfig {
             scroll: true,
             icon: None,
             backend: Backend::Software,
+            effects: Effects::default(),
         }
     }
 }
 
 impl WindowConfig {
+    pub fn with_effects(mut self, effects: Effects) -> Self {
+        self.effects = effects;
+        self
+    }
+
     pub fn validate(&self) -> Result<(), WindowError> {
         if self.width == 0 || self.height == 0 {
             return Err(WindowError::EmptySize);

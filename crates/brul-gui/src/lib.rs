@@ -67,6 +67,7 @@ mod border;
 mod color;
 mod cursor;
 mod draw;
+mod effect;
 mod gradient;
 mod image;
 mod paint;
@@ -86,6 +87,7 @@ pub use color::Color;
 pub use cursor::Cursor;
 pub type BorderColors = Sides<Color>;
 pub use draw::{DrawCommand, GlyphCommand, ImageCommand, RectCommand, ShapeCommand, draw_commands};
+pub use effect::{EFFECT_SLOTS, EffectSpec};
 pub use gradient::{Gradient, Paint};
 pub use image::{Image, Vector};
 pub use layout::{

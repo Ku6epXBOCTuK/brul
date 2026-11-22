@@ -1,10 +1,13 @@
 use std::rc::Rc;
 
+use brul_gpu::effect::{EffectFrame, Effects, effect_frame_bytes, effect_instance_bytes};
 use brul_gui::{Atlas, Dirty, Texture, WidgetSnapshot};
 
 use crate::gpu_frame::{CLIP, DECOR, GLYPH, IMAGE, SHAPE};
+use crate::surface::FrameInfo;
 
 use super::Gpu;
+use super::effects::EffectRange;
 use super::textures::Resources;
 
 impl Gpu {
@@ -59,6 +62,8 @@ impl Gpu {
         snapshot: &WidgetSnapshot,
         atlas: &Atlas,
         dirty: &Dirty,
+        info: FrameInfo,
+        effects: &Effects,
     ) -> bool {
         let (width, height) = surface.size();
         let uploads = self.frame.update(snapshot, atlas, dirty);
@@ -136,6 +141,61 @@ impl Gpu {
             self.queue.write_buffer(&self.viewport_buffer, 0, &viewport);
             self.viewport = viewport;
         }
+        let mut effect_ranges = Vec::new();
+        if self.effects_enabled {
+            let frame = EffectFrame {
+                time: info.time,
+                delta: info.delta,
+                frame: info.frame,
+                pad: 0,
+                viewport: [width as f32, height as f32, 0.0, 0.0],
+            };
+            let bytes = effect_frame_bytes(&frame).to_vec();
+            if self.effect_uniform != bytes {
+                self.queue
+                    .write_buffer(&self.effect_uniform_buffer, 0, &bytes);
+                self.effect_uniform = bytes;
+            }
+            let (instances, ranges) = super::effects::instances(snapshot, effects, info);
+            effect_ranges = ranges;
+            if !instances.is_empty() {
+                let bytes = effect_instance_bytes(&instances);
+                if bytes.len() > self.effect_capacity {
+                    self.effect_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("brul-effect-instances"),
+                        size: bytes.len() as u64,
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    });
+                    self.effect_capacity = bytes.len();
+                }
+                self.queue.write_buffer(&self.effect_buffer, 0, &bytes);
+            }
+            effect_ranges.retain(|range| {
+                let Some(def) = effects.get(range.name) else {
+                    return false;
+                };
+                if self.effect_pipelines.contains_key(range.name) {
+                    return true;
+                }
+                match super::effects::pipeline(
+                    &self.device,
+                    &self.effect_empty_layout,
+                    &self.effect_layout,
+                    def,
+                    self.config.format,
+                ) {
+                    Ok(pipeline) => {
+                        self.effect_pipelines.insert(range.name, pipeline);
+                        true
+                    }
+                    Err(error) => {
+                        tracing::warn!(?error, effect = range.name, "effect shader rejected");
+                        false
+                    }
+                }
+            });
+        }
         let shape_count = shape_len / brul_gpu::INSTANCE_SIZE as usize;
         let decor_count = decor_len / brul_gpu::INSTANCE_SIZE as usize;
         let glyph_count = glyph_len / brul_gpu::TEXTURE_INSTANCE_SIZE as usize;
@@ -153,6 +213,7 @@ impl Gpu {
             atlas,
             (shape_count, decor_count, glyph_count),
             image_ranges,
+            effect_ranges,
         )
     }
 
@@ -163,6 +224,7 @@ impl Gpu {
         atlas: &Atlas,
         (shape_count, decor_count, glyph_count): (usize, usize, usize),
         image_ranges: Vec<(u32, u32, Rc<Texture>)>,
+        effect_ranges: Vec<EffectRange>,
     ) -> bool {
         self.textures.tick();
         let glyph_bind_group = (glyph_count > 0).then(|| {
@@ -286,6 +348,115 @@ impl Gpu {
                     pass.draw(0..6, *start..*start + *count);
                 }
             }
+        }
+
+        if !effect_ranges.is_empty() {
+            encoder.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &surface_frame.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.effect_backdrop,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            let read = self.effect_history_write;
+            let write = 1 - read;
+            let advancing: Vec<_> = effect_ranges
+                .iter()
+                .filter(|range| {
+                    self.effect_pipelines
+                        .get(range.name)
+                        .and_then(|pipeline| pipeline.advance.as_ref())
+                        .is_some()
+                })
+                .collect();
+            if !advancing.is_empty() {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("brul-effect-advance"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.effect_history_views[write],
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                for range in advancing {
+                    let Some(pipeline) = self.effect_pipelines.get(range.name) else {
+                        continue;
+                    };
+                    let Some(advance) = pipeline.advance.as_ref() else {
+                        continue;
+                    };
+                    let group = super::effects::bind_group(
+                        &self.device,
+                        &self.effect_layout,
+                        &self.effect_uniform_buffer,
+                        &self.effect_buffer,
+                        &self.effect_backdrop_view,
+                        &self.effect_history_views[read],
+                        &self.effect_sampler,
+                    );
+                    pass.set_pipeline(advance);
+                    pass.set_bind_group(0, &self.effect_empty_group, &[]);
+                    pass.set_bind_group(1, &group, &[]);
+                    pass.draw(0..6, range.start..range.start + range.count);
+                }
+            }
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("brul-effect"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                for range in &effect_ranges {
+                    let Some(pipeline) = self.effect_pipelines.get(range.name) else {
+                        continue;
+                    };
+                    let group = super::effects::bind_group(
+                        &self.device,
+                        &self.effect_layout,
+                        &self.effect_uniform_buffer,
+                        &self.effect_buffer,
+                        &self.effect_backdrop_view,
+                        &self.effect_history_views[write],
+                        &self.effect_sampler,
+                    );
+                    pass.set_pipeline(&pipeline.main);
+                    pass.set_bind_group(0, &self.effect_empty_group, &[]);
+                    pass.set_bind_group(1, &group, &[]);
+                    pass.draw(0..6, range.start..range.start + range.count);
+                }
+            }
+            self.effect_history_write = write;
         }
 
         self.queue.submit(Some(encoder.finish()));

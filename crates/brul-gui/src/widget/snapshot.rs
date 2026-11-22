@@ -1,4 +1,5 @@
 use super::*;
+use crate::effect::EffectSpec;
 use crate::image::Image;
 use crate::layout::Size;
 use crate::rect::ClipRect;
@@ -40,6 +41,7 @@ pub struct WidgetSnapshotNode {
     pub selection: Vec<SelectionRect>,
     pub scroll: i32,
     pub image: Option<Image>,
+    pub effect: Option<EffectSpec>,
     pub clips: Vec<ClipRect>,
 }
 

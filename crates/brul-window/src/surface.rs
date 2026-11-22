@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use brul_gpu::effect::Effects;
 use brul_gui::{Atlas, Cursor, Dirty, WidgetSnapshot};
 use winit::cursor::{Cursor as WinitCursor, CursorIcon};
 use winit::window::{Window, WindowLevel};
@@ -81,6 +82,13 @@ impl Surface for Arc<dyn Window> {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct FrameInfo {
+    pub time: f32,
+    pub delta: f32,
+    pub frame: u32,
+}
+
 pub(crate) enum Renderer {
     Gpu(Box<Gpu>),
     Software(SoftwareRenderer),
@@ -92,7 +100,14 @@ pub(crate) enum Renderer {
 pub(crate) trait TestRenderer {
     fn resize(&mut self, width: u32, height: u32);
     fn clear(&mut self) -> bool;
-    fn render(&mut self, snapshot: &WidgetSnapshot, atlas: &Atlas, dirty: &Dirty) -> bool;
+    fn render(
+        &mut self,
+        snapshot: &WidgetSnapshot,
+        atlas: &Atlas,
+        dirty: &Dirty,
+        info: FrameInfo,
+        effects: &Effects,
+    ) -> bool;
     fn capture(&mut self) -> Option<Vec<u8>>;
 }
 
@@ -121,12 +136,14 @@ impl Renderer {
         snapshot: &WidgetSnapshot,
         atlas: &Atlas,
         dirty: &Dirty,
+        info: FrameInfo,
+        effects: &Effects,
     ) -> bool {
         match self {
-            Self::Gpu(gpu) => gpu.render(surface, snapshot, atlas, dirty),
+            Self::Gpu(gpu) => gpu.render(surface, snapshot, atlas, dirty, info, effects),
             Self::Software(software) => software.render(surface, snapshot, atlas, dirty),
             #[cfg(test)]
-            Self::Test(renderer) => renderer.render(snapshot, atlas, dirty),
+            Self::Test(renderer) => renderer.render(snapshot, atlas, dirty, info, effects),
         }
     }
 

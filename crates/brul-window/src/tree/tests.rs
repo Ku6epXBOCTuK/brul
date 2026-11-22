@@ -104,7 +104,14 @@ impl TestRenderer for FakeRenderer {
         true
     }
 
-    fn render(&mut self, _snapshot: &WidgetSnapshot, _atlas: &Atlas, _dirty: &Dirty) -> bool {
+    fn render(
+        &mut self,
+        _snapshot: &WidgetSnapshot,
+        _atlas: &Atlas,
+        _dirty: &Dirty,
+        _info: crate::surface::FrameInfo,
+        _effects: &brul_gpu::effect::Effects,
+    ) -> bool {
         self.calls.borrow_mut().push("render".to_owned());
         true
     }
