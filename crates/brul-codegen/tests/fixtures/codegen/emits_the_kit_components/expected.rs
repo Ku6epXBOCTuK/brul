@@ -1767,7 +1767,12 @@ fn demo_slot5(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut props = Vec::new();
     let mut children = Vec::new();
     children.push({
-        let widget0 = demo_styled(brul::gui::Widget::input(""), &[0], theme);
+        let widget0 = demo_styled(brul::gui::Widget::input("").with_class(&brul::gui::Class {
+            layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
+            style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Text), ..brul::gui::WidgetStylePatch::DEFAULT }),
+            text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+            transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+        }), &[0], theme);
         bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<DemoScriptState>().draft.get()) })));
         widget0
     });

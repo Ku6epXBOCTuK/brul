@@ -1,0 +1,11 @@
+.brul-input {
+    cursor: text;
+}
+
+.brul-draggable {
+    cursor: grab;
+}
+
+.brul-draggable:pressed {
+    cursor: grabbing;
+}

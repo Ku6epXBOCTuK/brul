@@ -46,7 +46,13 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Enter, demo_script_event_toggle));
                 widget0
             },
-        ]).draggable(true)
+        ]).with_class(&brul::gui::Class {
+            layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
+            style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Grab), ..brul::gui::WidgetStylePatch::DEFAULT })
+                .with(brul::gui::StyleState::Pressed, brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Grabbing), ..brul::gui::WidgetStylePatch::DEFAULT }),
+            text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+            transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+        }).draggable(true)
     };
     Ok(brul::Built {
         widget,

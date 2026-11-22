@@ -40,7 +40,12 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = demo_styled(brul::gui::Widget::input(""), &[0], theme).multiline(true);
+            let widget0 = demo_styled(brul::gui::Widget::input("").with_class(&brul::gui::Class {
+                layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
+                style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Text), ..brul::gui::WidgetStylePatch::DEFAULT }),
+                text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+                transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+            }), &[0], theme).multiline(true);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).try_into()?) })));
             widget0
         }

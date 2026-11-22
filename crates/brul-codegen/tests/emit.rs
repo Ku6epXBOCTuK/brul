@@ -60,6 +60,7 @@ goldens! {
     accepts_host_calls_with_declared_variables_at_build,
     an_image_prop_accepts_a_resource_at_the_call_site,
     an_override_follows_the_component_rules,
+    a_user_class_overrides_the_builtin_cursor,
     emits_a_dynamic_class_binding_and_its_table,
     emits_a_layer,
     emits_a_linear_gradient_background,

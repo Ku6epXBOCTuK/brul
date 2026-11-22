@@ -1,0 +1,9 @@
+<style>
+.field { cursor: pointer; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    TextInput (field) { draft }
+}
+</markup>
