@@ -28,6 +28,14 @@ transparent-software:
 transparent-gpu:
     $env:BRUL_EXAMPLE_BACKEND = 'gpu'; cargo run -p transparency
 
+aurora: aurora-gpu
+
+aurora-software:
+    $env:BRUL_EXAMPLE_BACKEND = 'software'; cargo run -p aurora
+
+aurora-gpu:
+    $env:BRUL_EXAMPLE_BACKEND = 'gpu'; cargo run -p aurora
+
 check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
