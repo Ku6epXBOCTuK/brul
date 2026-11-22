@@ -401,9 +401,13 @@ fn window_icon(bytes: &[u8]) -> Option<Icon> {
         Image::Raster(texture) => texture,
         Image::Vector(vector) => vector.raster(32, 32, Color::WHITE)?,
     };
-    RgbaIcon::new(texture.pixels().to_vec(), texture.width(), texture.height())
-        .ok()
-        .map(Icon::from)
+    RgbaIcon::new(
+        texture.rgba().unwrap_or(&[]).to_vec(),
+        texture.width(),
+        texture.height(),
+    )
+    .ok()
+    .map(Icon::from)
 }
 
 pub(crate) fn attributes(config: &WindowConfig) -> WindowAttributes {

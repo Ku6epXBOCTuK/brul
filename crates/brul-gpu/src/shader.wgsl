@@ -96,6 +96,17 @@ fn srgb_from_linear(c: vec3<f32>) -> vec3<f32> {
     return select(high, low, c <= vec3<f32>(0.0031308));
 }
 
+fn yuv_to_rgb(yuv: vec3<f32>) -> vec3<f32> {
+    let luma = (yuv.r - 16.0 / 255.0) * (255.0 / 219.0);
+    let blue = (yuv.g - 128.0 / 255.0) * (255.0 / 224.0);
+    let red = (yuv.b - 128.0 / 255.0) * (255.0 / 224.0);
+    return vec3<f32>(
+        luma + 1.5748 * red,
+        luma - 0.1873 * blue - 0.4681 * red,
+        luma + 1.8556 * blue,
+    );
+}
+
 fn shadow_coverage(d: f32, blur: f32) -> f32 {
     if blur <= 0.0 {
         return select(0.0, 1.0, d <= 0.0);
@@ -213,11 +224,14 @@ fn vs_quad(
 @fragment
 fn fs_quad(in: QuadVaryings) -> @location(0) vec4<f32> {
     let sampled = textureSample(quad_texture, quad_sampler, in.uv);
+    let raw = srgb_from_linear(sampled.rgb);
     var rgb: vec3<f32>;
     if in.params.x < 0.5 {
         rgb = in.tint.rgb;
+    } else if in.params.x < 1.5 {
+        rgb = raw * in.tint.rgb;
     } else {
-        rgb = srgb_from_linear(sampled.rgb) * in.tint.rgb;
+        rgb = yuv_to_rgb(raw) * in.tint.rgb;
     }
     let alpha = sampled.a
         * in.tint.a

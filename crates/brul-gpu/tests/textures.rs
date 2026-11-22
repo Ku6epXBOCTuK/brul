@@ -2,8 +2,9 @@ use std::rc::Rc;
 
 use brul_gpu::{TEXTURE_INSTANCE_SIZE, texture_instance_bytes, texture_instances};
 use brul_gui::{
-    ClipRect, Color, Dimension, Dirty, DrawCommand, Image, LayoutStyle, Size, StyleSet, TextEngine,
-    Texture, Vector, Widget, WidgetKind, WidgetStyle, WidgetTree, draw_commands,
+    ClipRect, Color, Dimension, Dirty, DrawCommand, ExternalTexture, Image, LayoutStyle, Revision,
+    Size, StyleSet, TextEngine, Texture, TextureFrame, Vector, Widget, WidgetKind, WidgetStyle,
+    WidgetTree, draw_commands,
 };
 
 fn layout(widget: Widget) -> (TextEngine, brul_gui::WidgetSnapshot) {
@@ -246,4 +247,64 @@ fn instance_bytes_have_one_entry_per_instance() {
 
     let bytes = texture_instance_bytes(&batches.images[0].instances);
     assert_eq!(bytes.len() as u64, TEXTURE_INSTANCE_SIZE);
+}
+
+struct ExternalRgba;
+
+impl ExternalTexture for ExternalRgba {
+    fn revision(&self) -> Revision {
+        Revision::START
+    }
+
+    fn frame(&self) -> TextureFrame<'_> {
+        TextureFrame::Rgba(&[255; 16])
+    }
+}
+
+struct ExternalYuv;
+
+impl ExternalTexture for ExternalYuv {
+    fn revision(&self) -> Revision {
+        Revision::START
+    }
+
+    fn frame(&self) -> TextureFrame<'_> {
+        TextureFrame::Yuv420 {
+            y: &[81; 4],
+            u: &[128],
+            v: &[128],
+            strides: [2, 1, 1],
+        }
+    }
+}
+
+#[test]
+fn an_external_rgba_frame_keeps_the_sample_mode() {
+    let texture =
+        Rc::new(Texture::external(2, 2, Rc::new(ExternalRgba)).expect("external texture"));
+    let image = Widget::image(texture).with_layout(fixed(16, 16));
+    let (engine, snapshot) = layout(image);
+
+    let batches = texture_instances(
+        &draw(&snapshot, &Dirty::all()),
+        engine.atlas(),
+        &brul_gpu::ClipSet::default(),
+    );
+
+    assert_eq!(batches.images[0].instances[0].params[0], 1.0);
+}
+
+#[test]
+fn an_external_yuv_frame_uses_the_conversion_mode() {
+    let texture = Rc::new(Texture::external(2, 2, Rc::new(ExternalYuv)).expect("external texture"));
+    let image = Widget::image(texture).with_layout(fixed(16, 16));
+    let (engine, snapshot) = layout(image);
+
+    let batches = texture_instances(
+        &draw(&snapshot, &Dirty::all()),
+        engine.atlas(),
+        &brul_gpu::ClipSet::default(),
+    );
+
+    assert_eq!(batches.images[0].instances[0].params[0], 2.0);
 }

@@ -225,11 +225,12 @@ pub fn texture_instances(
                         images.last_mut().expect("batch")
                     }
                 };
+                let mode = if image.texture.is_yuv() { 2.0 } else { 1.0 };
                 batch.instances.push(TextureInstance {
                     bounds: image.rect.map(|value| value as f32),
                     uv: [0.0, 0.0, 1.0, 1.0],
                     tint: image.tint.map(rgba).unwrap_or([1.0; 4]),
-                    params: [1.0, image.opacity, clip.offset as f32, clip.count as f32],
+                    params: [mode, image.opacity, clip.offset as f32, clip.count as f32],
                 });
             }
             DrawCommand::Shape(_) | DrawCommand::Rect(_) => {}

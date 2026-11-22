@@ -38,6 +38,10 @@ impl Image {
         }
     }
 
+    pub fn is_external(&self) -> bool {
+        matches!(self, Self::Raster(texture) if texture.external_source().is_some())
+    }
+
     pub fn ptr_eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Raster(left), Self::Raster(right)) => Rc::ptr_eq(left, right),

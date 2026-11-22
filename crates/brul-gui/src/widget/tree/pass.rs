@@ -184,9 +184,12 @@ impl WidgetTree {
     }
 
     fn animated_effects(&self) -> bool {
-        self.nodes
-            .iter()
-            .any(|node| node.effect.as_ref().is_some_and(|effect| effect.animated))
+        self.nodes.iter().any(|node| {
+            if node.effect.as_ref().is_some_and(|effect| effect.animated) {
+                return true;
+            }
+            matches!(&node.data, Content::Image(image) if image.is_external())
+        })
     }
 
     pub fn advance(&mut self, delta: Duration) -> bool {
@@ -197,7 +200,10 @@ impl WidgetTree {
         let animated: Vec<_> = self
             .nodes
             .iter()
-            .filter(|node| node.effect.as_ref().is_some_and(|effect| effect.animated))
+            .filter(|node| {
+                node.effect.as_ref().is_some_and(|effect| effect.animated)
+                    || matches!(&node.data, Content::Image(image) if image.is_external())
+            })
             .map(|node| node.id)
             .collect();
         for &id in &animated {

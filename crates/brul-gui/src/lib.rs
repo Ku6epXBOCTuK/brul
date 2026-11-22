@@ -101,7 +101,7 @@ pub use text::{
     CaretPosition, CaretStop, PlacedGlyph, SelectionRect, TextAlign, TextEngine, TextError,
     TextLayout, TextSize, TextStyle, VerticalAlign,
 };
-pub use texture::{Texture, TextureError};
+pub use texture::{ExternalTexture, Revision, Texture, TextureError, TextureFrame};
 pub use theme::{Theme, UnknownTheme};
 pub use widget::{
     CaretArea, Class, Dirty, FunctionName, KeyModifiers, KeyPress, Layers, StyleSet, StyleState,

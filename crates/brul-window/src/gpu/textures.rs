@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use brul_gui::{Atlas, Texture};
+use brul_gui::{Atlas, Revision, Texture, TextureFrame};
 
 pub(super) struct Textures {
     atlas: Option<AtlasTexture>,
@@ -23,7 +23,7 @@ struct ImageTexture {
     source: Rc<Texture>,
     texture: wgpu::Texture,
     bind_group: Option<wgpu::BindGroup>,
-    uploaded: bool,
+    revision: Option<Revision>,
     last_frame: u64,
 }
 
@@ -114,26 +114,28 @@ impl Textures {
     pub(super) fn image(&mut self, source: &Rc<Texture>, res: &Resources<'_>) -> &wgpu::BindGroup {
         let key = Rc::as_ptr(source) as usize;
         let frame = self.frame_index;
+        let revision = source.revision();
         let cache = self.images.entry(key).or_insert_with(|| {
             let texture = create_texture(res.device, source.width(), source.height());
             ImageTexture {
                 source: Rc::clone(source),
                 texture,
                 bind_group: None,
-                uploaded: false,
+                revision: None,
                 last_frame: frame,
             }
         });
-        if !cache.uploaded {
-            let source = &cache.source;
+        if cache.revision != Some(revision) {
+            let source = Rc::clone(&cache.source);
+            let pixels = upload_pixels(&source, source.width(), source.height());
             upload_texture(
                 res.queue,
                 &cache.texture,
                 source.width(),
                 source.height(),
-                source.pixels(),
+                &pixels,
             );
-            cache.uploaded = true;
+            cache.revision = Some(revision);
         }
         cache.last_frame = frame;
         if cache.bind_group.is_none() {
@@ -148,6 +150,29 @@ impl Textures {
             ));
         }
         cache.bind_group.as_ref().expect("image bind group")
+    }
+}
+
+fn upload_pixels(source: &Texture, width: u32, height: u32) -> Vec<u8> {
+    match source.frame() {
+        TextureFrame::Rgba(pixels) => pixels.to_vec(),
+        TextureFrame::Yuv420 { y, u, v, strides } => {
+            let [y_stride, u_stride, v_stride] = strides;
+            let width = width as usize;
+            let height = height as usize;
+            let mut packed = vec![0u8; width * height * 4];
+            for row in 0..height {
+                for column in 0..width {
+                    let destination = (row * width + column) * 4;
+                    let chroma = (row / 2) * u_stride + column / 2;
+                    packed[destination] = y[row * y_stride + column];
+                    packed[destination + 1] = u[chroma];
+                    packed[destination + 2] = v[(row / 2) * v_stride + column / 2];
+                    packed[destination + 3] = 255;
+                }
+            }
+            packed
+        }
     }
 }
 
@@ -244,4 +269,45 @@ fn quad_bind_group(
             },
         ],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use brul_gui::ExternalTexture;
+
+    struct Yuv;
+
+    impl ExternalTexture for Yuv {
+        fn revision(&self) -> Revision {
+            Revision::START
+        }
+
+        fn frame(&self) -> TextureFrame<'_> {
+            TextureFrame::Yuv420 {
+                y: &[81, 82, 83, 84, 85, 86, 87, 88],
+                u: &[128, 129],
+                v: &[64, 65],
+                strides: [4, 2, 2],
+            }
+        }
+    }
+
+    #[test]
+    fn rgba_pixels_are_copied_for_upload() {
+        let texture = Texture::from_rgba(1, 1, &[1, 2, 3, 4]).expect("texture");
+        assert_eq!(upload_pixels(&texture, 1, 1), vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn yuv_planes_are_packed_into_rgba_for_upload() {
+        let texture = Texture::external(4, 2, Rc::new(Yuv)).expect("external texture");
+        assert_eq!(
+            upload_pixels(&texture, 4, 2),
+            vec![
+                81, 128, 64, 255, 82, 128, 64, 255, 83, 129, 65, 255, 84, 129, 65, 255, 85, 128,
+                64, 255, 86, 128, 64, 255, 87, 129, 65, 255, 88, 129, 65, 255,
+            ]
+        );
+    }
 }

@@ -8,7 +8,7 @@ fn decodes_png_to_rgba() {
 
     assert_eq!(texture.width(), 2);
     assert_eq!(texture.height(), 2);
-    assert_eq!(texture.pixels().len(), 16);
+    assert_eq!(texture.rgba().expect("rgba").len(), 16);
     assert_eq!(texture.color_at(0, 0), Some(Color::rgba(255, 0, 0, 255)));
     assert_eq!(texture.color_at(1, 0), Some(Color::rgba(0, 255, 0, 255)));
     assert_eq!(texture.color_at(0, 1), Some(Color::rgba(0, 0, 255, 128)));
@@ -23,7 +23,7 @@ fn tint_multiplies_rgba_without_touching_raw_pixels() {
 
     assert_eq!(texture.tint(), Some(Color::rgba(255, 128, 255, 128)));
     assert_eq!(texture.color_at(0, 0), Some(Color::rgba(100, 25, 25, 100)));
-    assert_eq!(texture.pixels(), &[100, 50, 25, 200]);
+    assert_eq!(texture.rgba().expect("rgba"), &[100, 50, 25, 200]);
 }
 
 #[test]
