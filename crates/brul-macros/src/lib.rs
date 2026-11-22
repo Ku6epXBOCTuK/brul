@@ -1,4 +1,4 @@
-use brul_case::{camel, snake};
+use brul_case::{camel, constant, snake};
 use brul_command::Kind;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -27,6 +27,219 @@ pub fn command(attribute: TokenStream, item: TokenStream) -> TokenStream {
 pub fn host(input: TokenStream) -> TokenStream {
     let commands = syn::parse_macro_input!(input as Commands);
     commands.expand().into()
+}
+
+#[proc_macro]
+pub fn effect(input: TokenStream) -> TokenStream {
+    let definition = syn::parse_macro_input!(input as EffectDefinition);
+    match expand_effect(definition) {
+        Ok(tokens) => tokens.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
+}
+
+struct EffectDefinition {
+    name: syn::LitStr,
+    shader: syn::LitStr,
+    item: syn::ItemStruct,
+}
+
+impl Parse for EffectDefinition {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let key: Ident = input.parse()?;
+        if key != "name" {
+            return Err(syn::Error::new(key.span(), "expected `name`"));
+        }
+        input.parse::<Token![:]>()?;
+        let name: syn::LitStr = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let key: Ident = input.parse()?;
+        if key != "shader" {
+            return Err(syn::Error::new(key.span(), "expected `shader`"));
+        }
+        input.parse::<Token![:]>()?;
+        let shader: syn::LitStr = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let item: syn::ItemStruct = input.parse()?;
+        if !item.generics.params.is_empty() {
+            return Err(syn::Error::new_spanned(
+                &item.generics,
+                "effect parameters cannot be generic",
+            ));
+        }
+        Ok(EffectDefinition { name, shader, item })
+    }
+}
+
+#[derive(Clone, Copy)]
+enum FieldLayout {
+    Float,
+    Float2,
+    Float3,
+    Float4,
+    Float4Array(usize),
+}
+
+impl FieldLayout {
+    fn from_type(ty: &Type) -> Result<Self> {
+        if is_float(ty) {
+            return Ok(Self::Float);
+        }
+        let syn::Type::Array(array) = ty else {
+            return Err(unsupported(ty));
+        };
+        if is_float(&array.elem) {
+            return match array_length(&array.len)? {
+                2 => Ok(Self::Float2),
+                3 => Ok(Self::Float3),
+                4 => Ok(Self::Float4),
+                _ => Err(unsupported(ty)),
+            };
+        }
+        if let syn::Type::Array(rows) = &*array.elem
+            && is_float(&rows.elem)
+            && array_length(&rows.len)? == 4
+        {
+            return Ok(Self::Float4Array(array_length(&array.len)?));
+        }
+        Err(unsupported(ty))
+    }
+
+    fn slots(self) -> usize {
+        match self {
+            Self::Float | Self::Float2 | Self::Float3 | Self::Float4 => 1,
+            Self::Float4Array(length) => length,
+        }
+    }
+
+    fn width(self) -> usize {
+        match self {
+            Self::Float => 1,
+            Self::Float2 => 2,
+            Self::Float3 => 3,
+            Self::Float4 | Self::Float4Array(_) => 4,
+        }
+    }
+
+    fn effect_type(self) -> TokenStream2 {
+        match self {
+            Self::Float => quote!(::brul::effect::EffectType::Float),
+            Self::Float2 => quote!(::brul::effect::EffectType::Float2),
+            Self::Float3 => quote!(::brul::effect::EffectType::Float3),
+            Self::Float4 => quote!(::brul::effect::EffectType::Float4),
+            Self::Float4Array(_) => quote!(::brul::effect::EffectType::Float4Array),
+        }
+    }
+
+    fn write(self, field: &Ident, at: usize, out: &mut Vec<TokenStream2>) {
+        match self {
+            Self::Float => out.push(quote!(slots[#at][0] = self.#field;)),
+            Self::Float2 | Self::Float3 | Self::Float4 => {
+                let length = self.width();
+                out.push(quote!(slots[#at][0..#length].copy_from_slice(&self.#field);));
+            }
+            Self::Float4Array(_) => out.push(quote! {
+                for (index, row) in self.#field.iter().enumerate() {
+                    slots[#at + index] = *row;
+                }
+            }),
+        }
+    }
+}
+
+fn is_float(ty: &Type) -> bool {
+    match ty {
+        Type::Path(path) => path.qself.is_none() && path.path.is_ident("f32"),
+        _ => false,
+    }
+}
+
+fn array_length(length: &syn::Expr) -> Result<usize> {
+    match length {
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(value),
+            ..
+        }) => value.base10_parse(),
+        _ => Err(syn::Error::new_spanned(
+            length,
+            "effect array length must be a literal",
+        )),
+    }
+}
+
+fn unsupported(ty: &Type) -> syn::Error {
+    syn::Error::new_spanned(
+        ty,
+        "effect field must be f32, [f32; 2..=4] or [[f32; 4]; N]",
+    )
+}
+
+fn expand_effect(definition: EffectDefinition) -> Result<TokenStream2> {
+    let name = &definition.name;
+    let shader = &definition.shader;
+    let ident = &definition.item.ident;
+    let syn::Fields::Named(fields) = &definition.item.fields else {
+        return Err(syn::Error::new_spanned(
+            &definition.item,
+            "effect parameters must have named fields",
+        ));
+    };
+
+    let mut layouts = Vec::new();
+    let mut writes = Vec::new();
+    let mut slots = 0usize;
+    for field in &fields.named {
+        let name = field.ident.as_ref().expect("named field");
+        let layout = FieldLayout::from_type(&field.ty)?;
+        layout.write(name, slots, &mut writes);
+        layouts.push((name, layout));
+        slots += layout.slots();
+    }
+
+    let keys: Vec<_> = layouts.iter().map(|(field, _)| *field).collect();
+    let types: Vec<_> = layouts
+        .iter()
+        .map(|(_, layout)| layout.effect_type())
+        .collect();
+    let counts: Vec<_> = layouts
+        .iter()
+        .map(|(_, layout)| layout.slots() as u16)
+        .collect();
+    let marker = format_ident!("BRUL_EFFECT_{}", constant(&name.value()));
+    let mut item = definition.item.clone();
+    item.attrs
+        .push(syn::parse_quote!(#[derive(Clone, Copy, Debug, Default)]));
+
+    Ok(quote! {
+        #item
+
+        impl ::brul::effect::EffectParams for #ident {
+            const NAME: &'static str = #name;
+            const SHADER: &'static str = include_str!(#shader);
+            const SLOTS: u16 = #slots as u16;
+            const FIELDS: &'static [::brul::effect::EffectField] = &[
+                #(
+                    ::brul::effect::EffectField {
+                        name: stringify!(#keys),
+                        ty: #types,
+                        slots: #counts,
+                    },
+                )*
+            ];
+
+            fn pack(&self) -> [[f32; 4]; ::brul::effect::EFFECT_SLOTS] {
+                const _: () = assert!(#slots <= ::brul::effect::EFFECT_SLOTS);
+                let mut slots = [[0.0f32; 4]; ::brul::effect::EFFECT_SLOTS];
+                #(#writes)*
+                slots
+            }
+        }
+
+        #[doc(hidden)]
+        #[allow(non_upper_case_globals)]
+        pub const #marker: ::brul::effect::EffectDef =
+            <#ident as ::brul::effect::EffectParams>::DEF;
+    })
 }
 
 fn expand(function: ItemFn) -> Result<TokenStream2> {
@@ -273,5 +486,29 @@ mod tests {
             syn::parse_str("fn act(host: &mut Host, draft: Draft) {}").expect("fn");
         let signature = brul_command::parse(&function).expect("signature");
         assert_eq!(signature.params.len(), 1);
+    }
+
+    #[test]
+    fn effect_field_types_map_to_uniform_slots() {
+        for (source, slots) in [
+            ("struct Params { speed: f32 }", 1),
+            ("struct Params { color: [f32; 4] }", 1),
+            ("struct Params { bands: [[f32; 4]; 3] }", 3),
+        ] {
+            let item: syn::ItemStruct = syn::parse_str(source).expect("struct");
+            let field = item.fields.iter().next().expect("field");
+            assert_eq!(
+                FieldLayout::from_type(&field.ty).expect("layout").slots(),
+                slots
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_effect_field_is_rejected() {
+        let item: syn::ItemStruct =
+            syn::parse_str("struct Params { color: [f32; 5] }").expect("struct");
+        let field = item.fields.iter().next().expect("field");
+        assert!(FieldLayout::from_type(&field.ty).is_err());
     }
 }

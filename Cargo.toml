@@ -12,6 +12,7 @@ workspace = true
 brul-codegen = { workspace = true }
 brul-ident = { workspace = true }
 brul-gui = { workspace = true }
+brul-gpu = { workspace = true }
 brul-macros = { workspace = true }
 brul-reactive = { workspace = true }
 brul-script = { workspace = true }

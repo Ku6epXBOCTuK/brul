@@ -200,6 +200,7 @@ name = "brul"
 version = "0.1.0"
 dependencies = [
  "brul-codegen",
+ "brul-gpu",
  "brul-gui",
  "brul-ident",
  "brul-lang-gen",

@@ -8,6 +8,73 @@ use naga::{
 pub const PRELUDE: &str = include_str!("effect_prelude.wgsl");
 pub const EFFECT_FRAME_SIZE: u64 = size_of::<EffectFrame>() as u64;
 pub const EFFECT_INSTANCE_SIZE: u64 = size_of::<EffectInstance>() as u64;
+pub const EFFECT_SLOTS: usize = 16;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EffectType {
+    Float,
+    Float2,
+    Float3,
+    Float4,
+    Float4Array,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EffectField {
+    pub name: &'static str,
+    pub ty: EffectType,
+    pub slots: u16,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct EffectDef {
+    pub name: &'static str,
+    pub shader: &'static str,
+    pub slots: u16,
+    pub fields: &'static [EffectField],
+}
+
+impl EffectDef {
+    pub fn compile(&self) -> Result<EffectShader, EffectError> {
+        compile(self.shader, self.name)
+    }
+}
+
+pub trait EffectParams {
+    const NAME: &'static str;
+    const SHADER: &'static str;
+    const SLOTS: u16;
+    const FIELDS: &'static [EffectField];
+    const DEF: EffectDef = EffectDef {
+        name: Self::NAME,
+        shader: Self::SHADER,
+        slots: Self::SLOTS,
+        fields: Self::FIELDS,
+    };
+
+    fn pack(&self) -> [[f32; 4]; EFFECT_SLOTS];
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Effects(&'static [EffectDef]);
+
+impl Effects {
+    pub const fn new(definitions: &'static [EffectDef]) -> Self {
+        Self(definitions)
+    }
+
+    pub fn definitions(&self) -> &'static [EffectDef] {
+        self.0
+    }
+
+    pub fn get(&self, name: &str) -> Option<&'static EffectDef> {
+        self.0.iter().find(|effect| effect.name == name)
+    }
+
+    pub fn iter(&self) -> core::slice::Iter<'static, EffectDef> {
+        self.0.iter()
+    }
+}
 
 const FRAGMENT: &str = "
 @fragment
@@ -41,7 +108,7 @@ pub struct EffectFrame {
 pub struct EffectInstance {
     pub bounds: [f32; 4],
     pub uv: [f32; 4],
-    pub params: [[f32; 4]; 16],
+    pub params: [[f32; 4]; EFFECT_SLOTS],
     pub meta: [f32; 4],
     pub flags: [u32; 4],
 }
