@@ -4,6 +4,8 @@ use brul_gui::{
     Atlas, Color, Dirty, DrawCommand, Gradient, Paint, Texture, WidgetId, WidgetSnapshot,
 };
 
+pub mod effect;
+
 pub const SHADER: &str = include_str!("shader.wgsl");
 pub const INSTANCE_SIZE: u64 = size_of::<ShapeInstance>() as u64;
 pub const TEXTURE_INSTANCE_SIZE: u64 = size_of::<TextureInstance>() as u64;

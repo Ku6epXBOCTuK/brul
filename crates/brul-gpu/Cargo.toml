@@ -8,7 +8,6 @@ workspace = true
 
 [dependencies]
 brul-gui = { workspace = true }
-wgpu = { workspace = true }
-
-[dev-dependencies]
 naga = { workspace = true, features = ["wgsl-in"] }
+thiserror = { workspace = true }
+wgpu = { workspace = true }
