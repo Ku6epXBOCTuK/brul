@@ -1809,6 +1809,11 @@ fn checkbox_if1_rebuild(theme: Option<&str>, build: &mut brul::Build, component:
     Ok((brul::Built { widget, bindings, handlers, props }, rows))
 }
 
+pub fn __brul_effects() -> brul::effect::Effects {
+    brul::effect::Effects::new(&[
+    ])
+}
+
 pub fn demo_window() -> brul::WindowConfig {
     brul::WindowConfig {
         title: "demo".to_owned(),
@@ -1821,6 +1826,7 @@ pub fn demo_window() -> brul::WindowConfig {
         scroll: true,
         position: None,
         icon: None,
+        effects: __brul_effects(),
         ..brul::WindowConfig::default()
     }
 }

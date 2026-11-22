@@ -3,8 +3,10 @@ use brul_style::{
     Animation, ClassRule, Kind, Property, State, Stylesheet, Theme, ThemeEntry, Type,
 };
 
+use crate::ast::Expr;
 use crate::cursor::Cursor;
 use crate::error::Error;
+use crate::script;
 use crate::style::shorthand;
 use crate::style::value;
 
@@ -12,6 +14,15 @@ use crate::style::value;
 pub struct Style {
     pub stylesheet: Stylesheet,
     pub overrides: Vec<Override>,
+    pub effects: Vec<EffectRule>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EffectRule {
+    pub class: String,
+    pub name: String,
+    pub args: Vec<Expr>,
+    pub at: usize,
 }
 
 #[derive(Debug)]
@@ -28,6 +39,14 @@ pub fn parse_file(source: &str) -> Result<Stylesheet, Error> {
 
 pub fn parse_file_in(source: &str, palette: &[Theme]) -> Result<Stylesheet, Error> {
     Ok(parse(source, Scope::Imported(palette))?.stylesheet)
+}
+
+pub fn parse_file_in_with_effects(
+    source: &str,
+    palette: &[Theme],
+) -> Result<(Stylesheet, Vec<EffectRule>), Error> {
+    let style = parse(source, Scope::Imported(palette))?;
+    Ok((style.stylesheet, style.effects))
 }
 
 pub fn parse_root(source: &str) -> Result<Style, Error> {
@@ -61,6 +80,7 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
     let mut rules = Vec::new();
     let mut positions = Vec::new();
     let mut overrides = Vec::new();
+    let mut effects = Vec::new();
     loop {
         cursor.skip_trivia();
         if cursor.peek().is_none() {
@@ -77,11 +97,20 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
             if !scope.allows_overrides() {
                 return Err(cursor.error(Error::OverrideNotRoot));
             }
-            overrides.push(cursor.override_block()?);
+            let (over, over_effects) = cursor.override_block()?;
+            if let Some(effect) = over_effects.first() {
+                return Err(Error::at(
+                    source,
+                    effect.at,
+                    Error::custom("effect is not allowed inside an override"),
+                ));
+            }
+            overrides.push(over);
         } else {
-            let (rule, position) = cursor.class_rule()?;
+            let (rule, position, rule_effects) = cursor.class_rule()?;
             rules.push(rule);
             positions.push(position);
+            effects.extend(rule_effects);
         }
     }
     let report = |error: brul_style::ValidationError| {
@@ -105,11 +134,59 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
             rules,
         },
         overrides,
+        effects,
     })
 }
 
+fn arguments_end(source: &str, start: usize) -> Result<usize, Error> {
+    let bytes = source.as_bytes();
+    let mut depth = 1usize;
+    let mut quote = None;
+    let mut at = start;
+    while at < bytes.len() {
+        match quote {
+            Some(ch) => {
+                if bytes[at] == b'\\' {
+                    at += 2;
+                    continue;
+                }
+                if bytes[at] == ch {
+                    quote = None;
+                }
+            }
+            None => match bytes[at] {
+                b'"' | b'\'' | b'`' => quote = Some(bytes[at]),
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Ok(at);
+                    }
+                }
+                _ => {}
+            },
+        }
+        at += 1;
+    }
+    Err(Error::at(
+        source,
+        start,
+        Error::custom("unclosed effect arguments"),
+    ))
+}
+
+fn padded_arguments(source: &str, start: usize, end: usize) -> String {
+    let prefix = &source[..start];
+    let lines = prefix.bytes().filter(|byte| *byte == b'\n').count();
+    let column = prefix.rsplit('\n').next().unwrap_or("").len();
+    let mut padded = "\n".repeat(lines);
+    padded.push_str(&" ".repeat(column));
+    padded.push_str(&source[start..end]);
+    padded
+}
+
 impl Cursor<'_> {
-    fn class_rule(&mut self) -> Result<(ClassRule, RuleAt), Error> {
+    fn class_rule(&mut self) -> Result<(ClassRule, RuleAt, Vec<EffectRule>), Error> {
         self.expect('.')?;
         let class_at = self.value_start();
         let class = self.ident()?;
@@ -118,9 +195,33 @@ impl Cursor<'_> {
         let mut positions = Vec::new();
         let mut animations = Vec::new();
         let mut animation_positions = Vec::new();
+        let mut effects = Vec::new();
         self.braced_items(|cursor| {
             let at = cursor.value_start();
-            if cursor.eat_keyword("animate") {
+            if cursor.eat_keyword("effect") {
+                if state.is_some() {
+                    return Err(Error::at(
+                        cursor.source(),
+                        at,
+                        Error::custom("effect is not allowed in a state rule"),
+                    ));
+                }
+                cursor.expect(':')?;
+                let name = cursor.ident()?;
+                cursor.expect('(')?;
+                let start = cursor.pos();
+                let end = arguments_end(cursor.source(), start)?;
+                let inner = padded_arguments(cursor.source(), start, end);
+                let (args, _) = script::expression_list_in(&inner)?;
+                cursor.set_pos(end + 1);
+                cursor.expect(';')?;
+                effects.push(EffectRule {
+                    class: class.clone(),
+                    name,
+                    args,
+                    at,
+                });
+            } else if cursor.eat_keyword("animate") {
                 animations.push(cursor.animation()?);
                 animation_positions.push(PropertyAt { at });
             } else {
@@ -143,26 +244,32 @@ impl Cursor<'_> {
                 properties: positions,
                 animations: animation_positions,
             },
+            effects,
         ))
     }
 
-    fn override_block(&mut self) -> Result<Override, Error> {
+    fn override_block(&mut self) -> Result<(Override, Vec<EffectRule>), Error> {
         let component_at = self.value_start();
         let component = self.ident()?;
         let mut rules = Vec::new();
         let mut positions = Vec::new();
+        let mut effects = Vec::new();
         self.braced_items(|cursor| {
-            let (rule, position) = cursor.class_rule()?;
+            let (rule, position, rule_effects) = cursor.class_rule()?;
             rules.push(rule);
             positions.push(position);
+            effects.extend(rule_effects);
             Ok(())
         })?;
-        Ok(Override {
-            component,
-            component_at,
-            rules,
-            positions,
-        })
+        Ok((
+            Override {
+                component,
+                component_at,
+                rules,
+                positions,
+            },
+            effects,
+        ))
     }
 
     fn animation(&mut self) -> Result<Animation, Error> {

@@ -1,15 +1,15 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use brul_case::{identifier, pascal};
+use brul_case::{constant, identifier, pascal};
 use brul_script::Names;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Declaration, Element, Member};
 use brul_syntax::script::{Program, validate_build};
-use brul_syntax::style::Stylesheet;
+use brul_syntax::style::{EffectRule, Stylesheet};
 use brul_syntax::types::Type;
 
 use crate::commands::{self, Commands};
@@ -161,6 +161,17 @@ fn module_at(
     let root_props = names::declared(&declaration.members);
     let mut root_external = names::declared_events(&declaration.members);
     let command_names = commands::names(commands);
+    let effect_names: BTreeSet<String> = parsed
+        .effects
+        .iter()
+        .chain(
+            registry
+                .definitions
+                .iter()
+                .flat_map(|definition| definition.effects.iter()),
+        )
+        .map(|rule| constant(&rule.name))
+        .collect();
     if let Some(program) = &parsed.program {
         root_external.extend(root_props.iter().copied());
         validate_build(program, &root_external, &command_names)?;
@@ -179,6 +190,7 @@ fn module_at(
     let mut views = vec![WindowView {
         declaration,
         stylesheet: &parsed.stylesheet,
+        effects: &parsed.effects,
         program: parsed.program.as_ref(),
         script: parsed.script.as_ref(),
         imports: &registry.imports,
@@ -190,6 +202,7 @@ fn module_at(
             views.push(WindowView {
                 declaration: &definition.declaration,
                 stylesheet: &definition.stylesheet,
+                effects: &definition.effects,
                 program: definition.program.as_ref(),
                 script: definition.script.as_ref(),
                 imports: &definition.imports,
@@ -245,6 +258,7 @@ fn module_at(
                 imports: view.imports,
                 resources: view.resources,
                 stylesheet: view.stylesheet,
+                effects: view.effects,
                 names: &names,
                 state: &view_state,
                 prop_types: &types,
@@ -314,6 +328,7 @@ fn module_at(
     }
 
     let mut tail = String::new();
+    effects_registry(&mut tail, &effect_names);
     for (index, config) in configs.iter().enumerate() {
         let prefix = format!("{}_", views[index].base);
         window_config(&mut tail, &views[index].base, &prefix, config, icons[index]);
@@ -378,6 +393,7 @@ fn module_at(
 struct WindowView<'a> {
     declaration: &'a Declaration,
     stylesheet: &'a Stylesheet,
+    effects: &'a [EffectRule],
     program: Option<&'a Program>,
     script: Option<&'a Script>,
     imports: &'a [Import],
@@ -442,6 +458,7 @@ fn emit_component(
             imports: &definition.imports,
             resources: &definition.resources,
             stylesheet: &definition.stylesheet,
+            effects: &definition.effects,
             names,
             state: &component_state,
             prop_types: &component_prop_types,
@@ -652,6 +669,16 @@ fn icon_resource<'a>(
     })
 }
 
+fn effects_registry(out: &mut String, names: &BTreeSet<String>) {
+    out.push_str(
+        "pub fn __brul_effects() -> brul::effect::Effects {\n    brul::effect::Effects::new(&[\n",
+    );
+    for name in names {
+        let _ = writeln!(out, "        crate::BRUL_EFFECT_{name},");
+    }
+    out.push_str("    ])\n}\n\n");
+}
+
 fn window_config(
     out: &mut String,
     base: &str,
@@ -684,6 +711,7 @@ fn window_config(
         scroll: {},
         position: {position},
         icon: {icon},
+        effects: __brul_effects(),
         ..brul::WindowConfig::default()
     }}
 }}

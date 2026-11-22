@@ -1,0 +1,9 @@
+<style>
+.a { effect: cover(1); }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    Container (a) { }
+}
+</markup>

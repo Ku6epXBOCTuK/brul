@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::script::Program;
-use brul_syntax::style::Stylesheet;
+use brul_syntax::style::{EffectRule, Stylesheet};
 use brul_syntax::types::Type;
 
 use crate::{Import, Registry, Resource};
@@ -72,6 +72,7 @@ pub(super) struct Emit<'a> {
     base: &'a str,
     resource_prefix: &'a str,
     stylesheet: &'a Stylesheet,
+    effects: &'a [EffectRule],
     names: &'a Names<'a>,
     state: &'a State,
     prop_types: &'a HashMap<String, Type>,
@@ -91,6 +92,7 @@ struct EmitSources<'a> {
     imports: &'a [Import],
     resources: &'a [Resource],
     stylesheet: &'a Stylesheet,
+    effects: &'a [EffectRule],
     names: &'a Names<'a>,
     state: &'a State,
     prop_types: &'a HashMap<String, Type>,
@@ -125,6 +127,7 @@ impl<'a> Emit<'a> {
             base: sources.base,
             resource_prefix: sources.resource_prefix,
             stylesheet: sources.stylesheet,
+            effects: sources.effects,
             names: sources.names,
             state: sources.state,
             prop_types: sources.prop_types,

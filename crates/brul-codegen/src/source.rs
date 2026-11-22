@@ -3,7 +3,7 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{self, Declaration};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
-use brul_syntax::style::{self, Override, Stylesheet};
+use brul_syntax::style::{self, EffectRule, Override, Stylesheet};
 use brul_syntax::uses::{self, Block};
 
 use crate::{error_at, padded, sfc_error};
@@ -12,6 +12,7 @@ pub struct Source {
     pub declaration: Option<Declaration>,
     pub stylesheet: Stylesheet,
     pub overrides: Vec<Override>,
+    pub effects: Vec<EffectRule>,
     pub uses: Block,
     pub program: Option<Program>,
     pub script: Option<Script>,
@@ -40,6 +41,7 @@ impl Source {
                 rules: Vec::new(),
             },
             overrides: Vec::new(),
+            effects: Vec::new(),
             uses: Block::default(),
             program: None,
             script: None,
@@ -64,6 +66,7 @@ pub fn parse(source: &str) -> Result<Source, Error> {
                 rules: Vec::new(),
             },
             overrides: Vec::new(),
+            effects: Vec::new(),
         },
     };
     let uses = match sfc.uses {
@@ -81,6 +84,7 @@ pub fn parse(source: &str) -> Result<Source, Error> {
         declaration: Some(declaration),
         stylesheet: style.stylesheet,
         overrides: style.overrides,
+        effects: style.effects,
         uses,
         program,
         script,

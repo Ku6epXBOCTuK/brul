@@ -535,6 +535,18 @@ impl WidgetTree {
         true
     }
 
+    pub fn set_effect(&mut self, id: WidgetId, effect: EffectSpec) -> bool {
+        let Some(&slot) = self.index.get(&id) else {
+            return false;
+        };
+        if self.nodes[slot.index()].effect.as_ref() == Some(&effect) {
+            return false;
+        }
+        self.nodes[slot.index()].effect = Some(effect);
+        self.mark_dirty(id);
+        true
+    }
+
     fn invalidate_layout(&mut self) {
         self.invalidate_snapshot();
         self.layout_dirty = true;

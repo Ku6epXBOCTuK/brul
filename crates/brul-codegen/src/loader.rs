@@ -8,7 +8,7 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{self, Declaration};
 use brul_syntax::script::{self, Program};
 use brul_syntax::sfc;
-use brul_syntax::style::{self, Override, Stylesheet, Theme};
+use brul_syntax::style::{self, EffectRule, Override, Stylesheet, Theme};
 use brul_syntax::uses::{self, Block, Use};
 
 use crate::source::Script;
@@ -21,6 +21,7 @@ pub struct Definition {
     pub imports: Vec<Import>,
     pub resources: Vec<Resource>,
     pub stylesheet: Rc<Stylesheet>,
+    pub effects: Vec<EffectRule>,
     pub program: Option<Program>,
     pub script: Option<Script>,
 }
@@ -278,6 +279,7 @@ impl Loader<'_> {
             imports,
             resources,
             stylesheet: parsed.stylesheet,
+            effects: parsed.effects,
             program: parsed.program,
             script: parsed.script,
         });
@@ -299,6 +301,7 @@ struct Parsed {
     declaration: Declaration,
     uses: Block,
     stylesheet: Rc<Stylesheet>,
+    effects: Vec<EffectRule>,
     program: Option<Program>,
     script: Option<Script>,
 }
@@ -317,13 +320,16 @@ fn parse(source: &str, path: &Path, palette: &[Theme]) -> Result<Parsed, Error> 
         Some(block) => uses::parse(&padded(source, block)).map_err(|error| named(path, error))?,
         None => Block::default(),
     };
-    let stylesheet = match sfc.style {
-        Some(block) => style::parse_file_in(&padded(source, block), palette)
+    let (stylesheet, effects) = match sfc.style {
+        Some(block) => style::parse_file_in_with_effects(&padded(source, block), palette)
             .map_err(|error| named(path, error))?,
-        None => Stylesheet {
-            themes: palette.to_vec(),
-            rules: Vec::new(),
-        },
+        None => (
+            Stylesheet {
+                themes: palette.to_vec(),
+                rules: Vec::new(),
+            },
+            Vec::new(),
+        ),
     };
     let (program, script) = match sfc.script {
         Some(block) => (
@@ -336,6 +342,7 @@ fn parse(source: &str, path: &Path, palette: &[Theme]) -> Result<Parsed, Error> 
         declaration,
         uses,
         stylesheet: Rc::new(stylesheet),
+        effects,
         program,
         script,
     })

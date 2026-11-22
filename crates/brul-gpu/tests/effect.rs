@@ -1,6 +1,6 @@
 use brul_gpu::effect::{
-    EFFECT_FRAME_SIZE, EFFECT_INSTANCE_SIZE, EffectError, EffectFrame, EffectInstance, compile,
-    effect_frame_bytes, effect_instance_bytes,
+    EFFECT_FRAME_SIZE, EFFECT_INSTANCE_SIZE, EffectDef, EffectError, EffectField, EffectFrame,
+    EffectInstance, EffectType, compile, effect_frame_bytes, effect_instance_bytes,
 };
 
 const SHADE: &str = "
@@ -93,4 +93,40 @@ fn uniforms_and_instances_have_the_declared_layout() {
     let bytes = effect_instance_bytes(&[instance]);
     assert_eq!(bytes.len(), EFFECT_INSTANCE_SIZE as usize);
     assert_eq!(f32::from_ne_bytes(bytes[0..4].try_into().unwrap()), 10.0);
+}
+
+#[test]
+fn scalar_arguments_are_packed_by_the_effect_definition() {
+    static FIELDS: &[EffectField] = &[
+        EffectField {
+            name: "level",
+            ty: EffectType::Float,
+            slots: 1,
+        },
+        EffectField {
+            name: "tint",
+            ty: EffectType::Float4,
+            slots: 1,
+        },
+    ];
+    let def = EffectDef {
+        name: "cover",
+        shader: "",
+        slots: 2,
+        fields: FIELDS,
+    };
+    assert_eq!(def.expected(), 5);
+    let params = def
+        .pack(&[0.5, 1.0, 2.0, 3.0, 4.0])
+        .expect("values fit the layout");
+    assert_eq!(params[0][0], 0.5);
+    assert_eq!(params[1], [1.0, 2.0, 3.0, 4.0]);
+    assert!(matches!(
+        def.pack(&[0.5]),
+        Err(EffectError::Params {
+            expected: 5,
+            got: 1,
+            ..
+        })
+    ));
 }

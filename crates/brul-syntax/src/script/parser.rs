@@ -28,6 +28,35 @@ pub fn parse(source: &str) -> Result<Program, Error> {
     })
 }
 
+pub fn expression_list_in(source: &str) -> Result<(Vec<Expr>, usize), Error> {
+    let tokens = lexer::tokenize(source)?;
+    let mut parser = Parser {
+        stream: TokenStream::new(source, tokens),
+        in_function: false,
+    };
+    let mut values = Vec::new();
+    loop {
+        let token = parser.token()?;
+        let span = token.span;
+        let kind = token.kind.clone();
+        if kind == TokenKind::Eof {
+            return Ok((values, span.start));
+        }
+        if kind == TokenKind::Punct(Punct::Semicolon) {
+            return Ok((values, span.start));
+        }
+        values.push(parser.expression()?);
+        let token = parser.token()?;
+        let span = token.span;
+        let kind = token.kind.clone();
+        match kind {
+            TokenKind::Punct(Punct::Comma) => parser.stream.at += 1,
+            TokenKind::Punct(Punct::Semicolon) | TokenKind::Eof => return Ok((values, span.start)),
+            _ => return Err(parser.error(span, Expected::Punct(Punct::Comma))),
+        }
+    }
+}
+
 struct Parser<'a> {
     stream: TokenStream<'a>,
     in_function: bool,

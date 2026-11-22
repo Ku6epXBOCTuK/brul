@@ -19,6 +19,17 @@ pub enum EffectType {
     Float4Array,
 }
 
+impl EffectType {
+    pub const fn width(self) -> usize {
+        match self {
+            Self::Float => 1,
+            Self::Float2 => 2,
+            Self::Float3 => 3,
+            Self::Float4 | Self::Float4Array => 4,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EffectField {
     pub name: &'static str,
@@ -37,6 +48,47 @@ pub struct EffectDef {
 impl EffectDef {
     pub fn compile(&self) -> Result<EffectShader, EffectError> {
         compile(self.shader, self.name)
+    }
+
+    pub fn expected(&self) -> usize {
+        self.fields
+            .iter()
+            .map(|field| field.ty.width() * field.slots as usize)
+            .sum()
+    }
+
+    pub fn pack(&self, values: &[f64]) -> Result<[[f32; 4]; EFFECT_SLOTS], EffectError> {
+        let expected = self.expected();
+        if values.len() != expected {
+            return Err(EffectError::Params {
+                name: self.name.to_owned(),
+                expected,
+                got: values.len(),
+            });
+        }
+        let mut params = [[0.0; 4]; EFFECT_SLOTS];
+        let mut value = 0;
+        let mut slot = 0;
+        for field in self.fields {
+            let count = if matches!(field.ty, EffectType::Float4Array) {
+                field.slots as usize
+            } else {
+                1
+            };
+            if slot + count > EFFECT_SLOTS {
+                return Err(EffectError::Slots {
+                    name: self.name.to_owned(),
+                });
+            }
+            for index in 0..count {
+                for target in params[slot + index].iter_mut().take(field.ty.width()) {
+                    *target = values[value] as f32;
+                    value += 1;
+                }
+            }
+            slot += count;
+        }
+        Ok(params)
     }
 }
 
@@ -133,6 +185,14 @@ pub enum EffectError {
     Validate { path: String, message: String },
     #[error("{path}: missing effect entry point `shade`")]
     MissingShade { path: String },
+    #[error("effect {name} expects {expected} parameters, got {got}")]
+    Params {
+        name: String,
+        expected: usize,
+        got: usize,
+    },
+    #[error("effect {name} needs more than {EFFECT_SLOTS} uniform slots")]
+    Slots { name: String },
 }
 
 #[derive(Clone, Debug)]

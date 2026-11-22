@@ -228,6 +228,7 @@ version = "0.1.0"
 dependencies = [
  "brul-case",
  "brul-command",
+ "brul-gpu",
  "brul-gui",
  "brul-lang-gen",
  "brul-reactive",

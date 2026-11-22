@@ -9,5 +9,7 @@ pub use brul_style::{
     LinePlacement, Property, RepeatCount, Side, Snapshot, SnapshotError, State, Stylesheet, Theme,
     ThemeEntry, TrackSize, Value,
 };
-pub use parser::{Override, Style, parse_file, parse_file_in, parse_root};
+pub use parser::{
+    EffectRule, Override, Style, parse_file, parse_file_in, parse_file_in_with_effects, parse_root,
+};
 pub use rule::Rule;

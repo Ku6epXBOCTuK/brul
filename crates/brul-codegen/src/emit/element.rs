@@ -1,7 +1,9 @@
+use brul_case::constant;
 use brul_gui::Direction;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Slot, Widget};
+use brul_syntax::style::EffectRule;
 
 use crate::error_at;
 use crate::styles;
@@ -29,12 +31,22 @@ pub(super) fn widget(
     {
         return component::component(out, element, index, emit, counter, frame);
     }
-    let classes = classes(element)
+    let element_classes = classes(element);
+    let classes = element_classes
         .iter()
         .map(|class| classes::index(emit.classes, class))
         .collect::<Vec<_>>();
+    let effect = emit
+        .effects
+        .iter()
+        .find(|rule| element_classes.contains(&rule.class.as_str()));
+    let style = ElementStyle {
+        classes: &classes,
+        effect,
+    };
     let events = events::widget(element, emit.program)?;
-    let needs = content_needed(element, emit)
+    let needs = effect.is_some()
+        || content_needed(element, emit)
         || !events.handlers.is_empty()
         || element
             .args
@@ -42,7 +54,7 @@ pub(super) fn widget(
             .any(|arg| matches!(arg, Arg::Named { .. }));
     if !needs {
         out.indent();
-        element_expression(out, element, &classes, &events, emit, frame, counter)?;
+        element_expression(out, element, &style, &events, emit, frame, counter)?;
         return Ok(());
     }
     let name = format!("widget{}", *counter);
@@ -50,10 +62,13 @@ pub(super) fn widget(
     out.line(format_args!("{{"));
     out.indented(|out| -> Result<(), Error> {
         out.start(format_args!("let {name} = "));
-        let content = element_expression(out, element, &classes, &events, emit, frame, counter)?;
+        let content = element_expression(out, element, &style, &events, emit, frame, counter)?;
         out.push(format_args!(";"));
         out.end();
         content_binding(out, content, &name, emit, frame)?;
+        if let Some(rule) = effect {
+            effect_binding(out, rule, &name, emit, frame)?;
+        }
         parameters(out, element, &name, emit, frame)?;
         handler_bindings(out, &events.handlers, &name, emit.script_name);
         out.line(format_args!("{name}"));
@@ -63,15 +78,21 @@ pub(super) fn widget(
     Ok(())
 }
 
+struct ElementStyle<'a> {
+    classes: &'a [usize],
+    effect: Option<&'a EffectRule>,
+}
+
 fn element_expression(
     out: &mut Out<'_>,
     element: &Element,
-    classes: &[usize],
+    style: &ElementStyle<'_>,
     events: &events::Events,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<Option<Content>, Error> {
+    let classes = style.classes;
     let styled = !classes.is_empty();
     if styled {
         out.push(format_args!("{}styled(", emit.resource_prefix));
@@ -102,6 +123,12 @@ fn element_expression(
     }
     if events.modal {
         out.push(format_args!(".modal(true)"));
+    }
+    if let Some(rule) = style.effect {
+        out.push(format_args!(
+            ".effect(brul::gui::EffectSpec {{ name: {:?}, params: [[0.0; 4]; 16], animated: false }})",
+            rule.name
+        ));
     }
     Ok(content)
 }
@@ -272,6 +299,33 @@ fn content_binding(
     };
     out.line(format_args!(
         "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::{target}({closure})));"
+    ));
+    Ok(())
+}
+
+fn effect_binding(
+    out: &mut Out<'_>,
+    rule: &EffectRule,
+    name: &str,
+    emit: &Emit<'_>,
+    frame: Frame<'_>,
+) -> Result<(), Error> {
+    let mut args = Vec::with_capacity(rule.args.len());
+    for expression in &rule.args {
+        args.push(expression::typed_closure(
+            expression,
+            emit.names,
+            emit.state,
+            emit.prop_types,
+            &emit.scope_defs,
+            frame.scope,
+            &brul_syntax::types::Type::Number,
+        )?);
+    }
+    out.line(format_args!(
+        "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Effect {{ def: crate::BRUL_EFFECT_{}, args: vec![{}] }}));",
+        constant(&rule.name),
+        args.join(", ")
     ));
     Ok(())
 }

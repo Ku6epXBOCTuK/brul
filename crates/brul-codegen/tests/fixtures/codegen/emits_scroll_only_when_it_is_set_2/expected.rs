@@ -99,6 +99,11 @@ pub fn demo_script() -> Option<brul::Script> {
     None
 }
 
+pub fn __brul_effects() -> brul::effect::Effects {
+    brul::effect::Effects::new(&[
+    ])
+}
+
 pub fn demo_window() -> brul::WindowConfig {
     brul::WindowConfig {
         title: "demo".to_owned(),
@@ -111,6 +116,7 @@ pub fn demo_window() -> brul::WindowConfig {
         scroll: true,
         position: None,
         icon: None,
+        effects: __brul_effects(),
         ..brul::WindowConfig::default()
     }
 }

@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use brul_gui::{Image, Texture, WidgetId, WidgetTree};
+use brul_gui::{EffectSpec, Image, Texture, WidgetId, WidgetTree};
 use brul_script::{Component, Value};
 use tracing::error;
 
@@ -116,5 +116,11 @@ pub fn set_flag(
 pub fn set_offset(tree: &mut WidgetTree, widget: WidgetId, x: Option<i32>, y: Option<i32>) {
     if let (Some(x), Some(y)) = (x, y) {
         tree.set_offset(widget, x, y);
+    }
+}
+
+pub fn set_effect(tree: &mut WidgetTree, widget: WidgetId, value: Option<EffectSpec>) {
+    if let Some(value) = value {
+        tree.set_effect(widget, value);
     }
 }

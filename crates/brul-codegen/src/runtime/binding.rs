@@ -2,7 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use brul_gui::{Class, Image, WidgetId, WidgetTree};
+use brul_gpu::effect::EffectDef;
+use brul_gui::{Class, EffectSpec, Image, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 use brul_script::{Component, Dyn, Error as ScriptError, Scope, Value};
 use brul_syntax::TypeName;
@@ -11,7 +12,9 @@ use tracing::error;
 
 use super::ComponentHandle;
 use super::error::ViewError;
-use super::paint::{Textures, set_flag, set_input, set_offset, set_text, set_texture, texture};
+use super::paint::{
+    Textures, set_effect, set_flag, set_input, set_offset, set_text, set_texture, texture,
+};
 
 pub type Expression = fn(&mut Component) -> Result<Dyn, ScriptError>;
 pub type TextExpression = fn(&mut Component) -> Result<String, ScriptError>;
@@ -85,6 +88,10 @@ pub enum BindingTarget {
         table: ClassTable,
         expression: Expression,
     },
+    Effect {
+        def: EffectDef,
+        args: Vec<NumberExpression>,
+    },
 }
 
 pub struct Bindings {
@@ -119,6 +126,7 @@ pub enum Write {
     Visible(Option<bool>),
     Offset(Option<i32>, Option<i32>),
     Class(Option<Box<Class>>),
+    Effect(Option<Box<EffectSpec>>),
 }
 
 pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
@@ -141,6 +149,9 @@ pub fn evaluate(binding: &Binding, textures: &Textures) -> Write {
         BindingTarget::Class { table, expression } => {
             Write::Class(class_value(component, *table, *expression))
         }
+        BindingTarget::Effect { def, args } => {
+            Write::Effect(effect_value(component, *def, args).map(Box::new))
+        }
     }
 }
 
@@ -157,6 +168,7 @@ pub fn write(write: Write, widget: WidgetId, tree: &mut WidgetTree) {
         Write::Class(value) => {
             tree.apply_class(widget, value.as_deref());
         }
+        Write::Effect(value) => set_effect(tree, widget, value.map(|value| *value)),
     }
 }
 
@@ -183,6 +195,28 @@ fn string(component: &RefCell<Component>, expression: TextExpression) -> Option<
 
 fn flag(component: &RefCell<Component>, expression: FlagExpression) -> Option<bool> {
     evaluated(component, expression)
+}
+
+fn effect_value(
+    component: &RefCell<Component>,
+    def: EffectDef,
+    args: &[NumberExpression],
+) -> Option<EffectSpec> {
+    let mut values = Vec::with_capacity(args.len());
+    for expression in args {
+        values.push(evaluated(component, *expression)?);
+    }
+    match def.pack(&values) {
+        Ok(params) => Some(EffectSpec {
+            name: def.name,
+            params,
+            animated: false,
+        }),
+        Err(error) => {
+            error!(%error, "effect parameters failed");
+            None
+        }
+    }
 }
 
 thread_local! {

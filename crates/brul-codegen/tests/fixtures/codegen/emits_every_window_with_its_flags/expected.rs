@@ -137,6 +137,11 @@ pub fn settings_script() -> Option<brul::Script> {
     None
 }
 
+pub fn __brul_effects() -> brul::effect::Effects {
+    brul::effect::Effects::new(&[
+    ])
+}
+
 pub fn picker_window() -> brul::WindowConfig {
     brul::WindowConfig {
         title: "picker".to_owned(),
@@ -149,6 +154,7 @@ pub fn picker_window() -> brul::WindowConfig {
         scroll: true,
         position: None,
         icon: None,
+        effects: __brul_effects(),
         ..brul::WindowConfig::default()
     }
 }
@@ -164,6 +170,7 @@ pub fn settings_window() -> brul::WindowConfig {
         scroll: true,
         position: None,
         icon: None,
+        effects: __brul_effects(),
         ..brul::WindowConfig::default()
     }
 }
