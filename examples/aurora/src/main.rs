@@ -7,6 +7,7 @@ mod generated;
 brul::effect! {
     name: "Aurora",
     shader: "aurora.wgsl",
+    animated: true,
     pub struct AuroraParams {
         phase: f32,
         tint: [f32; 4],
@@ -82,6 +83,7 @@ mod tests {
     #[test]
     fn the_shader_compiles() {
         BRUL_EFFECT_AURORA.compile().expect("valid WGSL");
+        const { assert!(BRUL_EFFECT_AURORA.animated) };
     }
 
     #[test]
@@ -97,6 +99,7 @@ mod tests {
             })
             .expect("effect binding");
         assert_eq!(def.name, "Aurora");
+        assert!(def.animated);
         let values = {
             let mut state = component.borrow_mut();
             args.iter()

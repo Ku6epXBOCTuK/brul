@@ -210,7 +210,7 @@ fn effect_value(
         Ok(params) => Some(EffectSpec {
             name: def.name,
             params,
-            animated: false,
+            animated: def.animated,
         }),
         Err(error) => {
             error!(%error, "effect parameters failed");

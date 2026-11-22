@@ -3,6 +3,7 @@ use brul_command::Kind;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use syn::parse::discouraged::Speculative;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{Generics, Ident, ItemFn, Result, Token, Type};
@@ -41,6 +42,7 @@ pub fn effect(input: TokenStream) -> TokenStream {
 struct EffectDefinition {
     name: syn::LitStr,
     shader: syn::LitStr,
+    animated: bool,
     item: syn::ItemStruct,
 }
 
@@ -60,6 +62,16 @@ impl Parse for EffectDefinition {
         input.parse::<Token![:]>()?;
         let shader: syn::LitStr = input.parse()?;
         input.parse::<Token![,]>()?;
+        let mut animated = false;
+        let ahead = input.fork();
+        if let Ok(key) = ahead.parse::<Ident>()
+            && key == "animated"
+        {
+            ahead.parse::<Token![:]>()?;
+            animated = ahead.parse::<syn::LitBool>()?.value;
+            ahead.parse::<Token![,]>()?;
+            input.advance_to(&ahead);
+        }
         let item: syn::ItemStruct = input.parse()?;
         if !item.generics.params.is_empty() {
             return Err(syn::Error::new_spanned(
@@ -67,7 +79,12 @@ impl Parse for EffectDefinition {
                 "effect parameters cannot be generic",
             ));
         }
-        Ok(EffectDefinition { name, shader, item })
+        Ok(EffectDefinition {
+            name,
+            shader,
+            animated,
+            item,
+        })
     }
 }
 
@@ -177,6 +194,7 @@ fn unsupported(ty: &Type) -> syn::Error {
 fn expand_effect(definition: EffectDefinition) -> Result<TokenStream2> {
     let name = &definition.name;
     let shader = &definition.shader;
+    let animated = definition.animated;
     let ident = &definition.item.ident;
     let syn::Fields::Named(fields) = &definition.item.fields else {
         return Err(syn::Error::new_spanned(
@@ -216,6 +234,7 @@ fn expand_effect(definition: EffectDefinition) -> Result<TokenStream2> {
         impl ::brul::effect::EffectParams for #ident {
             const NAME: &'static str = #name;
             const SHADER: &'static str = include_str!(#shader);
+            const ANIMATED: bool = #animated;
             const SLOTS: u16 = #slots as u16;
             const FIELDS: &'static [::brul::effect::EffectField] = &[
                 #(

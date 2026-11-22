@@ -17,6 +17,7 @@ fn effect_is_bound_to_a_shader_by_name() {
     assert_eq!(<CoverParams as EffectParams>::SLOTS, 5);
     assert_eq!(BRUL_EFFECT_COVER.name, "cover");
     assert_eq!(BRUL_EFFECT_COVER.slots, 5);
+    const { assert!(!BRUL_EFFECT_COVER.animated) };
 }
 
 #[test]

@@ -41,6 +41,7 @@ pub struct EffectField {
 pub struct EffectDef {
     pub name: &'static str,
     pub shader: &'static str,
+    pub animated: bool,
     pub slots: u16,
     pub fields: &'static [EffectField],
 }
@@ -95,11 +96,13 @@ impl EffectDef {
 pub trait EffectParams {
     const NAME: &'static str;
     const SHADER: &'static str;
+    const ANIMATED: bool = false;
     const SLOTS: u16;
     const FIELDS: &'static [EffectField];
     const DEF: EffectDef = EffectDef {
         name: Self::NAME,
         shader: Self::SHADER,
+        animated: Self::ANIMATED,
         slots: Self::SLOTS,
         fields: Self::FIELDS,
     };

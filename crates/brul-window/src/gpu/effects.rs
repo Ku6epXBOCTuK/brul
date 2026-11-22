@@ -283,12 +283,14 @@ mod tests {
             EffectDef {
                 name: "b",
                 shader: "",
+                animated: false,
                 slots: 1,
                 fields: &[],
             },
             EffectDef {
                 name: "a",
                 shader: "",
+                animated: false,
                 slots: 1,
                 fields: &[],
             },

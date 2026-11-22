@@ -112,6 +112,7 @@ fn scalar_arguments_are_packed_by_the_effect_definition() {
     let def = EffectDef {
         name: "cover",
         shader: "",
+        animated: false,
         slots: 2,
         fields: FIELDS,
     };
