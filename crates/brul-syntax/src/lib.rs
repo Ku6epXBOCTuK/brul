@@ -1,4 +1,4 @@
-//! Синтаксис BRUL: SFC-сплиттер и парсеры языков в AST.
+//! `brul-syntax`: SFC splitter and parsers of BRUL languages into the AST.
 
 macro_rules! rule {
     ($vis:vis enum $name:ident { $($variant:ident),* $(,)? }) => {

@@ -1,4 +1,4 @@
-//! Обвязка CLI: разбор аргументов и вывод, генерация живёт в `generate`.
+//! CLI wrapper: argument parsing and output; generation lives in `generate`.
 
 use std::env;
 use std::fmt;

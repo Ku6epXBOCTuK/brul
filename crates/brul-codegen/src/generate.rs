@@ -1,4 +1,4 @@
-//! Единый путь генерации: общий для `build.rs`, CLI и тестов.
+//! Single generation path shared by `build.rs`, the CLI and tests.
 
 use std::fs;
 use std::path::Path;

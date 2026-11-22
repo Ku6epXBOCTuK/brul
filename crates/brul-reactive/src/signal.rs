@@ -4,11 +4,11 @@ use std::rc::Rc;
 
 use crate::graph::{self, Kind};
 
-/// Реактивная ячейка значения.
+/// A reactive value cell.
 ///
-/// Чтение возвращает клон, запись будит подписчиков: memo, прочитавшие сигнал
-/// внутри своего вычисления, помечаются грязными и пересчитываются при
-/// следующем чтении.
+/// Reads return a clone and writes wake subscribers: memos that read the
+/// signal inside their computation are marked dirty and recomputed on the next
+/// read.
 ///
 /// ```
 /// use brul_reactive::Signal;

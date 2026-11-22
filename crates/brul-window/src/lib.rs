@@ -1,15 +1,15 @@
-//! Окно BRUL: winit, wgpu и цикл событий.
+//! BRUL window: winit, wgpu and the event loop.
 //!
-//! [`run`] открывает пустое окно, [`run_tree`] и [`run_tree_themed`] — окно с
-//! деревом виджетов: дерево раскладывается, снапшот рисуется в кадр на CPU и
-//! уходит на wgpu-поверхность одной текстурой. Меняются только dirty-регионы;
-//! размер и DPI перерисовывают весь кадр. [`run_windows`] держит несколько окон
-//! в одном цикле, по состоянию на [`WindowKey`].
+//! [`run`] opens an empty window; [`run_tree`] and [`run_tree_themed`] open a
+//! window with a widget tree: the tree is laid out, the snapshot is drawn into
+//! a CPU frame and uploaded to the wgpu surface as one texture. Only dirty
+//! regions change; resize and DPI redraw the whole frame. [`run_windows`]
+//! keeps several windows in one loop, keyed by [`WindowKey`].
 //!
-//! Конфиг задан в логических пикселях, поверхность — в физических; масштаб
-//! берётся у окна. Высота хедера задаёт зону перетаскивания. Esc и закрытие
-//! окна закрывают окно, последнее окно завершает цикл. winit 0.31-beta прибит
-//! точной версией. Окно создаётся скрытым и показывается после первого кадра.
+//! Config is in logical pixels, the surface in physical ones; scale comes from
+//! the window. Header height defines the drag area. Esc and window close
+//! close the window, and the last window ends the loop. The window is created
+//! hidden and shown after the first frame.
 //!
 //! ```no_run
 //! use brul_window::{WindowConfig, run};

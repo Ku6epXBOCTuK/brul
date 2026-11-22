@@ -1,4 +1,4 @@
-//! Фасад BRUL: запуск приложения, корни окон, общий контекст.
+//! BRUL facade: app startup, window roots and the shared `Handle` context.
 
 pub mod builtins;
 mod each;

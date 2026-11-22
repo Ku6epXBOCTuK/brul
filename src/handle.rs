@@ -34,8 +34,9 @@ pub struct ScopedMessage {
     pub(crate) message: Message,
 }
 
-/// Путь из фонового потока в DSL: `Handle` адресован окну, клонируется,
-/// переживает поток и безопасен после выхода из цикла событий.
+/// A path from a background thread into the DSL: `Handle` is addressed to a
+/// window, cloneable, outlives the thread and is safe after the event loop
+/// exits.
 #[derive(Clone)]
 pub struct Handle {
     queue: Arc<Mutex<Vec<ScopedMessage>>>,
@@ -71,7 +72,7 @@ impl Handle {
         self.call_with(function, Vec::new());
     }
 
-    /// Зовёт функцию скрипта с аргументами и будит цикл событий.
+    /// Calls a script function with `arguments` and wakes the event loop.
     pub fn call_with(&self, function: &str, arguments: Vec<Value>) {
         self.push(Message::Call(function.to_owned(), arguments));
     }

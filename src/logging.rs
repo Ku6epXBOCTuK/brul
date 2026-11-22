@@ -1,4 +1,4 @@
-//! Управляемое логирование движка.
+//! Controlled engine logging via `tracing`.
 
 use std::fs::{self, File};
 use std::io;
@@ -15,18 +15,18 @@ pub use tracing::{debug, error, info, trace, warn};
 
 static INIT: Once = Once::new();
 
-/// Включает лог в файл; уровень задаёт `BRUL_LOG`, путь — `BRUL_LOG_FILE`.
+/// Enables file logging; `BRUL_LOG` sets the level, `BRUL_LOG_FILE` the path.
 ///
-/// По умолчанию уровень `info`, файл лежит в `~/.config/brul/<exe>.log` и
-/// дописывается, поэтому зависание остаётся в нём после перезапуска.
+/// By default the level is `info` and the file is `~/.config/brul/<exe>.log`;
+/// it is appended to, so a hang stays in it after a restart.
 pub fn init() {
     init_with(&[]);
 }
 
-/// То же, что [`init`], но пишет ещё и события перечисленных крейтов.
+/// Same as [`init`], but also logs events from the listed crates.
 ///
-/// Приложению нужно назвать свой крейт: фильтр знает только `brul*` и имя
-/// исполняемого файла.
+/// An app must name its crate: the filter only knows `brul*` and the binary
+/// name.
 pub fn init_with(crates: &[&str]) {
     let crates: Vec<String> = crates.iter().map(|name| name.replace('-', "_")).collect();
     INIT.call_once(|| {

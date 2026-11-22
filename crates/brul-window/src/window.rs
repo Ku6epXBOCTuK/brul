@@ -137,9 +137,9 @@ pub struct ScopedCommand {
     pub command: WindowCommand,
 }
 
-/// Будит цикл событий из другого потока: [`Waker::wake`] безопасен после выхода
-/// из цикла и тогда ничего не делает. [`Waker::command`] адресует команду одному
-/// окну; команда с неизвестным ключом отбрасывается циклом.
+/// Wakes the event loop from another thread: [`Waker::wake`] is safe after the
+/// loop exits and then does nothing. [`Waker::command`] addresses a command to
+/// one window; a command with an unknown key is dropped by the loop.
 #[derive(Clone, Debug)]
 pub struct Waker {
     proxy: EventLoopProxy,

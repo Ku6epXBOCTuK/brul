@@ -1,4 +1,4 @@
-//! Модель стиля BRUL: имена свойств, значения, правила и каскад.
+//! `brul-style`: property names, values, rules and the cascade.
 
 #[macro_export]
 macro_rules! states {

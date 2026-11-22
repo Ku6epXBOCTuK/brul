@@ -1,4 +1,4 @@
-//! Загрузка `.brul`: разбор SFC, реестр компонентов, аргументы окна.
+//! Loading `.brul` files: SFC parsing, component registry, window arguments.
 
 pub mod build;
 pub mod cli;

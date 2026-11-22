@@ -1,4 +1,4 @@
-//! Обвязка `build.rs`: генерация модуля интерфейса в `OUT_DIR`.
+//! `build.rs` wrapper: generates the interface module in `OUT_DIR`.
 
 use std::env;
 use std::fmt;

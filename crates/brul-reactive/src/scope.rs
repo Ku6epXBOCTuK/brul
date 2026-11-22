@@ -7,8 +7,8 @@ thread_local! {
     static SCOPES: RefCell<Vec<Rc<Inner>>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Владелец очисток: эффекты, дочерние области и замыкания [`on_cleanup`]
-/// останавливаются в [`dispose`](Self::dispose), при дропе и вместе с родителем.
+/// Owner of cleanups: effects, child scopes and [`on_cleanup`] closures are
+/// stopped by [`dispose`](Self::dispose), on drop and with the parent.
 ///
 /// ```
 /// use std::cell::Cell;
@@ -87,7 +87,7 @@ impl EffectScope {
         }
     }
 
-    /// Выполняет замыкание, привязывая созданные в нём эффекты к области.
+    /// Runs `f`, binding effects it creates to this scope.
     pub fn run<R>(&self, f: impl FnOnce() -> R) -> R {
         struct Pop;
         impl Drop for Pop {
@@ -103,7 +103,7 @@ impl EffectScope {
         f()
     }
 
-    /// Создаёт дочернюю область; её очистки выполняются вместе с этой.
+    /// Creates a child scope; its cleanups run with this `EffectScope`.
     pub fn child(&self) -> Self {
         let child = EffectScope::new();
         if self.inner.disposed.get() {
@@ -117,9 +117,9 @@ impl EffectScope {
         child
     }
 
-    /// Регистрирует очистку таймера, подписки или другого ресурса. Замыкания
-    /// выполняются в обратном порядке регистрации; на уже освобождённой области
-    /// очистка выполняется сразу.
+    /// Registers a `cleanup` for a timer, subscription or other resource.
+    /// Closures run in reverse registration order; on a disposed scope they
+    /// run immediately.
     pub fn on_cleanup(&self, cleanup: impl FnOnce() + 'static) {
         if self.inner.disposed.get() {
             cleanup();
@@ -128,8 +128,8 @@ impl EffectScope {
         }
     }
 
-    /// Останавливает эффекты области и дочерних областей, выполняет очистки.
-    /// Повторный вызов и дроп после него ничего не делают.
+    /// Stops this scope's and its children's effects, then runs cleanups.
+    /// Repeated calls and a later drop of the `EffectScope` do nothing.
     pub fn dispose(&self) {
         self.inner.dispose();
     }

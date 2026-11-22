@@ -1,4 +1,4 @@
-//! Исполнение скрипт-блока BRUL: значения и окружение компонента.
+//! `brul-script`: execution of script blocks - values and the component environment.
 
 pub mod builtins;
 pub mod component;

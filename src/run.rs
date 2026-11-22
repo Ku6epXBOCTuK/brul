@@ -32,7 +32,7 @@ pub struct WindowDef<T: Theme> {
     pub view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
 }
 
-/// Запускает окна по модулю, сгенерированному из `.brul`.
+/// Runs windows from a module generated out of `.brul`.
 pub fn run_generated<T: Theme>(
     windows: Vec<WindowDef<T>>,
     script: Option<Script>,
@@ -44,8 +44,9 @@ pub fn run_generated<T: Theme>(
     run_generated_with(windows, script, names, theme, seeds, host, |_| {})
 }
 
-/// Как [`run_generated`], но отдаёт [`Handle`] до старта цикла событий:
-/// фоновый поток пишет им в DSL, цикл просыпается и перерисовывает окна.
+/// Like [`run_generated`], but hands out a [`Handle`] before the event loop
+/// starts: a background thread writes DSL through it, the loop wakes and
+/// redraws the windows.
 pub fn run_generated_with<T: Theme>(
     windows: Vec<WindowDef<T>>,
     script: Option<Script>,

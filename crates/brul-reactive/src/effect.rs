@@ -5,11 +5,11 @@ use std::rc::Rc;
 use crate::graph::{self, Kind};
 use crate::scope;
 
-/// Побочный эффект: выполняется при создании и после каждой записи в
-/// прочитанные сигналы — на ближайшем [`flush`].
+/// A side effect: runs on creation and after every write to a signal it read,
+/// at the next [`flush`].
 ///
-/// Дескриптор можно отпустить: пока эффект не остановлен областью, он живёт в
-/// арене и продолжает работу.
+/// The handle can be dropped: while the effect is not stopped by a scope, it
+/// lives in the arena and keeps running.
 ///
 /// ```
 /// use std::cell::RefCell;
@@ -52,11 +52,11 @@ impl Effect {
     }
 }
 
-/// Выполняет запланированные эффекты. Вызывается циклом кадра между
-/// обработкой событий и отрисовкой; внутри [`batch`] ничего не делает.
+/// Runs scheduled effects. The frame loop calls it between event handling and
+/// drawing; inside [`batch`] it does nothing.
 ///
-/// Запись из эффекта планирует ещё один проход того же вызова, а не
-/// перезапускает текущий.
+/// A write from an effect schedules another pass of the same call rather than
+/// restarting the current one.
 ///
 /// ```
 /// use std::cell::Cell;
@@ -98,7 +98,7 @@ pub fn flush() {
     }
 }
 
-/// Копит записи и запускает эффекты один раз в конце внешнего батча.
+/// Collects writes and runs effects once at the end of the outer batch.
 ///
 /// ```
 /// use std::cell::Cell;
@@ -137,7 +137,7 @@ pub fn batch<R>(f: impl FnOnce() -> R) -> R {
     result
 }
 
-/// Выполняет замыкание без подписки на прочитанные сигналы.
+/// Runs a closure without subscribing to the signals it reads.
 ///
 /// ```
 /// use std::cell::Cell;

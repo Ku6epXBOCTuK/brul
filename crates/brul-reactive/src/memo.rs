@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::graph::{self, Kind};
 
-/// Производное значение: считается лениво и кэшируется между проходами.
+/// A derived value, computed lazily and cached between passes.
 ///
 /// ```
 /// use brul_reactive::{Memo, Signal};

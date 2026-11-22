@@ -1,6 +1,6 @@
-//! Точки замера: `measure` получает сброс счётчиков после первого нарисованного
-//! кадра и отчёт после остановки цикла событий, `start` и `startup` меряют путь
-//! до первого кадра.
+//! Measurement points: `measure` gets a counter reset after the first drawn
+//! frame and a report after the event loop stops; `start` and `startup` time
+//! the path to the first frame.
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
