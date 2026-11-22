@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use brul_gui::{
     Atlas, Color, Dirty, DrawCommand, Gradient, Paint, Texture, WidgetId, WidgetSnapshot,
-    draw_commands,
 };
 
 pub const SHADER: &str = include_str!("shader.wgsl");
@@ -108,13 +107,7 @@ pub fn clip_bytes(clips: &[ClipInstance]) -> Vec<u8> {
     bytes
 }
 
-pub fn shape_instances(
-    snapshot: &WidgetSnapshot,
-    clips: &ClipSet,
-    dirty: &Dirty,
-) -> Vec<ShapeInstance> {
-    let mut commands = Vec::new();
-    draw_commands(snapshot, dirty, &mut commands);
+pub fn shape_instances(commands: &[DrawCommand], clips: &ClipSet) -> Vec<ShapeInstance> {
     let mut shapes = Vec::new();
     for command in commands {
         let DrawCommand::Shape(shape) = command else {
@@ -183,13 +176,10 @@ pub fn shape_instances(
 }
 
 pub fn texture_instances(
-    snapshot: &WidgetSnapshot,
+    commands: &[DrawCommand],
     atlas: &Atlas,
     clips: &ClipSet,
-    dirty: &Dirty,
 ) -> TextureBatches {
-    let mut commands = Vec::new();
-    draw_commands(snapshot, dirty, &mut commands);
     let mut glyphs = Vec::new();
     let mut images: Vec<TextureBatch> = Vec::new();
     for command in commands {
@@ -246,13 +236,7 @@ pub fn texture_instances(
     TextureBatches { glyphs, images }
 }
 
-pub fn decoration_instances(
-    snapshot: &WidgetSnapshot,
-    clips: &ClipSet,
-    dirty: &Dirty,
-) -> Vec<ShapeInstance> {
-    let mut commands = Vec::new();
-    draw_commands(snapshot, dirty, &mut commands);
+pub fn decoration_instances(commands: &[DrawCommand], clips: &ClipSet) -> Vec<ShapeInstance> {
     let mut shapes = Vec::new();
     for command in commands {
         let DrawCommand::Rect(decoration) = command else {

@@ -86,10 +86,12 @@ impl FrameCache {
                 full: false,
                 ids: vec![id],
             };
+            let mut commands = Vec::new();
+            brul_gui::draw_commands(snapshot, &one, &mut commands);
             let set = brul_gpu::clip_set(snapshot, &one);
-            let mut shapes = brul_gpu::shape_instances(snapshot, &set, &one);
-            let mut decor = brul_gpu::decoration_instances(snapshot, &set, &one);
-            let mut textures = brul_gpu::texture_instances(snapshot, atlas, &set, &one);
+            let mut shapes = brul_gpu::shape_instances(&commands, &set);
+            let mut decor = brul_gpu::decoration_instances(&commands, &set);
+            let mut textures = brul_gpu::texture_instances(&commands, atlas, &set);
             let current = self.nodes.get(&id).copied().unwrap_or_default();
             let range = ClipRange {
                 offset: (current.slots[CLIP].start / CLIP_INSTANCE_SIZE as usize) as u32,
@@ -279,7 +281,9 @@ mod tests {
             ids: vec![id],
         };
         let clips = brul_gpu::clip_set(&snapshot, &one);
-        let shapes = brul_gpu::shape_instances(&snapshot, &clips, &one);
+        let mut commands = Vec::new();
+        brul_gui::draw_commands(&snapshot, &one, &mut commands);
+        let shapes = brul_gpu::shape_instances(&commands, &clips);
         let slot = cache.nodes[&id].slots[SHAPE];
         let bytes = &cache.buffer(SHAPE)[slot.start..slot.start + INSTANCE_SIZE as usize];
         assert_eq!(bytes, brul_gpu::instance_bytes(&shapes[..1]));

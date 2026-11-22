@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use brul_gpu::{TEXTURE_INSTANCE_SIZE, texture_instance_bytes, texture_instances};
 use brul_gui::{
-    ClipRect, Color, Dimension, Dirty, Image, LayoutStyle, Size, StyleSet, TextEngine, Texture,
-    Vector, Widget, WidgetKind, WidgetStyle, WidgetTree,
+    ClipRect, Color, Dimension, Dirty, DrawCommand, Image, LayoutStyle, Size, StyleSet, TextEngine,
+    Texture, Vector, Widget, WidgetKind, WidgetStyle, WidgetTree, draw_commands,
 };
 
 fn layout(widget: Widget) -> (TextEngine, brul_gui::WidgetSnapshot) {
@@ -29,6 +29,12 @@ fn fixed(width: u32, height: u32) -> LayoutStyle {
     }
 }
 
+fn draw(snapshot: &brul_gui::WidgetSnapshot, dirty: &Dirty) -> Vec<DrawCommand> {
+    let mut commands = Vec::new();
+    draw_commands(snapshot, dirty, &mut commands);
+    commands
+}
+
 #[test]
 fn glyphs_become_mask_instances_tinted_with_the_text_color() {
     let text = Widget::text("A")
@@ -40,10 +46,9 @@ fn glyphs_become_mask_instances_tinted_with_the_text_color() {
     let (engine, snapshot) = layout(text);
 
     let batches = texture_instances(
-        &snapshot,
+        &draw(&snapshot, &Dirty::all()),
         engine.atlas(),
         &brul_gpu::ClipSet::default(),
-        &Dirty::all(),
     );
 
     assert!(!batches.glyphs.is_empty());
@@ -64,7 +69,7 @@ fn a_clip_range_reaches_the_texture_instances() {
     snapshot.nodes[0].clips = vec![ClipRect::new(1, 2, 30, 40, 5)];
     let clips = brul_gpu::clip_set(&snapshot, &Dirty::all());
 
-    let batches = texture_instances(&snapshot, engine.atlas(), &clips, &Dirty::all());
+    let batches = texture_instances(&draw(&snapshot, &Dirty::all()), engine.atlas(), &clips);
 
     assert!(!batches.glyphs.is_empty());
     for instance in &batches.glyphs {
@@ -86,10 +91,9 @@ fn a_tinted_image_is_one_color_instance_with_full_uv() {
     let (engine, snapshot) = layout(image);
 
     let batches = texture_instances(
-        &snapshot,
+        &draw(&snapshot, &Dirty::all()),
         engine.atlas(),
         &brul_gpu::ClipSet::default(),
-        &Dirty::all(),
     );
 
     assert!(batches.glyphs.is_empty());
@@ -118,10 +122,9 @@ fn a_texture_tint_is_combined_with_the_style_tint() {
     let (engine, snapshot) = layout(image);
 
     let batches = texture_instances(
-        &snapshot,
+        &draw(&snapshot, &Dirty::all()),
         engine.atlas(),
         &brul_gpu::ClipSet::default(),
-        &Dirty::all(),
     );
 
     assert_eq!(
@@ -145,10 +148,9 @@ fn an_svg_is_rasterized_on_cpu_and_kept_untinted() {
     let (engine, snapshot) = layout(image);
 
     let batches = texture_instances(
-        &snapshot,
+        &draw(&snapshot, &Dirty::all()),
         engine.atlas(),
         &brul_gpu::ClipSet::default(),
-        &Dirty::all(),
     );
 
     assert_eq!(batches.images.len(), 1);
@@ -171,10 +173,9 @@ fn images_sharing_a_texture_share_one_batch() {
     let (engine, snapshot) = layout(column);
 
     let batches = texture_instances(
-        &snapshot,
+        &draw(&snapshot, &Dirty::all()),
         engine.atlas(),
         &brul_gpu::ClipSet::default(),
-        &Dirty::all(),
     );
 
     assert_eq!(batches.images.len(), 1);
@@ -192,10 +193,9 @@ fn zero_opacity_and_zero_sized_nodes_produce_no_instances() {
     let (engine, snapshot) = layout(hidden);
 
     let batches = texture_instances(
-        &snapshot,
+        &draw(&snapshot, &Dirty::all()),
         engine.atlas(),
         &brul_gpu::ClipSet::default(),
-        &Dirty::all(),
     );
 
     assert!(batches.glyphs.is_empty());
@@ -223,8 +223,8 @@ fn a_dirty_filter_builds_only_changed_glyphs() {
         ids: vec![text_id],
     };
 
-    let none_batches = texture_instances(&snapshot, engine.atlas(), &clips, &none);
-    let text_batches = texture_instances(&snapshot, engine.atlas(), &clips, &only_text);
+    let none_batches = texture_instances(&draw(&snapshot, &none), engine.atlas(), &clips);
+    let text_batches = texture_instances(&draw(&snapshot, &only_text), engine.atlas(), &clips);
 
     assert!(none_batches.glyphs.is_empty());
     assert!(!text_batches.glyphs.is_empty());
@@ -239,10 +239,9 @@ fn instance_bytes_have_one_entry_per_instance() {
     let image = Widget::image(texture).with_layout(fixed(8, 8));
     let (engine, snapshot) = layout(image);
     let batches = texture_instances(
-        &snapshot,
+        &draw(&snapshot, &Dirty::all()),
         engine.atlas(),
         &brul_gpu::ClipSet::default(),
-        &Dirty::all(),
     );
 
     let bytes = texture_instance_bytes(&batches.images[0].instances);

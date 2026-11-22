@@ -55,17 +55,26 @@ fn two_node_snapshot() -> brul_gui::WidgetSnapshot {
     tree.snapshot().expect("snapshot").clone()
 }
 
+fn draw(snapshot: &brul_gui::WidgetSnapshot, dirty: &Dirty) -> Vec<DrawCommand> {
+    let mut commands = Vec::new();
+    draw_commands(snapshot, dirty, &mut commands);
+    commands
+}
+
 #[test]
 fn a_dirty_filter_builds_only_changed_shapes() {
     let snapshot = two_node_snapshot();
-    let full = shape_instances(&snapshot, &brul_gpu::ClipSet::default(), &Dirty::all());
+    let full = shape_instances(
+        &draw(&snapshot, &Dirty::all()),
+        &brul_gpu::ClipSet::default(),
+    );
     assert_eq!(full.len(), 2);
     let dirty = Dirty {
         full: false,
         ids: vec![snapshot.nodes.last().expect("node").id],
     };
 
-    let shapes = shape_instances(&snapshot, &brul_gpu::ClipSet::default(), &dirty);
+    let shapes = shape_instances(&draw(&snapshot, &dirty), &brul_gpu::ClipSet::default());
 
     assert_eq!(shapes, vec![*full.last().expect("shape")]);
 }
@@ -117,7 +126,10 @@ fn a_solid_node_becomes_one_shape_with_border_coverage() {
         2,
     );
 
-    let shapes = shape_instances(&snapshot, &brul_gpu::ClipSet::default(), &Dirty::all());
+    let shapes = shape_instances(
+        &draw(&snapshot, &Dirty::all()),
+        &brul_gpu::ClipSet::default(),
+    );
     assert_eq!(shapes.len(), 1);
     assert_eq!(shapes[0].bounds, [0.0, 0.0, 20.0, 20.0]);
     assert_eq!(shapes[0].params, [4.0, 0.0, 0.0, 0.5]);
@@ -147,7 +159,10 @@ fn a_shadow_adds_a_separate_padded_instance() {
         0,
     );
 
-    let shapes = shape_instances(&snapshot, &brul_gpu::ClipSet::default(), &Dirty::all());
+    let shapes = shape_instances(
+        &draw(&snapshot, &Dirty::all()),
+        &brul_gpu::ClipSet::default(),
+    );
     assert_eq!(shapes.len(), 2);
     assert_eq!(shapes[0].extra, [0.0, 2.0, 3.0, 2.0]);
     assert_eq!(shapes[0].padding[0], 7.0);
@@ -190,7 +205,7 @@ fn clip_ranges_are_flattened_and_encoded_into_shapes() {
         }
     );
 
-    let shapes = shape_instances(&first, &clips, &Dirty::all());
+    let shapes = shape_instances(&draw(&first, &Dirty::all()), &clips);
     assert_eq!(shapes.len(), 2);
     assert_eq!(shapes[0].padding, [1.0, 0.0, 0.0, 0.0]);
     assert_eq!(shapes[1].padding, [1.0, 0.0, 2.0, 0.0]);
@@ -214,7 +229,7 @@ fn input_decorations_become_unfilled_shapes() {
     });
     let clips = clip_set(&snapshot, &Dirty::all());
 
-    let shapes = decoration_instances(&snapshot, &clips, &Dirty::all());
+    let shapes = decoration_instances(&draw(&snapshot, &Dirty::all()), &clips);
     assert_eq!(shapes.len(), 2);
     assert_eq!(shapes[0].bounds, [1.0, 2.0, 5.0, 3.0]);
     assert_eq!(shapes[0].fill[3], 60.0 / 255.0);
@@ -252,8 +267,8 @@ fn instances_are_a_projection_of_the_draw_commands() {
 
     let mut commands = Vec::new();
     draw_commands(&snapshot, &Dirty::all(), &mut commands);
-    let shapes = shape_instances(&snapshot, &clips, &Dirty::all());
-    let decor = decoration_instances(&snapshot, &clips, &Dirty::all());
+    let shapes = shape_instances(&commands, &clips);
+    let decor = decoration_instances(&commands, &clips);
 
     let command_shapes: Vec<_> = commands
         .iter()
@@ -303,7 +318,10 @@ fn a_gradient_sets_the_angle_and_end_colors() {
         0,
     );
 
-    let shapes = shape_instances(&snapshot, &brul_gpu::ClipSet::default(), &Dirty::all());
+    let shapes = shape_instances(
+        &draw(&snapshot, &Dirty::all()),
+        &brul_gpu::ClipSet::default(),
+    );
     assert_eq!(shapes.len(), 1);
     assert_eq!(shapes[0].extra[0], 90.0);
     assert_eq!(shapes[0].from[0], 10.0 / 255.0);
