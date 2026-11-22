@@ -12,6 +12,7 @@ brul-reactive = { workspace = true }
 brul-script = { workspace = true }
 brul-syntax = { workspace = true }
 brul-window = { workspace = true }
+brul-widget-schema = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 syn = { workspace = true }

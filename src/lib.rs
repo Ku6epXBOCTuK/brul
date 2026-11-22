@@ -23,7 +23,7 @@ pub use brul_codegen::runtime::{
 pub use brul_gpu::effect;
 pub use brul_gui as gui;
 pub use brul_gui::{Theme, UnknownTheme};
-pub use brul_macros::{command, effect, host};
+pub use brul_macros::{command, effect, host, widget};
 pub use brul_reactive::Signal;
 pub use brul_script::{
     Component, Dyn, Error, EventCall, Fields, FunctionName, Host, HostCommand, Items, Scope,

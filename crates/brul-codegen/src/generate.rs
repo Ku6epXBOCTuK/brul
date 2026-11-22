@@ -8,6 +8,7 @@ use brul_syntax::error::Error;
 
 use crate::commands::{self, Commands};
 use crate::emit::{self, Module};
+use crate::widgets::{self, Widgets};
 use crate::{error_at, parse_source};
 
 pub fn generate(entry: &Path, root: &Path) -> Result<Module, Error> {
@@ -21,10 +22,24 @@ pub fn generate(entry: &Path, root: &Path) -> Result<Module, Error> {
 }
 
 pub fn generate_with(entry: &Path, commands: &Commands) -> Result<Module, Error> {
-    if is_application(entry)? {
-        emit::split_module_file_with_commands(entry, commands)
+    let dir = entry.parent().unwrap_or(Path::new(".")).join("src");
+    let widgets = if dir.is_dir() {
+        widgets::collect(&dir)?
     } else {
-        emit::split_component_file_with_commands(entry, commands)
+        Widgets::new()
+    };
+    generate_with_widgets(entry, commands, &widgets)
+}
+
+pub fn generate_with_widgets(
+    entry: &Path,
+    commands: &Commands,
+    widgets: &Widgets,
+) -> Result<Module, Error> {
+    if is_application(entry)? {
+        emit::split_module_file_with_widgets(entry, commands, widgets)
+    } else {
+        emit::split_component_file_with_widgets(entry, commands, widgets)
     }
 }
 

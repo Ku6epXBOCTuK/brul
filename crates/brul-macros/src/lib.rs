@@ -6,7 +6,7 @@ use quote::{format_ident, quote};
 use syn::parse::discouraged::Speculative;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{Generics, Ident, ItemFn, Result, Token, Type};
+use syn::{FnArg, Generics, Ident, ItemFn, LitStr, Pat, Result, ReturnType, Token, Type};
 
 #[proc_macro_attribute]
 pub fn command(attribute: TokenStream, item: TokenStream) -> TokenStream {
@@ -37,6 +37,167 @@ pub fn effect(input: TokenStream) -> TokenStream {
         Ok(tokens) => tokens.into(),
         Err(error) => error.to_compile_error().into(),
     }
+}
+
+#[proc_macro_attribute]
+pub fn widget(attribute: TokenStream, item: TokenStream) -> TokenStream {
+    let arguments = syn::parse_macro_input!(attribute as WidgetArguments);
+    let function = syn::parse_macro_input!(item as ItemFn);
+    match expand_widget(arguments, function) {
+        Ok(tokens) => tokens.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
+}
+
+struct WidgetArguments;
+
+impl Parse for WidgetArguments {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut name = None;
+        let mut events = 0;
+        for argument in Punctuated::<WidgetArgument, Token![,]>::parse_terminated(input)? {
+            match argument {
+                WidgetArgument::Name(value) => name = Some(value),
+                WidgetArgument::Events(count) => events = count,
+            }
+        }
+        let _ = (name, events);
+        Ok(Self)
+    }
+}
+
+enum WidgetArgument {
+    Name(LitStr),
+    Events(usize),
+}
+
+impl Parse for WidgetArgument {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let key: Ident = input.parse()?;
+        if key == "name" {
+            input.parse::<Token![=]>()?;
+            return Ok(Self::Name(input.parse()?));
+        }
+        if key == "events" {
+            let content;
+            syn::parenthesized!(content in input);
+            let events = Punctuated::<WidgetEvent, Token![,]>::parse_terminated(&content)?;
+            return Ok(Self::Events(events.len()));
+        }
+        Err(syn::Error::new(key.span(), "expected `name` or `events`"))
+    }
+}
+
+struct WidgetEvent;
+
+impl Parse for WidgetEvent {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let _: Ident = input.parse()?;
+        input.parse::<Token![:]>()?;
+        let content;
+        syn::bracketed!(content in input);
+        let _: Punctuated<Ident, Token![,]> = Punctuated::parse_terminated(&content)?;
+        Ok(Self)
+    }
+}
+
+fn expand_widget(_arguments: WidgetArguments, function: ItemFn) -> Result<TokenStream2> {
+    if !function.sig.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &function.sig.generics,
+            "a widget cannot be generic",
+        ));
+    }
+    let mut inputs = function.sig.inputs.iter();
+    for _ in 0..3 {
+        if !matches!(inputs.next(), Some(FnArg::Typed(_))) {
+            return Err(syn::Error::new_spanned(
+                &function.sig,
+                "a widget takes theme, build and component first",
+            ));
+        }
+    }
+    let mut names = Vec::new();
+    let mut bindings = Vec::new();
+    for input in inputs {
+        let FnArg::Typed(argument) = input else {
+            return Err(syn::Error::new_spanned(input, "a widget has no receiver"));
+        };
+        let Pat::Ident(pattern) = &*argument.pat else {
+            return Err(syn::Error::new_spanned(
+                &*argument.pat,
+                "a widget prop needs a name",
+            ));
+        };
+        let name = &pattern.ident;
+        let key = LitStr::new(&name.to_string(), name.span());
+        let ty = &*argument.ty;
+        let binding = match brul_command::kind(ty) {
+            Kind::String if matches!(ty, Type::Reference(_)) => {
+                return Err(syn::Error::new_spanned(
+                    ty,
+                    "a widget prop cannot be borrowed",
+                ));
+            }
+            Kind::String => quote! {
+                let #name: String = component.borrow_mut().seed(#key, __position)?;
+            },
+            Kind::Number => quote! {
+                let #name: #ty = component.borrow_mut().seed::<f64>(#key, __position)? as #ty;
+            },
+            Kind::Bool => quote! {
+                let #name: bool = component.borrow_mut().seed(#key, __position)?;
+            },
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    ty,
+                    "a widget prop must be Number, String or Bool",
+                ));
+            }
+        };
+        names.push(name);
+        bindings.push(binding);
+    }
+    let name = function.sig.ident.clone();
+    let wrapper = format_ident!("__brul_widget_{}", snake(&name.to_string()));
+    let call = quote! { #name(theme, build, component #(, #names)*) };
+    let result = if is_result(&function.sig.output) {
+        call
+    } else {
+        quote! { ::std::result::Result::Ok(#call) }
+    };
+    let attrs = &function.attrs;
+    let visibility = &function.vis;
+    let signature = &function.sig;
+    let body = &function.block;
+    Ok(quote! {
+        #(#attrs)*
+        #visibility #signature #body
+
+        #[doc(hidden)]
+        pub fn #wrapper(
+            theme: Option<&str>,
+            build: &mut ::brul::Build,
+            component: &::brul::ComponentHandle,
+        ) -> ::std::result::Result<::brul::Built, ::brul::ViewError> {
+            let __position = ::brul::ast::Position { line: 0, column: 0 };
+            #(#bindings)*
+            #result
+        }
+    })
+}
+
+fn is_result(output: &ReturnType) -> bool {
+    let ReturnType::Type(_, ty) = output else {
+        return false;
+    };
+    let Type::Path(path) = &**ty else {
+        return false;
+    };
+    path.path
+        .segments
+        .last()
+        .is_some_and(|segment| segment.ident == "Result")
 }
 
 struct EffectDefinition {

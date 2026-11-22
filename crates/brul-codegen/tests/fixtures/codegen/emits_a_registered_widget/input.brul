@@ -1,0 +1,9 @@
+<script>
+    function changed(amount: Number): Void { }
+</script>
+
+<markup>
+window GaugeDemo (title: "gauge") {
+    Gauge (value: 42, label: "load", on changed: changed)
+}
+</markup>

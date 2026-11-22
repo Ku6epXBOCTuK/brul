@@ -510,7 +510,7 @@ fn write(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn arguments(
+pub(super) fn arguments(
     out: &mut Out<'_>,
     field: &str,
     arguments: &[(&str, &PropType, &Expr)],

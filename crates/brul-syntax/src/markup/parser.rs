@@ -2,11 +2,11 @@ use crate::ast::Position;
 use crate::cursor::Cursor;
 use crate::error::{Error, Expected};
 use crate::lexer::Span;
+use crate::markup::Widget;
 use crate::markup::ast::{
     Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element, Event,
     EventParam, File, IfBlock, Member, Prop, PropType, Slot,
 };
-use crate::markup::widget::Widget;
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
     let mut cursor = Cursor::new(source);
@@ -101,10 +101,13 @@ impl Cursor<'_> {
         } else {
             Vec::new()
         };
+        self.skip_trivia();
         let block = if widget.is_some_and(Widget::is_leaf) {
             self.leaf_block(&name)?
-        } else {
+        } else if widget.is_some() || args.is_empty() || self.peek() == Some('{') {
             self.block()?
+        } else {
+            Block { items: Vec::new() }
         };
         Ok(Element {
             name,

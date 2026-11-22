@@ -2,7 +2,7 @@ use crate::ast::{Expr, Position};
 
 pub use crate::types::Type as PropType;
 
-use super::widget::Widget;
+use super::Widget;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct File {

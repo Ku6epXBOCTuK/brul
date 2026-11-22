@@ -1,0 +1,7 @@
+<markup>
+window Demo (title: "demo") {
+    Gauge (value: 42, label: "load") {
+        Text { "child" }
+    }
+}
+</markup>

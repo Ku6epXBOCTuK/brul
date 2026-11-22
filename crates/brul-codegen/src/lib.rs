@@ -11,6 +11,7 @@ mod loader;
 pub mod runtime;
 mod source;
 pub mod styles;
+mod widgets;
 mod window;
 
 pub use commands::{Command, Commands};

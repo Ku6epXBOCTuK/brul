@@ -18,3 +18,4 @@ material-colors = { workspace = true }
 [build-dependencies]
 brul-lang-gen = { workspace = true }
 brul-style-gen = { workspace = true }
+brul-widget-gen = { workspace = true }

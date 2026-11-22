@@ -79,6 +79,8 @@ brul-style-gen = { path = 'crates\brul-style-gen' }
 brul-style-schema = { path = 'crates\brul-style-schema' }
 brul-syntax = { path = 'crates\brul-syntax' }
 brul-window = { path = 'crates\brul-window' }
+brul-widget-gen = { path = 'crates\brul-widget-gen' }
+brul-widget-schema = { path = 'crates\brul-widget-schema' }
 cosmic-text = "0.19.0"
 criterion = { version = "0.8.2", default-features = false }
 heck = "0.5.0"

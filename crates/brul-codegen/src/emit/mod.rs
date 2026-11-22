@@ -6,6 +6,7 @@ use brul_syntax::script::Program;
 use brul_syntax::style::{EffectRule, Stylesheet};
 use brul_syntax::types::Type;
 
+use crate::widgets::Widgets;
 use crate::{Import, Registry, Resource};
 
 pub(super) use structure::StructureNames;
@@ -40,9 +41,11 @@ pub use state::State;
 pub use alloc::allocations;
 pub use expression::operation;
 pub use module::{
-    GeneratedFile, Module, ResourceFile, component_file, component_file_with_commands, module,
-    module_file, module_file_with_commands, module_with_commands,
-    split_component_file_with_commands, split_module_file, split_module_file_with_commands,
+    GeneratedFile, Module, ResourceFile, component_file, component_file_with_commands,
+    component_file_with_widgets, module, module_file, module_file_with_commands,
+    module_file_with_widgets, module_with_commands, module_with_widgets,
+    split_component_file_with_commands, split_component_file_with_widgets, split_module_file,
+    split_module_file_with_commands, split_module_file_with_widgets,
 };
 pub(super) use out::Out;
 
@@ -77,6 +80,7 @@ pub(super) struct Emit<'a> {
     state: &'a State,
     prop_types: &'a HashMap<String, Type>,
     program: Option<&'a Program>,
+    widgets: &'a Widgets,
     scope_defs: Vec<ScopeInfo>,
     functions: &'a mut Vec<String>,
     bases: &'a [String],
@@ -97,6 +101,7 @@ struct EmitSources<'a> {
     state: &'a State,
     prop_types: &'a HashMap<String, Type>,
     program: Option<&'a Program>,
+    widgets: &'a Widgets,
     base: &'a str,
     resource_prefix: &'a str,
 }
@@ -133,6 +138,7 @@ impl<'a> Emit<'a> {
             prop_types: sources.prop_types,
             scope_defs: Vec::new(),
             program: sources.program,
+            widgets: sources.widgets,
             functions: outputs.functions,
             bases: outputs.bases,
             structures: outputs.structures,

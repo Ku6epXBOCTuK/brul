@@ -17,6 +17,7 @@ use crate::error_at;
 use crate::loader::Import;
 use crate::runtime::HandlerEvent;
 use crate::source::Script;
+use crate::widgets::Widgets;
 use crate::{Definition, Registry, Resource};
 
 use super::Emit;
@@ -60,7 +61,15 @@ pub fn module(source: &str) -> Result<String, Error> {
 }
 
 pub fn module_with_commands(source: &str, commands: &Commands) -> Result<String, Error> {
-    let module = module_at(source, None, false, None, commands)?;
+    module_with_widgets(source, commands, &Widgets::new())
+}
+
+pub fn module_with_widgets(
+    source: &str,
+    commands: &Commands,
+    widgets: &Widgets,
+) -> Result<String, Error> {
+    let module = module_at(source, None, false, None, commands, widgets)?;
     Ok(module.flat)
 }
 
@@ -70,7 +79,15 @@ pub fn module_file(path: &Path) -> Result<String, Error> {
 }
 
 pub fn module_file_with_commands(path: &Path, commands: &Commands) -> Result<String, Error> {
-    let module = split_module_file_with_commands(path, commands)?;
+    module_file_with_widgets(path, commands, &Widgets::new())
+}
+
+pub fn module_file_with_widgets(
+    path: &Path,
+    commands: &Commands,
+    widgets: &Widgets,
+) -> Result<String, Error> {
+    let module = split_module_file_with_widgets(path, commands, widgets)?;
     Ok(module.flat)
 }
 
@@ -79,6 +96,14 @@ pub fn split_module_file(path: &Path) -> Result<Module, Error> {
 }
 
 pub fn split_module_file_with_commands(path: &Path, commands: &Commands) -> Result<Module, Error> {
+    split_module_file_with_widgets(path, commands, &Widgets::new())
+}
+
+pub fn split_module_file_with_widgets(
+    path: &Path,
+    commands: &Commands,
+    widgets: &Widgets,
+) -> Result<Module, Error> {
     let position = Position { line: 1, column: 1 };
     let source = fs::read_to_string(path).map_err(|error| {
         error_at(
@@ -86,7 +111,7 @@ pub fn split_module_file_with_commands(path: &Path, commands: &Commands) -> Resu
             format!("cannot read '{}': {error}", path.display()),
         )
     })?;
-    module_at(&source, path.parent(), true, Some(path), commands)
+    module_at(&source, path.parent(), true, Some(path), commands, widgets)
 }
 
 pub fn component_file(path: &Path) -> Result<String, Error> {
@@ -94,18 +119,37 @@ pub fn component_file(path: &Path) -> Result<String, Error> {
 }
 
 pub fn component_file_with_commands(path: &Path, commands: &Commands) -> Result<String, Error> {
-    Ok(split_component_file_with_commands(path, commands)?.flat)
+    component_file_with_widgets(path, commands, &Widgets::new())
+}
+
+pub fn component_file_with_widgets(
+    path: &Path,
+    commands: &Commands,
+    widgets: &Widgets,
+) -> Result<String, Error> {
+    Ok(split_component_file_with_widgets(path, commands, widgets)?.flat)
 }
 
 pub fn split_component_file_with_commands(
     path: &Path,
     commands: &Commands,
 ) -> Result<Module, Error> {
+    split_component_file_with_widgets(path, commands, &Widgets::new())
+}
+
+pub fn split_component_file_with_widgets(
+    path: &Path,
+    commands: &Commands,
+    widgets: &Widgets,
+) -> Result<Module, Error> {
     let (registry, entry) = crate::load_entry(path)?;
     let command_names = commands::names(commands);
     validate_components(&registry.definitions, &command_names)?;
     let source = crate::Source::empty();
-    let names = names::table(&source, &registry.definitions);
+    let mut names = names::table(&source, &registry.definitions);
+    for name in crate::widgets::names(widgets) {
+        names.intern(name);
+    }
     let mut used = HashSet::new();
     let bases: Vec<String> = registry
         .definitions
@@ -123,7 +167,7 @@ pub fn split_component_file_with_commands(
         &registry,
         &bases,
         &names,
-        commands,
+        &Discovery { commands, widgets },
         &mut sinks,
     )?;
     let source = emitted.file.source;
@@ -143,6 +187,7 @@ fn module_at(
     _split: bool,
     entry: Option<&Path>,
     commands: &Commands,
+    widgets: &Widgets,
 ) -> Result<Module, Error> {
     let parsed = crate::parse_source(source)?;
     let declaration = parsed
@@ -157,7 +202,10 @@ fn module_at(
     }
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
-    let names = names::table(&parsed, &registry.definitions);
+    let mut names = names::table(&parsed, &registry.definitions);
+    for name in crate::widgets::names(widgets) {
+        names.intern(name);
+    }
     let root_props = names::declared(&declaration.members);
     let mut root_external = names::declared_events(&declaration.members);
     let command_names = commands::names(commands);
@@ -265,6 +313,7 @@ fn module_at(
                 program: view.program,
                 base: &view.base,
                 resource_prefix: &prefix,
+                widgets,
             },
             EmitOutputs {
                 functions: &mut functions,
@@ -319,7 +368,7 @@ fn module_at(
             &registry,
             &definition_bases,
             &names,
-            commands,
+            &Discovery { commands, widgets },
             &mut sinks,
         )?;
         files.push(emitted.file);
@@ -424,13 +473,18 @@ struct ComponentSinks<'a> {
     scripts: Option<&'a mut Vec<GeneratedFile>>,
 }
 
+struct Discovery<'a> {
+    commands: &'a Commands,
+    widgets: &'a Widgets,
+}
+
 fn emit_component(
     definition: &Definition,
     base: &str,
     registry: &Registry,
     bases: &[String],
     names: &Names<'_>,
-    commands: &Commands,
+    discovery: &Discovery<'_>,
     sinks: &mut ComponentSinks<'_>,
 ) -> Result<ComponentOutput, Error> {
     let root = definition_root(definition)?;
@@ -444,7 +498,7 @@ fn emit_component(
         definition.program.as_ref(),
         &state_type(&format!("{prefix}script")),
     )?
-    .with_commands(commands);
+    .with_commands(discovery.commands);
     let component_prop_types = prop_types(&definition.declaration.members);
     body.push_str(HEADER);
     emit_view(
@@ -465,6 +519,7 @@ fn emit_component(
             program: definition.program.as_ref(),
             base,
             resource_prefix: &prefix,
+            widgets: discovery.widgets,
         },
         EmitOutputs {
             functions: &mut functions,

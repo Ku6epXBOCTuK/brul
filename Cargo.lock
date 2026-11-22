@@ -242,6 +242,7 @@ dependencies = [
  "brul-script",
  "brul-style-gen",
  "brul-syntax",
+ "brul-widget-schema",
  "brul-window",
  "syn 2.0.119",
  "thiserror 2.0.21",
@@ -370,11 +371,23 @@ dependencies = [
  "brul-lang-gen",
  "brul-style",
  "brul-style-gen",
+ "brul-widget-gen",
  "material-colors",
  "pest",
  "pest_derive",
  "thiserror 2.0.21",
 ]
+
+[[package]]
+name = "brul-widget-gen"
+version = "0.1.0"
+dependencies = [
+ "brul-widget-schema",
+]
+
+[[package]]
+name = "brul-widget-schema"
+version = "0.1.0"
 
 [[package]]
 name = "brul-window"

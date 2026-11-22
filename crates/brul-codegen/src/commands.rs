@@ -126,7 +126,7 @@ pub fn names(commands: &Commands) -> Vec<&str> {
     names
 }
 
-fn rust_sources(dir: &Path) -> Result<Vec<PathBuf>, std::io::Error> {
+pub(super) fn rust_sources(dir: &Path) -> Result<Vec<PathBuf>, std::io::Error> {
     let mut found = Vec::new();
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();

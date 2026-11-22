@@ -1,0 +1,5 @@
+<markup>
+window Demo (title: "demo") {
+    Gauge (value: 42, missing: 1)
+}
+</markup>
