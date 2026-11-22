@@ -1,6 +1,7 @@
 use super::frame::{HitScratch, collect_hit, common_prefix};
 use super::render::max_scroll_offset;
 use super::*;
+use crate::Cursor;
 
 impl WidgetTree {
     pub fn wheel(&mut self, x: i32, y: i32, dy: i32) -> bool {
@@ -36,6 +37,17 @@ impl WidgetTree {
         self.stale.insert(target);
         self.invalidate();
         true
+    }
+
+    pub fn cursor(&self) -> Cursor {
+        self.hovered
+            .iter()
+            .rev()
+            .find_map(|slot| {
+                let cursor = self.nodes[slot.index()].style().cursor;
+                (cursor != Cursor::Default).then_some(cursor)
+            })
+            .unwrap_or_default()
     }
 
     pub fn pointer_moved(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {

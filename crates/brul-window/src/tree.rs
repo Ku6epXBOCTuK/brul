@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{CaretArea, Size, TextEngine, WidgetEvent, WidgetTree};
+use brul_gui::{CaretArea, Cursor, Size, TextEngine, WidgetEvent, WidgetTree};
 use tracing::{error, info};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -52,6 +52,7 @@ pub(crate) struct TreeApp {
     error: Rc<Cell<Option<WindowError>>>,
     pub(crate) timers: Vec<Timer>,
     cursor: (i32, i32),
+    shown_cursor: Cursor,
     tick: Instant,
     next_frame: Instant,
     clipboard: Option<String>,
@@ -107,6 +108,7 @@ pub(crate) fn tree_app(
         error,
         timers: Vec::new(),
         cursor: (0, 0),
+        shown_cursor: Cursor::default(),
         tick: Instant::now(),
         next_frame: Instant::now(),
         clipboard: None,
@@ -229,8 +231,20 @@ impl TreeApp {
 
     pub(crate) fn apply(&mut self, commands: &[WindowCommand]) -> Step {
         match self.window.clone() {
-            Some(window) => self.run_commands(&window, commands),
+            Some(window) => {
+                let step = self.run_commands(&window, commands);
+                self.sync_cursor(&window);
+                step
+            }
             None => Step::Continue,
+        }
+    }
+
+    pub(crate) fn sync_cursor(&mut self, surface: &dyn Surface) {
+        let cursor = self.tree.borrow().cursor();
+        if cursor != self.shown_cursor {
+            self.shown_cursor = cursor;
+            surface.set_cursor(cursor);
         }
     }
 

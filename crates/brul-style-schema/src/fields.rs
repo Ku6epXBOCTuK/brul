@@ -331,6 +331,14 @@ pub static FIELDS: &[FieldSpec] = &[
         &[patch("scroll", 12, Converter::Raw)],
     ),
     field(
+        StyleOwner::Widget,
+        "cursor",
+        FieldType::Cursor,
+        FieldDefault::Default,
+        TweenKind::None,
+        &[patch("cursor", 16, Converter::Cursor)],
+    ),
+    field(
         StyleOwner::Text,
         "family",
         FieldType::OptionString,

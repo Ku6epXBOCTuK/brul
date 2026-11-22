@@ -3,8 +3,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{
-    Atlas, Dirty, KeyPress, Size, TextEngine, TimerOwner, Widget, WidgetError, WidgetEvent,
-    WidgetSnapshot, WidgetTree,
+    Atlas, Cursor, Dimension, Dirty, KeyPress, LayoutStyle, Size, StyleSet, TextEngine, TimerOwner,
+    Widget, WidgetError, WidgetEvent, WidgetSnapshot, WidgetStyle, WidgetTree,
 };
 use winit::event_loop::ControlFlow;
 
@@ -22,6 +22,7 @@ struct FakeSurface {
     visible: Cell<Option<bool>>,
     on_top: Cell<Option<bool>>,
     focus: Cell<usize>,
+    cursors: RefCell<Vec<Cursor>>,
 }
 
 impl FakeSurface {
@@ -34,6 +35,7 @@ impl FakeSurface {
             visible: Cell::new(None),
             on_top: Cell::new(None),
             focus: Cell::new(0),
+            cursors: RefCell::new(Vec::new()),
         }
     }
 }
@@ -68,6 +70,10 @@ impl Surface for FakeSurface {
     }
 
     fn pre_present_notify(&self) {}
+
+    fn set_cursor(&self, cursor: Cursor) {
+        self.cursors.borrow_mut().push(cursor);
+    }
 }
 
 struct FakeRenderer {
@@ -171,6 +177,35 @@ fn commands(commands: Vec<WindowCommand>) -> EventHandler {
     Box::new(move |_| commands.clone())
 }
 
+fn cursor_app(cursor: Cursor) -> (TreeApp, FakeSurface) {
+    let mut app = tree_app(commands(Vec::new()));
+    let widget = Widget::column(vec![])
+        .with_layout(LayoutStyle {
+            width: Dimension::Px(8),
+            height: Dimension::Px(6),
+            ..LayoutStyle::default()
+        })
+        .with_styles(StyleSet::new(WidgetStyle {
+            cursor,
+            ..WidgetStyle::default()
+        }));
+    *app.tree.borrow_mut() = WidgetTree::new(widget);
+    let mut engine = TextEngine::new();
+    app.tree
+        .borrow_mut()
+        .layout(
+            &mut engine,
+            Size {
+                width: 8,
+                height: 6,
+            },
+            1.0,
+        )
+        .expect("layout");
+    app.engine = Some(engine);
+    (app, FakeSurface::new(1.0))
+}
+
 #[test]
 fn an_input_after_a_rebuild_lays_the_tree_out_instead_of_failing() {
     let mut app = tree_app(commands(Vec::new()));
@@ -229,6 +264,32 @@ fn an_empty_event_list_changes_nothing() {
     assert_eq!(app.dispatch_events(&surface, Vec::new()), Step::Continue);
     assert_eq!(surface.drags.get(), 0);
     assert_eq!(surface.redraws.get(), 0);
+}
+
+#[test]
+fn a_hovered_cursor_is_installed_once_and_restored_on_leave() {
+    let (mut app, surface) = cursor_app(Cursor::Text);
+
+    assert_eq!(app.handle(&surface, Input::Moved(1.0, 1.0)), Step::Continue);
+    assert_eq!(surface.cursors.borrow().as_slice(), &[Cursor::Text]);
+    app.handle(&surface, Input::Moved(2.0, 2.0));
+    assert_eq!(surface.cursors.borrow().len(), 1);
+    app.handle(&surface, Input::Left);
+    assert_eq!(
+        surface.cursors.borrow().as_slice(),
+        &[Cursor::Text, Cursor::Default]
+    );
+}
+
+#[test]
+fn a_default_cursor_does_not_touch_the_window_cursor() {
+    let (mut app, surface) = cursor_app(Cursor::Default);
+
+    app.handle(&surface, Input::Moved(1.0, 1.0));
+    app.handle(&surface, Input::Down(1.0, 1.0));
+    app.handle(&surface, Input::Left);
+
+    assert!(surface.cursors.borrow().is_empty());
 }
 
 #[test]

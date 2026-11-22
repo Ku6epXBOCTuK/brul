@@ -90,6 +90,7 @@ fn keyword_fn(ty: FieldType) -> Ident {
         FieldType::GridAutoFlow => "grid_auto_flow",
         FieldType::TextAlign => "text_align",
         FieldType::VerticalAlign => "vertical_align",
+        FieldType::Cursor => "cursor",
         _ => unreachable!("keyword properties map to keyword fields"),
     };
     ident(name)

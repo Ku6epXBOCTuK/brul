@@ -54,6 +54,7 @@ macro_rules! errors {
 
 goldens! {
     a_component_file_resolves_its_imports,
+    emits_a_cursor_property,
     a_palette_without_themes_emits_an_empty_theme_id,
     a_window_icon_resource_reaches_the_window_config,
     accepts_host_calls_with_declared_variables_at_build,

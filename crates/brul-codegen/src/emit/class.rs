@@ -88,7 +88,7 @@ mod convert {
     use std::time::Duration;
 
     use brul_gui::{
-        Align, AreaTemplate, Color, Dimension, Direction, Display, Gradient, GridAutoFlow,
+        Align, AreaTemplate, Color, Cursor, Dimension, Direction, Display, Gradient, GridAutoFlow,
         GridLine, Justify, LinePlacement, Padding, Paint, RepeatCount, TextAlign, TrackSize,
         VerticalAlign,
     };
@@ -127,6 +127,10 @@ mod convert {
 
     pub(super) fn text_align(value: &TextAlign) -> String {
         format!("brul::gui::TextAlign::{value:?}")
+    }
+
+    pub(super) fn cursor(value: &Cursor) -> String {
+        format!("brul::gui::Cursor::{value:?}")
     }
 
     pub(super) fn paint(value: &Paint) -> String {

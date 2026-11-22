@@ -6,7 +6,7 @@ use crate::gradient::Paint;
 use crate::layout::LayoutPatch;
 use crate::rect::Shadow;
 use crate::text::{TextStylePatch, VerticalAlign};
-use crate::{BorderColors, Color};
+use crate::{BorderColors, Color, Cursor};
 use brul_style::Side;
 
 macro_rules! resolve_layers {

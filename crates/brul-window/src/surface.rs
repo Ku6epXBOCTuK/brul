@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use brul_gui::{Atlas, Dirty, WidgetSnapshot};
+use brul_gui::{Atlas, Cursor, Dirty, WidgetSnapshot};
+use winit::cursor::{Cursor as WinitCursor, CursorIcon};
 use winit::window::{Window, WindowLevel};
 
 use crate::gpu::Gpu;
@@ -16,6 +17,20 @@ pub(crate) trait Surface {
     fn size(&self) -> (u32, u32);
     fn pre_present_notify(&self);
     fn set_always_on_top(&self, on_top: bool);
+    fn set_cursor(&self, cursor: Cursor);
+}
+
+fn cursor_icon(cursor: Cursor) -> CursorIcon {
+    match cursor {
+        Cursor::Default => CursorIcon::Default,
+        Cursor::Pointer => CursorIcon::Pointer,
+        Cursor::Text => CursorIcon::Text,
+        Cursor::Grab => CursorIcon::Grab,
+        Cursor::Grabbing => CursorIcon::Grabbing,
+        Cursor::Crosshair => CursorIcon::Crosshair,
+        Cursor::NotAllowed => CursorIcon::NotAllowed,
+        Cursor::Move => CursorIcon::Move,
+    }
 }
 
 impl Surface for Arc<dyn Window> {
@@ -58,6 +73,11 @@ impl Surface for Arc<dyn Window> {
             WindowLevel::Normal
         };
         self.as_ref().set_window_level(level);
+    }
+
+    fn set_cursor(&self, cursor: Cursor) {
+        self.as_ref()
+            .set_cursor(WinitCursor::Icon(cursor_icon(cursor)));
     }
 }
 

@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use brul_gui::{
-    Class, Color, Dimension, Direction, Layers, LayoutPatch, LayoutStyle, Padding, Paint, Size,
-    StyleSet, StyleState, TextAlign, TextEngine, TextStyle, TextStylePatch, TextStyleSet, Texture,
-    Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetState, WidgetStyle,
+    Class, Color, Cursor, Dimension, Direction, Layers, LayoutPatch, LayoutStyle, Padding, Paint,
+    Size, StyleSet, StyleState, TextAlign, TextEngine, TextStyle, TextStylePatch, TextStyleSet,
+    Texture, Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetState, WidgetStyle,
     WidgetStylePatch, WidgetTree,
 };
 
@@ -675,6 +675,92 @@ fn hover_switches_style_snapshot() {
     let node = snapshot.node(id).expect("view");
     assert_eq!(node.style.background, base.background);
     assert!(!node.state.hovered);
+}
+
+#[test]
+fn cursor_is_default_without_hover() {
+    let view = Widget::column(vec![])
+        .with_layout(fixed(50, 50))
+        .with_styles(StyleSet::new(WidgetStyle {
+            cursor: Cursor::Pointer,
+            ..WidgetStyle::default()
+        }));
+    let mut tree = WidgetTree::new(view);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 50,
+            height: 50,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    assert_eq!(tree.cursor(), Cursor::Default);
+}
+
+#[test]
+fn cursor_follows_the_hovered_path() {
+    let child = Widget::column(vec![])
+        .with_layout(fixed(40, 20))
+        .with_styles(StyleSet::new(WidgetStyle {
+            cursor: Cursor::Text,
+            ..WidgetStyle::default()
+        }));
+    let root = Widget::column(vec![child])
+        .with_layout(fixed(100, 100))
+        .with_styles(StyleSet::new(WidgetStyle {
+            cursor: Cursor::Pointer,
+            ..WidgetStyle::default()
+        }));
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 100,
+            height: 100,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    tree.pointer_moved(5, 5).expect("move");
+    assert_eq!(tree.cursor(), Cursor::Text);
+    tree.pointer_moved(60, 60).expect("move");
+    assert_eq!(tree.cursor(), Cursor::Pointer);
+    tree.pointer_leave();
+    assert_eq!(tree.cursor(), Cursor::Default);
+}
+
+#[test]
+fn cursor_can_change_in_a_state() {
+    let view = Widget::column(vec![])
+        .with_layout(fixed(50, 50))
+        .with_styles(StyleSet::new(WidgetStyle::default()).with(
+            StyleState::Pressed,
+            WidgetStylePatch {
+                cursor: Some(Cursor::Grabbing),
+                ..WidgetStylePatch::default()
+            },
+        ));
+    let mut tree = WidgetTree::new(view);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 50,
+            height: 50,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    tree.pointer_moved(5, 5).expect("move");
+    assert_eq!(tree.cursor(), Cursor::Default);
+    tree.pointer_down(5, 5).expect("down");
+    assert_eq!(tree.cursor(), Cursor::Grabbing);
 }
 
 #[test]

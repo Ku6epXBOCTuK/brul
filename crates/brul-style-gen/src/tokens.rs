@@ -29,6 +29,7 @@ pub(crate) fn converter(converter: Converter) -> Option<TokenStream> {
         Converter::VerticalAlign => "vertical_align",
         Converter::TextAlign => "text_align",
         Converter::AutoFlow => "auto_flow",
+        Converter::Cursor => "cursor",
     };
     let name = ident(name);
     Some(quote!(convert::#name))
@@ -61,6 +62,7 @@ pub(crate) fn field_type(ty: FieldType) -> TokenStream {
         FieldType::TextAlign => quote!(TextAlign),
         FieldType::U16 => quote!(u16),
         FieldType::Duration => quote!(Duration),
+        FieldType::Cursor => quote!(Cursor),
     }
 }
 

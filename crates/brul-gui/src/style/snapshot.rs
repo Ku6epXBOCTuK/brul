@@ -9,7 +9,7 @@ use super::value::{
 };
 use crate::widget::{TextStylePatch, Transitions, WidgetStyle, WidgetStylePatch};
 use crate::{
-    Align, Direction, Display, GridAutoFlow, Justify, LayoutStyle, TextAlign, TextStyle,
+    Align, Cursor, Direction, Display, GridAutoFlow, Justify, LayoutStyle, TextAlign, TextStyle,
     VerticalAlign,
 };
 

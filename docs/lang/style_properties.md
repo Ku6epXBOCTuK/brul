@@ -49,6 +49,7 @@
 | `opacity` | `NumberRange(0.0, 1.0)` | `1.0` | `Visual` | `Style(Opacity)` | `true` |
 | `clip` | `Bool` | `false` | `Visual` | `Style(Clip)` | `false` |
 | `scroll` | `Bool` | `false` | `Forbidden` | `Style(Scroll)` | `false` |
+| `cursor` | `Keywords(["default", "pointer", "text", "grab", "grabbing", "crosshair", "not-allowed", "move"])` | `default` | `Visual` | `Style(Cursor)` | `false` |
 | `box-shadow-offset-x` | `SignedPx` | `0` | `Forbidden` | `Style(ShadowX)` | `false` |
 | `box-shadow-offset-y` | `SignedPx` | `0` | `Forbidden` | `Style(ShadowY)` | `false` |
 | `box-shadow-blur` | `Px` | `0` | `Forbidden` | `Style(ShadowBlur)` | `false` |

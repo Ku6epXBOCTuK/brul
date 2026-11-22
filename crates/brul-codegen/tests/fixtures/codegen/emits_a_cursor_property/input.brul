@@ -1,0 +1,9 @@
+<style>
+.panel { cursor: pointer; }
+</style>
+
+<markup>
+window Demo (title: "demo") {
+    Container (panel) { }
+}
+</markup>

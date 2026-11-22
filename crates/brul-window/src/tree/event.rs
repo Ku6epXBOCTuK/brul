@@ -210,6 +210,7 @@ impl TreeApp {
         surface: &dyn Surface,
         events: Vec<WidgetEvent>,
     ) -> Step {
+        self.sync_cursor(surface);
         if events.is_empty() {
             return Step::Continue;
         }
@@ -233,6 +234,7 @@ impl TreeApp {
         debug!(?commands, "window commands");
         let step = self.run_commands(surface, &commands);
         brul_reactive::flush();
+        self.sync_cursor(surface);
         if self.tree.borrow().snapshot_dirty() {
             surface.redraw();
         }

@@ -72,6 +72,7 @@ pub enum StyleField {
     Opacity,
     Clip,
     Scroll,
+    Cursor,
     ShadowX,
     ShadowY,
     ShadowBlur,
@@ -130,6 +131,7 @@ pub enum PropertyKey {
     Opacity,
     Clip,
     Scroll,
+    Cursor,
     ShadowOffsetX,
     ShadowOffsetY,
     ShadowBlur,
@@ -198,6 +200,7 @@ pub enum FieldType {
     TextAlign,
     U16,
     Duration,
+    Cursor,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -290,6 +293,7 @@ pub enum Converter {
     VerticalAlign,
     TextAlign,
     AutoFlow,
+    Cursor,
 }
 
 #[derive(Clone, Copy)]

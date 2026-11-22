@@ -121,6 +121,29 @@ fn scroll_takes_a_bool() {
 }
 
 #[test]
+fn cursor_takes_a_keyword() {
+    let source = ".a { cursor: pointer; }";
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule(
+            "a",
+            vec![property("cursor", Value::Keyword("pointer".to_owned()))]
+        )])
+    );
+}
+
+#[test]
+fn cursor_can_change_in_a_visual_state() {
+    let source = ".a { } .a:hover { cursor: not-allowed; }";
+    let mut hovered = state_rule("a", State::Hover);
+    hovered.properties = vec![property("cursor", Value::Keyword("not-allowed".to_owned()))];
+    assert_eq!(
+        parse_file(source).unwrap(),
+        sheet(vec![rule("a", Vec::new()), hovered])
+    );
+}
+
+#[test]
 fn properties_parse_with_values_and_order() {
     let source = r#".item {
         width: 100%;
