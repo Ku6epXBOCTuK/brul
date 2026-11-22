@@ -354,10 +354,12 @@ fn if_else_blocks_parse() {
                             block: Block {
                                 items: vec![BlockItem::Element(element("Span"))],
                             },
+                            position: Position::default(),
                         }],
                         else_block: Some(Block {
                             items: vec![BlockItem::Element(element("Container"))],
                         }),
+                        position: Position::default(),
                     }),
                     BlockItem::If(IfBlock {
                         branches: vec![
@@ -374,15 +376,18 @@ fn if_else_blocks_parse() {
                                         },
                                     })],
                                 },
+                                position: Position::default(),
                             },
                             Branch {
                                 condition: ident("retry"),
                                 block: Block {
                                     items: vec![BlockItem::Element(element("Span"))],
                                 },
+                                position: Position::default(),
                             },
                         ],
                         else_block: None,
+                        position: Position::default(),
                     }),
                 ],
             },
@@ -622,6 +627,7 @@ fn each_blocks_parse() {
                         key: None,
                         block: Block { items: vec![row()] },
                         else_block: None,
+                        position: Position::default(),
                     }),
                     BlockItem::Each(EachBlock {
                         collection: ident("items"),
@@ -641,6 +647,7 @@ fn each_blocks_parse() {
                             })],
                         },
                         else_block: None,
+                        position: Position::default(),
                     }),
                     BlockItem::Each(EachBlock {
                         collection: ident("items"),
@@ -649,6 +656,7 @@ fn each_blocks_parse() {
                         key: key(),
                         block: Block { items: vec![row()] },
                         else_block: None,
+                        position: Position::default(),
                     }),
                     BlockItem::Each(EachBlock {
                         collection: expr(ExprKind::Index {
@@ -660,6 +668,7 @@ fn each_blocks_parse() {
                         key: key(),
                         block: Block { items: vec![row()] },
                         else_block: None,
+                        position: Position::default(),
                     }),
                     BlockItem::Each(EachBlock {
                         collection: ident("items"),
@@ -670,6 +679,7 @@ fn each_blocks_parse() {
                         else_block: Some(Block {
                             items: vec![BlockItem::Element(element("Container"))],
                         }),
+                        position: Position::default(),
                     }),
                 ],
             },
@@ -696,4 +706,48 @@ fn each_errors_point_at_the_source() {
 
     let error = parse_file("component A { Container { @each (items as item) } }").unwrap_err();
     assert_eq!(error.message(), "expected '{'");
+}
+
+#[test]
+fn directive_nodes_keep_source_positions() {
+    let source = "\
+component A {
+    Container {
+        @if (done) { }
+        @else if (retry) { @each (items as item) { } }
+    }
+}";
+    let component = parse_file(source).unwrap().declaration.unwrap();
+    let Member::Element(container) = &component.members[0] else {
+        panic!("expected container element");
+    };
+    let BlockItem::If(if_block) = &container.block.items[0] else {
+        panic!("expected if block");
+    };
+    assert_eq!(if_block.position, Position { line: 3, column: 9 });
+    assert_eq!(
+        if_block.branches[0].position,
+        Position {
+            line: 3,
+            column: 13
+        }
+    );
+    assert_eq!(
+        if_block.branches[1].position,
+        Position {
+            line: 4,
+            column: 18
+        }
+    );
+
+    let BlockItem::Each(each) = &if_block.branches[1].block.items[0] else {
+        panic!("expected each block");
+    };
+    assert_eq!(
+        each.position,
+        Position {
+            line: 4,
+            column: 28
+        }
+    );
 }

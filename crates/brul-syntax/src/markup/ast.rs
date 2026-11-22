@@ -88,19 +88,33 @@ pub struct Slot {
     pub position: Position,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct IfBlock {
     pub branches: Vec<Branch>,
     pub else_block: Option<Block>,
+    pub position: Position,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl PartialEq for IfBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.branches == other.branches && self.else_block == other.else_block
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Branch {
     pub condition: Expr,
     pub block: Block,
+    pub position: Position,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl PartialEq for Branch {
+    fn eq(&self, other: &Self) -> bool {
+        self.condition == other.condition && self.block == other.block
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct EachBlock {
     pub collection: Expr,
     pub item: String,
@@ -108,6 +122,18 @@ pub struct EachBlock {
     pub key: Option<Expr>,
     pub block: Block,
     pub else_block: Option<Block>,
+    pub position: Position,
+}
+
+impl PartialEq for EachBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.collection == other.collection
+            && self.item == other.item
+            && self.index == other.index
+            && self.key == other.key
+            && self.block == other.block
+            && self.else_block == other.else_block
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

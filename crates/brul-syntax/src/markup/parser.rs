@@ -178,8 +178,8 @@ impl Cursor<'_> {
         if self.eat('@') {
             let name = self.ident()?;
             return match name.as_str() {
-                "if" => self.if_block().map(BlockItem::If),
-                "each" => self.each_block().map(BlockItem::Each),
+                "if" => self.if_block(start).map(BlockItem::If),
+                "each" => self.each_block(start).map(BlockItem::Each),
                 "slot" => self.slot(start),
                 _ => Err(self.error_at(start, Error::UnexpectedDirective(name.clone()))),
             };
@@ -228,14 +228,14 @@ impl Cursor<'_> {
         }
     }
 
-    fn each_block(&mut self) -> Result<EachBlock, Error> {
+    fn each_block(&mut self, start: usize) -> Result<EachBlock, Error> {
         self.expect('(')?;
         let (collection, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
         self.set_pos(end);
         self.skip_trivia();
-        let start = self.pos();
+        let as_start = self.pos();
         if self.ident()? != "as" {
-            return Err(self.error_at(start, Expected::Keyword("as")));
+            return Err(self.error_at(as_start, Expected::Keyword("as")));
         }
         let item = self.ident()?;
         self.skip_trivia();
@@ -269,10 +269,11 @@ impl Cursor<'_> {
             key,
             block,
             else_block,
+            position: position(self, start),
         })
     }
 
-    fn if_block(&mut self) -> Result<IfBlock, Error> {
+    fn if_block(&mut self, start: usize) -> Result<IfBlock, Error> {
         let mut branches = vec![self.branch()?];
         let mut else_block = None;
         while self.eat_directive("else") {
@@ -286,16 +287,22 @@ impl Cursor<'_> {
         Ok(IfBlock {
             branches,
             else_block,
+            position: position(self, start),
         })
     }
 
     fn branch(&mut self) -> Result<Branch, Error> {
+        let start = self.value_start();
         self.expect('(')?;
         let (condition, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
         self.set_pos(end);
         self.expect(')')?;
         let block = self.block()?;
-        Ok(Branch { condition, block })
+        Ok(Branch {
+            condition,
+            block,
+            position: position(self, start),
+        })
     }
 
     fn prop(&mut self) -> Result<Member, Error> {
