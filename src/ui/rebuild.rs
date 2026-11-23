@@ -1,24 +1,18 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use brul_gui::{WidgetId, WidgetTree};
 
-use super::{Owned, OwnedStructure};
+use super::registry::owners;
+use super::{ElementOwner, Registry};
 use crate::each::reconcile_each;
-use crate::{
-    Binding, Build, Built, ComponentHandle, EventSink, Handler, Hooks, PropBinding, RowInfo,
-    SharedStates, Structure,
-};
+use crate::{Build, Built, ComponentHandle, EventSink, Hooks, RowInfo, SharedStates, Structure};
 
 #[derive(Default)]
 pub(super) struct Staged {
-    pub(super) bindings: Vec<Binding>,
-    pub(super) handlers: Vec<Handler>,
-    pub(super) props: Vec<PropBinding>,
-    pub(super) structures: Vec<Structure>,
-    pub(super) capabilities: Vec<Hooks>,
+    pub(super) owners: Vec<ElementOwner>,
     pub(super) components: Vec<(WidgetId, ComponentHandle)>,
     pub(super) rebuilt: Vec<WidgetId>,
 }
@@ -32,9 +26,8 @@ struct Rebuilt {
 }
 
 pub(super) struct Pending {
-    pub(super) structures: Vec<OwnedStructure>,
-    pub(super) rows: Vec<(WidgetId, Vec<RowInfo>)>,
-    pub(super) by_parent: HashMap<WidgetId, Structure>,
+    pub(super) owners: Registry<ElementOwner>,
+    by_parent: HashMap<WidgetId, Structure>,
     states: SharedStates,
     event_sink: Option<Arc<dyn EventSink>>,
     pub(super) staged: Staged,
@@ -42,18 +35,16 @@ pub(super) struct Pending {
 
 impl Pending {
     pub(super) fn new(
-        structures: Vec<OwnedStructure>,
-        rows: Vec<(WidgetId, Vec<RowInfo>)>,
+        owners: Registry<ElementOwner>,
         states: SharedStates,
         event_sink: Option<Arc<dyn EventSink>>,
     ) -> Self {
-        let by_parent = structures
-            .iter()
-            .map(|owned| (owned.structure.parent, owned.structure.clone()))
+        let by_parent = owners
+            .structures()
+            .map(|owner| (owner.structure.parent, owner.structure.clone()))
             .collect();
         Self {
-            structures,
-            rows,
+            owners,
             by_parent,
             states,
             event_sink,
@@ -67,13 +58,17 @@ impl Pending {
         tree: &Rc<RefCell<WidgetTree>>,
         theme: Option<&str>,
     ) -> bool {
-        let Some(structure) = self.by_parent.get(&parent) else {
+        let Some(structure) = self.by_parent.get(&parent).cloned() else {
             return false;
         };
         if !tree.borrow().contains(parent) {
             return false;
         }
-        let old_rows = take_rows(&mut self.rows, parent, structure.each);
+        let old_rows = self
+            .owners
+            .structure_mut(parent)
+            .map(|owner| std::mem::take(&mut owner.rows))
+            .unwrap_or_default();
         let Some(Rebuilt {
             built,
             rows,
@@ -81,15 +76,17 @@ impl Pending {
             capabilities,
             components,
         }) = rebuild_structure(
-            structure,
+            &structure,
             theme,
             &old_rows,
             Rc::clone(&self.states),
             self.event_sink.clone(),
         )
         else {
-            if structure.each {
-                self.rows.push((parent, old_rows));
+            if structure.each
+                && let Some(owner) = self.owners.structure_mut(parent)
+            {
+                owner.rows = old_rows;
             }
             return false;
         };
@@ -101,37 +98,25 @@ impl Pending {
         } = built;
         let mut tree = tree.borrow_mut();
         let children = if structure.each {
-            self.rows.push((parent, rows.clone()));
             reconcile_each(&mut tree, parent, &old_rows, widget, &rows)
         } else {
             widget.into_children()
         };
         tree.replace_all_children(parent, children);
-        self.staged.bindings.extend(bindings);
-        self.staged.handlers.extend(handlers);
-        self.staged.props.extend(props);
-        self.staged.structures.extend(structures);
-        self.staged.capabilities.extend(capabilities);
+        if structure.each
+            && let Some(owner) = self.owners.structure_mut(parent)
+        {
+            owner.rows = rows;
+        }
+        self.staged
+            .owners
+            .extend(owners(bindings, props, structures, capabilities, handlers));
         self.staged
             .components
             .extend(components.into_iter().map(|component| (parent, component)));
         self.staged.rebuilt.push(parent);
         true
     }
-}
-
-fn take_rows(
-    rows: &mut Vec<(WidgetId, Vec<RowInfo>)>,
-    parent: WidgetId,
-    each: bool,
-) -> Vec<RowInfo> {
-    if !each {
-        return Vec::new();
-    }
-    rows.iter()
-        .position(|(id, _)| *id == parent)
-        .map(|at| rows.remove(at).1)
-        .unwrap_or_default()
 }
 
 fn rebuild_structure(
@@ -166,43 +151,4 @@ fn rebuild_structure(
         capabilities,
         components,
     })
-}
-
-pub(super) trait WidgetRef {
-    fn widget(&self) -> Option<WidgetId>;
-}
-
-impl WidgetRef for Owned {
-    fn widget(&self) -> Option<WidgetId> {
-        Some(self.widget)
-    }
-}
-
-impl WidgetRef for OwnedStructure {
-    fn widget(&self) -> Option<WidgetId> {
-        Some(self.structure.parent)
-    }
-}
-
-impl WidgetRef for (WidgetId, Vec<RowInfo>) {
-    fn widget(&self) -> Option<WidgetId> {
-        Some(self.0)
-    }
-}
-
-impl WidgetRef for Handler {
-    fn widget(&self) -> Option<WidgetId> {
-        self.widget
-    }
-}
-
-pub(super) fn retain_live<T: WidgetRef>(
-    items: &mut Vec<T>,
-    tree: &WidgetTree,
-    replaced: &HashSet<WidgetId>,
-) {
-    items.retain(|item| {
-        item.widget()
-            .is_none_or(|id| tree.contains(id) && !replaced.contains(&id))
-    });
 }

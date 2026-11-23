@@ -1,29 +1,30 @@
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use brul_codegen::runtime::{self, Build, EventHook, Hooks, accepts_prop, apply_capability};
+use brul_codegen::runtime::{self, Build, Hooks, accepts_prop};
 use brul_gui::{TimerOwner, UiEvent, WidgetId, WidgetTree};
 use brul_ident::TimerId;
-use brul_reactive::{Effect, EffectScope};
+use brul_reactive::EffectScope;
 use brul_window::{TimerCommand, WindowCommand};
 
 #[cfg(test)]
 use crate::Host;
 use crate::event::{arguments, call};
 use crate::{
-    Binding, Built, ComponentHandle, Dyn, Event, EventKind, EventSet, EventSink, EventTarget,
-    FunctionName, Handler, PropBinding, RowInfo, SharedStates, StateId, Structure, Theme,
-    TimerRequest, Value, ViewError,
+    Built, ComponentHandle, Dyn, Event, EventKind, EventSink, EventTarget, FunctionName, Handler,
+    PropBinding, SharedStates, StateId, Structure, Theme, TimerRequest, Value, ViewError,
 };
 
 mod host;
 mod rebuild;
+mod registry;
 
 pub(crate) use host::CommandHost;
-use rebuild::{Pending, Staged, retain_live};
+use rebuild::{Pending, Staged};
+use registry::{Context, ElementOwner, Owner, Registry, capability_context, owners};
 
 #[cfg(test)]
 mod tests;
@@ -36,22 +37,6 @@ pub(crate) struct AssemblyParts {
     pub(crate) nested: Vec<ComponentHandle>,
     pub(crate) states: SharedStates,
     pub(crate) event_sink: Option<Arc<dyn EventSink>>,
-}
-
-fn capability_context(
-    tree: &Rc<RefCell<WidgetTree>>,
-    states: &SharedStates,
-    sink: &Option<Arc<dyn EventSink>>,
-    widget: WidgetId,
-    state: StateId,
-    component: &ComponentHandle,
-) -> Build {
-    let mut build = Build::new();
-    build.set_tree(Rc::clone(tree));
-    build.set_states(Rc::clone(states));
-    build.set_event_sink(sink.clone());
-    build.set_target(widget, state, Rc::clone(component));
-    build
 }
 
 fn timer_command(request: TimerRequest, owner: TimerOwner) -> Option<WindowCommand> {
@@ -122,15 +107,10 @@ pub struct Ui<T: Theme> {
     lifecycle: Rc<RefCell<Vec<WindowCommand>>>,
     next_owner: u64,
     pub tree: Rc<RefCell<WidgetTree>>,
-    handlers: Vec<Handler>,
-    capabilities: Vec<OwnedCapability>,
+    owners: Registry<ElementOwner>,
     window_handlers: Vec<Handler>,
-    handler_index: HashMap<(EventTarget, EventKind), usize>,
+    handler_index: HashMap<(EventTarget, EventKind), Handler>,
     pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
-    bindings: Vec<Owned>,
-    props: Vec<Owned>,
-    structures: Vec<OwnedStructure>,
-    rows: Vec<(WidgetId, Vec<RowInfo>)>,
     requests: Rc<RefCell<Vec<WidgetId>>>,
     view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
     pub(crate) theme: Option<T>,
@@ -140,32 +120,6 @@ pub struct Ui<T: Theme> {
     scope: EffectScope,
 }
 
-struct Owned {
-    widget: WidgetId,
-    components: Vec<ComponentHandle>,
-    _scope: EffectScope,
-}
-
-struct OwnedStructure {
-    structure: Structure,
-    components: Vec<ComponentHandle>,
-    _scope: EffectScope,
-}
-
-struct OwnedCapability {
-    widget: WidgetId,
-    state: StateId,
-    component: ComponentHandle,
-    events: EventSet,
-    hook: EventHook,
-    _scope: EffectScope,
-}
-
-impl rebuild::WidgetRef for OwnedCapability {
-    fn widget(&self) -> Option<WidgetId> {
-        Some(self.widget)
-    }
-}
 impl<T: Theme> Ui<T> {
     #[cfg(test)]
     pub(crate) fn assemble(
@@ -237,15 +191,10 @@ impl<T: Theme> Ui<T> {
             lifecycle: Rc::new(RefCell::new(Vec::new())),
             next_owner: 0,
             tree,
-            handlers,
-            capabilities: Vec::new(),
+            owners: Registry::default(),
             window_handlers,
             handler_index: HashMap::new(),
             commands,
-            bindings: Vec::new(),
-            props: Vec::new(),
-            structures: Vec::new(),
-            rows: Vec::new(),
             requests: Rc::new(RefCell::new(Vec::new())),
             view,
             theme,
@@ -259,10 +208,7 @@ impl<T: Theme> Ui<T> {
             ui.components.push(owned);
         }
         schedule_timers(&ui.components, &ui.active, &ui.commands);
-        ui.bind(bindings);
-        ui.bind_props(props);
-        ui.bind_structures(structures);
-        ui.bind_capabilities(capabilities);
+        ui.bind_all(owners(bindings, props, structures, capabilities, handlers));
         ui.index_handlers();
         ui
     }
@@ -290,208 +236,77 @@ impl<T: Theme> Ui<T> {
         }
     }
 
+    fn context(&self) -> Context {
+        Context {
+            tree: Rc::clone(&self.tree),
+            textures: Rc::clone(&self.textures),
+            states: Rc::clone(&self.states),
+            sink: self.event_sink.clone(),
+            requests: Rc::clone(&self.requests),
+        }
+    }
+
+    fn bind_all(&mut self, owners: Vec<ElementOwner>) {
+        let ctx = self.context();
+        self.owners.bind(&self.scope, &ctx, owners);
+    }
+
     fn index_handlers(&mut self) {
         self.handler_index = self
-            .handlers
-            .iter()
-            .enumerate()
-            .rev()
-            .map(|(at, handler)| {
-                (
-                    (
-                        handler
-                            .widget
-                            .map_or(EventTarget::Window, EventTarget::Widget),
-                        handler.event,
-                    ),
-                    at,
-                )
-            })
-            .collect();
-    }
-
-    fn bind(&mut self, bindings: Vec<Binding>) {
-        for binding in bindings {
-            let widget = binding.widget;
-            let components = vec![Rc::clone(&binding.component)];
-            let tree = Rc::clone(&self.tree);
-            let textures = Rc::clone(&self.textures);
-            let scope = self.scope.child();
-            scope.run(|| {
-                Effect::new(move || {
-                    let pending = runtime::evaluate(&binding, &textures);
-                    runtime::write(pending, binding.widget, &mut tree.borrow_mut());
-                });
+            .owners
+            .handlers()
+            .fold(HashMap::new(), |mut index, handler| {
+                let target = handler
+                    .widget
+                    .map_or(EventTarget::Window, EventTarget::Widget);
+                index
+                    .entry((target, handler.event))
+                    .or_insert_with(|| handler.clone());
+                index
             });
-            self.bindings.push(Owned {
-                widget,
-                components,
-                _scope: scope,
-            });
-        }
-    }
-
-    fn bind_props(&mut self, props: Vec<PropBinding>) {
-        for prop in props {
-            let widget = prop.widget;
-            let components = vec![Rc::clone(&prop.component), Rc::clone(&prop.target)];
-            let scope = self.scope.child();
-            scope.run(|| {
-                Effect::new(move || apply_prop(&prop));
-            });
-            self.props.push(Owned {
-                widget,
-                components,
-                _scope: scope,
-            });
-        }
-    }
-
-    fn bind_capabilities(&mut self, capabilities: Vec<Hooks>) {
-        for hooks in capabilities {
-            let widget = hooks.widget;
-            let state = hooks.state.for_widget(widget);
-            let component = Rc::clone(&hooks.component);
-            let tree = Rc::clone(&self.tree);
-            let states = Rc::clone(&self.states);
-            let sink = self.event_sink.clone();
-            let scope = self.scope.child();
-            let cleanup = hooks.cleanup;
-            let cleanup_component = Rc::clone(&component);
-            let cleanup_tree = Rc::clone(&tree);
-            let cleanup_states = Rc::clone(&states);
-            let cleanup_sink = sink.clone();
-            scope.on_cleanup(move || {
-                let mut build = capability_context(
-                    &cleanup_tree,
-                    &cleanup_states,
-                    &cleanup_sink,
-                    widget,
-                    state,
-                    &cleanup_component,
-                );
-                cleanup(&mut build, state);
-            });
-            let apply = hooks.apply;
-            let params = hooks.params.clone();
-            let apply_component = Rc::clone(&component);
-            let apply_tree = Rc::clone(&tree);
-            let apply_states = Rc::clone(&states);
-            let apply_sink = sink.clone();
-            scope.run(|| {
-                Effect::new(move || {
-                    let mut build = capability_context(
-                        &apply_tree,
-                        &apply_states,
-                        &apply_sink,
-                        widget,
-                        state,
-                        &apply_component,
-                    );
-                    if let Err(message) = apply_capability(&mut build, &params, apply) {
-                        tracing::error!(%message, "capability failed");
-                    }
-                });
-            });
-            self.capabilities.push(OwnedCapability {
-                widget,
-                state,
-                component,
-                events: hooks.events,
-                hook: hooks.event,
-                _scope: scope,
-            });
-        }
-    }
-
-    fn bind_structures(&mut self, structures: Vec<Structure>) {
-        for structure in structures {
-            let component = Rc::clone(&structure.component);
-            let each_scope = structure.scope.clone();
-            let structure_value = Rc::clone(&structure.value);
-            let requests = Rc::clone(&self.requests);
-            let initialized = Rc::new(Cell::new(false));
-            let last: Rc<Cell<Option<Value>>> = Rc::new(Cell::new(None));
-            let scope = self.scope.child();
-            scope.run(|| {
-                Effect::new(move || {
-                    let previous = component.borrow().scope().clone();
-                    component.borrow_mut().set_scope(each_scope.clone());
-                    let evaluated = structure_value.call(&mut component.borrow_mut());
-                    component.borrow_mut().set_scope(previous);
-                    let value = match evaluated {
-                        Ok(value) => Some(value),
-                        Err(error) => {
-                            tracing::error!(%error, "structure expression failed");
-                            None
-                        }
-                    };
-                    if !initialized.replace(true) {
-                        last.set(value);
-                        return;
-                    }
-                    let changed = last.take().as_ref() != value.as_ref();
-                    last.set(value);
-                    if !changed {
-                        return;
-                    }
-                    let mut requests = requests.borrow_mut();
-                    if !requests.contains(&structure.parent) {
-                        requests.push(structure.parent);
-                    }
-                });
-            });
-            self.structures.push(OwnedStructure {
-                structure,
-                components: Vec::new(),
-                _scope: scope,
-            });
-        }
     }
 
     fn rebind(&mut self, staged: Staged) {
         let Staged {
-            bindings,
-            handlers,
-            props,
-            structures,
-            capabilities,
+            owners: mut staged_owners,
             components,
             rebuilt,
         } = staged;
-        for owned in &mut self.structures {
-            if rebuilt.contains(&owned.structure.parent) {
-                owned.components.clear();
+        for parent in &rebuilt {
+            if let Some(owner) = self.owners.structure_mut(*parent) {
+                owner.components.clear();
             }
         }
-        let parents: HashSet<WidgetId> = structures.iter().map(|s| s.parent).collect();
-        let widgets: HashSet<WidgetId> = bindings.iter().map(|b| b.widget).collect();
-        let prop_widgets: HashSet<WidgetId> = props.iter().map(|p| p.widget).collect();
-        let capability_widgets: HashSet<WidgetId> = capabilities.iter().map(|a| a.widget).collect();
-        let none = HashSet::new();
+        let structure_parents: HashSet<WidgetId> = staged_owners
+            .iter()
+            .filter_map(|owner| match owner {
+                ElementOwner::Structure(owner) => Some(owner.structure.parent),
+                _ => None,
+            })
+            .collect();
+        let mut carried = HashMap::new();
+        for parent in &structure_parents {
+            if let Some(owner) = self.owners.structure_mut(*parent) {
+                carried.insert(*parent, std::mem::take(&mut owner.rows));
+            }
+        }
         // NOTE: bind runs effects immediately, so a live tree borrow here panics on borrow_mut
         {
             let tree = self.tree.borrow();
-            retain_live(&mut self.structures, &tree, &parents);
-            retain_live(&mut self.rows, &tree, &none);
-            retain_live(&mut self.bindings, &tree, &widgets);
-            retain_live(&mut self.props, &tree, &prop_widgets);
-            retain_live(&mut self.capabilities, &tree, &capability_widgets);
-            self.handlers.extend(handlers);
-            retain_live(&mut self.handlers, &tree, &none);
+            self.owners.retain_live(&tree, &staged_owners);
         }
+        for owner in &mut staged_owners {
+            if let ElementOwner::Structure(owner) = owner
+                && let Some(rows) = carried.remove(&owner.structure.parent)
+            {
+                owner.rows = rows;
+            }
+        }
+        self.bind_all(staged_owners);
         self.index_handlers();
-        self.bind(bindings);
-        self.bind_props(props);
-        self.bind_structures(structures);
-        self.bind_capabilities(capabilities);
         for (parent, handle) in components {
             let owned = self.adopt(handle);
-            if let Some(entry) = self
-                .structures
-                .iter_mut()
-                .find(|entry| entry.structure.parent == parent)
-            {
+            if let Some(entry) = self.owners.structure_mut(parent) {
                 entry.components.push(Rc::clone(&owned.component));
             }
             self.components.push(owned);
@@ -502,21 +317,14 @@ impl<T: Theme> Ui<T> {
     fn prune_components(&mut self) {
         let mut live: HashSet<*const RefCell<crate::Component>> = HashSet::new();
         live.insert(Rc::as_ptr(&self.component));
-        for owned in &self.bindings {
-            live.extend(owned.components.iter().map(Rc::as_ptr));
+        for owner in self.owners.entries() {
+            live.extend(owner.components().iter().map(Rc::as_ptr));
+            if let ElementOwner::Structure(owner) = owner {
+                live.insert(Rc::as_ptr(&owner.structure.component));
+            }
         }
-        for owned in &self.props {
-            live.extend(owned.components.iter().map(Rc::as_ptr));
-        }
-        for handler in self.handlers.iter().chain(&self.window_handlers) {
+        for handler in &self.window_handlers {
             live.insert(Rc::as_ptr(&handler.component));
-        }
-        for owned in &self.structures {
-            live.insert(Rc::as_ptr(&owned.structure.component));
-            live.extend(owned.components.iter().map(Rc::as_ptr));
-        }
-        for owned in &self.capabilities {
-            live.insert(Rc::as_ptr(&owned.component));
         }
         self.components
             .retain(|owned| live.contains(&Rc::as_ptr(&owned.component)));
@@ -537,21 +345,19 @@ impl<T: Theme> Ui<T> {
             self.components.push(owned);
         }
         self.tree.borrow_mut().replace_root(built.widget);
-        let mut handlers = built.handlers;
+        let Built {
+            bindings,
+            handlers: widget_handlers,
+            props,
+            ..
+        } = built;
+        let mut handlers = widget_handlers;
         handlers.extend(self.window_handlers.iter().cloned());
-        self.handlers = handlers;
-        self.index_handlers();
-        self.bindings.clear();
-        self.props.clear();
-        self.capabilities.clear();
-        self.structures.clear();
-        self.rows.clear();
+        self.owners.clear();
         self.requests.borrow_mut().clear();
         self.scope = EffectScope::new();
-        self.bind(built.bindings);
-        self.bind_props(built.props);
-        self.bind_structures(structures);
-        self.bind_capabilities(capabilities);
+        self.bind_all(owners(bindings, props, structures, capabilities, handlers));
+        self.index_handlers();
         Ok(())
     }
 
@@ -606,8 +412,8 @@ impl<T: Theme> Ui<T> {
         let kind = event.event.kind();
         for target in event.target.chain() {
             if let Some(widget) = target.widget() {
-                for owned in &self.capabilities {
-                    if owned.widget != widget || !owned.events.contains(kind) {
+                for owner in self.owners.capabilities(widget) {
+                    if !owner.hooks.events.contains(kind) {
                         continue;
                     }
                     let mut build = capability_context(
@@ -615,16 +421,15 @@ impl<T: Theme> Ui<T> {
                         &self.states,
                         &self.event_sink,
                         widget,
-                        owned.state,
-                        &owned.component,
+                        owner.state,
+                        &owner.hooks.component,
                     );
-                    if (owned.hook)(&mut build, owned.state, event) {
+                    if (owner.hooks.event)(&mut build, owner.state, event) {
                         return;
                     }
                 }
             }
-            if let Some(&at) = self.handler_index.get(&(target, kind)) {
-                let handler = &self.handlers[at];
+            if let Some(handler) = self.handler_index.get(&(target, kind)) {
                 call(
                     &handler.component,
                     handler.call,
@@ -639,10 +444,7 @@ impl<T: Theme> Ui<T> {
             .handler_index
             .get(&(EventTarget::Window, EventKind::Close))
         {
-            Some(&at) => {
-                let handler = &self.handlers[at];
-                call(&handler.component, handler.call, Vec::new());
-            }
+            Some(handler) => call(&handler.component, handler.call, Vec::new()),
             None => self.commands.borrow_mut().push(WindowCommand::Close),
         }
     }
@@ -682,8 +484,7 @@ impl<T: Theme> Ui<T> {
             return;
         }
         let mut pending = Pending::new(
-            std::mem::take(&mut self.structures),
-            std::mem::take(&mut self.rows),
+            std::mem::take(&mut self.owners),
             Rc::clone(&self.states),
             self.event_sink.clone(),
         );
@@ -691,14 +492,8 @@ impl<T: Theme> Ui<T> {
         for parent in requests {
             changed |= pending.rebuild(parent, &self.tree, self.theme.map(Theme::name));
         }
-        let Pending {
-            structures,
-            rows,
-            staged,
-            ..
-        } = pending;
-        self.structures = structures;
-        self.rows = rows;
+        let Pending { owners, staged, .. } = pending;
+        self.owners = owners;
         if changed {
             self.rebind(staged);
         }

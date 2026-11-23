@@ -11,7 +11,7 @@ use brul_syntax::script::{BUILTINS, BuiltinEmit};
 use brul_window::{TimerCommand, WindowCommand, WindowKey};
 
 use crate::run::generated_built;
-use crate::{Binding, BindingTarget, Component, Dyn, Error, RowKey, Script};
+use crate::{Binding, BindingTarget, Component, Dyn, Error, EventSet, RowInfo, RowKey, Script};
 
 const NAMES: &[&str] = &[
     "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code", "accent",
