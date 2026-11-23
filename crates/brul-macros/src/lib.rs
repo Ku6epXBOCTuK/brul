@@ -141,16 +141,16 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
         #function
 
         pub fn #apply(
-            ctx: &mut ::brul::AttachCtx<'_>,
+            ctx: &mut ::brul::Build,
             _state: ::brul::StateId,
             params: &[::brul::Dyn],
         ) -> Result<(), ::brul::ViewError> {
             #(#reads)*
-            if ::brul::AttachCtx::state::<#state_ty>(&*ctx).is_none() {
+            if ::brul::Build::get_state::<#state_ty>(&*ctx).is_none() {
                 let state = #name(ctx, #(Clone::clone(&#values)),*)?;
                 ctx.set_state(state);
             }
-            let cell = ::brul::AttachCtx::state::<#state_ty>(&*ctx)
+            let cell = ::brul::Build::get_state::<#state_ty>(&*ctx)
                 .expect("attachment state was just created");
             if let Ok(mut state) = cell.try_borrow_mut() {
                 #update
@@ -159,11 +159,11 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
         }
 
         pub fn #event(
-            ctx: &mut ::brul::AttachCtx<'_>,
+            ctx: &mut ::brul::Build,
             _state: ::brul::StateId,
             event: &::brul::AttachEvent<'_>,
         ) -> bool {
-            let Some(cell) = ::brul::AttachCtx::state::<#state_ty>(&*ctx) else {
+            let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
                 return false;
             };
             let Ok(mut state) = cell.try_borrow_mut() else {
@@ -172,8 +172,8 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
             #event_call
         }
 
-        pub fn #cleanup(ctx: &mut ::brul::AttachCtx<'_>, _state: ::brul::StateId) {
-            if let Some(cell) = ::brul::AttachCtx::state::<#state_ty>(&*ctx)
+        pub fn #cleanup(ctx: &mut ::brul::Build, _state: ::brul::StateId) {
+            if let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx)
                 && let Ok(mut state) = cell.try_borrow_mut()
             {
                 #cleanup_call

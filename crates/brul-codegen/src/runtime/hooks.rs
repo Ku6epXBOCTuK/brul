@@ -1,17 +1,15 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use brul_gui::{ImeKind, KeyModifiers, KeyPress, WidgetEvent, WidgetId, WidgetTree};
-use brul_script::{Component, Dyn, Error as ScriptError, Value};
+use brul_script::{Component, Dyn, Error as ScriptError};
 
-use super::event_sink;
-use super::{ComponentHandle, EventSink, SharedStates, StateId, ViewError};
+use super::{Build, ComponentHandle, StateId, ViewError};
 
 pub type Param = fn(&mut Component) -> Result<Dyn, ScriptError>;
-pub type Apply = fn(&mut AttachCtx<'_>, StateId, &[Dyn]) -> Result<(), ViewError>;
-pub type EventHook = fn(&mut AttachCtx<'_>, StateId, &AttachEvent<'_>) -> bool;
-pub type CleanupHook = fn(&mut AttachCtx<'_>, StateId);
+pub type Apply = fn(&mut Build, StateId, &[Dyn]) -> Result<(), ViewError>;
+pub type EventHook = fn(&mut Build, StateId, &AttachEvent<'_>) -> bool;
+pub type CleanupHook = fn(&mut Build, StateId);
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AttachEvents {
@@ -39,7 +37,7 @@ impl AttachEvents {
 }
 
 #[derive(Clone)]
-pub struct Attachment {
+pub struct Hooks {
     pub widget: WidgetId,
     pub state: StateId,
     pub component: ComponentHandle,
@@ -50,48 +48,12 @@ pub struct Attachment {
     pub events: AttachEvents,
 }
 
-pub fn apply(ctx: &mut AttachCtx<'_>, params: &[Param], apply: Apply) -> Result<(), ViewError> {
+pub fn apply(build: &mut Build, params: &[Param], apply: Apply) -> Result<(), ViewError> {
     let mut values = Vec::with_capacity(params.len());
     for param in params {
-        values.push(param(&mut ctx.component.borrow_mut())?);
+        values.push(param(&mut build.component().borrow_mut())?);
     }
-    apply(ctx, ctx.state, &values)
-}
-
-pub struct AttachCtx<'a> {
-    pub widget: WidgetId,
-    pub state: StateId,
-    pub component: &'a ComponentHandle,
-    pub tree: &'a Rc<RefCell<WidgetTree>>,
-    pub states: &'a SharedStates,
-    pub sink: Option<&'a Arc<dyn EventSink>>,
-}
-
-impl AttachCtx<'_> {
-    pub fn element(&self) -> Element<'_> {
-        Element {
-            id: self.widget,
-            tree: self.tree,
-        }
-    }
-
-    pub fn state<T: 'static>(&self) -> Option<Rc<RefCell<T>>> {
-        self.states.borrow().get_cloned::<RefCell<T>>(self.state)
-    }
-
-    pub fn set_state<T: 'static>(&mut self, value: T) {
-        self.states
-            .borrow_mut()
-            .get::<RefCell<T>>(self.state, self.component, || RefCell::new(value));
-    }
-
-    pub fn remove_state(&self) {
-        self.states.borrow_mut().remove(self.state);
-    }
-
-    pub fn emit(&self, event: &str, arguments: Vec<Value>) {
-        event_sink::emit(&self.sink.cloned(), self.state, event, arguments);
-    }
+    apply(build, build.state_id(), &values)
 }
 
 pub struct Element<'a> {
@@ -100,6 +62,10 @@ pub struct Element<'a> {
 }
 
 impl Element<'_> {
+    pub(crate) fn new(id: WidgetId, tree: &Rc<RefCell<WidgetTree>>) -> Element<'_> {
+        Element { id, tree }
+    }
+
     pub fn id(&self) -> WidgetId {
         self.id
     }

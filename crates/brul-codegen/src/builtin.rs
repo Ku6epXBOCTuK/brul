@@ -4,14 +4,14 @@ use brul_syntax::error::Error;
 use brul_syntax::style::{Binding, BuiltinStyles, Target, Theme, parse_builtin};
 use brul_widget_schema::{ELEMENTS, find};
 
-use crate::widgets::Widgets;
+use crate::capability::CapabilityTable;
 use crate::{Registry, Source};
 
 const SOURCE: &str = include_str!("../../../builtin/widgets.brul");
 
 pub fn load(
     palette: &[Theme],
-    widgets: &Widgets,
+    widgets: &CapabilityTable,
     components: &[String],
 ) -> Result<BuiltinStyles, Error> {
     let builtin = parse_builtin(SOURCE, palette)?;
@@ -30,7 +30,7 @@ pub fn load(
 pub fn compose(
     source: &mut Source,
     registry: &mut Registry,
-    widgets: &Widgets,
+    widgets: &CapabilityTable,
 ) -> Result<(), Error> {
     let components: Vec<String> = registry
         .definitions
@@ -49,7 +49,7 @@ pub fn compose(
     Ok(())
 }
 
-fn known(binding: &Binding, widgets: &Widgets, components: &[String]) -> bool {
+fn known(binding: &Binding, widgets: &CapabilityTable, components: &[String]) -> bool {
     match &binding.target {
         Target::Element(name) => {
             find(name).is_some()

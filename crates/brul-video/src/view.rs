@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use brul_codegen::runtime::{Build, Built, ComponentHandle, StateId, ViewError};
+use brul_codegen::runtime::{Build, Built, ComponentHandle, ViewError};
 use brul_gui::{Texture, Widget};
 use brul_syntax::ast::Position;
 
@@ -28,13 +28,12 @@ pub fn view(
     build: &mut Build,
     component: &ComponentHandle,
 ) -> Result<Built, ViewError> {
-    let state = component.borrow_mut().seed::<usize>("state", POSITION)?;
     let source = component.borrow_mut().seed::<String>("source", POSITION)?;
     let playing = component.borrow_mut().seed::<bool>("playing", POSITION)?;
     let (decoder, first) =
         decoder(&source).map_err(|error| ViewError::Message(error.to_string()))?;
     let sink = build.event_sink();
-    let id = StateId::new(state as u64);
+    let id = build.state_id();
     let player = build.state(id, component, || Player::new(id, decoder, first, sink));
     player.set_playing(playing);
     let width = player.width();

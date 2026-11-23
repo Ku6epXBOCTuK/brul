@@ -2,8 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul::{
-    AttachCtx, AttachEvent, Component, ComponentHandle, Dyn, SharedStates, StateId, States,
-    ViewError,
+    AttachEvent, Build, Component, ComponentHandle, Dyn, SharedStates, StateId, States, ViewError,
 };
 
 thread_local! {
@@ -25,7 +24,7 @@ struct CounterState {
     cleanup = counter_cleanup
 )]
 fn counter(
-    _ctx: &mut AttachCtx<'_>,
+    _ctx: &mut Build,
     amount: f64,
     flag: bool,
     label: String,
@@ -40,7 +39,7 @@ fn counter(
 
 fn counter_update(
     state: &mut CounterState,
-    _ctx: &mut AttachCtx<'_>,
+    _ctx: &mut Build,
     amount: f64,
     flag: bool,
     label: String,
@@ -52,15 +51,11 @@ fn counter_update(
     Ok(())
 }
 
-fn counter_event(
-    _state: &mut CounterState,
-    _ctx: &mut AttachCtx<'_>,
-    event: &AttachEvent<'_>,
-) -> bool {
+fn counter_event(_state: &mut CounterState, _ctx: &mut Build, event: &AttachEvent<'_>) -> bool {
     matches!(event, AttachEvent::Key { .. })
 }
 
-fn counter_cleanup(state: &mut CounterState, _ctx: &mut AttachCtx<'_>) {
+fn counter_cleanup(state: &mut CounterState, _ctx: &mut Build) {
     LOG.with(|log| log.borrow_mut().push(format!("cleanup:{}", state.amount)));
 }
 
@@ -74,21 +69,17 @@ fn attach_shims_create_update_event_and_cleanup_state() {
     )));
     let states: SharedStates = Rc::new(RefCell::new(States::default()));
     let state_id = StateId::new(42);
-    let mut ctx = AttachCtx {
-        widget: brul::gui::WidgetId::new(1),
-        state: state_id,
-        component: &component,
-        tree: &tree,
-        states: &states,
-        sink: None,
-    };
+    let mut ctx = Build::new();
+    ctx.set_tree(tree);
+    ctx.set_states(Rc::clone(&states));
+    ctx.set_target(brul::gui::WidgetId::new(1), state_id, Rc::clone(&component));
 
     let first = [Dyn::num(1.0), Dyn::flag(false), Dyn::text("first")];
     __brul_attach_counter_apply(&mut ctx, state_id, &first).expect("first apply");
     let second = [Dyn::num(2.5), Dyn::flag(true), Dyn::text("second")];
     __brul_attach_counter_apply(&mut ctx, state_id, &second).expect("second apply");
 
-    let cell = ctx.state::<CounterState>().expect("state created");
+    let cell = ctx.get_state::<CounterState>().expect("state created");
     assert_eq!(
         *cell.borrow(),
         CounterState {
@@ -123,7 +114,7 @@ fn attach_shims_create_update_event_and_cleanup_state() {
     ));
 
     __brul_attach_counter_cleanup(&mut ctx, state_id);
-    assert!(ctx.state::<CounterState>().is_none());
+    assert!(ctx.get_state::<CounterState>().is_none());
 
     let log = LOG.with(|log| log.borrow().clone());
     assert_eq!(log.last().map(String::as_str), Some("cleanup:2.5"));

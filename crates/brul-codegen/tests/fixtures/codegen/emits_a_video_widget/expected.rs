@@ -40,7 +40,7 @@ pub fn video_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, componen
     let mut props = Vec::new();
     let widget = {
         {
-            let built = brul::instance(build, component, brul::Instance {
+            let built = build.capability(brul::Capability::view(brul::StateId::new(2034772354779141u64), std::rc::Rc::clone(component), brul::Instance {
                 theme,
                 view: ::brul::video::view,
                 script: None,
@@ -49,7 +49,6 @@ pub fn video_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, componen
                 props: &[
                     brul::PropArgument { name: "source", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("clip.gif".to_owned()) }) },
                     brul::PropArgument { name: "playing", ty: brul::PropType::Bool, expression: brul::PropExpression::Flag(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok(true) }) },
-                    brul::PropArgument { name: "state", ty: brul::PropType::Number, expression: brul::PropExpression::Number(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok(2034772354779141.0_f64) }) },
                 ],
                 defaults: &[],
                 events: &[
@@ -57,7 +56,7 @@ pub fn video_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, componen
                     brul::ComponentEvent { name: "error", call: video_demo_script_event_failed, params: &[brul::PropType::String], component: std::rc::Rc::clone(component) },
                 ],
                 slots: &[],
-            })?;
+            }))?.expect("view capability");
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
@@ -250,5 +249,5 @@ pub fn script() -> Option<brul::Script> {
 }
 
 pub fn names() -> &'static [&'static str] {
-    &["message", "source", "playing", "state"]
+    &["message", "source", "playing"]
 }

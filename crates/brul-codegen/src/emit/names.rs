@@ -4,13 +4,13 @@ use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Member, Prop};
 use brul_syntax::script::{Builtin, Function, Program, Statement, builtin};
 
-use crate::widgets::Widgets;
+use crate::capability::CapabilityTable;
 use crate::{Definition, Source, error_at};
 
 pub(super) fn table<'a>(
     source: &'a Source,
     definitions: &'a [Definition],
-    widgets: &'a Widgets,
+    widgets: &'a CapabilityTable,
 ) -> Names<'a> {
     let mut names = Names::new();
     if let Some(declaration) = &source.declaration {
@@ -34,7 +34,7 @@ pub(super) fn table<'a>(
     names
 }
 
-fn widget_names<'a>(members: &'a [Member], widgets: &'a Widgets, names: &mut Names<'a>) {
+fn widget_names<'a>(members: &'a [Member], widgets: &'a CapabilityTable, names: &mut Names<'a>) {
     for member in members {
         if let Member::Element(element) = member {
             element_widget_names(element, widgets, names);
@@ -42,19 +42,20 @@ fn widget_names<'a>(members: &'a [Member], widgets: &'a Widgets, names: &mut Nam
     }
 }
 
-fn element_widget_names<'a>(element: &'a Element, widgets: &'a Widgets, names: &mut Names<'a>) {
+fn element_widget_names<'a>(
+    element: &'a Element,
+    widgets: &'a CapabilityTable,
+    names: &mut Names<'a>,
+) {
     if let Some(spec) = widgets.get(&element.name) {
         for prop in &spec.props {
             names.intern(&prop.name);
-        }
-        if matches!(spec.name.as_str(), "Video" | "WebView") {
-            names.intern("state");
         }
     }
     block_widget_names(&element.block, widgets, names);
 }
 
-fn block_widget_names<'a>(block: &'a Block, widgets: &'a Widgets, names: &mut Names<'a>) {
+fn block_widget_names<'a>(block: &'a Block, widgets: &'a CapabilityTable, names: &mut Names<'a>) {
     for item in &block.items {
         match item {
             BlockItem::Element(element) => element_widget_names(element, widgets, names),

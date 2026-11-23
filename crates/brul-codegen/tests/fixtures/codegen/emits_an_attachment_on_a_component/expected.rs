@@ -139,7 +139,7 @@ pub fn editor_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
         {
             let widget0 = editor_styled(brul::gui::Widget::input(""), &[0], theme);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<EditorScriptState>().draft.get()) })));
-            build.attach(brul::Attachment {
+            let _ = build.capability(brul::Capability::hooks(brul::Hooks {
                 widget: widget0.id(),
                 state: brul::StateId::new(5705614215138471u64),
                 component: std::rc::Rc::clone(component),
@@ -148,7 +148,7 @@ pub fn editor_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                 event: crate::__brul_attach_editor_event,
                 cleanup: crate::__brul_attach_editor_cleanup,
                 events: brul::AttachEvents { key: true, ime: false, input: false, submit: false, focus: false, blur: false, click: false },
-            });
+            }));
             widget0
         }
     };

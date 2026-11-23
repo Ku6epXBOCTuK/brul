@@ -1095,24 +1095,24 @@ struct ProbeState {
     applied: Vec<String>,
 }
 
-fn probe_apply(ctx: &mut AttachCtx<'_>, state: StateId, params: &[Dyn]) -> Result<(), ViewError> {
-    if ctx.state::<ProbeState>().is_none() {
+fn probe_apply(ctx: &mut Build, state: StateId, params: &[Dyn]) -> Result<(), ViewError> {
+    if ctx.get_state::<ProbeState>().is_none() {
         ctx.set_state(ProbeState::default());
     }
     let value = params
         .first()
         .and_then(|param| String::try_from(param.clone()).ok())
         .unwrap_or_default();
-    if let Some(probe) = ctx.state::<ProbeState>() {
+    if let Some(probe) = ctx.get_state::<ProbeState>() {
         probe.borrow_mut().applied.push(value);
     }
     let _ = state;
     Ok(())
 }
 
-fn probe_event(ctx: &mut AttachCtx<'_>, _state: StateId, event: &AttachEvent<'_>) -> bool {
+fn probe_event(ctx: &mut Build, _state: StateId, event: &AttachEvent<'_>) -> bool {
     if matches!(event, AttachEvent::Click) {
-        ctx.component
+        ctx.component()
             .borrow_mut()
             .assign("ran", Value::Bool(true))
             .expect("ran");
@@ -1122,8 +1122,8 @@ fn probe_event(ctx: &mut AttachCtx<'_>, _state: StateId, event: &AttachEvent<'_>
     }
 }
 
-fn probe_cleanup(ctx: &mut AttachCtx<'_>, _state: StateId) {
-    ctx.component
+fn probe_cleanup(ctx: &mut Build, _state: StateId) {
+    ctx.component()
         .borrow_mut()
         .assign("cleaned", Value::Bool(true))
         .expect("cleaned");
@@ -1142,7 +1142,7 @@ fn attachment_reruns_vetoes_events_and_cleans_up() {
     });
     let widget = Widget::text("");
     let id = widget.id();
-    let attachment = Attachment {
+    let hooks = Hooks {
         widget: id,
         state: StateId::new(7),
         component: Rc::clone(&component),
@@ -1175,7 +1175,7 @@ fn attachment_reruns_vetoes_events_and_cleans_up() {
         None,
         AssemblyParts {
             structures: Vec::new(),
-            attachments: vec![attachment],
+            capabilities: vec![hooks],
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
@@ -1638,7 +1638,7 @@ fn a_timer_from_a_nested_component_runs_in_its_component() {
         None,
         AssemblyParts {
             structures,
-            attachments: Vec::new(),
+            capabilities: Vec::new(),
             nested,
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,

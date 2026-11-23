@@ -15,11 +15,12 @@ pub mod build {
 }
 
 pub use brul_codegen::runtime::{
-    AttachCtx, AttachEvent, AttachEvents, Attachment, Binding, BindingTarget, Build, Built,
-    ClassTable, ComponentEvent, ComponentHandle, DEFAULT_SLOT, Element, EventSink, FlagExpression,
-    Handler, HandlerEvent, Instance, NumberExpression, PropArgument, PropBinding, PropExpression,
+    AttachEvent, AttachEvents, Binding, BindingTarget, Build, Built, Capability, ClassTable,
+    ComponentEvent, ComponentHandle, DEFAULT_SLOT, Element, EventSink, FlagExpression, Handler,
+    HandlerEvent, Hooks, Instance, NumberExpression, PropArgument, PropBinding, PropExpression,
     Rebuilt, RowInfo, RowKey, SharedStates, SlotArgument, Slots, StateId, States, Structure,
-    TextExpression, View, ViewError, emit_widget_event, instance, register_structure, slot,
+    TextExpression, View, ViewError, apply_capability, emit_widget_event, instance,
+    register_structure, slot,
 };
 pub use brul_gpu::effect;
 pub use brul_gui as gui;

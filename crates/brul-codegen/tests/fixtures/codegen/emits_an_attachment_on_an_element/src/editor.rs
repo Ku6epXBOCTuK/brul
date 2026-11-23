@@ -6,7 +6,7 @@
     cleanup = editor_cleanup
 )]
 pub fn editor(
-    ctx: &brul::AttachCtx<'_>,
+    ctx: &brul::Build,
     value: String,
     multiline: bool,
 ) -> Result<EditorState, brul::ViewError> {

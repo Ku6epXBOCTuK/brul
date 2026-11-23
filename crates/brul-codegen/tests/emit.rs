@@ -30,8 +30,8 @@ fn discovers_capabilities_for_explicit_generation() {
     let input = dir.join("input.brul");
     let capabilities = Capabilities::discover(&dir, &input).expect("capabilities");
     assert!(capabilities.commands.is_empty());
-    assert!(capabilities.attachments.contains_key("editor"));
-    assert!(capabilities.widgets.contains_key("Video"));
+    assert!(capabilities.specs.contains_key("editor"));
+    assert!(capabilities.specs.contains_key("Video"));
     let module = generate_with(&input, &capabilities).expect("generated module");
     let expected = include_str!("fixtures/codegen/emits_an_attachment_on_an_element/expected.rs");
     assert_eq!(module.flat(), expected);

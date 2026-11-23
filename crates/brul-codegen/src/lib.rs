@@ -1,9 +1,9 @@
 //! Loading `.brul` files: SFC parsing, component registry, window arguments.
 
-mod attachments;
 mod bindings;
 pub mod build;
 mod builtin;
+mod capability;
 pub mod cli;
 pub mod commands;
 mod diagnostics;
@@ -15,7 +15,6 @@ mod loader;
 pub mod runtime;
 mod source;
 pub mod styles;
-mod widgets;
 mod window;
 
 pub use commands::{Command, Commands};

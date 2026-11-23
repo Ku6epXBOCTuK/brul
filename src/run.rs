@@ -332,7 +332,7 @@ impl<T: Theme> Runtime<T> {
         let structures = build.take_structures();
         let components = build.take_components();
         let states = build.take_states();
-        let attachments = build.take_attachments();
+        let capabilities = build.take_capabilities();
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
             built,
@@ -340,7 +340,7 @@ impl<T: Theme> Runtime<T> {
             self.fixed_theme,
             AssemblyParts {
                 structures,
-                attachments,
+                capabilities,
                 nested: components,
                 states,
                 event_sink,

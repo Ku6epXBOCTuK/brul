@@ -40,7 +40,7 @@ pub fn web_view_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compo
     let mut props = Vec::new();
     let widget = {
         {
-            let built = brul::instance(build, component, brul::Instance {
+            let built = build.capability(brul::Capability::view(brul::StateId::new(7451242923022373u64), std::rc::Rc::clone(component), brul::Instance {
                 theme,
                 view: ::brul::webview::view,
                 script: None,
@@ -49,14 +49,13 @@ pub fn web_view_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compo
                 props: &[
                     brul::PropArgument { name: "source", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("https://example.com".to_owned()) }) },
                     brul::PropArgument { name: "visible", ty: brul::PropType::Bool, expression: brul::PropExpression::Flag(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok(true) }) },
-                    brul::PropArgument { name: "state", ty: brul::PropType::Number, expression: brul::PropExpression::Number(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok(7451242923022373.0_f64) }) },
                 ],
                 defaults: &[],
                 events: &[
                     brul::ComponentEvent { name: "message", call: web_view_demo_script_event_received, params: &[brul::PropType::String], component: std::rc::Rc::clone(component) },
                 ],
                 slots: &[],
-            })?;
+            }))?.expect("view capability");
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
@@ -228,5 +227,5 @@ pub fn script() -> Option<brul::Script> {
 }
 
 pub fn names() -> &'static [&'static str] {
-    &["message", "source", "visible", "state"]
+    &["message", "source", "visible"]
 }

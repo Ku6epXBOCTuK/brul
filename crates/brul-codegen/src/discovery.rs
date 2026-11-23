@@ -5,16 +5,14 @@ use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use syn::Item;
 
-use crate::attachments::Attachments;
+use crate::capability::CapabilityTable;
 use crate::commands::Commands;
 use crate::error_at;
-use crate::widgets::Widgets;
 
 #[derive(Clone, Debug, Default)]
 pub struct Capabilities {
     pub commands: Commands,
-    pub widgets: Widgets,
-    pub attachments: Attachments,
+    pub specs: CapabilityTable,
 }
 
 impl Capabilities {
@@ -30,8 +28,7 @@ impl Capabilities {
 
     pub fn discover_with_commands(entry: &Path, commands: Commands) -> Result<Self, Error> {
         let dir = entry.parent().unwrap_or(Path::new(".")).join("src");
-        let mut widgets = crate::widgets::builtins();
-        let mut attachments = Attachments::new();
+        let mut specs = crate::capability::builtins();
         if dir.is_dir() {
             let sources = crate::commands::rust_sources(&dir)
                 .map_err(|error| at(format!("cannot read '{}': {error}", dir.display())))?;
@@ -43,20 +40,14 @@ impl Capabilities {
                     let Item::Fn(function) = item else {
                         continue;
                     };
-                    if brul_capability::is_widget(function) {
-                        crate::widgets::collect_into(&mut widgets, function)?;
-                    }
-                    if brul_capability::is_attach(function) {
-                        crate::attachments::collect_into(&mut attachments, function)?;
+                    if brul_capability::is_widget(function) || brul_capability::is_attach(function)
+                    {
+                        crate::capability::collect_into(&mut specs, function)?;
                     }
                 }
             }
         }
-        Ok(Self {
-            commands,
-            widgets,
-            attachments,
-        })
+        Ok(Self { commands, specs })
     }
 }
 

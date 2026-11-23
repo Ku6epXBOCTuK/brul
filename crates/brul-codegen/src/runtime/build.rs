@@ -2,20 +2,29 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use brul_gui::{WidgetId, WidgetTree};
+use brul_script::Value;
+
 use super::component::ComponentHandle;
-use super::event_sink::EventSink;
+use super::event_sink;
+use super::hooks::{Element, Hooks};
 use super::slot::Slots;
-use super::state::{SharedStates, StateId, States};
+use super::state::{SharedStates, StateId};
 use super::structure::Structure;
+use super::{Built, Capability, ViewError};
 
 #[derive(Default)]
 pub struct Build {
     slots: Option<Rc<Slots>>,
     structures: Vec<Structure>,
     components: Vec<ComponentHandle>,
-    attachments: Vec<super::Attachment>,
+    capabilities: Vec<Hooks>,
     states: SharedStates,
-    event_sink: Option<Arc<dyn EventSink>>,
+    event_sink: Option<Arc<dyn super::EventSink>>,
+    tree: Option<Rc<RefCell<WidgetTree>>>,
+    widget: Option<WidgetId>,
+    state: Option<StateId>,
+    component: Option<ComponentHandle>,
 }
 
 impl Build {
@@ -26,11 +35,7 @@ impl Build {
     pub fn with_slots(slots: Option<Rc<Slots>>) -> Self {
         Self {
             slots,
-            structures: Vec::new(),
-            components: Vec::new(),
-            attachments: Vec::new(),
-            states: Rc::new(RefCell::new(States::default())),
-            event_sink: None,
+            ..Self::default()
         }
     }
 
@@ -42,12 +47,79 @@ impl Build {
         Rc::clone(&self.states)
     }
 
-    pub fn set_event_sink(&mut self, sink: Option<Arc<dyn EventSink>>) {
+    pub fn set_event_sink(&mut self, sink: Option<Arc<dyn super::EventSink>>) {
         self.event_sink = sink;
     }
 
-    pub fn event_sink(&self) -> Option<Arc<dyn EventSink>> {
+    pub fn event_sink(&self) -> Option<Arc<dyn super::EventSink>> {
         self.event_sink.clone()
+    }
+
+    pub fn set_tree(&mut self, tree: Rc<RefCell<WidgetTree>>) {
+        self.tree = Some(tree);
+    }
+
+    pub fn set_target(&mut self, widget: WidgetId, state: StateId, component: ComponentHandle) {
+        self.widget = Some(widget);
+        self.state = Some(state);
+        self.component = Some(component);
+    }
+
+    pub fn component(&self) -> &ComponentHandle {
+        self.component.as_ref().expect("capability component")
+    }
+
+    pub fn state_id(&self) -> StateId {
+        self.state.expect("capability state")
+    }
+
+    pub fn element(&self) -> Element<'_> {
+        Element::new(
+            self.widget.expect("capability widget"),
+            self.tree.as_ref().expect("capability widget tree"),
+        )
+    }
+
+    pub fn get_state<T: 'static>(&self) -> Option<Rc<RefCell<T>>> {
+        self.states
+            .borrow()
+            .get_cloned::<RefCell<T>>(self.state_id())
+    }
+
+    pub fn set_state<T: 'static>(&mut self, value: T) {
+        let state = self.state_id();
+        self.states.borrow_mut().get::<RefCell<T>>(
+            state,
+            self.component.as_ref().expect("capability component"),
+            || RefCell::new(value),
+        );
+    }
+
+    pub fn remove_state(&self) {
+        self.states.borrow_mut().remove(self.state_id());
+    }
+
+    pub fn emit(&self, event: &str, arguments: Vec<Value>) {
+        event_sink::emit(&self.event_sink, self.state_id(), event, arguments);
+    }
+
+    pub fn capability(&mut self, capability: Capability<'_>) -> Result<Option<Built>, ViewError> {
+        match capability {
+            Capability::View {
+                state,
+                parent,
+                instance,
+            } => {
+                let previous = self.state.replace(state);
+                let built = super::component::instance(self, &parent, instance);
+                self.state = previous;
+                built.map(Some)
+            }
+            Capability::Hooks(hooks) => {
+                self.capabilities.push(hooks);
+                Ok(None)
+            }
+        }
     }
 
     pub fn state<T: 'static>(
@@ -83,11 +155,7 @@ impl Build {
         std::mem::take(&mut self.components)
     }
 
-    pub fn attach(&mut self, attachment: super::Attachment) {
-        self.attachments.push(attachment);
-    }
-
-    pub fn take_attachments(&mut self) -> Vec<super::Attachment> {
-        std::mem::take(&mut self.attachments)
+    pub fn take_capabilities(&mut self) -> Vec<Hooks> {
+        std::mem::take(&mut self.capabilities)
     }
 }

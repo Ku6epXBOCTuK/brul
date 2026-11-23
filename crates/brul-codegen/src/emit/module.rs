@@ -118,8 +118,8 @@ pub fn split_component_file_with_capabilities(
     let command_names = commands::names(&capabilities.commands);
     validate_components(&registry.definitions, &command_names)?;
     let mut source = crate::Source::empty();
-    crate::builtin::compose(&mut source, &mut registry, &capabilities.widgets)?;
-    let names = names::table(&source, &registry.definitions, &capabilities.widgets);
+    crate::builtin::compose(&mut source, &mut registry, &capabilities.specs)?;
+    let names = names::table(&source, &registry.definitions, &capabilities.specs);
     let anchor_table = anchor::collect(&source, &registry.definitions)?;
     let mut used = HashSet::new();
     let bases: Vec<String> = registry
@@ -165,7 +165,7 @@ fn module_at(
     let mut parsed = crate::parse_source(source)?;
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
-    crate::builtin::compose(&mut parsed, &mut registry, &capabilities.widgets)?;
+    crate::builtin::compose(&mut parsed, &mut registry, &capabilities.specs)?;
     let declaration = parsed
         .declaration
         .as_ref()
@@ -176,7 +176,7 @@ fn module_at(
             "entry declaration must be a window",
         ));
     }
-    let names = names::table(&parsed, &registry.definitions, &capabilities.widgets);
+    let names = names::table(&parsed, &registry.definitions, &capabilities.specs);
     let anchor_table = anchor::collect(&parsed, &registry.definitions)?;
     let root_props = names::declared(&declaration.members);
     let mut root_external = names::declared_events(&declaration.members);

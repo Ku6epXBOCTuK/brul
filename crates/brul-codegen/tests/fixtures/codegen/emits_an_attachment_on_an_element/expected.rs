@@ -42,7 +42,7 @@ pub fn editor_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
         {
             let widget0 = editor_demo_styled(brul::gui::Widget::input(""), &[0], theme);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<EditorDemoScriptState>().draft.get()) })));
-            build.attach(brul::Attachment {
+            let _ = build.capability(brul::Capability::hooks(brul::Hooks {
                 widget: widget0.id(),
                 state: brul::StateId::new(5705614215138471u64),
                 component: std::rc::Rc::clone(component),
@@ -51,7 +51,7 @@ pub fn editor_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
                 event: crate::__brul_attach_editor_event,
                 cleanup: crate::__brul_attach_editor_cleanup,
                 events: brul::AttachEvents { key: true, ime: true, input: true, submit: true, focus: true, blur: true, click: true },
-            });
+            }));
             widget0
         }
     };

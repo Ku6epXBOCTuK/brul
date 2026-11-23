@@ -7,9 +7,9 @@ use brul_syntax::markup::{Arg, Block, BlockItem, Element, Slot, Widget};
 use brul_syntax::style::EffectRule;
 use brul_syntax::types::Type;
 
+use crate::capability::CapabilitySpec;
 use crate::error_at;
 use crate::styles;
-use crate::widgets::WidgetSpec;
 
 use super::CodegenContext;
 use super::Emit;
@@ -49,12 +49,8 @@ pub(super) fn widget(
             "anchor cannot be combined with x or y",
         ));
     }
-    if let Some(spec) = emit
-        .context
-        .capabilities
-        .widgets
-        .get(&element.name)
-        .cloned()
+    if let Some(spec) = emit.context.capabilities.specs.get(&element.name).cloned()
+        && spec.view.is_some()
     {
         return registered_widget(out, element, &spec, emit, frame, counter);
     }
@@ -600,8 +596,6 @@ fn image_widget(
     Ok(Some(expression.clone()))
 }
 
-const NUMBER_TYPE: Type = Type::Number;
-
 fn state_id(element: &Element) -> u64 {
     let mut id = 0x811c9dc5u64;
     for byte in element.name.bytes() {
@@ -616,7 +610,7 @@ fn state_id(element: &Element) -> u64 {
 fn registered_widget(
     out: &mut Out<'_>,
     element: &Element,
-    spec: &WidgetSpec,
+    spec: &CapabilitySpec,
     emit: &mut Emit<'_>,
     frame: Frame<'_>,
     counter: &mut usize,
@@ -671,15 +665,11 @@ fn registered_widget(
             }
         }
     }
-    let mut props: Vec<(&str, &Type, &Expr)> = owned
+    let props: Vec<(&str, &Type, &Expr)> = owned
         .iter()
         .map(|(name, ty, value)| (*name, ty, *value))
         .collect();
-    let state_expr;
-    if matches!(spec.name.as_str(), "Video" | "WebView") {
-        state_expr = Expr::new(ExprKind::Number(state_id(element) as f64), element.position);
-        props.push(("state", &NUMBER_TYPE, &state_expr));
-    }
+    let id = state_id(element);
     let element_classes = classes(element);
     let class_indices = element_classes
         .iter()
@@ -690,10 +680,10 @@ fn registered_widget(
     let suffix = anchor::suffix(element, emit)?;
     out.line(format_args!("{{"));
     out.indented(|out| -> Result<(), Error> {
-        out.line(format_args!("let built = brul::instance(build, component, brul::Instance {{"));
+        out.line(format_args!("let built = build.capability(brul::Capability::view(brul::StateId::new({id}u64), std::rc::Rc::clone(component), brul::Instance {{"));
         out.indented(|out| -> Result<(), Error> {
             out.line(format_args!("theme,"));
-            out.line(format_args!("view: {},", spec.view));
+            out.line(format_args!("view: {},", spec.view.as_deref().expect("view capability")));
             out.line(format_args!("script: None,"));
             out.line(format_args!("name: {:?},", spec.name));
             out.line(format_args!("names: names(),"));
@@ -728,7 +718,7 @@ fn registered_widget(
             out.line(format_args!("slots: &[],"));
             Ok(())
         })?;
-        out.line(format_args!("}})?;"));
+        out.line(format_args!("}}))?.expect(\"view capability\");"));
         for field in ["bindings", "handlers", "props"] {
             out.line(format_args!("{field}.extend(built.{field});"));
         }
@@ -783,7 +773,7 @@ pub(super) fn attachment_bindings(
     scopes: &[ScopeInfo],
     scope: Option<usize>,
 ) -> Result<(), Error> {
-    let attachments = &context.capabilities.attachments;
+    let specs = &context.capabilities.specs;
     let names = context.names;
     let state = context.state;
     let prop_types = context.prop_types;
@@ -797,11 +787,17 @@ pub(super) fn attachment_bindings(
         else {
             continue;
         };
-        let Some(spec) = attachments.get(name).cloned() else {
+        let Some(spec) = specs.get(name).cloned() else {
             return Err(error_at(*position, format!("unknown attachment '{name}'")));
         };
-        let mut expressions = Vec::with_capacity(spec.params.len());
-        for expected in &spec.params {
+        let Some(hooks) = spec.hooks else {
+            return Err(error_at(
+                *position,
+                format!("capability '{name}' has no hooks"),
+            ));
+        };
+        let mut expressions = Vec::with_capacity(hooks.params.len());
+        for expected in &hooks.params {
             let Some((_, value)) = params
                 .iter()
                 .find(|(given, _)| *given == expected.name.as_str())
@@ -815,22 +811,27 @@ pub(super) fn attachment_bindings(
                 value, names, state, prop_types, scopes, scope,
             )?);
         }
-        if params.len() != spec.params.len() {
+        if params.len() != hooks.params.len() {
             return Err(error_at(
                 *position,
-                format!("attachment '{name}' takes {} parameters", spec.params.len()),
+                format!(
+                    "attachment '{name}' takes {} parameters",
+                    hooks.params.len()
+                ),
             ));
         }
-        let events = &spec.events;
-        out.start(format_args!("build.attach(brul::Attachment {{\n"));
+        let events = &hooks.events;
+        out.start(format_args!(
+            "let _ = build.capability(brul::Capability::hooks(brul::Hooks {{\n"
+        ));
         out.indented(|out| {
             out.line(format_args!("widget: {widget}.id(),"));
             out.line(format_args!("state: brul::StateId::new({id}u64),"));
             out.line(format_args!("component: std::rc::Rc::clone(component),"));
             out.line(format_args!("params: vec![{}],", expressions.join(", ")));
-            out.line(format_args!("apply: {},", spec.apply));
-            out.line(format_args!("event: {},", spec.event));
-            out.line(format_args!("cleanup: {},", spec.cleanup));
+            out.line(format_args!("apply: {},", hooks.apply));
+            out.line(format_args!("event: {},", hooks.event));
+            out.line(format_args!("cleanup: {},", hooks.cleanup));
             let fields = AttachEventKind::ALL
                 .iter()
                 .map(|kind| format!("{}: {}", kind.field(), events.contains(kind)))
@@ -839,7 +840,7 @@ pub(super) fn attachment_bindings(
             out.line(format_args!("events: brul::AttachEvents {{ {fields} }},"));
             Ok::<(), Error>(())
         })?;
-        out.line(format_args!("}});"));
+        out.line(format_args!("}}));"));
     }
     Ok(())
 }

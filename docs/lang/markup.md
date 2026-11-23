@@ -148,16 +148,20 @@ TextInput (use: editor(value: draft, multiline: true)) { draft }
 ```rust,ignore
 #[brul::attach(name = "editor", events(Key, Ime), update = editor_update,
                event = editor_event, cleanup = editor_cleanup)]
-fn editor(ctx: &mut brul::AttachCtx<'_>, value: String, multiline: bool)
+fn editor(ctx: &mut brul::Build, value: String, multiline: bool)
     -> Result<EditorState, brul::ViewError> { /* состояние */ }
 ```
 
+`#[brul::attach]` и `#[brul::widget]` регистрируют capability: первая приносит
+хуки, вторая — view. Обе проходят через `Build::capability(...)`, поэтому
+`Build` — единственный контекст Rust-кода на элементе: он даёт
+`Build::get_state::<T>()` / `set_state` / `remove_state`, `element()` для правки
+примитива, `emit()` для событий скрипта и `state_id()`.
+
 Функция создаёт состояние один раз, `update` вызывается при изменении любого
 параметра. Состояние лежит в слоте `StateId` элемента: отдельный слот на каждый
-экземпляр, в том числе в строках `@each`; `apply` и хуки получают его через
-`AttachCtx::state::<T>()` / `set_state`. `AttachCtx` также даёт `element()` для
-правки примитива, `emit()` для событий скрипта и `remove_state()`. Хук `event`
-получает `Key`, `Ime`, `Input`, `Submit`, `Focus`, `Blur` или `Click` и
+экземпляр, в том числе в строках `@each`; хуки получают его через `Build`. Хук
+`event` получает `Key`, `Ime`, `Input`, `Submit`, `Focus`, `Blur` или `Click` и
 возвращает `true`, если событие поглощено; такой вызов не доходит до `on ...`
 элемента и окна. У `Key` нет идентификатора элемента, поэтому он адресуется
 сфокусированному элементу; клавишу сначала обрабатывает движок, вложение только
@@ -575,7 +579,9 @@ Gauge (value: 42, label: "load", on changed: changed)
 
 Тело возвращает `Built` из существующих виджетов `brul::gui`; отдельный скрипт у
 такого элемента отсутствует. Событие объявляется в атрибуте и отправляется через
-`component.borrow_mut().call("changed", &[...])`. Дочерние элементы пока не
+`component.borrow_mut().call("changed", &[...])`. Идентификатор слота состояния
+элемента доступен как `build.state_id()` — через него view хранит своё
+Rust-состояние без синтетического пропса в разметке. Дочерние элементы пока не
 поддерживаются; неизвестное имя элемента, пропса или события — ошибка сборки с
 позицией в файле.
 
