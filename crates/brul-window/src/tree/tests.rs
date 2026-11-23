@@ -3,9 +3,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{
-    Atlas, Cursor, Dimension, Dirty, KeyPress, LayoutStyle, PlatformViewId, Size, StyleSet,
-    TextEngine, TimerOwner, Widget, WidgetError, WidgetEvent, WidgetSnapshot, WidgetStyle,
-    WidgetTree,
+    Atlas, Cursor, Dimension, Dirty, Event, KeyPress, LayoutStyle, PlatformViewId, Size, StyleSet,
+    TextEngine, TimerOwner, UiEvent, Widget, WidgetError, WidgetSnapshot, WidgetStyle, WidgetTree,
 };
 use winit::event_loop::ControlFlow;
 
@@ -309,7 +308,7 @@ fn a_drag_event_drags_the_window() {
     let mut app = tree_app(commands(Vec::new()));
     let widget = Widget::text("x").id();
 
-    let step = app.dispatch_events(&surface, vec![WidgetEvent::Drag(widget)]);
+    let step = app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::drag())]);
     assert_eq!(step, Step::Continue);
     assert_eq!(surface.drags.get(), 1);
 }
@@ -319,13 +318,13 @@ fn a_close_request_waits_for_the_handler() {
     let surface = FakeSurface::new(1.0);
     let mut app = tree_app(commands(Vec::new()));
     assert_eq!(
-        app.dispatch_events(&surface, vec![WidgetEvent::Close]),
+        app.dispatch_events(&surface, vec![UiEvent::window(Event::close())]),
         Step::Continue
     );
 
     let mut app = tree_app(commands(vec![WindowCommand::Close]));
     assert_eq!(
-        app.dispatch_events(&surface, vec![WidgetEvent::Close]),
+        app.dispatch_events(&surface, vec![UiEvent::window(Event::close())]),
         Step::Close
     );
 }
@@ -336,7 +335,7 @@ fn the_exit_command_finishes_the_loop() {
     let mut app = tree_app(commands(vec![WindowCommand::Exit]));
     let widget = Widget::text("x").id();
 
-    let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    let step = app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(step, Step::Exit);
 }
 
@@ -346,7 +345,7 @@ fn the_close_command_closes_the_window() {
     let mut app = tree_app(commands(vec![WindowCommand::Close]));
     let widget = Widget::text("x").id();
 
-    let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    let step = app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(step, Step::Close);
 }
 
@@ -357,7 +356,7 @@ fn the_open_command_names_the_window() {
     let mut app = tree_app(commands(vec![WindowCommand::Open(key)]));
     let widget = Widget::text("x").id();
 
-    let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    let step = app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(step, Step::Open(key));
 }
 
@@ -367,7 +366,7 @@ fn a_drag_command_drags_the_window() {
     let mut app = tree_app(commands(vec![WindowCommand::Drag]));
     let widget = Widget::text("x").id();
 
-    app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(surface.drags.get(), 1);
 }
 
@@ -377,7 +376,7 @@ fn a_hide_command_hides_the_window() {
     let mut app = tree_app(commands(vec![WindowCommand::Hide]));
     let widget = Widget::text("x").id();
 
-    let step = app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    let step = app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(step, Step::Continue);
     assert_eq!(surface.visible.get(), Some(false));
 }
@@ -388,7 +387,7 @@ fn a_show_command_shows_the_window() {
     let mut app = tree_app(commands(vec![WindowCommand::Show]));
     let widget = Widget::text("x").id();
 
-    app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(surface.visible.get(), Some(true));
 }
 
@@ -398,7 +397,7 @@ fn an_always_on_top_command_raises_the_window() {
     let mut app = tree_app(commands(vec![WindowCommand::AlwaysOnTop(true)]));
     let widget = Widget::text("x").id();
 
-    app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(surface.on_top.get(), Some(true));
 }
 
@@ -408,7 +407,7 @@ fn a_focus_command_takes_the_focus() {
     let mut app = tree_app(commands(vec![WindowCommand::Show, WindowCommand::Focus]));
     let widget = Widget::text("x").id();
 
-    app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(surface.focus.get(), 1);
 }
 
@@ -424,7 +423,7 @@ fn a_timer_command_is_kept() {
     })]));
     let widget = Widget::text("x").id();
 
-    app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert_eq!(app.timers.len(), 1);
 }
 
@@ -446,7 +445,7 @@ fn a_timer_cancel_removes_the_started_timer() {
     ]));
     let widget = Widget::text("x").id();
 
-    app.dispatch_events(&surface, vec![WidgetEvent::Press(widget)]);
+    app.dispatch_events(&surface, vec![UiEvent::widget(widget, Event::press())]);
     assert!(app.timers.is_empty());
 }
 

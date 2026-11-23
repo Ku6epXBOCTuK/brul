@@ -243,29 +243,15 @@ fn an_offset_binding_rounds_and_ignores_what_it_has_no_number_for() {
 
 #[test]
 fn event_names_round_trip_and_stay_distinct() {
-    let events = [
-        HandlerEvent::Click,
-        HandlerEvent::Press,
-        HandlerEvent::Release,
-        HandlerEvent::Enter,
-        HandlerEvent::Leave,
-        HandlerEvent::Drag,
-        HandlerEvent::Key,
-        HandlerEvent::Close,
-        HandlerEvent::Focus,
-        HandlerEvent::Blur,
-        HandlerEvent::Input,
-        HandlerEvent::Submit,
-        HandlerEvent::Dismiss,
-    ];
+    let events = EventKind::ALL;
     for event in events {
-        assert_eq!(HandlerEvent::parse(event.name()), Some(event));
+        assert_eq!(event.name().parse::<EventKind>().unwrap(), *event);
     }
     let mut names: Vec<_> = events.iter().map(|event| event.name()).collect();
     names.sort_unstable();
     names.dedup();
     assert_eq!(names.len(), events.len());
-    assert_eq!(HandlerEvent::parse("hover"), None);
+    assert!("hover".parse::<EventKind>().is_err());
 }
 
 fn event_host(events: Vec<ComponentEvent>) -> EventHost {

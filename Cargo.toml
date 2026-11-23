@@ -68,6 +68,7 @@ brul-case = { path = 'crates\brul-case' }
 brul-capability = { path = 'crates\brul-capability' }
 brul-command = { path = 'crates\brul-command' }
 brul-codegen = { path = 'crates\brul-codegen' }
+brul-event = { path = 'crates\brul-event' }
 brul-gpu = { path = 'crates\brul-gpu' }
 brul-gui = { path = 'crates\brul-gui' }
 brul-ident = { path = 'crates\brul-ident' }

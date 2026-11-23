@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_gui::{
-    Color, Dimension, LayoutStyle, Padding, Paint, StyleSet, StyleState, Widget, WidgetEvent,
+    Color, Dimension, Event, LayoutStyle, Padding, Paint, StyleSet, StyleState, UiEvent, Widget,
     WidgetStyle, WidgetTree,
 };
 use brul_reactive::{Effect, Signal, batch};
@@ -46,16 +46,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..WindowConfig::default()
     };
     run_tree(config, tree, Vec::new(), move |events| {
-        if events
-            .iter()
-            .any(|event| matches!(event, WidgetEvent::Click(_)))
-        {
+        if events.iter().any(|event| {
+            matches!(
+                event,
+                UiEvent {
+                    event: Event::Click { .. },
+                    ..
+                }
+            )
+        }) {
             batch(|| checked.set(!checked.get()));
         }
-        if events
-            .iter()
-            .any(|event| matches!(event, WidgetEvent::Close))
-        {
+        if events.iter().any(|event| {
+            matches!(
+                event,
+                UiEvent {
+                    event: Event::Close { .. },
+                    ..
+                }
+            )
+        }) {
             return vec![WindowCommand::Close];
         }
         Vec::new()

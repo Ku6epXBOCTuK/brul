@@ -43,7 +43,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
             let widget0 = brul::gui::Widget::layer(vec![
                 brul::gui::Widget::text("x"),
             ]).modal(true);
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Dismiss, demo_script_event_dismiss));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Dismiss, demo_script_event_dismiss));
             widget0
         }
     };

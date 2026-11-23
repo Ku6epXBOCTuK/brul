@@ -1,5 +1,5 @@
 use brul_gui::{
-    Dimension, KeyModifiers, KeyPress, LayoutStyle, Size, TextEngine, Widget, WidgetEvent,
+    Dimension, Event, KeyModifiers, KeyPress, LayoutStyle, Size, TextEngine, UiEvent, Widget,
     WidgetTree,
 };
 
@@ -45,12 +45,12 @@ fn typing_inserts_at_the_caret_and_moves_it() {
     assert_eq!(tree.press_key("Home"), Vec::new());
     assert_eq!(
         tree.press_key("X"),
-        vec![WidgetEvent::Input(id, "Xab".to_owned(), 1)]
+        vec![UiEvent::widget(id, Event::input("Xab".to_owned(), 1))]
     );
     assert_eq!(tree.press_key("ArrowRight"), Vec::new());
     assert_eq!(
         tree.press_key("Y"),
-        vec![WidgetEvent::Input(id, "XaYb".to_owned(), 3)]
+        vec![UiEvent::widget(id, Event::input("XaYb".to_owned(), 3))]
     );
 }
 
@@ -63,19 +63,17 @@ fn backspace_and_delete_remove_whole_characters() {
     assert_eq!(tree.press_key("End"), Vec::new());
     assert_eq!(
         tree.press_key("Backspace"),
-        vec![WidgetEvent::Input(
+        vec![UiEvent::widget(
             id,
-            "\u{43f}\u{440}\u{438}\u{432}\u{435}".to_owned(),
-            10
+            Event::input("\u{43f}\u{440}\u{438}\u{432}\u{435}".to_owned(), 10)
         )]
     );
     assert_eq!(tree.press_key("Home"), Vec::new());
     assert_eq!(
         tree.press_key("Delete"),
-        vec![WidgetEvent::Input(
+        vec![UiEvent::widget(
             id,
-            "\u{440}\u{438}\u{432}\u{435}".to_owned(),
-            0
+            Event::input("\u{440}\u{438}\u{432}\u{435}".to_owned(), 0)
         )]
     );
 }
@@ -86,9 +84,12 @@ fn space_inserts_a_space_and_enter_submits_instead_of_clicking() {
 
     assert_eq!(
         tree.press_key(" "),
-        vec![WidgetEvent::Input(id, "a ".to_owned(), 2)]
+        vec![UiEvent::widget(id, Event::input("a ".to_owned(), 2))]
     );
-    assert_eq!(tree.press_key("Enter"), vec![WidgetEvent::Submit(id)]);
+    assert_eq!(
+        tree.press_key("Enter"),
+        vec![UiEvent::widget(id, Event::submit())]
+    );
 }
 
 #[test]
@@ -98,17 +99,23 @@ fn enter_submits_and_escape_and_tab_leave_the_field() {
     let mut tree = laid_out(Widget::column(vec![first, second]).with_layout(fixed(100, 100)));
     tree.press_key("Tab");
 
-    assert_eq!(tree.press_key("Enter"), vec![WidgetEvent::Submit(first_id)]);
+    assert_eq!(
+        tree.press_key("Enter"),
+        vec![UiEvent::widget(first_id, Event::submit())]
+    );
     assert_eq!(
         tree.press_key("Escape"),
-        vec![WidgetEvent::Key {
-            key: KeyPress::from("Escape"),
-            modifiers: KeyModifiers::default(),
-        }]
+        vec![UiEvent::widget(
+            first_id,
+            Event::key(KeyPress::from("Escape"), KeyModifiers::default()),
+        )]
     );
     assert_eq!(
         tree.press_key("Tab"),
-        vec![WidgetEvent::Blur(first_id), WidgetEvent::Focus(second_id)]
+        vec![
+            UiEvent::widget(first_id, Event::blur()),
+            UiEvent::widget(second_id, Event::focus())
+        ]
     );
 }
 
@@ -121,14 +128,14 @@ fn an_external_write_replaces_the_text_and_clamps_the_caret() {
     assert_eq!(tree.press_key("ArrowRight"), Vec::new());
     assert_eq!(
         tree.press_key("Z"),
-        vec![WidgetEvent::Input(id, "xyZ".to_owned(), 3)]
+        vec![UiEvent::widget(id, Event::input("xyZ".to_owned(), 3))]
     );
     assert!(!tree.set_input_text(id, "xyZ".to_owned()));
 
     assert!(tree.set_input_text(id, "q".to_owned()));
     assert_eq!(
         tree.press_key("W"),
-        vec![WidgetEvent::Input(id, "qW".to_owned(), 2)]
+        vec![UiEvent::widget(id, Event::input("qW".to_owned(), 2))]
     );
 }
 
@@ -175,7 +182,7 @@ fn a_click_places_the_caret() {
     let _ = tree.pointer_down(60, 5).expect("down");
     assert_eq!(
         tree.press_key("Z"),
-        vec![WidgetEvent::Input(id, "abZ".to_owned(), 3)]
+        vec![UiEvent::widget(id, Event::input("abZ".to_owned(), 3))]
     );
 }
 
@@ -186,10 +193,10 @@ fn a_key_press_without_a_focused_field_still_reaches_the_window() {
 
     assert_eq!(
         tree.press_key("a"),
-        vec![WidgetEvent::Key {
-            key: KeyPress::from("a"),
-            modifiers: KeyModifiers::default(),
-        }]
+        vec![UiEvent::window(Event::key(
+            KeyPress::from("a"),
+            KeyModifiers::default(),
+        ))]
     );
 }
 
@@ -204,10 +211,7 @@ fn a_physical_code_reaches_the_window_event() {
 
     assert_eq!(
         tree.press_key(key.clone()),
-        vec![WidgetEvent::Key {
-            key,
-            modifiers: KeyModifiers::default(),
-        }]
+        vec![UiEvent::window(Event::key(key, KeyModifiers::default()))]
     );
 }
 
@@ -246,11 +250,11 @@ fn a_multiline_field_inserts_a_newline_and_keeps_the_submit_for_one_line() {
 
     assert_eq!(
         tree.press_key("Enter"),
-        vec![WidgetEvent::Input(id, "ab\n".to_owned(), 3)]
+        vec![UiEvent::widget(id, Event::input("ab\n".to_owned(), 3))]
     );
     assert_eq!(
         tree.press_key("Z"),
-        vec![WidgetEvent::Input(id, "ab\nZ".to_owned(), 4)]
+        vec![UiEvent::widget(id, Event::input("ab\nZ".to_owned(), 4))]
     );
 }
 
@@ -265,13 +269,13 @@ fn vertical_arrows_move_the_caret_between_the_lines() {
     assert_eq!(tree.press_key("ArrowUp"), Vec::new());
     assert_eq!(
         tree.press_key("X"),
-        vec![WidgetEvent::Input(id, "abX\ncd".to_owned(), 3)]
+        vec![UiEvent::widget(id, Event::input("abX\ncd".to_owned(), 3))]
     );
     relayout(&mut tree);
     assert_eq!(tree.press_key("ArrowDown"), Vec::new());
     assert_eq!(
         tree.press_key("Y"),
-        vec![WidgetEvent::Input(id, "abX\ncdY".to_owned(), 7)]
+        vec![UiEvent::widget(id, Event::input("abX\ncdY".to_owned(), 7))]
     );
 }
 
@@ -331,7 +335,7 @@ fn a_click_on_the_second_line_places_the_caret_there() {
     let _ = tree.pointer_down(60, 18).expect("down");
     assert_eq!(
         tree.press_key("Z"),
-        vec![WidgetEvent::Input(id, "ab\ncdZ".to_owned(), 6)]
+        vec![UiEvent::widget(id, Event::input("ab\ncdZ".to_owned(), 6))]
     );
 }
 
@@ -386,7 +390,7 @@ fn control_a_selects_everything_and_typing_replaces_it() {
     tree.set_modifiers(KeyModifiers::default());
     assert_eq!(
         tree.press_key("Z"),
-        vec![WidgetEvent::Input(id, "Z".to_owned(), 1)]
+        vec![UiEvent::widget(id, Event::input("Z".to_owned(), 1))]
     );
 }
 
@@ -400,7 +404,7 @@ fn dragging_across_the_field_selects_the_text() {
     let _ = tree.pointer_moved(0, 5).expect("move");
     assert_eq!(
         tree.press_key("Backspace"),
-        vec![WidgetEvent::Input(id, String::new(), 0)]
+        vec![UiEvent::widget(id, Event::input(String::new(), 0))]
     );
 }
 
@@ -415,13 +419,13 @@ fn home_and_end_stay_on_the_current_line() {
     assert_eq!(tree.press_key("Home"), Vec::new());
     assert_eq!(
         tree.press_key("X"),
-        vec![WidgetEvent::Input(id, "ab\nXcd".to_owned(), 4)]
+        vec![UiEvent::widget(id, Event::input("ab\nXcd".to_owned(), 4))]
     );
     relayout(&mut tree);
     assert_eq!(tree.press_key("End"), Vec::new());
     assert_eq!(
         tree.press_key("Y"),
-        vec![WidgetEvent::Input(id, "ab\nXcdY".to_owned(), 7)]
+        vec![UiEvent::widget(id, Event::input("ab\nXcdY".to_owned(), 7))]
     );
 }
 
@@ -437,7 +441,10 @@ fn shift_tab_moves_the_focus_back() {
 
     assert_eq!(
         tree.press_key("Tab"),
-        vec![WidgetEvent::Blur(second_id), WidgetEvent::Focus(first_id)]
+        vec![
+            UiEvent::widget(second_id, Event::blur()),
+            UiEvent::widget(first_id, Event::focus())
+        ]
     );
 }
 
@@ -456,12 +463,12 @@ fn selected(tree: &mut WidgetTree) {
 
 #[test]
 fn control_c_copies_the_selection() {
-    let (mut tree, _) = focused_field("abc");
+    let (mut tree, id) = focused_field("abc");
     selected(&mut tree);
 
     assert_eq!(
         tree.press_key("c"),
-        vec![WidgetEvent::Copy("abc".to_owned())]
+        vec![UiEvent::widget(id, Event::copy("abc".to_owned()))]
     );
 }
 
@@ -481,18 +488,21 @@ fn control_x_cuts_the_selection() {
     assert_eq!(
         tree.press_key("x"),
         vec![
-            WidgetEvent::Input(id, String::new(), 0),
-            WidgetEvent::Copy("abc".to_owned()),
+            UiEvent::widget(id, Event::input(String::new(), 0)),
+            UiEvent::widget(id, Event::copy("abc".to_owned())),
         ]
     );
 }
 
 #[test]
 fn control_v_asks_for_the_clipboard() {
-    let (mut tree, _) = focused_field("abc");
+    let (mut tree, id) = focused_field("abc");
     tree.set_modifiers(control());
 
-    assert_eq!(tree.press_key("v"), vec![WidgetEvent::Paste]);
+    assert_eq!(
+        tree.press_key("v"),
+        vec![UiEvent::widget(id, Event::paste())]
+    );
 }
 
 #[test]
@@ -504,13 +514,14 @@ fn pasting_replaces_the_selection_and_strips_newlines() {
 
     assert_eq!(
         tree.paste_text("x\r\ny"),
-        vec![WidgetEvent::Input(id, "xy".to_owned(), 2)]
+        vec![UiEvent::widget(id, Event::input("xy".to_owned(), 2))]
     );
 }
 
 #[test]
 fn ctrl_enter_leaves_a_multiline_field_for_the_window() {
     let input = multiline("a");
+    let id = input.id();
     let mut tree = focused(laid_out(
         Widget::column(vec![input]).with_layout(fixed(100, 40)),
     ));
@@ -518,10 +529,10 @@ fn ctrl_enter_leaves_a_multiline_field_for_the_window() {
 
     assert_eq!(
         tree.press_key("Enter"),
-        vec![WidgetEvent::Key {
-            key: KeyPress::from("Enter"),
-            modifiers: control(),
-        }]
+        vec![UiEvent::widget(
+            id,
+            Event::key(KeyPress::from("Enter"), control()),
+        )]
     );
 }
 
@@ -535,7 +546,7 @@ fn a_multiline_paste_keeps_its_lines() {
 
     assert_eq!(
         tree.paste_text("b\r\nc"),
-        vec![WidgetEvent::Input(id, "ab\nc".to_owned(), 4)]
+        vec![UiEvent::widget(id, Event::input("ab\nc".to_owned(), 4))]
     );
 }
 
@@ -566,7 +577,7 @@ fn a_commit_inserts_the_text_and_clears_the_preedit() {
 
     assert_eq!(
         tree.commit_text("X"),
-        vec![WidgetEvent::Input(id, "Xab".to_owned(), 1)]
+        vec![UiEvent::widget(id, Event::input("Xab".to_owned(), 1))]
     );
     relayout(&mut tree);
     let node = tree
@@ -599,7 +610,7 @@ fn delete_surrounding_removes_whole_characters_around_the_caret() {
 
     assert_eq!(
         tree.delete_surrounding(2, 2),
-        vec![WidgetEvent::Input(id, "\u{438}".to_owned(), 0)]
+        vec![UiEvent::widget(id, Event::input("\u{438}".to_owned(), 0))]
     );
 }
 

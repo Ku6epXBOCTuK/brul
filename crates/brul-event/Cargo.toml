@@ -1,0 +1,12 @@
+[package]
+name = "brul-event"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Ku6epXBOCTuK/brul"
+
+[dependencies]
+brul-ident = { workspace = true }
+
+[lints]
+workspace = true

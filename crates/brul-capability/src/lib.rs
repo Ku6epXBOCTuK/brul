@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 use std::fmt;
-use std::str::FromStr;
 
 use brul_case::snake;
+use brul_event::EventKind;
 use proc_macro2::TokenStream;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
@@ -23,7 +23,7 @@ pub struct EventArg {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AttachAttr {
     pub name: Option<String>,
-    pub events: BTreeSet<AttachEventKind>,
+    pub events: BTreeSet<EventKind>,
     pub update: Option<Ident>,
     pub event: Option<Ident>,
     pub cleanup: Option<Ident>,
@@ -155,7 +155,7 @@ impl From<EventArgument> for EventArg {
 
 enum AttachArgument {
     Name(LitStr),
-    Events(BTreeSet<AttachEventKind>),
+    Events(BTreeSet<EventKind>),
     Update(Ident),
     Event(Ident),
     Cleanup(Ident),
@@ -172,9 +172,9 @@ impl Parse for AttachArgument {
                 let events = Punctuated::<Ident, Token![,]>::parse_terminated(&content)?;
                 let mut result = BTreeSet::new();
                 for event in events {
-                    result.insert(event.to_string().parse().map_err(
-                        |error: UnknownAttachEvent| syn::Error::new(event.span(), error),
-                    )?);
+                    result.insert(event.to_string().parse::<EventKind>().map_err(|error| {
+                        syn::Error::new(event.span(), UnknownAttachEvent(error.0))
+                    })?);
                 }
                 Ok(Self::Events(result))
             }
@@ -196,58 +196,6 @@ impl fmt::Display for UnknownAttachEvent {
 }
 
 impl std::error::Error for UnknownAttachEvent {}
-
-macro_rules! attach_events {
-    ($(($variant:ident, $name:literal, $field:literal)),+ $(,)?) => {
-        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub enum AttachEventKind {
-            $($variant),+
-        }
-
-        impl AttachEventKind {
-            pub const ALL: &'static [Self] = &[$(Self::$variant),+];
-
-            pub const fn name(self) -> &'static str {
-                match self {
-                    $(Self::$variant => $name),+
-                }
-            }
-
-            pub const fn field(self) -> &'static str {
-                match self {
-                    $(Self::$variant => $field),+
-                }
-            }
-        }
-
-        impl fmt::Display for AttachEventKind {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str(self.name())
-            }
-        }
-
-        impl FromStr for AttachEventKind {
-            type Err = UnknownAttachEvent;
-
-            fn from_str(value: &str) -> Result<Self, Self::Err> {
-                $(if value == $name {
-                    return Ok(Self::$variant);
-                })+
-                Err(UnknownAttachEvent(value.to_owned()))
-            }
-        }
-    };
-}
-
-attach_events! {
-    (Key, "Key", "key"),
-    (Ime, "Ime", "ime"),
-    (Input, "Input", "input"),
-    (Submit, "Submit", "submit"),
-    (Focus, "Focus", "focus"),
-    (Blur, "Blur", "blur"),
-    (Click, "Click", "click"),
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AttachShims {
@@ -293,7 +241,17 @@ mod tests {
         assert_eq!(attribute.name.as_deref(), Some("counter"));
         assert_eq!(
             attribute.events,
-            AttachEventKind::ALL.iter().copied().collect()
+            [
+                EventKind::Key,
+                EventKind::Ime,
+                EventKind::Input,
+                EventKind::Submit,
+                EventKind::Focus,
+                EventKind::Blur,
+                EventKind::Click,
+            ]
+            .into_iter()
+            .collect()
         );
         assert_eq!(
             attribute.update.as_ref().unwrap().to_string(),
@@ -346,9 +304,9 @@ mod tests {
 
     #[test]
     fn event_kinds_round_trip_names_and_fields() {
-        for kind in AttachEventKind::ALL {
-            assert_eq!(kind.to_string().parse::<AttachEventKind>().unwrap(), *kind);
-            assert_eq!(kind.field(), kind.name().to_lowercase());
+        for kind in EventKind::ALL {
+            assert_eq!(kind.to_string().parse::<EventKind>().unwrap(), *kind);
+            assert_eq!(kind.field().parse::<EventKind>().unwrap(), *kind);
         }
     }
 

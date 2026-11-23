@@ -1,40 +1,8 @@
-use brul_ident::{FunctionName, TimerOwner};
+use brul_event::Event;
 
 use super::WidgetId;
 use crate::layout::LayoutError;
 use crate::text::TextError;
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct KeyModifiers {
-    pub shift: bool,
-    pub control: bool,
-    pub alt: bool,
-    pub meta: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct KeyPress {
-    pub code: String,
-    pub physical: Option<String>,
-}
-
-impl From<&str> for KeyPress {
-    fn from(code: &str) -> Self {
-        Self {
-            code: code.to_owned(),
-            physical: None,
-        }
-    }
-}
-
-impl From<String> for KeyPress {
-    fn from(code: String) -> Self {
-        Self {
-            code,
-            physical: None,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CaretArea {
@@ -44,43 +12,52 @@ pub struct CaretArea {
     pub height: u32,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ImeKind {
-    Enabled,
-    Preedit(String),
-    Commit(String),
-    DeleteSurrounding {
-        before_bytes: usize,
-        after_bytes: usize,
-    },
-    Disabled,
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum EventTarget {
+    Window,
+    Widget(WidgetId),
+}
+
+impl EventTarget {
+    pub fn chain(self) -> impl Iterator<Item = Self> {
+        match self {
+            Self::Window => vec![Self::Window].into_iter(),
+            Self::Widget(id) => vec![Self::Widget(id), Self::Window].into_iter(),
+        }
+    }
+
+    pub fn widget(self) -> Option<WidgetId> {
+        match self {
+            Self::Window => None,
+            Self::Widget(id) => Some(id),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum WidgetEvent {
-    PointerEnter(WidgetId),
-    PointerLeave(WidgetId),
-    Press(WidgetId),
-    Release(WidgetId),
-    Click(WidgetId),
-    Drag(WidgetId),
-    Key {
-        key: KeyPress,
-        modifiers: KeyModifiers,
-    },
-    Close,
-    Timer(TimerOwner, FunctionName),
-    Focus(WidgetId),
-    Blur(WidgetId),
-    Input(WidgetId, String, usize),
-    Ime {
-        id: WidgetId,
-        kind: ImeKind,
-    },
-    Submit(WidgetId),
-    Dismiss(WidgetId),
-    Copy(String),
-    Paste,
+pub struct UiEvent {
+    pub target: EventTarget,
+    pub event: Event,
+}
+
+impl UiEvent {
+    pub fn window(event: Event) -> Self {
+        Self {
+            target: EventTarget::Window,
+            event,
+        }
+    }
+
+    pub fn widget(id: WidgetId, event: Event) -> Self {
+        Self {
+            target: EventTarget::Widget(id),
+            event,
+        }
+    }
+
+    pub fn at(target: EventTarget, event: Event) -> Self {
+        Self { target, event }
+    }
 }
 
 #[derive(Clone, Debug, Default)]

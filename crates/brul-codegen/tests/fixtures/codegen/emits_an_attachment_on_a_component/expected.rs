@@ -147,7 +147,7 @@ pub fn editor_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                 apply: crate::__brul_attach_editor_apply,
                 event: crate::__brul_attach_editor_event,
                 cleanup: crate::__brul_attach_editor_cleanup,
-                events: brul::AttachEvents { key: true, ime: false, input: false, submit: false, focus: false, blur: false, click: false },
+                events: brul::EventSet::from([brul::EventKind::Key]),
             }));
             widget0
         }

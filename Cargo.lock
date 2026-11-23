@@ -288,6 +288,7 @@ name = "brul-capability"
 version = "0.1.0"
 dependencies = [
  "brul-case",
+ "brul-event",
  "proc-macro2",
  "syn 2.0.119",
 ]
@@ -306,6 +307,7 @@ dependencies = [
  "brul-capability",
  "brul-case",
  "brul-command",
+ "brul-event",
  "brul-gpu",
  "brul-gui",
  "brul-lang-gen",
@@ -328,6 +330,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "brul-event"
+version = "0.1.0"
+dependencies = [
+ "brul-ident",
+]
+
+[[package]]
 name = "brul-gpu"
 version = "0.1.0"
 dependencies = [
@@ -341,6 +350,7 @@ dependencies = [
 name = "brul-gui"
 version = "0.1.0"
 dependencies = [
+ "brul-event",
  "brul-ident",
  "brul-layout",
  "brul-reactive",

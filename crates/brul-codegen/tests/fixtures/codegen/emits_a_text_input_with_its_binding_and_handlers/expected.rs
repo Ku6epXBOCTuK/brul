@@ -42,8 +42,8 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
         {
             let widget0 = demo_styled(brul::gui::Widget::input(""), &[0, 1], theme);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).try_into()?) })));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Input, demo_script_event_edited));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Submit, demo_script_event_submitted));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Input, demo_script_event_edited));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Submit, demo_script_event_submitted));
             widget0
         }
     };

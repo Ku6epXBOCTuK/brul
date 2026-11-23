@@ -161,7 +161,7 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
         pub fn #event(
             ctx: &mut ::brul::Build,
             _state: ::brul::StateId,
-            event: &::brul::AttachEvent<'_>,
+            event: &::brul::UiEvent,
         ) -> bool {
             let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
                 return false;

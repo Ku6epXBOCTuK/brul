@@ -7,6 +7,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+brul-event = { workspace = true }
 brul-ident = { workspace = true }
 brul-layout = { workspace = true }
 brul-style = { workspace = true }

@@ -16,8 +16,9 @@ mod text;
 mod tree;
 
 pub use crate::text::TextStylePatch;
+pub use brul_event::{Event, EventKind, EventSet, ImeKind, KeyModifiers, KeyPress};
 pub use brul_ident::{FunctionName, TimerOwner};
-pub use event::{CaretArea, Dirty, ImeKind, KeyModifiers, KeyPress, WidgetError, WidgetEvent};
+pub use event::{CaretArea, Dirty, EventTarget, UiEvent, WidgetError};
 pub use snapshot::{WidgetSnapshot, WidgetSnapshotNode};
 pub use style::{Class, Layers, StyleSet, StyleState, Transitions, WidgetStyle, WidgetStylePatch};
 pub use text::TextStyleSet;

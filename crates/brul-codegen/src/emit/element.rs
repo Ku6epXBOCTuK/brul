@@ -1,5 +1,5 @@
-use brul_capability::AttachEventKind;
 use brul_case::constant;
+use brul_event::EventKind;
 use brul_gui::Direction;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
@@ -18,7 +18,6 @@ use super::Out;
 use super::anchor;
 use super::classes;
 use super::{ScopeInfo, component, events, expression, structure};
-use crate::runtime::HandlerEvent;
 
 pub(super) fn widget(
     out: &mut Out<'_>,
@@ -368,16 +367,11 @@ fn effect_binding(
     Ok(())
 }
 
-fn handler_bindings(
-    out: &mut Out<'_>,
-    handlers: &[(HandlerEvent, String)],
-    name: &str,
-    script: &str,
-) {
+fn handler_bindings(out: &mut Out<'_>, handlers: &[(EventKind, String)], name: &str, script: &str) {
     for (event, handler) in handlers {
         let call = super::script::event_call(script, handler);
         out.line(format_args!(
-            "handlers.push(brul::Handler::new(component, Some({name}.id()), brul::HandlerEvent::{event:?}, {call}));"
+            "handlers.push(brul::Handler::new(component, Some({name}.id()), brul::EventKind::{event:?}, {call}));"
         ));
     }
 }
@@ -832,12 +826,14 @@ pub(super) fn attachment_bindings(
             out.line(format_args!("apply: {},", hooks.apply));
             out.line(format_args!("event: {},", hooks.event));
             out.line(format_args!("cleanup: {},", hooks.cleanup));
-            let fields = AttachEventKind::ALL
+            let kinds = EventKind::ALL
                 .iter()
-                .map(|kind| format!("{}: {}", kind.field(), events.contains(kind)))
+                .copied()
+                .filter(|kind| events.contains(kind))
+                .map(|kind| format!("brul::EventKind::{}", kind.field()))
                 .collect::<Vec<_>>()
                 .join(", ");
-            out.line(format_args!("events: brul::AttachEvents {{ {fields} }},"));
+            out.line(format_args!("events: brul::EventSet::from([{kinds}]),"));
             Ok::<(), Error>(())
         })?;
         out.line(format_args!("}}));"));

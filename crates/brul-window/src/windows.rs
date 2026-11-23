@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
-use brul_gui::WidgetEvent;
+use brul_gui::UiEvent;
 use tracing::{debug, error, info, trace, warn};
 use winit::application::ApplicationHandler;
 use winit::data_transfer::{DataTransferSendBuilder, TypeHint};
@@ -24,7 +24,7 @@ pub(crate) fn run<C, H, F, R, W>(
 ) -> Result<(), WindowError>
 where
     C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, WindowError> + 'static,
-    H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
+    H: FnMut(WindowKey, &[UiEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
     R: FnOnce(Waker) + 'static,
     W: FnMut() + 'static,
@@ -68,7 +68,7 @@ struct Windows<C, H, F, W> {
 impl<C, H, F, W> Windows<C, H, F, W>
 where
     C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, WindowError> + 'static,
-    H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
+    H: FnMut(WindowKey, &[UiEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
     W: FnMut() + 'static,
 {
@@ -125,7 +125,7 @@ where
         }
 
         let handler = Rc::clone(&self.handler);
-        let events = Box::new(move |events: &[WidgetEvent]| (handler.borrow_mut())(key, events));
+        let events = Box::new(move |events: &[UiEvent]| (handler.borrow_mut())(key, events));
         let mut app = tree_app(
             spec.config,
             Rc::clone(&spec.tree),
@@ -280,7 +280,7 @@ where
 impl<C, H, F, W> ApplicationHandler for Windows<C, H, F, W>
 where
     C: FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, WindowError> + 'static,
-    H: FnMut(WindowKey, &[WidgetEvent]) -> Vec<WindowCommand> + 'static,
+    H: FnMut(WindowKey, &[UiEvent]) -> Vec<WindowCommand> + 'static,
     F: FnMut(WindowKey) + 'static,
     W: FnMut() + 'static,
 {

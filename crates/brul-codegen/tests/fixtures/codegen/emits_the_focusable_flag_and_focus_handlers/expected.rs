@@ -41,8 +41,8 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let widget = {
         {
             let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]).focusable(true);
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Focus, demo_script_event_gained));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Blur, demo_script_event_lost));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Focus, demo_script_event_gained));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Blur, demo_script_event_lost));
             widget0
         }
     };

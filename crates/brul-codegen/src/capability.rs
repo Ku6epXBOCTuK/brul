@@ -1,8 +1,8 @@
 use std::collections::{BTreeSet, HashMap};
 
-use brul_capability::AttachEventKind;
 use brul_case::pascal;
 use brul_command::Kind;
+use brul_event::EventKind;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
@@ -33,7 +33,7 @@ pub struct HooksSpec {
     pub event: String,
     pub cleanup: String,
     pub params: Vec<CapabilityParam>,
-    pub events: BTreeSet<AttachEventKind>,
+    pub events: BTreeSet<EventKind>,
 }
 
 #[derive(Clone, Debug)]

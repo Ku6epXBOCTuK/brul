@@ -16,7 +16,7 @@ use crate::commands;
 use crate::discovery::Capabilities;
 use crate::error_at;
 use crate::loader::Import;
-use crate::runtime::HandlerEvent;
+use crate::runtime::EventKind;
 use crate::source::Script;
 use crate::{Definition, Registry, Resource};
 
@@ -571,7 +571,7 @@ fn emit_view<'a>(
     out: &mut String,
     name: &str,
     root: &Element,
-    handlers: &[(HandlerEvent, String)],
+    handlers: &[(EventKind, String)],
     context: &'a CodegenContext<'a>,
     outputs: EmitOutputs<'a>,
     kind: ViewKind,

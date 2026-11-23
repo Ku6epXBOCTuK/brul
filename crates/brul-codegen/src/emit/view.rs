@@ -1,7 +1,7 @@
 use brul_syntax::error::Error;
 use brul_syntax::markup::Element;
 
-use crate::runtime::HandlerEvent;
+use crate::runtime::EventKind;
 
 use super::Emit;
 use super::Frame;
@@ -12,7 +12,7 @@ pub(super) fn view(
     out: &mut String,
     name: &str,
     root: &Element,
-    handlers: &[(HandlerEvent, String)],
+    handlers: &[(EventKind, String)],
     emit: &mut Emit<'_>,
     typed: bool,
 ) -> Result<(), Error> {
@@ -40,7 +40,7 @@ pub(super) fn view(
         out.line(format_args!("}};"));
         for (event, handler) in handlers {
             out.line(format_args!(
-                "handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::{event:?}, {}));",
+                "handlers.push(brul::Handler::new(component, None, brul::EventKind::{event:?}, {}));",
                 super::script::event_call(emit.context.script_name, handler)
             ));
         }

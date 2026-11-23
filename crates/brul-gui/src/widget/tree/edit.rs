@@ -2,28 +2,54 @@ use super::frame::boundary_before;
 use super::*;
 
 impl WidgetTree {
-    pub(super) fn copy_input(&self, slot: Slot) -> Vec<WidgetEvent> {
-        self.selected_text(slot)
-            .map_or_else(Vec::new, |text| vec![WidgetEvent::Copy(text)])
+    pub(super) fn copy_input(&self, slot: Slot) -> Vec<UiEvent> {
+        self.selected_text(slot).map_or_else(Vec::new, |text| {
+            vec![UiEvent::widget(
+                self.nodes[slot.index()].id,
+                Event::copy(text),
+            )]
+        })
     }
 
-    pub(super) fn cut_input(&mut self, slot: Slot) -> Vec<WidgetEvent> {
+    pub(super) fn cut_input(&mut self, slot: Slot) -> Vec<UiEvent> {
         let Some(text) = self.selected_text(slot) else {
             return Vec::new();
         };
         let changed = self.delete_input(slot, true);
         let mut events = self.input_event(slot, changed);
-        events.push(WidgetEvent::Copy(text));
+        events.push(UiEvent::widget(
+            self.nodes[slot.index()].id,
+            Event::copy(text),
+        ));
         events
     }
 
-    pub fn paste_text(&mut self, text: &str) -> Vec<WidgetEvent> {
+    pub fn paste_text(&mut self, text: &str) -> Vec<UiEvent> {
         let Some(slot) = self.focused_input() else {
             return Vec::new();
         };
         let text = self.field_text(slot, text);
         let changed = self.insert_input(slot, &text);
         self.input_event(slot, changed)
+    }
+
+    pub fn ime(&mut self, kind: ImeKind) -> Vec<UiEvent> {
+        let mut events = match &kind {
+            ImeKind::Preedit(text) => {
+                self.set_preedit(text);
+                Vec::new()
+            }
+            ImeKind::Commit(text) => self.commit_text(text),
+            ImeKind::DeleteSurrounding {
+                before_bytes,
+                after_bytes,
+            } => self.delete_surrounding(*before_bytes, *after_bytes),
+            ImeKind::Enabled | ImeKind::Disabled => Vec::new(),
+        };
+        if let Some(id) = self.focused() {
+            events.push(UiEvent::widget(id, Event::ime(kind)));
+        }
+        events
     }
 
     pub fn set_preedit(&mut self, text: &str) -> bool {
@@ -43,7 +69,7 @@ impl WidgetTree {
         true
     }
 
-    pub fn commit_text(&mut self, text: &str) -> Vec<WidgetEvent> {
+    pub fn commit_text(&mut self, text: &str) -> Vec<UiEvent> {
         let Some(slot) = self.focused_input() else {
             return Vec::new();
         };
@@ -53,7 +79,7 @@ impl WidgetTree {
         self.input_event(slot, changed)
     }
 
-    pub fn delete_surrounding(&mut self, before: usize, after: usize) -> Vec<WidgetEvent> {
+    pub fn delete_surrounding(&mut self, before: usize, after: usize) -> Vec<UiEvent> {
         let Some(slot) = self.focused_input() else {
             return Vec::new();
         };

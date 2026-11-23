@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{ImeKind, KeyPress, WidgetEvent};
+use brul_gui::{Event, ImeKind, KeyPress, UiEvent};
 use tracing::{debug, trace, warn};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
@@ -35,7 +35,9 @@ impl TreeApp {
         }
         let started = Instant::now();
         let step = match input {
-            Some(Input::Exit) => self.dispatch_events(&window, vec![WidgetEvent::Close]),
+            Some(Input::Exit) => {
+                self.dispatch_events(&window, vec![UiEvent::window(Event::close())])
+            }
             Some(Input::Redraw) => self.render(&window),
             Some(input) => {
                 let step = self.handle(&window, input);
@@ -115,25 +117,7 @@ impl TreeApp {
             },
             ImeEvent::Disabled => ImeKind::Disabled,
         };
-        let id = self.tree.borrow().focused();
-        let mut events = match ime {
-            ImeEvent::Preedit(text) => {
-                self.tree.borrow_mut().set_preedit(&text);
-                Vec::new()
-            }
-            ImeEvent::Commit(text) => self.tree.borrow_mut().commit_text(&text),
-            ImeEvent::DeleteSurrounding {
-                before_bytes,
-                after_bytes,
-            } => self
-                .tree
-                .borrow_mut()
-                .delete_surrounding(before_bytes, after_bytes),
-            ImeEvent::Enabled | ImeEvent::Disabled => Vec::new(),
-        };
-        if let Some(id) = id {
-            events.push(WidgetEvent::Ime { id, kind });
-        }
+        let events = self.tree.borrow_mut().ime(kind);
         self.dispatch_events(surface, events)
     }
 
@@ -215,7 +199,7 @@ impl TreeApp {
     pub(super) fn dispatch(
         &mut self,
         surface: &dyn Surface,
-        events: Result<Vec<WidgetEvent>, brul_gui::WidgetError>,
+        events: Result<Vec<UiEvent>, brul_gui::WidgetError>,
     ) -> Step {
         match events {
             Ok(events) => self.dispatch_events(surface, events),
@@ -223,40 +207,36 @@ impl TreeApp {
         }
     }
 
-    pub(super) fn dispatch_events(
-        &mut self,
-        surface: &dyn Surface,
-        events: Vec<WidgetEvent>,
-    ) -> Step {
+    pub(super) fn dispatch_events(&mut self, surface: &dyn Surface, events: Vec<UiEvent>) -> Step {
         self.sync_cursor(surface);
         if events.is_empty() {
             return Step::Continue;
         }
         for event in &events {
-            let view = match event {
-                WidgetEvent::Focus(id) | WidgetEvent::Blur(id) => {
-                    self.tree.borrow().platform_view(*id)
+            let view = match (&event.event, event.target.widget()) {
+                (Event::Focus { .. } | Event::Blur { .. }, Some(id)) => {
+                    self.tree.borrow().platform_view(id)
                 }
                 _ => None,
             };
-            match (event, view) {
-                (WidgetEvent::Focus(_), Some(id)) => self.platform.focus(id),
-                (WidgetEvent::Blur(_), Some(_)) => self.platform.blur(),
+            match (&event.event, view) {
+                (Event::Focus { .. }, Some(id)) => self.platform.focus(id),
+                (Event::Blur { .. }, Some(_)) => self.platform.blur(),
                 _ => {}
             }
         }
-        let drag = events
+        if events
             .iter()
-            .any(|event| matches!(event, WidgetEvent::Drag(_)));
-        if drag {
+            .any(|event| matches!(event.event, Event::Drag { .. }))
+        {
             surface.drag();
         }
         for event in &events {
-            match event {
-                WidgetEvent::Copy(text) => {
+            match &event.event {
+                Event::Copy { text } => {
                     self.clipboard = (!text.is_empty()).then(|| text.clone());
                 }
-                WidgetEvent::Paste => self.paste = true,
+                Event::Paste { .. } => self.paste = true,
                 _ => {}
             }
         }

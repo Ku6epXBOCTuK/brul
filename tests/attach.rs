@@ -2,7 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul::{
-    AttachEvent, Build, Component, ComponentHandle, Dyn, SharedStates, StateId, States, ViewError,
+    Build, Component, ComponentHandle, Dyn, Event, SharedStates, StateId, States, UiEvent,
+    ViewError,
 };
 
 thread_local! {
@@ -51,8 +52,8 @@ fn counter_update(
     Ok(())
 }
 
-fn counter_event(_state: &mut CounterState, _ctx: &mut Build, event: &AttachEvent<'_>) -> bool {
-    matches!(event, AttachEvent::Key { .. })
+fn counter_event(_state: &mut CounterState, _ctx: &mut Build, event: &UiEvent) -> bool {
+    matches!(event.event, Event::Key { .. })
 }
 
 fn counter_cleanup(state: &mut CounterState, _ctx: &mut Build) {
@@ -102,15 +103,12 @@ fn attach_shims_create_update_event_and_cleanup_state() {
 
     let key = brul::gui::KeyPress::from("Enter");
     let modifiers = brul::gui::KeyModifiers::default();
-    let key_event = AttachEvent::Key {
-        key: &key,
-        modifiers: &modifiers,
-    };
+    let key_event = UiEvent::widget(brul::gui::WidgetId::new(1), Event::key(key, modifiers));
     assert!(__brul_attach_counter_event(&mut ctx, state_id, &key_event));
     assert!(!__brul_attach_counter_event(
         &mut ctx,
         state_id,
-        &AttachEvent::Submit
+        &UiEvent::window(Event::submit())
     ));
 
     __brul_attach_counter_cleanup(&mut ctx, state_id);

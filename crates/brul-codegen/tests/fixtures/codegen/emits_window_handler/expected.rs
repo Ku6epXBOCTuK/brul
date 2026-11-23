@@ -41,7 +41,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let widget = {
         brul::gui::Widget::view(brul::gui::Direction::Row, vec![])
     };
-    handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::Key, demo_script_event_quit));
+    handlers.push(brul::Handler::new(component, None, brul::EventKind::Key, demo_script_event_quit));
     Ok(brul::Built {
         widget,
         bindings,

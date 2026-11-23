@@ -1,3 +1,4 @@
+use brul_event::EventKind;
 use brul_syntax::ast::ExprKind;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
@@ -5,7 +6,6 @@ use brul_syntax::markup::{Arg, Element, PropType};
 use brul_syntax::script::Program;
 
 use crate::error_at;
-use crate::runtime::HandlerEvent;
 use crate::window::HandlerArg;
 
 pub(super) struct Events {
@@ -13,7 +13,7 @@ pub(super) struct Events {
     pub focusable: bool,
     pub multiline: bool,
     pub modal: bool,
-    pub handlers: Vec<(HandlerEvent, String)>,
+    pub handlers: Vec<(EventKind, String)>,
 }
 
 pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Events, Error> {
@@ -38,25 +38,25 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
         let Arg::Handler { event, handler } = arg else {
             continue;
         };
-        let Some(event) = HandlerEvent::parse(event) else {
+        let Ok(event) = event.parse::<EventKind>() else {
             return Err(error_at(
                 element.position,
                 format!("event '{event}' is not supported yet"),
             ));
         };
-        if event == HandlerEvent::Key {
+        if event == EventKind::Key {
             return Err(error_at(
                 element.position,
                 "key events are only supported on the window",
             ));
         }
-        if event == HandlerEvent::Close {
+        if event == EventKind::Close {
             return Err(error_at(
                 element.position,
                 "close events are only supported on the window",
             ));
         }
-        if event == HandlerEvent::Drag {
+        if event == EventKind::Drag {
             if handler != "dragWindow" {
                 return Err(error_at(
                     element.position,
@@ -68,14 +68,14 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
         }
         if handlers
             .iter()
-            .any(|item: &(HandlerEvent, String)| item.0 == event)
+            .any(|item: &(EventKind, String)| item.0 == event)
         {
             return Err(error_at(
                 element.position,
                 format!("event '{}' is handled twice", event.name()),
             ));
         }
-        define(handler, program, event.params(), element.position)?;
+        define(handler, program, params(event), element.position)?;
         handlers.push((event, handler.clone()));
     }
     Ok(Events {
@@ -85,6 +85,14 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
         modal,
         handlers,
     })
+}
+
+fn params(event: EventKind) -> &'static [PropType] {
+    if event.arguments_count() == 0 {
+        &[]
+    } else {
+        &[PropType::Object]
+    }
 }
 
 fn literal_flag(arg: &Arg, name: &str) -> Result<Option<bool>, Error> {
@@ -110,16 +118,16 @@ fn literal_flag(arg: &Arg, name: &str) -> Result<Option<bool>, Error> {
 pub(super) fn window(
     args: &[HandlerArg],
     program: Option<&Program>,
-) -> Result<Vec<(HandlerEvent, String)>, Error> {
+) -> Result<Vec<(EventKind, String)>, Error> {
     let mut handlers = Vec::new();
     for item in args {
-        let Some(event) = HandlerEvent::parse(&item.event) else {
+        let Ok(event) = item.event.parse::<EventKind>() else {
             return Err(error_at(
                 item.position,
                 format!("event '{}' is not supported yet", item.event),
             ));
         };
-        if !matches!(event, HandlerEvent::Key | HandlerEvent::Close) {
+        if !matches!(event, EventKind::Key | EventKind::Close) {
             return Err(error_at(
                 item.position,
                 format!("window event '{}' is not supported yet", event.name()),
@@ -127,14 +135,14 @@ pub(super) fn window(
         }
         if handlers
             .iter()
-            .any(|other: &(HandlerEvent, String)| other.0 == event)
+            .any(|other: &(EventKind, String)| other.0 == event)
         {
             return Err(error_at(
                 item.position,
                 format!("event '{}' is handled twice", event.name()),
             ));
         }
-        define(&item.function, program, event.params(), item.position)?;
+        define(&item.function, program, params(event), item.position)?;
         handlers.push((event, item.function.clone()));
     }
     Ok(handlers)

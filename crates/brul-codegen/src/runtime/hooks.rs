@@ -1,40 +1,16 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_gui::{ImeKind, KeyModifiers, KeyPress, WidgetEvent, WidgetId, WidgetTree};
+use brul_event::EventSet;
+use brul_gui::{UiEvent, WidgetId, WidgetTree};
 use brul_script::{Component, Dyn, Error as ScriptError};
 
 use super::{Build, ComponentHandle, StateId, ViewError};
 
 pub type Param = fn(&mut Component) -> Result<Dyn, ScriptError>;
 pub type Apply = fn(&mut Build, StateId, &[Dyn]) -> Result<(), ViewError>;
-pub type EventHook = fn(&mut Build, StateId, &AttachEvent<'_>) -> bool;
+pub type EventHook = fn(&mut Build, StateId, &UiEvent) -> bool;
 pub type CleanupHook = fn(&mut Build, StateId);
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct AttachEvents {
-    pub key: bool,
-    pub ime: bool,
-    pub input: bool,
-    pub submit: bool,
-    pub focus: bool,
-    pub blur: bool,
-    pub click: bool,
-}
-
-impl AttachEvents {
-    pub fn accepts(self, event: &AttachEvent<'_>) -> bool {
-        match event {
-            AttachEvent::Key { .. } => self.key,
-            AttachEvent::Ime(_) => self.ime,
-            AttachEvent::Input { .. } => self.input,
-            AttachEvent::Submit => self.submit,
-            AttachEvent::Focus => self.focus,
-            AttachEvent::Blur => self.blur,
-            AttachEvent::Click => self.click,
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct Hooks {
@@ -45,7 +21,7 @@ pub struct Hooks {
     pub apply: Apply,
     pub event: EventHook,
     pub cleanup: CleanupHook,
-    pub events: AttachEvents,
+    pub events: EventSet,
 }
 
 pub fn apply(build: &mut Build, params: &[Param], apply: Apply) -> Result<(), ViewError> {
@@ -104,55 +80,5 @@ impl Element<'_> {
 
     pub fn caret_area(&self) -> Option<brul_gui::CaretArea> {
         self.tree.borrow().caret_area()
-    }
-}
-
-pub enum AttachEvent<'a> {
-    Key {
-        key: &'a KeyPress,
-        modifiers: &'a KeyModifiers,
-    },
-    Ime(&'a ImeKind),
-    Input {
-        value: &'a str,
-        caret: usize,
-    },
-    Submit,
-    Focus,
-    Blur,
-    Click,
-}
-
-pub fn from_widget(event: &WidgetEvent) -> Option<AttachEvent<'_>> {
-    match event {
-        WidgetEvent::Key { key, modifiers } => Some(AttachEvent::Key { key, modifiers }),
-        WidgetEvent::Ime { kind, .. } => Some(AttachEvent::Ime(kind)),
-        WidgetEvent::Input(_, value, caret) => Some(AttachEvent::Input {
-            value,
-            caret: *caret,
-        }),
-        WidgetEvent::Submit(_) => Some(AttachEvent::Submit),
-        WidgetEvent::Focus(_) => Some(AttachEvent::Focus),
-        WidgetEvent::Blur(_) => Some(AttachEvent::Blur),
-        WidgetEvent::Click(_) => Some(AttachEvent::Click),
-        _ => None,
-    }
-}
-
-pub fn event_widget(event: &WidgetEvent) -> Option<WidgetId> {
-    match event {
-        WidgetEvent::PointerEnter(id)
-        | WidgetEvent::PointerLeave(id)
-        | WidgetEvent::Press(id)
-        | WidgetEvent::Release(id)
-        | WidgetEvent::Click(id)
-        | WidgetEvent::Drag(id)
-        | WidgetEvent::Input(id, _, _)
-        | WidgetEvent::Ime { id, .. }
-        | WidgetEvent::Focus(id)
-        | WidgetEvent::Blur(id)
-        | WidgetEvent::Submit(id)
-        | WidgetEvent::Dismiss(id) => Some(*id),
-        _ => None,
     }
 }

@@ -374,7 +374,7 @@ pub fn button_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
             }), &[0], theme).focusable(true);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 71 }))?; value }) })));
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: button_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(3))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 35 }))?; value }); Ok(value) } }));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Click, button_script_event_press));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Click, button_script_event_press));
             widget0
         }
     };
@@ -905,8 +905,8 @@ pub fn tooltip_view(theme: Option<&str>, build: &mut brul::Build, component: &br
                 });
                 children
             }), &[0], theme).with_id(brul::gui::WidgetId::new(2147483648));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Enter, tooltip_script_event_show));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Leave, tooltip_script_event_hide));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::PointerEnter, tooltip_script_event_show));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::PointerLeave, tooltip_script_event_hide));
             widget0
         }
     };
@@ -1208,7 +1208,7 @@ pub fn checkbox_view(theme: Option<&str>, build: &mut brul::Build, component: &b
                 },
             ]), &[0], theme);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 17, column: 40 }))?; value }) })));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Click, checkbox_script_event_toggle));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Click, checkbox_script_event_toggle));
             widget0
         }
     };
@@ -1494,7 +1494,7 @@ pub fn dialog_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                 {
                     let widget1 = dialog_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[1], theme);
                     bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Offset { x: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok(0.0_f64) }), y: Some(|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok(0.0_f64) }) }));
-                    handlers.push(brul::Handler::new(component, Some(widget1.id()), brul::HandlerEvent::Click, dialog_script_event_dismiss_dialog));
+                    handlers.push(brul::Handler::new(component, Some(widget1.id()), brul::EventKind::Click, dialog_script_event_dismiss_dialog));
                     widget1
                 },
                 dialog_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
@@ -1568,7 +1568,7 @@ pub fn dialog_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                 ]), &[2], theme),
             ]), &[0], theme).modal(true);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(7))?)).map_err(|error| error.at(brul::ast::Position { line: 27, column: 39 }))?; value }) })));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Dismiss, dialog_script_event_dismiss_dialog));
+            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Dismiss, dialog_script_event_dismiss_dialog));
             widget0
         }
     };

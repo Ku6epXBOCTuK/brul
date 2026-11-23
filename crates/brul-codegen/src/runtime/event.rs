@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
+use brul_event::EventKind;
 use brul_gui::WidgetId;
 use brul_script::{Dyn, Error as ScriptError, EventCall, Host, Value};
 use brul_syntax::markup::PropType;
@@ -9,80 +10,10 @@ use brul_syntax::markup::PropType;
 use super::ComponentHandle;
 use super::component::accepts_prop;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum HandlerEvent {
-    Click,
-    Press,
-    Release,
-    Enter,
-    Leave,
-    Drag,
-    Key,
-    Close,
-    Focus,
-    Blur,
-    Input,
-    Submit,
-    Dismiss,
-}
-
-impl HandlerEvent {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Click => "click",
-            Self::Press => "press",
-            Self::Release => "release",
-            Self::Enter => "enter",
-            Self::Leave => "leave",
-            Self::Drag => "drag",
-            Self::Key => "key",
-            Self::Close => "close",
-            Self::Focus => "focus",
-            Self::Blur => "blur",
-            Self::Input => "input",
-            Self::Submit => "submit",
-            Self::Dismiss => "dismiss",
-        }
-    }
-
-    pub fn parse(name: &str) -> Option<Self> {
-        match name {
-            "click" => Some(Self::Click),
-            "press" => Some(Self::Press),
-            "release" => Some(Self::Release),
-            "enter" => Some(Self::Enter),
-            "leave" => Some(Self::Leave),
-            "drag" => Some(Self::Drag),
-            "key" => Some(Self::Key),
-            "close" => Some(Self::Close),
-            "focus" => Some(Self::Focus),
-            "blur" => Some(Self::Blur),
-            "input" => Some(Self::Input),
-            "submit" => Some(Self::Submit),
-            "dismiss" => Some(Self::Dismiss),
-            _ => None,
-        }
-    }
-
-    pub const fn arguments_count(self) -> usize {
-        match self {
-            Self::Key | Self::Input => 1,
-            _ => 0,
-        }
-    }
-
-    pub const fn params(self) -> &'static [PropType] {
-        match self {
-            Self::Key | Self::Input => &[PropType::Object],
-            _ => &[],
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Handler {
     pub widget: Option<WidgetId>,
-    pub event: HandlerEvent,
+    pub event: EventKind,
     pub call: EventCall,
     pub component: ComponentHandle,
 }
@@ -91,7 +22,7 @@ impl Handler {
     pub fn new(
         component: &ComponentHandle,
         widget: Option<WidgetId>,
-        event: HandlerEvent,
+        event: EventKind,
         call: EventCall,
     ) -> Self {
         Self {

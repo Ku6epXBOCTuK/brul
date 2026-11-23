@@ -50,7 +50,7 @@ impl WidgetTree {
             .unwrap_or_default()
     }
 
-    pub fn pointer_moved(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {
+    pub fn pointer_moved(&mut self, x: i32, y: i32) -> Result<Vec<UiEvent>, WidgetError> {
         if let Some(slot) = self
             .pressed
             .iter()
@@ -78,7 +78,7 @@ impl WidgetTree {
             let id = node.id;
             self.mark_dirty(id);
             self.retarget(slot);
-            events.push(WidgetEvent::PointerLeave(id));
+            events.push(UiEvent::widget(id, Event::pointer_leave()));
         }
         for &slot in &new[common..] {
             let node = &mut self.nodes[slot.index()];
@@ -86,14 +86,14 @@ impl WidgetTree {
             let id = node.id;
             self.mark_dirty(id);
             self.retarget(slot);
-            events.push(WidgetEvent::PointerEnter(id));
+            events.push(UiEvent::widget(id, Event::pointer_enter()));
         }
         self.hovered = new;
         self.hit_scratch.active = old;
         Ok(events)
     }
 
-    pub fn pointer_down(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {
+    pub fn pointer_down(&mut self, x: i32, y: i32) -> Result<Vec<UiEvent>, WidgetError> {
         self.hit_path(x, y)?;
         self.collect_active_path();
         let path = std::mem::take(&mut self.hit_scratch.active);
@@ -115,16 +115,16 @@ impl WidgetTree {
             let draggable = node.draggable;
             self.mark_dirty(id);
             self.retarget(slot);
-            events.push(WidgetEvent::Press(id));
+            events.push(UiEvent::widget(id, Event::press()));
             if draggable {
-                events.push(WidgetEvent::Drag(id));
+                events.push(UiEvent::widget(id, Event::drag()));
             }
         }
         self.pressed = path;
         Ok(events)
     }
 
-    pub fn pointer_up(&mut self, x: i32, y: i32) -> Result<Vec<WidgetEvent>, WidgetError> {
+    pub fn pointer_up(&mut self, x: i32, y: i32) -> Result<Vec<UiEvent>, WidgetError> {
         self.hit_path(x, y)?;
         self.collect_active_path();
         let pressed = std::mem::take(&mut self.pressed);
@@ -137,18 +137,18 @@ impl WidgetTree {
             let id = node.id;
             self.mark_dirty(id);
             self.retarget(slot);
-            events.push(WidgetEvent::Release(id));
+            events.push(UiEvent::widget(id, Event::release()));
         }
         if !pressed.is_empty() && pressed.last() == path.last() {
             for &slot in path.iter().rev() {
-                events.push(WidgetEvent::Click(self.nodes[slot.index()].id));
+                events.push(UiEvent::widget(self.nodes[slot.index()].id, Event::click()));
             }
         }
         self.hit_scratch.active = path;
         Ok(events)
     }
 
-    pub fn pointer_leave(&mut self) -> Vec<WidgetEvent> {
+    pub fn pointer_leave(&mut self) -> Vec<UiEvent> {
         let hovered = std::mem::take(&mut self.hovered);
         let pressed = std::mem::take(&mut self.pressed);
         let mut events = Vec::with_capacity(hovered.len() + pressed.len());
@@ -159,7 +159,7 @@ impl WidgetTree {
             let id = node.id;
             self.mark_dirty(id);
             self.retarget(*slot);
-            events.push(WidgetEvent::PointerLeave(id));
+            events.push(UiEvent::widget(id, Event::pointer_leave()));
         }
         for slot in pressed.iter().rev() {
             let node = &mut self.nodes[slot.index()];
@@ -167,7 +167,7 @@ impl WidgetTree {
             let id = node.id;
             self.mark_dirty(id);
             self.retarget(*slot);
-            events.push(WidgetEvent::Release(id));
+            events.push(UiEvent::widget(id, Event::release()));
         }
         events
     }

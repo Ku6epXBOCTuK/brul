@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use brul_gui::{PlatformViewId, WidgetEvent};
+use brul_gui::{PlatformViewId, UiEvent};
 use brul_window::{
     ColorScheme, NoopPlatformBackendFactory, PlatformBackendFactory, PlatformMessageHandler,
     PlatformSpec, ScopedCommand, Waker, WindowCommand, WindowError, WindowKey, WindowSpec,
@@ -366,7 +366,7 @@ impl<T: Theme> Runtime<T> {
         })
     }
 
-    fn dispatch(&mut self, key: WindowKey, events: &[WidgetEvent]) -> Vec<WindowCommand> {
+    fn dispatch(&mut self, key: WindowKey, events: &[UiEvent]) -> Vec<WindowCommand> {
         let Some(ui) = self.uis.get_mut(&key) else {
             tracing::warn!(%key, "event for an unknown window");
             return Vec::new();
@@ -457,11 +457,11 @@ mod tests {
 
     use std::collections::HashMap;
 
-    use brul_gui::{Widget, WidgetEvent, WidgetId};
+    use brul_gui::{Event, Widget, WidgetId};
 
     use crate::ui::{CommandHost, Ui};
     use crate::{
-        Binding, BindingTarget, Built, ComponentHandle, Dyn, Handler, HandlerEvent, StateId, Value,
+        Binding, BindingTarget, Built, ComponentHandle, Dyn, EventKind, Handler, StateId, Value,
     };
 
     const NAMES: &[&str] = &["name"];
@@ -1035,7 +1035,7 @@ mod tests {
         Ok(Built {
             widget,
             bindings: Vec::new(),
-            handlers: vec![Handler::new(component, None, HandlerEvent::Key, call)],
+            handlers: vec![Handler::new(component, None, EventKind::Key, call)],
             props: Vec::new(),
         })
     }
@@ -1128,10 +1128,10 @@ mod tests {
 
         let commands = runtime.dispatch(
             WindowKey(1),
-            &[WidgetEvent::Key {
-                key: brul_gui::KeyPress::from("Escape"),
-                modifiers: brul_gui::KeyModifiers::default(),
-            }],
+            &[UiEvent::window(Event::key(
+                brul_gui::KeyPress::from("Escape"),
+                brul_gui::KeyModifiers::default(),
+            ))],
         );
 
         assert_eq!(commands, vec![WindowCommand::Close]);

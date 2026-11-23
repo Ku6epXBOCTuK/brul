@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use brul_gui::WidgetEvent;
+use brul_gui::{Event, UiEvent};
 use brul_ident::{FunctionName, TimerId, TimerKind, TimerOwner};
 use winit::event_loop::ControlFlow;
 
@@ -34,13 +34,16 @@ impl Timer {
     }
 }
 
-pub(crate) fn due(timers: &mut Vec<Timer>, now: Instant) -> Vec<WidgetEvent> {
+pub(crate) fn due(timers: &mut Vec<Timer>, now: Instant) -> Vec<UiEvent> {
     let mut events = Vec::new();
     timers.retain_mut(|timer| {
         if timer.next > now {
             return true;
         }
-        events.push(WidgetEvent::Timer(timer.owner, timer.function.clone()));
+        events.push(UiEvent::window(Event::timer(
+            timer.owner,
+            timer.function.clone(),
+        )));
         if timer.kind == TimerKind::Once {
             return false;
         }
@@ -103,7 +106,7 @@ pub(super) fn split_initial(commands: Vec<WindowCommand>) -> (Vec<Timer>, Vec<Wi
 mod tests {
     use std::time::{Duration, Instant};
 
-    use brul_gui::WidgetEvent;
+    use brul_gui::Event;
     use brul_ident::{TimerId, TimerKind, TimerOwner};
     use winit::event_loop::ControlFlow;
 
@@ -137,7 +140,9 @@ mod tests {
         let events = due(&mut timers, now);
 
         assert_eq!(events.len(), 1);
-        assert!(matches!(&events[0], WidgetEvent::Timer(_, name) if name.as_ref() == "tick"));
+        assert!(
+            matches!(&events[0].event, Event::Timer { function, .. } if function.as_ref() == "tick")
+        );
         assert!(timers[0].next > now);
         assert!(due(&mut timers, now).is_empty());
     }
@@ -157,7 +162,7 @@ mod tests {
         let events = due(&mut timers, now);
 
         assert!(
-            matches!(&events[0], WidgetEvent::Timer(_, name) if name.as_str().as_ptr() == timers[0].function.as_str().as_ptr())
+            matches!(&events[0].event, Event::Timer { function, .. } if function.as_str().as_ptr() == timers[0].function.as_str().as_ptr())
         );
     }
 

@@ -1,7 +1,7 @@
 use super::*;
 
 impl WidgetTree {
-    pub(super) fn focus_next(&mut self) -> Vec<WidgetEvent> {
+    pub(super) fn focus_next(&mut self) -> Vec<UiEvent> {
         self.enter_modal_scope();
         let slots = self.focusable_slots();
         let Some(first) = slots.first().copied() else {
@@ -17,7 +17,7 @@ impl WidgetTree {
         self.focus_events(Some(target))
     }
 
-    pub(super) fn focus_previous(&mut self) -> Vec<WidgetEvent> {
+    pub(super) fn focus_previous(&mut self) -> Vec<UiEvent> {
         self.enter_modal_scope();
         let slots = self.focusable_slots();
         if slots.is_empty() {
@@ -169,16 +169,16 @@ impl WidgetTree {
         }
     }
 
-    pub(super) fn focus_events(&mut self, slot: Option<Slot>) -> Vec<WidgetEvent> {
+    pub(super) fn focus_events(&mut self, slot: Option<Slot>) -> Vec<UiEvent> {
         if self.focused_slot() == slot {
             return Vec::new();
         }
         let mut events = Vec::with_capacity(2);
         if let Some(previous) = self.focused {
-            events.push(WidgetEvent::Blur(previous));
+            events.push(UiEvent::widget(previous, Event::blur()));
         }
         if let Some(next) = slot {
-            events.push(WidgetEvent::Focus(self.nodes[next.index()].id));
+            events.push(UiEvent::widget(self.nodes[next.index()].id, Event::focus()));
         }
         self.set_focused(slot);
         events

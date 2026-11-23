@@ -4,20 +4,19 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use brul_codegen::runtime::{
-    self, Build, EventHook, Hooks, accepts_prop, apply_capability, event_widget, from_widget,
-};
-use brul_gui::{TimerOwner, WidgetEvent, WidgetId, WidgetTree};
+use brul_codegen::runtime::{self, Build, EventHook, Hooks, accepts_prop, apply_capability};
+use brul_gui::{TimerOwner, UiEvent, WidgetId, WidgetTree};
 use brul_ident::TimerId;
 use brul_reactive::{Effect, EffectScope};
 use brul_window::{TimerCommand, WindowCommand};
 
 #[cfg(test)]
 use crate::Host;
-use crate::event::{arguments, call, handler_target};
+use crate::event::{arguments, call};
 use crate::{
-    Binding, Built, ComponentHandle, Dyn, EventSink, FunctionName, Handler, HandlerEvent,
-    PropBinding, RowInfo, SharedStates, StateId, Structure, Theme, TimerRequest, Value, ViewError,
+    Binding, Built, ComponentHandle, Dyn, Event, EventKind, EventSet, EventSink, EventTarget,
+    FunctionName, Handler, PropBinding, RowInfo, SharedStates, StateId, Structure, Theme,
+    TimerRequest, Value, ViewError,
 };
 
 mod host;
@@ -126,7 +125,7 @@ pub struct Ui<T: Theme> {
     handlers: Vec<Handler>,
     capabilities: Vec<OwnedCapability>,
     window_handlers: Vec<Handler>,
-    handler_index: HashMap<(Option<WidgetId>, HandlerEvent), usize>,
+    handler_index: HashMap<(EventTarget, EventKind), usize>,
     pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
     bindings: Vec<Owned>,
     props: Vec<Owned>,
@@ -157,7 +156,7 @@ struct OwnedCapability {
     widget: WidgetId,
     state: StateId,
     component: ComponentHandle,
-    events: crate::AttachEvents,
+    events: EventSet,
     hook: EventHook,
     _scope: EffectScope,
 }
@@ -297,7 +296,17 @@ impl<T: Theme> Ui<T> {
             .iter()
             .enumerate()
             .rev()
-            .map(|(at, handler)| ((handler.widget, handler.event), at))
+            .map(|(at, handler)| {
+                (
+                    (
+                        handler
+                            .widget
+                            .map_or(EventTarget::Window, EventTarget::Widget),
+                        handler.event,
+                    ),
+                    at,
+                )
+            })
             .collect();
     }
 
@@ -558,10 +567,10 @@ impl<T: Theme> Ui<T> {
         Ok(())
     }
 
-    pub fn dispatch(&mut self, events: &[WidgetEvent]) -> Vec<WindowCommand> {
+    pub fn dispatch(&mut self, events: &[UiEvent]) -> Vec<WindowCommand> {
         for event in events {
-            match event {
-                WidgetEvent::Timer(owner, function) => {
+            match &event.event {
+                Event::Timer { owner, function } => {
                     let component = self
                         .components
                         .iter()
@@ -574,7 +583,7 @@ impl<T: Theme> Ui<T> {
                         }
                     }
                 }
-                WidgetEvent::Close => self.close(),
+                Event::Close { .. } => self.close(),
                 _ => self.dispatch_event(event),
             }
             self.pump_events();
@@ -593,43 +602,43 @@ impl<T: Theme> Ui<T> {
         tracing::error!(depth = EVENT_DEPTH, "event chain is too deep");
     }
 
-    fn dispatch_event(&mut self, event: &WidgetEvent) {
-        let attach_event = from_widget(event);
-        let widget = event_widget(event).or_else(|| {
-            matches!(event, WidgetEvent::Key { .. })
-                .then(|| self.tree.borrow().focused())
-                .flatten()
-        });
-        if let (Some(attach_event), Some(widget)) = (attach_event, widget) {
-            for owned in &self.capabilities {
-                if owned.widget != widget || !owned.events.accepts(&attach_event) {
-                    continue;
-                }
-                let mut build = capability_context(
-                    &self.tree,
-                    &self.states,
-                    &self.event_sink,
-                    widget,
-                    owned.state,
-                    &owned.component,
-                );
-                if (owned.hook)(&mut build, owned.state, &attach_event) {
-                    return;
+    fn dispatch_event(&mut self, event: &UiEvent) {
+        let kind = event.event.kind();
+        for target in event.target.chain() {
+            if let Some(widget) = target.widget() {
+                for owned in &self.capabilities {
+                    if owned.widget != widget || !owned.events.contains(kind) {
+                        continue;
+                    }
+                    let mut build = capability_context(
+                        &self.tree,
+                        &self.states,
+                        &self.event_sink,
+                        widget,
+                        owned.state,
+                        &owned.component,
+                    );
+                    if (owned.hook)(&mut build, owned.state, event) {
+                        return;
+                    }
                 }
             }
+            if let Some(&at) = self.handler_index.get(&(target, kind)) {
+                let handler = &self.handlers[at];
+                call(
+                    &handler.component,
+                    handler.call,
+                    arguments(&event.event, &event.target),
+                );
+            }
         }
-        let Some((widget, target)) = handler_target(event) else {
-            return;
-        };
-        let Some(&at) = self.handler_index.get(&(widget, target)) else {
-            return;
-        };
-        let handler = &self.handlers[at];
-        call(&handler.component, handler.call, arguments(event));
     }
 
     fn close(&mut self) {
-        match self.handler_index.get(&(None, HandlerEvent::Close)) {
+        match self
+            .handler_index
+            .get(&(EventTarget::Window, EventKind::Close))
+        {
             Some(&at) => {
                 let handler = &self.handlers[at];
                 call(&handler.component, handler.call, Vec::new());

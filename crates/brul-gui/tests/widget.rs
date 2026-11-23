@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use brul_gui::{
-    Class, Color, Cursor, Dimension, Direction, Layers, LayoutPatch, LayoutStyle, Padding, Paint,
-    Size, StyleSet, StyleState, TextAlign, TextEngine, TextStyle, TextStylePatch, TextStyleSet,
-    Texture, Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetState, WidgetStyle,
-    WidgetStylePatch, WidgetTree,
+    Class, Color, Cursor, Dimension, Direction, Event, Layers, LayoutPatch, LayoutStyle, Padding,
+    Paint, Size, StyleSet, StyleState, TextAlign, TextEngine, TextStyle, TextStylePatch,
+    TextStyleSet, Texture, Transitions, UiEvent, Widget, WidgetError, WidgetId, WidgetState,
+    WidgetStyle, WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -71,7 +71,7 @@ fn draggable_widget_reports_a_drag_on_press() {
     .expect("layout");
 
     let events = tree.pointer_down(5, 5).expect("down");
-    assert!(events.contains(&WidgetEvent::Drag(text_id)));
+    assert!(events.contains(&UiEvent::widget(text_id, Event::drag())));
 }
 
 #[test]
@@ -625,11 +625,11 @@ fn clipped_child_hover_does_not_stick_across_moves() {
     .expect("layout");
 
     let inside = tree.pointer_moved(8, 8).expect("move inside");
-    assert!(inside.contains(&WidgetEvent::PointerEnter(child_id)));
+    assert!(inside.contains(&UiEvent::widget(child_id, Event::pointer_enter())));
     let outside = tree.pointer_moved(20, 8).expect("move outside");
-    assert!(outside.contains(&WidgetEvent::PointerLeave(child_id)));
+    assert!(outside.contains(&UiEvent::widget(child_id, Event::pointer_leave())));
     let back = tree.pointer_moved(8, 8).expect("move back");
-    assert!(back.contains(&WidgetEvent::PointerEnter(child_id)));
+    assert!(back.contains(&UiEvent::widget(child_id, Event::pointer_enter())));
 }
 
 #[test]
@@ -661,7 +661,7 @@ fn hover_switches_style_snapshot() {
 
     assert_eq!(
         tree.pointer_moved(10, 10).expect("move"),
-        vec![WidgetEvent::PointerEnter(id)]
+        vec![UiEvent::widget(id, Event::pointer_enter())]
     );
     {
         let snapshot = tree.snapshot().expect("snapshot");
@@ -670,7 +670,10 @@ fn hover_switches_style_snapshot() {
         assert!(node.state.hovered);
     }
 
-    assert_eq!(tree.pointer_leave(), vec![WidgetEvent::PointerLeave(id)]);
+    assert_eq!(
+        tree.pointer_leave(),
+        vec![UiEvent::widget(id, Event::pointer_leave())]
+    );
     let snapshot = tree.snapshot().expect("snapshot");
     let node = snapshot.node(id).expect("view");
     assert_eq!(node.style.background, base.background);
@@ -836,20 +839,20 @@ fn click_bubbles_from_leaf_to_root() {
     assert_eq!(
         tree.pointer_down(5, 5).expect("down"),
         vec![
-            WidgetEvent::Press(text_id),
-            WidgetEvent::Press(child_id),
-            WidgetEvent::Press(root_id),
+            UiEvent::widget(text_id, Event::press()),
+            UiEvent::widget(child_id, Event::press()),
+            UiEvent::widget(root_id, Event::press()),
         ]
     );
     assert_eq!(
         tree.pointer_up(5, 5).expect("up"),
         vec![
-            WidgetEvent::Release(text_id),
-            WidgetEvent::Release(child_id),
-            WidgetEvent::Release(root_id),
-            WidgetEvent::Click(text_id),
-            WidgetEvent::Click(child_id),
-            WidgetEvent::Click(root_id),
+            UiEvent::widget(text_id, Event::release()),
+            UiEvent::widget(child_id, Event::release()),
+            UiEvent::widget(root_id, Event::release()),
+            UiEvent::widget(text_id, Event::click()),
+            UiEvent::widget(child_id, Event::click()),
+            UiEvent::widget(root_id, Event::click()),
         ]
     );
     assert_eq!(
@@ -886,9 +889,9 @@ fn disabled_subtree_does_not_receive_clicks() {
     let down = tree.pointer_down(5, 5).expect("down");
     let up = tree.pointer_up(5, 5).expect("up");
 
-    assert_eq!(down, vec![WidgetEvent::Press(root_id)]);
-    assert!(!up.contains(&WidgetEvent::Click(child_id)));
-    assert!(up.contains(&WidgetEvent::Click(root_id)));
+    assert_eq!(down, vec![UiEvent::widget(root_id, Event::press())]);
+    assert!(!up.contains(&UiEvent::widget(child_id, Event::click())));
+    assert!(up.contains(&UiEvent::widget(root_id, Event::click())));
 }
 
 #[test]
