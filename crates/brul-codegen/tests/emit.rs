@@ -55,6 +55,8 @@ macro_rules! errors {
 goldens! {
     a_component_file_resolves_its_imports,
     emits_a_cursor_property,
+    emits_an_attachment_on_an_element,
+    emits_an_attachment_on_a_component,
     emits_an_effect_binding,
     a_palette_without_themes_emits_an_empty_theme_id,
     a_window_icon_resource_reaches_the_window_config,
@@ -135,6 +137,7 @@ errors! {
     an_unknown_kit_component_lists_the_kit,
     an_unknown_theme_key_in_an_imported_component_names_the_file,
     rejects_a_focusable_that_is_not_a_literal,
+    rejects_an_unknown_attachment,
     rejects_a_handler_that_ignores_the_event_arguments,
     rejects_a_multiline_that_is_not_a_literal,
     rejects_a_slot_outside_a_component,

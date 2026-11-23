@@ -104,8 +104,8 @@ pub use text::{
 pub use texture::{ExternalTexture, Revision, Texture, TextureError, TextureFrame};
 pub use theme::{Theme, UnknownTheme};
 pub use widget::{
-    Anchor, CaretArea, Class, Dirty, FunctionName, KeyModifiers, KeyPress, Layers, PlatformViewId,
-    PlatformViewSpec, StyleSet, StyleState, TextStylePatch, TextStyleSet, TimerOwner, Transitions,
-    Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode,
-    WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Anchor, CaretArea, Class, Dirty, FunctionName, ImeKind, KeyModifiers, KeyPress, Layers,
+    PlatformViewId, PlatformViewSpec, StyleSet, StyleState, TextStylePatch, TextStyleSet,
+    TimerOwner, Transitions, Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind,
+    WidgetSnapshot, WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };

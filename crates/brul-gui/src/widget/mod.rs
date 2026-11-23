@@ -17,7 +17,7 @@ mod tree;
 
 pub use crate::text::TextStylePatch;
 pub use brul_ident::{FunctionName, TimerOwner};
-pub use event::{CaretArea, Dirty, KeyModifiers, KeyPress, WidgetError, WidgetEvent};
+pub use event::{CaretArea, Dirty, ImeKind, KeyModifiers, KeyPress, WidgetError, WidgetEvent};
 pub use snapshot::{WidgetSnapshot, WidgetSnapshotNode};
 pub use style::{Class, Layers, StyleSet, StyleState, Transitions, WidgetStyle, WidgetStylePatch};
 pub use text::TextStyleSet;
@@ -29,6 +29,10 @@ pub struct WidgetId(u32);
 impl WidgetId {
     pub const fn new(value: u32) -> Self {
         Self(value)
+    }
+
+    pub const fn get(self) -> u32 {
+        self.0
     }
 }
 

@@ -1,11 +1,15 @@
+use std::collections::HashMap;
+
 use brul_case::constant;
 use brul_gui::Direction;
+use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Slot, Widget};
 use brul_syntax::style::EffectRule;
 use brul_syntax::types::Type;
 
+use crate::attachments::Attachments;
 use crate::error_at;
 use crate::styles;
 use crate::widgets::WidgetSpec;
@@ -15,7 +19,8 @@ use super::Frame;
 use super::Out;
 use super::anchor;
 use super::classes;
-use super::{component, events, expression, structure};
+use super::state::State;
+use super::{ScopeInfo, component, events, expression, structure};
 use crate::runtime::HandlerEvent;
 
 pub(super) fn widget(
@@ -69,7 +74,7 @@ pub(super) fn widget(
         || element
             .args
             .iter()
-            .any(|arg| matches!(arg, Arg::Named { .. }));
+            .any(|arg| matches!(arg, Arg::Named { .. } | Arg::Attach { .. }));
     if !needs {
         out.indent();
         element_expression(out, element, &style, &events, emit, frame, counter)?;
@@ -89,6 +94,19 @@ pub(super) fn widget(
         }
         parameters(out, element, &name, emit, frame)?;
         handler_bindings(out, &events.handlers, &name, emit.script_name);
+        attachment_bindings(
+            out,
+            element,
+            &name,
+            AttachmentContext {
+                attachments: emit.attachments,
+                names: emit.names,
+                state: emit.state,
+                prop_types: emit.prop_types,
+                scopes: &emit.scope_defs,
+                scope: frame.scope,
+            },
+        )?;
         out.line(format_args!("{name}"));
         Ok(())
     })?;
@@ -166,7 +184,7 @@ fn classes(element: &Element) -> Vec<&str> {
         .iter()
         .filter_map(|arg| match arg {
             Arg::Class(class) => Some(class.as_str()),
-            Arg::Named { .. } | Arg::Handler { .. } | Arg::Anchor(_) | Arg::Name(_) => None,
+            _ => None,
         })
         .collect()
 }
@@ -614,7 +632,7 @@ fn registered_widget(
     let mut class = None;
     for arg in &element.args {
         match arg {
-            Arg::Class(_) | Arg::Anchor(_) | Arg::Name(_) => {}
+            Arg::Class(_) | Arg::Anchor(_) | Arg::Name(_) | Arg::Attach { .. } => {}
             Arg::Handler { event, handler } => {
                 if handlers.iter().any(|(name, _, _)| *name == event.as_str()) {
                     return Err(error_at(
@@ -742,10 +760,110 @@ fn registered_widget(
                 )?
             ));
         }
+        attachment_bindings(
+            out,
+            element,
+            &name,
+            AttachmentContext {
+                attachments: emit.attachments,
+                names: emit.names,
+                state: emit.state,
+                prop_types: emit.prop_types,
+                scopes: &emit.scope_defs,
+                scope: frame.scope,
+            },
+        )?;
         out.line(format_args!("{name}"));
         Ok(())
     })?;
     out.start(format_args!("}}"));
+    Ok(())
+}
+
+pub(super) struct AttachmentContext<'a> {
+    pub(super) attachments: &'a Attachments,
+    pub(super) names: &'a Names<'a>,
+    pub(super) state: &'a State,
+    pub(super) prop_types: &'a HashMap<String, Type>,
+    pub(super) scopes: &'a [ScopeInfo],
+    pub(super) scope: Option<usize>,
+}
+
+pub(super) fn attachment_bindings(
+    out: &mut Out<'_>,
+    element: &Element,
+    widget: &str,
+    context: AttachmentContext<'_>,
+) -> Result<(), Error> {
+    let AttachmentContext {
+        attachments,
+        names,
+        state,
+        prop_types,
+        scopes,
+        scope,
+    } = context;
+    let id = state_id(element);
+    for arg in &element.args {
+        let Arg::Attach {
+            name,
+            params,
+            position,
+        } = arg
+        else {
+            continue;
+        };
+        let Some(spec) = attachments.get(name).cloned() else {
+            return Err(error_at(*position, format!("unknown attachment '{name}'")));
+        };
+        let mut expressions = Vec::with_capacity(spec.params.len());
+        for expected in &spec.params {
+            let Some((_, value)) = params
+                .iter()
+                .find(|(given, _)| *given == expected.name.as_str())
+            else {
+                return Err(error_at(
+                    *position,
+                    format!("attachment '{name}' needs a '{}' parameter", expected.name),
+                ));
+            };
+            expressions.push(expression::closure(
+                value, names, state, prop_types, scopes, scope,
+            )?);
+        }
+        if params.len() != spec.params.len() {
+            return Err(error_at(
+                *position,
+                format!("attachment '{name}' takes {} parameters", spec.params.len()),
+            ));
+        }
+        let events = &spec.events;
+        out.start(format_args!("build.attach(brul::Attachment {{\n"));
+        out.indented(|out| {
+            out.line(format_args!("widget: {widget}.id(),"));
+            out.line(format_args!("state: brul::StateId::new({id}u64),"));
+            out.line(format_args!("component: std::rc::Rc::clone(component),"));
+            out.line(format_args!(
+                "params: vec![{}],",
+                expressions.join(", ")
+            ));
+            out.line(format_args!("apply: {},", spec.apply));
+            out.line(format_args!("event: {},", spec.event));
+            out.line(format_args!("cleanup: {},", spec.cleanup));
+            out.line(format_args!(
+                "events: brul::AttachEvents {{ key: {}, ime: {}, input: {}, submit: {}, focus: {}, blur: {}, click: {} }},",
+                events.key,
+                events.ime,
+                events.input,
+                events.submit,
+                events.focus,
+                events.blur,
+                events.click
+            ));
+            Ok::<(), Error>(())
+        })?;
+        out.line(format_args!("}});"));
+    }
     Ok(())
 }
 

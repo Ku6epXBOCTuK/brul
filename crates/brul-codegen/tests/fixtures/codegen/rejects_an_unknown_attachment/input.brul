@@ -1,0 +1,9 @@
+<script>
+    let draft: String = "";
+</script>
+
+<markup>
+window EditorDemo (title: "editor") {
+    TextInput (use: missing(value: draft)) { draft }
+}
+</markup>

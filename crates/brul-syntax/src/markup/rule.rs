@@ -13,6 +13,8 @@ rule! {
         Element,
         ArgList,
         Arg,
+        AttachRef,
+        AttachParams,
         AnchorName,
         AnchorRef,
         HandlerRef,

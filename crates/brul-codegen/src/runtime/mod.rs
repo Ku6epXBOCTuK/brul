@@ -1,3 +1,4 @@
+mod attachment;
 mod binding;
 mod build;
 mod component;
@@ -12,6 +13,10 @@ mod structure;
 #[cfg(test)]
 mod tests;
 
+pub use attachment::{
+    AttachCtx, AttachEvent, AttachEvents, Attachment, CleanupHook, Element, EventHook, Param,
+    apply as apply_attachment, event_widget, from_widget,
+};
 pub use binding::{
     Binding, BindingTarget, Bindings, ClassTable, Expression, FlagExpression, NumberExpression,
     PropBinding, PropExpression, TextExpression, Write, boolean, evaluate, offset, text, write,

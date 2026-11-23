@@ -1,5 +1,6 @@
 //! Loading `.brul` files: SFC parsing, component registry, window arguments.
 
+mod attachments;
 mod bindings;
 pub mod build;
 mod builtin;

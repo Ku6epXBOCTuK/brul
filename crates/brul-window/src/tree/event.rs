@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{KeyPress, WidgetEvent};
+use brul_gui::{ImeKind, KeyPress, WidgetEvent};
 use tracing::{debug, trace, warn};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
@@ -102,27 +102,39 @@ impl TreeApp {
     }
 
     pub(super) fn ime(&mut self, surface: &dyn Surface, ime: ImeEvent) -> Step {
-        match ime {
-            ImeEvent::Preedit(text) => {
-                self.tree.borrow_mut().set_preedit(&text);
-                Step::Continue
-            }
-            ImeEvent::Commit(text) => {
-                let events = self.tree.borrow_mut().commit_text(&text);
-                self.dispatch_events(surface, events)
-            }
+        let kind = match &ime {
+            ImeEvent::Enabled => ImeKind::Enabled,
+            ImeEvent::Preedit(text) => ImeKind::Preedit(text.clone()),
+            ImeEvent::Commit(text) => ImeKind::Commit(text.clone()),
             ImeEvent::DeleteSurrounding {
                 before_bytes,
                 after_bytes,
-            } => {
-                let events = self
-                    .tree
-                    .borrow_mut()
-                    .delete_surrounding(before_bytes, after_bytes);
-                self.dispatch_events(surface, events)
+            } => ImeKind::DeleteSurrounding {
+                before_bytes: *before_bytes,
+                after_bytes: *after_bytes,
+            },
+            ImeEvent::Disabled => ImeKind::Disabled,
+        };
+        let id = self.tree.borrow().focused();
+        let mut events = match ime {
+            ImeEvent::Preedit(text) => {
+                self.tree.borrow_mut().set_preedit(&text);
+                Vec::new()
             }
-            ImeEvent::Enabled | ImeEvent::Disabled => Step::Continue,
+            ImeEvent::Commit(text) => self.tree.borrow_mut().commit_text(&text),
+            ImeEvent::DeleteSurrounding {
+                before_bytes,
+                after_bytes,
+            } => self
+                .tree
+                .borrow_mut()
+                .delete_surrounding(before_bytes, after_bytes),
+            ImeEvent::Enabled | ImeEvent::Disabled => Vec::new(),
+        };
+        if let Some(id) = id {
+            events.push(WidgetEvent::Ime { id, kind });
         }
+        self.dispatch_events(surface, events)
     }
 
     pub(super) fn sync_ime(&mut self, window: &dyn Window) {

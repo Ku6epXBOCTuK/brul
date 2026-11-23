@@ -4,7 +4,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use brul_codegen::runtime::{self, accepts_prop};
+use brul_codegen::runtime::{
+    self, AttachCtx, Attachment, EventHook, accepts_prop, apply_attachment, event_widget,
+    from_widget,
+};
 use brul_gui::{TimerOwner, WidgetEvent, WidgetId, WidgetTree};
 use brul_ident::TimerId;
 use brul_reactive::{Effect, EffectScope};
@@ -31,6 +34,7 @@ const EVENT_DEPTH: usize = 64;
 
 pub(crate) struct AssemblyParts {
     pub(crate) structures: Vec<Structure>,
+    pub(crate) attachments: Vec<Attachment>,
     pub(crate) nested: Vec<ComponentHandle>,
     pub(crate) states: SharedStates,
     pub(crate) event_sink: Option<Arc<dyn EventSink>>,
@@ -105,6 +109,7 @@ pub struct Ui<T: Theme> {
     next_owner: u64,
     pub tree: Rc<RefCell<WidgetTree>>,
     handlers: Vec<Handler>,
+    attachments: Vec<OwnedAttachment>,
     window_handlers: Vec<Handler>,
     handler_index: HashMap<(Option<WidgetId>, HandlerEvent), usize>,
     pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
@@ -132,6 +137,21 @@ struct OwnedStructure {
     components: Vec<ComponentHandle>,
     _scope: EffectScope,
 }
+
+struct OwnedAttachment {
+    widget: WidgetId,
+    state: StateId,
+    component: ComponentHandle,
+    events: crate::AttachEvents,
+    hook: EventHook,
+    _scope: EffectScope,
+}
+
+impl rebuild::WidgetRef for OwnedAttachment {
+    fn widget(&self) -> Option<WidgetId> {
+        Some(self.widget)
+    }
+}
 impl<T: Theme> Ui<T> {
     #[cfg(test)]
     pub(crate) fn assemble(
@@ -150,6 +170,7 @@ impl<T: Theme> Ui<T> {
             theme,
             AssemblyParts {
                 structures,
+                attachments: Vec::new(),
                 nested: Vec::new(),
                 states: Rc::new(RefCell::new(crate::States::default())),
                 event_sink: None,
@@ -183,6 +204,7 @@ impl<T: Theme> Ui<T> {
         } = built;
         let AssemblyParts {
             structures,
+            attachments,
             nested,
             states,
             event_sink,
@@ -202,6 +224,7 @@ impl<T: Theme> Ui<T> {
             next_owner: 0,
             tree,
             handlers,
+            attachments: Vec::new(),
             window_handlers,
             handler_index: HashMap::new(),
             commands,
@@ -225,6 +248,7 @@ impl<T: Theme> Ui<T> {
         ui.bind(bindings);
         ui.bind_props(props);
         ui.bind_structures(structures);
+        ui.bind_attachments(attachments);
         ui.index_handlers();
         ui
     }
@@ -299,6 +323,63 @@ impl<T: Theme> Ui<T> {
         }
     }
 
+    fn bind_attachments(&mut self, attachments: Vec<Attachment>) {
+        for attachment in attachments {
+            let widget = attachment.widget;
+            let state = attachment.state.for_widget(widget);
+            let component = Rc::clone(&attachment.component);
+            let tree = Rc::clone(&self.tree);
+            let states = Rc::clone(&self.states);
+            let sink = self.event_sink.clone();
+            let scope = self.scope.child();
+            let cleanup = attachment.cleanup;
+            let cleanup_component = Rc::clone(&component);
+            let cleanup_tree = Rc::clone(&tree);
+            let cleanup_states = Rc::clone(&states);
+            let cleanup_sink = sink.clone();
+            scope.on_cleanup(move || {
+                let mut ctx = AttachCtx {
+                    widget,
+                    state,
+                    component: &cleanup_component,
+                    tree: &cleanup_tree,
+                    states: &cleanup_states,
+                    sink: cleanup_sink.as_ref(),
+                };
+                cleanup(&mut ctx, state);
+            });
+            let apply = attachment.apply;
+            let params = attachment.params.clone();
+            let apply_component = Rc::clone(&component);
+            let apply_tree = Rc::clone(&tree);
+            let apply_states = Rc::clone(&states);
+            let apply_sink = sink.clone();
+            scope.run(|| {
+                Effect::new(move || {
+                    let mut ctx = AttachCtx {
+                        widget,
+                        state,
+                        component: &apply_component,
+                        tree: &apply_tree,
+                        states: &apply_states,
+                        sink: apply_sink.as_ref(),
+                    };
+                    if let Err(message) = apply_attachment(&mut ctx, &params, apply) {
+                        tracing::error!(%message, "attachment failed");
+                    }
+                });
+            });
+            self.attachments.push(OwnedAttachment {
+                widget,
+                state,
+                component,
+                events: attachment.events,
+                hook: attachment.event,
+                _scope: scope,
+            });
+        }
+    }
+
     fn bind_structures(&mut self, structures: Vec<Structure>) {
         for structure in structures {
             let component = Rc::clone(&structure.component);
@@ -350,6 +431,7 @@ impl<T: Theme> Ui<T> {
             handlers,
             props,
             structures,
+            attachments,
             components,
             rebuilt,
         } = staged;
@@ -361,6 +443,7 @@ impl<T: Theme> Ui<T> {
         let parents: HashSet<WidgetId> = structures.iter().map(|s| s.parent).collect();
         let widgets: HashSet<WidgetId> = bindings.iter().map(|b| b.widget).collect();
         let prop_widgets: HashSet<WidgetId> = props.iter().map(|p| p.widget).collect();
+        let attachment_widgets: HashSet<WidgetId> = attachments.iter().map(|a| a.widget).collect();
         let none = HashSet::new();
         // NOTE: bind runs effects immediately, so a live tree borrow here panics on borrow_mut
         {
@@ -369,6 +452,7 @@ impl<T: Theme> Ui<T> {
             retain_live(&mut self.rows, &tree, &none);
             retain_live(&mut self.bindings, &tree, &widgets);
             retain_live(&mut self.props, &tree, &prop_widgets);
+            retain_live(&mut self.attachments, &tree, &attachment_widgets);
             self.handlers.extend(handlers);
             retain_live(&mut self.handlers, &tree, &none);
         }
@@ -376,6 +460,7 @@ impl<T: Theme> Ui<T> {
         self.bind(bindings);
         self.bind_props(props);
         self.bind_structures(structures);
+        self.bind_attachments(attachments);
         for (parent, handle) in components {
             let owned = self.adopt(handle);
             if let Some(entry) = self
@@ -406,6 +491,9 @@ impl<T: Theme> Ui<T> {
             live.insert(Rc::as_ptr(&owned.structure.component));
             live.extend(owned.components.iter().map(Rc::as_ptr));
         }
+        for owned in &self.attachments {
+            live.insert(Rc::as_ptr(&owned.component));
+        }
         self.components
             .retain(|owned| live.contains(&Rc::as_ptr(&owned.component)));
     }
@@ -417,6 +505,7 @@ impl<T: Theme> Ui<T> {
         let built = (self.view)(self.theme, &mut build, &self.component);
         let structures = build.take_structures();
         let nested = build.take_components();
+        let attachments = build.take_attachments();
         let built = built?;
         self.components.clear();
         for handle in std::iter::once(Rc::clone(&self.component)).chain(nested) {
@@ -430,6 +519,7 @@ impl<T: Theme> Ui<T> {
         self.index_handlers();
         self.bindings.clear();
         self.props.clear();
+        self.attachments.clear();
         self.structures.clear();
         self.rows.clear();
         self.requests.borrow_mut().clear();
@@ -437,6 +527,7 @@ impl<T: Theme> Ui<T> {
         self.bind(built.bindings);
         self.bind_props(built.props);
         self.bind_structures(structures);
+        self.bind_attachments(attachments);
         Ok(())
     }
 
@@ -488,6 +579,30 @@ impl<T: Theme> Ui<T> {
     }
 
     fn dispatch_event(&mut self, event: &WidgetEvent) {
+        let attach_event = from_widget(event);
+        let widget = event_widget(event).or_else(|| {
+            matches!(event, WidgetEvent::Key { .. })
+                .then(|| self.tree.borrow().focused())
+                .flatten()
+        });
+        if let (Some(attach_event), Some(widget)) = (attach_event, widget) {
+            for owned in &self.attachments {
+                if owned.widget != widget || !owned.events.accepts(&attach_event) {
+                    continue;
+                }
+                let mut ctx = AttachCtx {
+                    widget,
+                    state: owned.state,
+                    component: &owned.component,
+                    tree: &self.tree,
+                    states: &self.states,
+                    sink: self.event_sink.as_ref(),
+                };
+                if (owned.hook)(&mut ctx, owned.state, &attach_event) {
+                    return;
+                }
+            }
+        }
         let Some((widget, target)) = handler_target(event) else {
             return;
         };

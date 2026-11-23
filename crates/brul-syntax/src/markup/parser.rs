@@ -170,6 +170,42 @@ impl Cursor<'_> {
             let handler = self.ident()?;
             return Ok(Arg::Handler { event, handler });
         }
+        if name == "use" {
+            self.expect(':')?;
+            let name = self.ident()?;
+            let mut params = Vec::new();
+            self.skip_trivia();
+            if self.eat('(') {
+                loop {
+                    self.skip_trivia();
+                    if self.eat(')') {
+                        break;
+                    }
+                    let key = self.ident()?;
+                    self.expect(':')?;
+                    let (value, end) =
+                        crate::parser::parse_expression_at(self.source(), self.pos())?;
+                    self.set_pos(end);
+                    params.push((key, value));
+                    self.skip_trivia();
+                    match self.peek() {
+                        Some(',') => {
+                            self.bump();
+                        }
+                        Some(')') => {
+                            self.bump();
+                            break;
+                        }
+                        _ => return Err(self.error(Expected::OneOf("',' or ')'"))),
+                    }
+                }
+            }
+            return Ok(Arg::Attach {
+                name,
+                params,
+                position: position(self, start),
+            });
+        }
         self.skip_trivia();
         if self.peek() == Some(':') {
             self.bump();

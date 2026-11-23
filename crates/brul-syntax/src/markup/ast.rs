@@ -165,7 +165,18 @@ pub struct AnchorName {
 pub enum Arg {
     Class(String),
     Name(AnchorName),
-    Named { name: String, value: Expr },
-    Handler { event: String, handler: String },
+    Named {
+        name: String,
+        value: Expr,
+    },
+    Handler {
+        event: String,
+        handler: String,
+    },
     Anchor(AnchorName),
+    Attach {
+        name: String,
+        params: Vec<(String, Expr)>,
+        position: Position,
+    },
 }

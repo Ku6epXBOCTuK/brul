@@ -1,0 +1,9 @@
+<script>
+    let draft: String = "";
+</script>
+
+<markup>
+component Editor {
+    TextInput (use: editor(value: draft)) { draft }
+}
+</markup>

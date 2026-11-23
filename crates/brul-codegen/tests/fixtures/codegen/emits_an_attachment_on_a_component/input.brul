@@ -1,0 +1,9 @@
+<use>
+    import Editor from "./editor.brul";
+</use>
+
+<markup>
+window EditorHost (title: "editor") {
+    Editor { }
+}
+</markup>

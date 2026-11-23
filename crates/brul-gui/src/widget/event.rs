@@ -45,6 +45,18 @@ pub struct CaretArea {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ImeKind {
+    Enabled,
+    Preedit(String),
+    Commit(String),
+    DeleteSurrounding {
+        before_bytes: usize,
+        after_bytes: usize,
+    },
+    Disabled,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WidgetEvent {
     PointerEnter(WidgetId),
     PointerLeave(WidgetId),
@@ -61,6 +73,10 @@ pub enum WidgetEvent {
     Focus(WidgetId),
     Blur(WidgetId),
     Input(WidgetId, String, usize),
+    Ime {
+        id: WidgetId,
+        kind: ImeKind,
+    },
     Submit(WidgetId),
     Dismiss(WidgetId),
     Copy(String),

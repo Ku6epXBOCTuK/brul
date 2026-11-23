@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Scope, TestTheme};
+use crate::{Scope, Signal, TestTheme};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -11,11 +11,14 @@ use brul_syntax::script::{BUILTINS, BuiltinEmit};
 use brul_window::{TimerCommand, WindowCommand, WindowKey};
 
 use crate::run::generated_built;
-use crate::{Binding, BindingTarget, Component, Dyn, Error, HandlerEvent, RowKey, Script};
+use crate::{
+    AttachEvent, AttachEvents, Binding, BindingTarget, Component, Dyn, Error, HandlerEvent, RowKey,
+    Script,
+};
 
 const NAMES: &[&str] = &[
     "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code", "accent",
-    "missing", "icon",
+    "missing", "icon", "value", "script", "cleaned",
 ];
 
 fn unknown_theme() -> ViewError {
@@ -1083,6 +1086,132 @@ fn dispatch_calls_the_handler_of_the_widget() {
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
 }
 
+struct ProbeSource {
+    value: Signal<String>,
+}
+
+#[derive(Default)]
+struct ProbeState {
+    applied: Vec<String>,
+}
+
+fn probe_apply(ctx: &mut AttachCtx<'_>, state: StateId, params: &[Dyn]) -> Result<(), ViewError> {
+    if ctx.state::<ProbeState>().is_none() {
+        ctx.set_state(ProbeState::default());
+    }
+    let value = params
+        .first()
+        .and_then(|param| String::try_from(param.clone()).ok())
+        .unwrap_or_default();
+    if let Some(probe) = ctx.state::<ProbeState>() {
+        probe.borrow_mut().applied.push(value);
+    }
+    let _ = state;
+    Ok(())
+}
+
+fn probe_event(ctx: &mut AttachCtx<'_>, _state: StateId, event: &AttachEvent<'_>) -> bool {
+    if matches!(event, AttachEvent::Click) {
+        ctx.component
+            .borrow_mut()
+            .assign("ran", Value::Bool(true))
+            .expect("ran");
+        true
+    } else {
+        false
+    }
+}
+
+fn probe_cleanup(ctx: &mut AttachCtx<'_>, _state: StateId) {
+    ctx.component
+        .borrow_mut()
+        .assign("cleaned", Value::Bool(true))
+        .expect("cleaned");
+}
+
+fn set_script(component: &mut Component, _: &[Dyn]) -> Result<Dyn, Error> {
+    component.assign("script", Value::Bool(true))?;
+    Ok(Dyn::null())
+}
+
+#[test]
+fn attachment_reruns_vetoes_events_and_cleans_up() {
+    let component = component_with(&["ran", "script", "cleaned"]);
+    component.borrow_mut().set_state(ProbeSource {
+        value: Signal::new("first".to_owned()),
+    });
+    let widget = Widget::text("");
+    let id = widget.id();
+    let attachment = Attachment {
+        widget: id,
+        state: StateId::new(7),
+        component: Rc::clone(&component),
+        params: vec![|component: &mut Component| -> Result<Dyn, Error> {
+            Ok(Dyn::text(component.state::<ProbeSource>().value.get()))
+        }],
+        apply: probe_apply,
+        event: probe_event,
+        cleanup: probe_cleanup,
+        events: AttachEvents {
+            click: true,
+            ..AttachEvents::default()
+        },
+    };
+    let built = Built {
+        widget,
+        bindings: Vec::new(),
+        handlers: vec![Handler::new(
+            &component,
+            Some(id),
+            HandlerEvent::Click,
+            set_script,
+        )],
+        props: Vec::new(),
+    };
+    let mut ui = Ui::assemble_with(
+        Rc::clone(&component),
+        built,
+        themed_view,
+        None,
+        AssemblyParts {
+            structures: Vec::new(),
+            attachments: vec![attachment],
+            nested: Vec::new(),
+            states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
+        },
+        Rc::new(RefCell::new(Vec::new())),
+        false,
+    );
+    ui.settle();
+    let state = StateId::new(7).for_widget(id);
+    let probe = ui
+        .states
+        .borrow()
+        .get_cloned::<RefCell<ProbeState>>(state)
+        .expect("probe state");
+    assert_eq!(probe.borrow().applied, ["first".to_owned()]);
+
+    component
+        .borrow_mut()
+        .state::<ProbeSource>()
+        .value
+        .set("second".to_owned());
+    brul_reactive::flush();
+    ui.settle();
+    assert_eq!(
+        probe.borrow().applied,
+        ["first".to_owned(), "second".to_owned()]
+    );
+
+    ui.dispatch(&[WidgetEvent::Click(id)]);
+    assert_eq!(component.borrow().read("ran"), Ok(Value::Bool(true)));
+    assert_ne!(component.borrow().read("script"), Ok(Value::Bool(true)));
+
+    drop(ui);
+    assert_eq!(component.borrow().read("cleaned"), Ok(Value::Bool(true)));
+}
+
 #[test]
 fn dispatch_runs_the_first_of_two_handlers_of_a_widget() {
     let component = component_with(&["ran", "off"]);
@@ -1509,6 +1638,7 @@ fn a_timer_from_a_nested_component_runs_in_its_component() {
         None,
         AssemblyParts {
             structures,
+            attachments: Vec::new(),
             nested,
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,

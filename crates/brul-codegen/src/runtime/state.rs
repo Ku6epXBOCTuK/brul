@@ -3,6 +3,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use brul_gui::WidgetId;
+
 use super::ComponentHandle;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -15,6 +17,11 @@ impl StateId {
 
     pub const fn get(self) -> u64 {
         self.0
+    }
+
+    pub const fn for_widget(self, widget: WidgetId) -> Self {
+        let id = (widget.get() as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        Self((self.0 ^ id) & 0x001f_ffff_ffff_ffff)
     }
 }
 

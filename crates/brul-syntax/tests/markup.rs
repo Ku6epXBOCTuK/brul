@@ -94,6 +94,46 @@ fn element_args_parse_handlers_and_expressions() {
 }
 
 #[test]
+fn element_args_parse_attachments_with_params() {
+    let source = r#"component Editor {
+        TextInput (field, use: editor(value: draft, multiline: true)) { draft }
+    }"#;
+    let file = parse_file(source).unwrap();
+    let Member::Element(element) = &file.declaration.as_ref().unwrap().members[0] else {
+        panic!("element");
+    };
+    let Arg::Attach { name, params, .. } = &element.args[1] else {
+        panic!("attach arg");
+    };
+    assert_eq!(name, "editor");
+    assert_eq!(params.len(), 2);
+    assert_eq!(params[0].0, "value");
+    assert_eq!(params[0].1.kind, ExprKind::Ident("draft".to_owned()));
+    assert_eq!(params[1].0, "multiline");
+    assert_eq!(params[1].1.kind, ExprKind::Bool(true));
+}
+
+#[test]
+fn attachment_without_params_parses() {
+    let file = parse_file("window Demo (root) { TextInput (use: editor) { draft } }").unwrap();
+    let declaration = file.declaration.as_ref().unwrap();
+    let Member::Element(element) = &declaration.members[0] else {
+        panic!("element");
+    };
+    assert!(matches!(
+        &element.args[0],
+        Arg::Attach { name, params, .. } if name == "editor" && params.is_empty()
+    ));
+}
+
+#[test]
+fn a_malformed_attachment_is_rejected() {
+    assert!(
+        parse_file("window Demo (root) { TextInput (use: editor(a: 1 b: 2)) { draft } }").is_err()
+    );
+}
+
+#[test]
 fn anchor_name_parses_separately_from_classes() {
     let source = r#"component Tip {
         Container (trigger, #tip-target) {

@@ -14,12 +14,13 @@ use super::Emit;
 use super::Frame;
 use super::Out;
 use super::anchor;
-use super::{events, expression, items_spliced};
+use super::{element, events, expression, items_spliced};
 
 type Props<'a> = Vec<(&'a str, &'a PropType, &'a Expr)>;
 type Events<'a> = Vec<(&'a str, &'a str, Vec<PropType>)>;
 
 struct Call<'a> {
+    element: &'a Element,
     name: &'a str,
     props: Props<'a>,
     defaults: Props<'a>,
@@ -68,7 +69,7 @@ pub(super) fn component(
         .iter()
         .filter_map(|arg| match arg {
             Arg::Class(class) => Some(class.as_str()),
-            Arg::Named { .. } | Arg::Handler { .. } | Arg::Anchor(_) | Arg::Name(_) => None,
+            _ => None,
         })
         .collect();
     let class = element.args.iter().find_map(|arg| match arg {
@@ -87,6 +88,7 @@ pub(super) fn component(
     write(
         out,
         Call {
+            element,
             name,
             props,
             defaults,
@@ -264,7 +266,7 @@ fn collect<'a>(
     let mut events = Events::new();
     for arg in &element.args {
         match arg {
-            Arg::Class(_) | Arg::Anchor(_) | Arg::Name(_) => {}
+            Arg::Class(_) | Arg::Anchor(_) | Arg::Name(_) | Arg::Attach { .. } => {}
             Arg::Handler { event, handler } => events.push(event_of(
                 element, definition, name, emit, &events, event, handler,
             )?),
@@ -402,6 +404,7 @@ fn write(
     let dynamic_classes = &mut *emit.dynamic_classes;
     let base = bases[index].as_str();
     let Call {
+        element,
         name,
         props,
         defaults,
@@ -506,6 +509,19 @@ fn write(
                 expression::closure(value, names, state, prop_types, scopes, scope)?
             ));
         }
+        element::attachment_bindings(
+            out,
+            element,
+            &widget,
+            element::AttachmentContext {
+                attachments: emit.attachments,
+                names,
+                state,
+                prop_types,
+                scopes,
+                scope,
+            },
+        )?;
         out.line(format_args!("{widget}"));
         Ok(())
     })?;

@@ -148,6 +148,7 @@ pub fn split_component_file_with_widgets(
     validate_components(&registry.definitions, &command_names)?;
     let mut source = crate::Source::empty();
     crate::builtin::compose(&mut source, &mut registry, widgets)?;
+    let attachments = attachments_from(Some(path))?;
     let names = names::table(&source, &registry.definitions, widgets);
     let anchor_table = anchor::collect(&source, &registry.definitions)?;
     let mut used = HashSet::new();
@@ -171,6 +172,7 @@ pub fn split_component_file_with_widgets(
             commands,
             widgets,
             anchor_ids: &anchor_table,
+            attachments: &attachments,
         },
         &mut sinks,
     )?;
@@ -207,6 +209,7 @@ fn module_at(
             "entry declaration must be a window",
         ));
     }
+    let attachments = attachments_from(entry)?;
     let names = names::table(&parsed, &registry.definitions, widgets);
     let anchor_table = anchor::collect(&parsed, &registry.definitions)?;
     let root_props = names::declared(&declaration.members);
@@ -317,6 +320,7 @@ fn module_at(
                 base: &view.base,
                 resource_prefix: &prefix,
                 widgets,
+                attachments: &attachments,
                 anchor_ids: &anchor_table,
             },
             EmitOutputs {
@@ -375,6 +379,7 @@ fn module_at(
             &Discovery {
                 commands,
                 widgets,
+                attachments: &attachments,
                 anchor_ids: &anchor_table,
             },
             &mut sinks,
@@ -484,7 +489,17 @@ struct ComponentSinks<'a> {
 struct Discovery<'a> {
     commands: &'a Commands,
     widgets: &'a Widgets,
+    attachments: &'a crate::attachments::Attachments,
     anchor_ids: &'a AnchorIds,
+}
+
+fn attachments_from(entry: Option<&Path>) -> Result<crate::attachments::Attachments, Error> {
+    match entry {
+        Some(path) => {
+            crate::attachments::collect(&path.parent().unwrap_or(Path::new(".")).join("src"))
+        }
+        None => Ok(crate::attachments::Attachments::new()),
+    }
 }
 
 fn emit_component(
@@ -529,6 +544,7 @@ fn emit_component(
             base,
             resource_prefix: &prefix,
             widgets: discovery.widgets,
+            attachments: discovery.attachments,
             anchor_ids: discovery.anchor_ids,
         },
         EmitOutputs {

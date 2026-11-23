@@ -49,6 +49,225 @@ pub fn widget(attribute: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
+#[proc_macro_attribute]
+pub fn attach(attribute: TokenStream, item: TokenStream) -> TokenStream {
+    let arguments = syn::parse_macro_input!(attribute as AttachArguments);
+    let function = syn::parse_macro_input!(item as ItemFn);
+    match expand_attach(arguments, function) {
+        Ok(tokens) => tokens.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
+}
+
+struct AttachArguments {
+    update: Option<Ident>,
+    event: Option<Ident>,
+    cleanup: Option<Ident>,
+}
+
+impl Parse for AttachArguments {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut result = Self {
+            update: None,
+            event: None,
+            cleanup: None,
+        };
+        for argument in Punctuated::<AttachArg, Token![,]>::parse_terminated(input)? {
+            match argument {
+                AttachArg::Update(value) => result.update = Some(value),
+                AttachArg::Event(value) => result.event = Some(value),
+                AttachArg::Cleanup(value) => result.cleanup = Some(value),
+                AttachArg::Ignored => {}
+            }
+        }
+        Ok(result)
+    }
+}
+
+enum AttachArg {
+    Update(Ident),
+    Event(Ident),
+    Cleanup(Ident),
+    Ignored,
+}
+
+impl Parse for AttachArg {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let key: Ident = input.parse()?;
+        match key.to_string().as_str() {
+            "update" | "event" | "cleanup" => {
+                input.parse::<Token![=]>()?;
+                let value = input.parse()?;
+                Ok(match key.to_string().as_str() {
+                    "update" => Self::Update(value),
+                    "event" => Self::Event(value),
+                    _ => Self::Cleanup(value),
+                })
+            }
+            "name" => {
+                input.parse::<Token![=]>()?;
+                let _: LitStr = input.parse()?;
+                Ok(Self::Ignored)
+            }
+            "events" => {
+                let content;
+                syn::parenthesized!(content in input);
+                let _: Punctuated<Ident, Token![,]> = Punctuated::parse_terminated(&content)?;
+                Ok(Self::Ignored)
+            }
+            _ => Err(syn::Error::new(key.span(), "unknown attachment argument")),
+        }
+    }
+}
+
+fn expand_attach(arguments: AttachArguments, function: ItemFn) -> Result<TokenStream2> {
+    if !function.sig.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &function.sig.generics,
+            "an attachment cannot be generic",
+        ));
+    }
+    let mut inputs = function.sig.inputs.iter();
+    if !matches!(inputs.next(), Some(FnArg::Typed(_))) {
+        return Err(syn::Error::new_spanned(
+            &function.sig,
+            "an attachment takes a context first",
+        ));
+    }
+    let mut names = Vec::new();
+    let mut types = Vec::new();
+    for input in inputs {
+        let FnArg::Typed(argument) = input else {
+            return Err(syn::Error::new_spanned(
+                &function.sig,
+                "an attachment has no receiver",
+            ));
+        };
+        if !matches!(
+            brul_command::kind(&argument.ty),
+            Kind::String | Kind::Number | Kind::Bool
+        ) {
+            return Err(syn::Error::new_spanned(
+                &argument.ty,
+                "an attachment param must be Number, String or Bool",
+            ));
+        }
+        let Pat::Ident(pattern) = &*argument.pat else {
+            return Err(syn::Error::new_spanned(
+                &argument.pat,
+                "an attachment param needs a name",
+            ));
+        };
+        names.push(pattern.ident.clone());
+        types.push((*argument.ty).clone());
+    }
+    let state_ty = attachment_state_type(&function.sig.output)?;
+    let name = &function.sig.ident;
+    let base = format_ident!("__brul_attach_{}", snake(&name.to_string()));
+    let apply = format_ident!("{base}_apply");
+    let event = format_ident!("{base}_event");
+    let cleanup = format_ident!("{base}_cleanup");
+    let indices = 0..names.len();
+    let reads = indices
+        .clone()
+        .zip(types.iter())
+        .map(|(index, ty)| {
+            let value = format_ident!("param_{index}");
+            quote! { let #value: #ty = params[#index].clone().try_into()?; }
+        })
+        .collect::<Vec<_>>();
+    let values = (0..names.len())
+        .map(|index| format_ident!("param_{index}"))
+        .collect::<Vec<_>>();
+    let update = match &arguments.update {
+        Some(hook) => {
+            quote! { #hook(&mut *state, ctx, #(Clone::clone(&#values)),*)?; let _ = &*state; }
+        }
+        None => quote! { let _ = (&mut *state, &*ctx, #(#values),*); },
+    };
+    let event_call = match &arguments.event {
+        Some(hook) => quote! { #hook(&mut *state, ctx, event) },
+        None => quote! { let _ = (&mut *state, &*ctx, event); false },
+    };
+    let cleanup_call = match &arguments.cleanup {
+        Some(hook) => quote! { #hook(&mut *state, ctx); },
+        None => quote! { let _ = (&mut *state, &*ctx); },
+    };
+    Ok(quote! {
+        #function
+
+        pub fn #apply(
+            ctx: &mut ::brul::AttachCtx<'_>,
+            _state: ::brul::StateId,
+            params: &[::brul::Dyn],
+        ) -> Result<(), ::brul::ViewError> {
+            #(#reads)*
+            if ::brul::AttachCtx::state::<#state_ty>(&*ctx).is_none() {
+                let state = #name(ctx, #(Clone::clone(&#values)),*)?;
+                ctx.set_state(state);
+            }
+            let cell = ::brul::AttachCtx::state::<#state_ty>(&*ctx)
+                .expect("attachment state was just created");
+            if let Ok(mut state) = cell.try_borrow_mut() {
+                #update
+            }
+            Ok(())
+        }
+
+        pub fn #event(
+            ctx: &mut ::brul::AttachCtx<'_>,
+            _state: ::brul::StateId,
+            event: &::brul::AttachEvent<'_>,
+        ) -> bool {
+            let Some(cell) = ::brul::AttachCtx::state::<#state_ty>(&*ctx) else {
+                return false;
+            };
+            let Ok(mut state) = cell.try_borrow_mut() else {
+                return false;
+            };
+            #event_call
+        }
+
+        pub fn #cleanup(ctx: &mut ::brul::AttachCtx<'_>, _state: ::brul::StateId) {
+            if let Some(cell) = ::brul::AttachCtx::state::<#state_ty>(&*ctx)
+                && let Ok(mut state) = cell.try_borrow_mut()
+            {
+                #cleanup_call
+            }
+            ctx.remove_state();
+        }
+    })
+}
+
+fn attachment_state_type(output: &ReturnType) -> Result<Type> {
+    let ReturnType::Type(_, ty) = output else {
+        return Err(syn::Error::new_spanned(
+            output,
+            "an attachment returns a state",
+        ));
+    };
+    let Type::Path(path) = &**ty else {
+        return Err(syn::Error::new_spanned(ty, "an attachment returns a state"));
+    };
+    let segment = path.path.segments.last().expect("result type");
+    if segment.ident != "Result" {
+        return Ok((**ty).clone());
+    }
+    let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return Err(syn::Error::new_spanned(
+            ty,
+            "an attachment returns Result<State, Error>",
+        ));
+    };
+    let Some(syn::GenericArgument::Type(state)) = arguments.args.first() else {
+        return Err(syn::Error::new_spanned(
+            ty,
+            "an attachment returns Result<State, Error>",
+        ));
+    };
+    Ok(state.clone())
+}
+
 struct WidgetArguments;
 
 impl Parse for WidgetArguments {

@@ -6,6 +6,7 @@ use brul_syntax::script::Program;
 use brul_syntax::style::{EffectRule, Stylesheet};
 use brul_syntax::types::Type;
 
+use crate::attachments::Attachments;
 use crate::widgets::Widgets;
 use crate::{Import, Registry, Resource};
 
@@ -81,6 +82,7 @@ pub(super) struct Emit<'a> {
     prop_types: &'a HashMap<String, Type>,
     program: Option<&'a Program>,
     widgets: &'a Widgets,
+    attachments: &'a Attachments,
     anchor_ids: &'a anchor::AnchorIds,
     scope_defs: Vec<ScopeInfo>,
     functions: &'a mut Vec<String>,
@@ -103,6 +105,7 @@ struct EmitSources<'a> {
     prop_types: &'a HashMap<String, Type>,
     program: Option<&'a Program>,
     widgets: &'a Widgets,
+    attachments: &'a Attachments,
     anchor_ids: &'a anchor::AnchorIds,
     base: &'a str,
     resource_prefix: &'a str,
@@ -141,6 +144,7 @@ impl<'a> Emit<'a> {
             scope_defs: Vec::new(),
             program: sources.program,
             widgets: sources.widgets,
+            attachments: sources.attachments,
             anchor_ids: sources.anchor_ids,
             functions: outputs.functions,
             bases: outputs.bases,

@@ -13,6 +13,7 @@ pub struct Build {
     slots: Option<Rc<Slots>>,
     structures: Vec<Structure>,
     components: Vec<ComponentHandle>,
+    attachments: Vec<super::Attachment>,
     states: SharedStates,
     event_sink: Option<Arc<dyn EventSink>>,
 }
@@ -27,6 +28,7 @@ impl Build {
             slots,
             structures: Vec::new(),
             components: Vec::new(),
+            attachments: Vec::new(),
             states: Rc::new(RefCell::new(States::default())),
             event_sink: None,
         }
@@ -79,5 +81,13 @@ impl Build {
 
     pub fn take_components(&mut self) -> Vec<ComponentHandle> {
         std::mem::take(&mut self.components)
+    }
+
+    pub fn attach(&mut self, attachment: super::Attachment) {
+        self.attachments.push(attachment);
+    }
+
+    pub fn take_attachments(&mut self) -> Vec<super::Attachment> {
+        std::mem::take(&mut self.attachments)
     }
 }

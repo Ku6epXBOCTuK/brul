@@ -135,6 +135,35 @@ window Note (title: "note", width: 520, height: 480, centered: true) {
 В `TextInput` эти клавиши действуют по-своему: `Enter` вызывает `on submit`,
 Space вставляет пробел, клик не посылается.
 
+### Код на элементе: `use:`
+
+`use: name(a: expr, ...)` прикрепляет к элементу Rust-функцию. Параметры —
+выражения скрипта, как у пропсов; функция может быть на Element или компоненте.
+Имя ищется в реестре `#[brul::attach]` исходников приложения.
+
+```brul
+TextInput (use: editor(value: draft, multiline: true)) { draft }
+```
+
+```rust,ignore
+#[brul::attach(name = "editor", events(Key, Ime), update = editor_update,
+               event = editor_event, cleanup = editor_cleanup)]
+fn editor(ctx: &mut brul::AttachCtx<'_>, value: String, multiline: bool)
+    -> Result<EditorState, brul::ViewError> { /* состояние */ }
+```
+
+Функция создаёт состояние один раз, `update` вызывается при изменении любого
+параметра. Состояние лежит в слоте `StateId` элемента: отдельный слот на каждый
+экземпляр, в том числе в строках `@each`; `apply` и хуки получают его через
+`AttachCtx::state::<T>()` / `set_state`. `AttachCtx` также даёт `element()` для
+правки примитива, `emit()` для событий скрипта и `remove_state()`. Хук `event`
+получает `Key`, `Ime`, `Input`, `Submit`, `Focus`, `Blur` или `Click` и
+возвращает `true`, если событие поглощено; такой вызов не доходит до `on ...`
+элемента и окна. У `Key` нет идентификатора элемента, поэтому он адресуется
+сфокусированному элементу; клавишу сначала обрабатывает движок, вложение только
+запрещает дальнейшую доставку. `cleanup` вызывается при демонтаже элемента или
+перестройке дерева, после чего слот состояния удаляется.
+
 ### Поле ввода
 
 `TextInput` — листовой виджет: блок — одно выражение, начальное значение.

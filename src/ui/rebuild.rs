@@ -8,8 +8,8 @@ use brul_gui::{WidgetId, WidgetTree};
 use super::{Owned, OwnedStructure};
 use crate::each::reconcile_each;
 use crate::{
-    Binding, Build, Built, ComponentHandle, EventSink, Handler, PropBinding, RowInfo, SharedStates,
-    Structure,
+    Attachment, Binding, Build, Built, ComponentHandle, EventSink, Handler, PropBinding, RowInfo,
+    SharedStates, Structure,
 };
 
 #[derive(Default)]
@@ -18,6 +18,7 @@ pub(super) struct Staged {
     pub(super) handlers: Vec<Handler>,
     pub(super) props: Vec<PropBinding>,
     pub(super) structures: Vec<Structure>,
+    pub(super) attachments: Vec<Attachment>,
     pub(super) components: Vec<(WidgetId, ComponentHandle)>,
     pub(super) rebuilt: Vec<WidgetId>,
 }
@@ -26,6 +27,7 @@ struct Rebuilt {
     built: Built,
     rows: Vec<RowInfo>,
     structures: Vec<Structure>,
+    attachments: Vec<Attachment>,
     components: Vec<ComponentHandle>,
 }
 
@@ -76,6 +78,7 @@ impl Pending {
             built,
             rows,
             structures,
+            attachments,
             components,
         }) = rebuild_structure(
             structure,
@@ -108,6 +111,7 @@ impl Pending {
         self.staged.handlers.extend(handlers);
         self.staged.props.extend(props);
         self.staged.structures.extend(structures);
+        self.staged.attachments.extend(attachments);
         self.staged
             .components
             .extend(components.into_iter().map(|component| (parent, component)));
@@ -146,6 +150,7 @@ fn rebuild_structure(
     let rebuilt = (structure.rebuild)(theme, &mut build, &component, old_rows);
     let structures = build.take_structures();
     let components = build.take_components();
+    let attachments = build.take_attachments();
     component.borrow_mut().set_scope(previous);
     let (built, rows) = match rebuilt {
         Ok(result) => result,
@@ -158,6 +163,7 @@ fn rebuild_structure(
         built,
         rows,
         structures,
+        attachments,
         components,
     })
 }
