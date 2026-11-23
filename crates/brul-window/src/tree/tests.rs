@@ -3,12 +3,14 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{
-    Atlas, Cursor, Dimension, Dirty, KeyPress, LayoutStyle, Size, StyleSet, TextEngine, TimerOwner,
-    Widget, WidgetError, WidgetEvent, WidgetSnapshot, WidgetStyle, WidgetTree,
+    Atlas, Cursor, Dimension, Dirty, KeyPress, LayoutStyle, PlatformViewId, Size, StyleSet,
+    TextEngine, TimerOwner, Widget, WidgetError, WidgetEvent, WidgetSnapshot, WidgetStyle,
+    WidgetTree,
 };
 use winit::event_loop::ControlFlow;
 
 use crate::input::Input;
+use crate::platform::{PlatformViewBackend, PlatformViewBounds};
 use crate::surface::{Renderer, Surface, TestRenderer};
 use crate::window::{ColorScheme, TimerCommand, WindowCommand, WindowConfig, WindowKey};
 
@@ -678,4 +680,161 @@ fn a_resize_forgets_the_presented_frame() {
     assert!(app.presented);
     app.resize(&surface, 10, 8);
     assert!(!app.presented);
+}
+
+struct RecordingPlatform {
+    calls: Rc<RefCell<Vec<String>>>,
+}
+
+impl RecordingPlatform {
+    fn push(&self, call: String) {
+        self.calls.borrow_mut().push(call);
+    }
+}
+
+impl PlatformViewBackend for RecordingPlatform {
+    fn create(&mut self, id: PlatformViewId, source: &str, bounds: PlatformViewBounds, scale: f64) {
+        self.push(format!(
+            "create {} {} {},{},{}x{} @{}",
+            id.get(),
+            source,
+            bounds.x,
+            bounds.y,
+            bounds.width,
+            bounds.height,
+            scale as u32
+        ));
+    }
+    fn set_bounds(&mut self, id: PlatformViewId, bounds: PlatformViewBounds, scale: f64) {
+        self.push(format!(
+            "bounds {} {},{},{}x{} @{}",
+            id.get(),
+            bounds.x,
+            bounds.y,
+            bounds.width,
+            bounds.height,
+            scale as u32
+        ));
+    }
+    fn set_source(&mut self, id: PlatformViewId, source: &str) {
+        self.push(format!("source {} {}", id.get(), source));
+    }
+    fn set_visible(&mut self, id: PlatformViewId, visible: bool) {
+        self.push(format!("visible {} {visible}", id.get()));
+    }
+    fn focus(&mut self, id: PlatformViewId) {
+        self.push(format!("focus {}", id.get()));
+    }
+    fn blur(&mut self) {
+        self.push("blur".to_owned());
+    }
+    fn remove(&mut self, id: PlatformViewId) {
+        self.push(format!("remove {}", id.get()));
+    }
+}
+
+fn platform_app() -> (TreeApp, FakeSurface, Rc<RefCell<Vec<String>>>) {
+    let (mut app, surface, _) = renderable_app();
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    app.set_platform_backend(Box::new(RecordingPlatform {
+        calls: Rc::clone(&calls),
+    }));
+    let mut engine = TextEngine::new();
+    let tree = Rc::new(RefCell::new(WidgetTree::new(
+        Widget::column(vec![
+            Widget::platform_view(PlatformViewId::new(4), "about:blank").with_layout(LayoutStyle {
+                width: Dimension::Px(4),
+                height: Dimension::Px(2),
+                ..LayoutStyle::default()
+            }),
+            Widget::input(""),
+        ])
+        .with_layout(LayoutStyle {
+            width: Dimension::Px(8),
+            height: Dimension::Px(6),
+            ..LayoutStyle::default()
+        }),
+    )));
+    tree.borrow_mut()
+        .layout(
+            &mut engine,
+            Size {
+                width: 8,
+                height: 6,
+            },
+            2.0,
+        )
+        .expect("layout");
+    app.tree = tree;
+    app.engine = Some(engine);
+    (app, surface, calls)
+}
+
+#[test]
+fn platform_views_follow_the_snapshot_geometry() {
+    let (mut app, surface, calls) = platform_app();
+
+    app.render_frame(&surface).expect("render");
+
+    assert!(
+        calls
+            .borrow()
+            .contains(&"create 4 about:blank 0,0,4x2 @1".to_owned()),
+        "{calls:?}"
+    );
+}
+
+#[test]
+fn tab_moves_focus_between_a_platform_view_and_the_tree() {
+    let (mut app, surface, calls) = platform_app();
+    let tab = || KeyPress {
+        code: "Tab".to_owned(),
+        physical: None,
+    };
+
+    let events = app.tree.borrow_mut().press_key(tab());
+    app.dispatch_events(&surface, events);
+    assert!(calls.borrow().contains(&"focus 4".to_owned()));
+
+    let events = app.tree.borrow_mut().press_key(tab());
+    app.dispatch_events(&surface, events);
+    assert!(calls.borrow().contains(&"blur".to_owned()));
+}
+
+#[test]
+fn a_focused_platform_view_keeps_keyboard_input_to_itself() {
+    let (mut app, surface, calls) = platform_app();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let record = Rc::clone(&seen);
+    app.handler = Box::new(move |events| {
+        record
+            .borrow_mut()
+            .extend(events.iter().map(|event| format!("{event:?}")));
+        Vec::new()
+    });
+    let events = app.tree.borrow_mut().press_key(KeyPress {
+        code: "Tab".to_owned(),
+        physical: None,
+    });
+    app.dispatch_events(&surface, events);
+    seen.borrow_mut().clear();
+
+    app.handle(
+        &surface,
+        Input::Key(KeyPress {
+            code: "A".to_owned(),
+            physical: None,
+        }),
+    );
+    assert!(seen.borrow().is_empty());
+    assert!(!calls.borrow().contains(&"blur".to_owned()));
+
+    app.handle(
+        &surface,
+        Input::Key(KeyPress {
+            code: "Tab".to_owned(),
+            physical: None,
+        }),
+    );
+    assert!(calls.borrow().contains(&"blur".to_owned()));
 }

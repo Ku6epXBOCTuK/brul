@@ -43,9 +43,10 @@ impl Pass<'_> {
                 }
                 (Direction::Row, ScrollOffset::ZERO, true)
             }
-            Content::Text { .. } | Content::Input { .. } | Content::Image(_) => {
-                (Direction::Row, ScrollOffset::ZERO, false)
-            }
+            Content::Text { .. }
+            | Content::Input { .. }
+            | Content::Image(_)
+            | Content::PlatformView(_) => (Direction::Row, ScrollOffset::ZERO, false),
         };
 
         self.layouter.node(

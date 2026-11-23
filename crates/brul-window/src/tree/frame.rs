@@ -111,6 +111,7 @@ impl TreeApp {
         if rebuild || !dirty.is_empty() || !self.presented || crate::perf::measuring() {
             let mut tree = self.tree.borrow_mut();
             let snapshot = tree.snapshot()?;
+            self.platform.sync(snapshot, surface.scale_factor());
             let paint = if dirty.is_empty() {
                 Dirty::all()
             } else {

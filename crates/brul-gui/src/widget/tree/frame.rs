@@ -229,6 +229,10 @@ pub(super) fn snapshot_node(
         Content::Image(image) => Some(image.clone()),
         _ => None,
     };
+    let platform_view = match &node.data {
+        Content::PlatformView(spec) => Some(spec.clone()),
+        _ => None,
+    };
 
     WidgetSnapshotNode {
         id: node.id,
@@ -250,6 +254,7 @@ pub(super) fn snapshot_node(
         selection,
         scroll,
         image,
+        platform_view,
         effect: node.effect.clone(),
         clips: node_clips,
     }
@@ -266,6 +271,7 @@ pub(super) fn collect_hit(
     let node = &tree[slot.index()];
     let structure = matches!(node.data, Content::Structure);
     if !node.state.visible
+        || matches!(node.data, Content::PlatformView(_))
         || (!structure && !contains(&boxes[slot.index()], x, y))
         || !scratch.clips.iter().all(|clip| clip.contains(x, y))
     {

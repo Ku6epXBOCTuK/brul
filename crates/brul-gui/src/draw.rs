@@ -58,7 +58,9 @@ pub fn draw_commands(snapshot: &WidgetSnapshot, dirty: &Dirty, out: &mut Vec<Dra
         let Some(opacity) = opacity(node.style.opacity) else {
             continue;
         };
-        push_shape(index, node, opacity, out);
+        if node.kind != WidgetKind::PlatformView {
+            push_shape(index, node, opacity, out);
+        }
         match node.kind {
             WidgetKind::Text => push_text(index, node, opacity, out),
             WidgetKind::Image => push_image(index, node, opacity, out),
@@ -72,7 +74,7 @@ pub fn draw_commands(snapshot: &WidgetSnapshot, dirty: &Dirty, out: &mut Vec<Dra
                 }
                 push_caret(index, node, opacity, out);
             }
-            WidgetKind::View | WidgetKind::Structure => {}
+            WidgetKind::View | WidgetKind::Structure | WidgetKind::PlatformView => {}
         }
     }
 }

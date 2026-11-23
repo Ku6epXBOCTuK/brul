@@ -26,6 +26,25 @@ pub use tree::WidgetTree;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct WidgetId(u32);
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct PlatformViewId(u64);
+
+impl PlatformViewId {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlatformViewSpec {
+    pub id: PlatformViewId,
+    pub source: String,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WidgetKind {
     View,
@@ -33,6 +52,7 @@ pub enum WidgetKind {
     Text,
     Image,
     Input,
+    PlatformView,
 }
 
 macro_rules! define_widget_state {
@@ -88,6 +108,7 @@ enum Content {
         preedit: String,
     },
     Image(Image),
+    PlatformView(PlatformViewSpec),
 }
 
 impl Content {
@@ -98,6 +119,7 @@ impl Content {
             Self::Text { .. } => WidgetKind::Text,
             Self::Input { .. } => WidgetKind::Input,
             Self::Image(_) => WidgetKind::Image,
+            Self::PlatformView(_) => WidgetKind::PlatformView,
         }
     }
 
@@ -172,6 +194,14 @@ impl Widget {
         Self::new(Content::Image(image.into()))
     }
 
+    pub fn platform_view(id: PlatformViewId, source: impl Into<String>) -> Self {
+        Self::new(Content::PlatformView(PlatformViewSpec {
+            id,
+            source: source.into(),
+        }))
+        .focusable(true)
+    }
+
     pub fn input(value: impl Into<String>) -> Self {
         Self::input_with_styles(value, TextStyleSet::default())
     }
@@ -244,7 +274,7 @@ impl Widget {
             | Content::Input {
                 styles: current, ..
             } => **current = styles,
-            Content::View | Content::Structure | Content::Image(_) => {}
+            Content::View | Content::Structure | Content::Image(_) | Content::PlatformView(_) => {}
         }
         self
     }
@@ -259,7 +289,7 @@ impl Widget {
             | Content::Input {
                 styles: current, ..
             } => current.apply_layers(&class.text),
-            Content::View | Content::Structure | Content::Image(_) => {}
+            Content::View | Content::Structure | Content::Image(_) | Content::PlatformView(_) => {}
         }
         self
     }

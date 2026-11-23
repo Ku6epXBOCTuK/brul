@@ -41,6 +41,7 @@ pub struct WidgetSnapshotNode {
     pub selection: Vec<SelectionRect>,
     pub scroll: i32,
     pub image: Option<Image>,
+    pub platform_view: Option<PlatformViewSpec>,
     pub effect: Option<EffectSpec>,
     pub clips: Vec<ClipRect>,
 }

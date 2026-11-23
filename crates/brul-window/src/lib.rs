@@ -23,6 +23,7 @@ mod input;
 #[cfg(windows)]
 mod layered;
 pub mod perf;
+mod platform;
 mod software;
 mod surface;
 mod tree;

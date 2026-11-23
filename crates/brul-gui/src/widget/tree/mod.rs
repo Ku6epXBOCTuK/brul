@@ -303,6 +303,21 @@ impl WidgetTree {
         self.focused.and_then(|id| self.index.get(&id).copied())
     }
 
+    pub fn platform_view(&self, id: WidgetId) -> Option<PlatformViewId> {
+        match &self.node(id)?.data {
+            Content::PlatformView(spec) => Some(spec.id),
+            _ => None,
+        }
+    }
+
+    pub fn focused_platform_view(&self) -> Option<PlatformViewId> {
+        let slot = self.focused_slot()?;
+        match &self.nodes[slot.index()].data {
+            Content::PlatformView(spec) => Some(spec.id),
+            _ => None,
+        }
+    }
+
     fn node(&self, id: WidgetId) -> Option<&Node> {
         self.index.get(&id).map(|slot| &self.nodes[slot.index()])
     }

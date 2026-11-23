@@ -11,6 +11,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
 
 use crate::input::system_scheme;
+use crate::platform::PlatformViews;
 use crate::surface::{Renderer, Surface, create_renderer};
 use crate::window::{
     ColorScheme, WindowCommand, WindowConfig, WindowError, WindowKey, create_window,
@@ -46,6 +47,8 @@ pub(crate) struct TreeApp {
     tree: Rc<RefCell<WidgetTree>>,
     build: Option<TreeBuilder>,
     handler: EventHandler,
+    // NOTE: child platform windows must drop before their parent window
+    platform: PlatformViews,
     window: Option<Arc<dyn Window>>,
     renderer: Option<Renderer>,
     engine: Option<TextEngine>,
@@ -106,6 +109,7 @@ pub(crate) fn tree_app(
         window: None,
         renderer: None,
         engine: None,
+        platform: PlatformViews::default(),
         error,
         timers: Vec::new(),
         cursor: (0, 0),
@@ -254,6 +258,14 @@ impl TreeApp {
         if let Some(window) = &self.window {
             window.focus_window();
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_platform_backend(
+        &mut self,
+        backend: Box<dyn crate::platform::PlatformViewBackend>,
+    ) {
+        self.platform.set_backend(backend);
     }
 
     pub(crate) fn take_clipboard(&mut self) -> Option<String> {

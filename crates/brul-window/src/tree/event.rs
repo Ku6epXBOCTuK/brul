@@ -62,6 +62,12 @@ impl TreeApp {
                 return Step::Continue;
             }
         }
+        if self.tree.borrow().focused_platform_view().is_some()
+            && !matches!(&input, Input::Key(key) if key.code == "Tab")
+            && matches!(&input, Input::Key(_) | Input::Ime(_) | Input::Paste(_))
+        {
+            return Step::Continue;
+        }
         match input {
             Input::Key(key) => self.press_key(surface, key),
             Input::Modifiers(modifiers) => {
@@ -213,6 +219,19 @@ impl TreeApp {
         self.sync_cursor(surface);
         if events.is_empty() {
             return Step::Continue;
+        }
+        for event in &events {
+            let view = match event {
+                WidgetEvent::Focus(id) | WidgetEvent::Blur(id) => {
+                    self.tree.borrow().platform_view(*id)
+                }
+                _ => None,
+            };
+            match (event, view) {
+                (WidgetEvent::Focus(_), Some(id)) => self.platform.focus(id),
+                (WidgetEvent::Blur(_), Some(_)) => self.platform.blur(),
+                _ => {}
+            }
         }
         let drag = events
             .iter()
