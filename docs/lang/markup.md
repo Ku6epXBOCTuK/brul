@@ -110,7 +110,9 @@ window Note (title: "note", width: 520, height: 480, centered: true) {
   `function handleKey(ev: Object): Void { if (ev.ctrl && ev.physical == "KeyQ") { show() } }`
   На элементе обработчик получает ту же клавишу через `ev.target` после
   capability; если capability её не поглотил, событие продолжает цепочку
-  `Widget → Window`.
+  `Widget → Window`. У сфокусированного `TextInput` поле `ev.text_unchanged`
+  равно `true`, когда `Backspace` или `Delete` не изменили текст; в остальных
+  клавишах оно равно `false`. Это не `on input`: текст остался прежним.
 - `on close: fn` (окно) — запрос закрытия от оконной системы: крестик, `Alt+F4`.
   Без обработчика окно закрывается по умолчанию, с обработчиком остаётся
   открытым, пока скрипт не вызовет `exit()` или `closeWindow()`. Закрытие из
@@ -191,6 +193,9 @@ preedit и прокрутка — интерактивное состояние 
 
 - `on input: fn(ev)` — текст изменён; `ev.value` — новая строка, `ev.caret` —
   позиция каретки в байтах UTF-8.
+- `on key: fn(ev)` — `Backspace` на пустом поле или `Delete` в конце буфера не
+  меняют текст и приходят сюда с `ev.text_unchanged == true`; компонент может
+  обработать клавишу сам, например снять последний тег.
 - `on submit: fn` — нажат `Enter` в однострочном поле.
 - `Escape` и `Tab` поле не поглощает: первый уходит в `on key` окна, `Tab` — в
   навигацию фокуса. `ArrowUp`/`ArrowDown` уходят в окно только из однострочного

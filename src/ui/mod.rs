@@ -409,7 +409,7 @@ impl<T: Theme> Ui<T> {
     }
 
     fn dispatch_event(&mut self, event: &UiEvent) {
-        let kind = event.event.kind();
+        let kind = event.event.kind().dispatch_kind();
         for target in event.target.chain() {
             if let Some(widget) = target.widget() {
                 for owner in self.owners.capabilities(widget) {

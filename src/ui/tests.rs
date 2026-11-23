@@ -1242,6 +1242,7 @@ fn dispatch_passes_the_key_code() {
                 ("shift".to_owned(), Value::Bool(false)),
                 ("alt".to_owned(), Value::Bool(false)),
                 ("meta".to_owned(), Value::Bool(false)),
+                ("text_unchanged".to_owned(), Value::Bool(false)),
                 ("target".to_owned(), Value::Null),
             ]
             .into()
@@ -1278,6 +1279,68 @@ fn dispatch_passes_a_key_to_the_widget_then_the_window() {
         "widget target is preserved"
     );
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+}
+
+#[test]
+fn an_unchanged_key_reaches_capability_element_and_window() {
+    let component = component_with(&["attach", "seen", "ran", "cleaned"]);
+    let widget = Widget::text("");
+    let id = widget.id();
+    let built = Built {
+        widget,
+        bindings: Vec::new(),
+        handlers: vec![
+            Handler::new(&component, Some(id), EventKind::Key, key_code),
+            Handler::new(&component, None, EventKind::Key, set_ran),
+        ],
+        props: Vec::new(),
+    };
+    let hooks = Hooks {
+        widget: id,
+        state: StateId::new(7),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: record_attachment_target,
+        cleanup: probe_cleanup,
+        events: EventSet::from([EventKind::Key]),
+    };
+    let mut ui = Ui::assemble_with(
+        Rc::clone(&component),
+        built,
+        themed_view,
+        None,
+        AssemblyParts {
+            structures: Vec::new(),
+            capabilities: vec![hooks],
+            nested: Vec::new(),
+            states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
+        },
+        Rc::new(RefCell::new(Vec::new())),
+        false,
+    );
+    ui.dispatch(&[UiEvent::widget(
+        id,
+        Event::key_unchanged(
+            brul_gui::KeyPress::from("Backspace"),
+            brul_gui::KeyModifiers::default(),
+        ),
+    )]);
+
+    let component = ui.component.borrow();
+    assert_eq!(component.read("attach"), Ok(Value::Number(id.get() as f64)));
+    let Value::Object(fields) = component.read("seen").expect("seen") else {
+        panic!("unchanged key is not an object");
+    };
+    assert_eq!(
+        fields
+            .iter()
+            .find(|(name, _)| name == "text_unchanged")
+            .map(|(_, value)| value),
+        Some(&Value::Bool(true))
+    );
+    assert_eq!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
 fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &UiEvent) -> bool {

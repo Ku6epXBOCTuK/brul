@@ -35,6 +35,13 @@ impl WidgetTree {
         )
     }
 
+    pub(super) fn key_unchanged_event(&self, key: &KeyPress) -> UiEvent {
+        UiEvent::at(
+            self.event_target(),
+            Event::key_unchanged(key.clone(), self.modifiers),
+        )
+    }
+
     pub fn press_key(&mut self, key: impl Into<KeyPress>) -> Vec<UiEvent> {
         let key = key.into();
         let code = key.code.as_str();
@@ -108,12 +115,18 @@ impl WidgetTree {
                 Vec::new()
             }
             "Backspace" => {
-                let changed = self.delete_input(slot, true);
-                self.input_event(slot, changed)
+                if self.delete_input(slot, true) {
+                    self.input_event(slot, true)
+                } else {
+                    vec![self.key_unchanged_event(&key)]
+                }
             }
             "Delete" => {
-                let changed = self.delete_input(slot, false);
-                self.input_event(slot, changed)
+                if self.delete_input(slot, false) {
+                    self.input_event(slot, true)
+                } else {
+                    vec![self.key_unchanged_event(&key)]
+                }
             }
             "Enter" if !multiline => vec![UiEvent::widget(
                 self.nodes[slot.index()].id,

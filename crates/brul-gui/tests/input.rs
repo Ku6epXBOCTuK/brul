@@ -79,6 +79,43 @@ fn backspace_and_delete_remove_whole_characters() {
 }
 
 #[test]
+fn backspace_on_an_empty_field_reports_an_unchanged_key() {
+    let (mut tree, id) = focused_field("");
+    let key = KeyPress {
+        code: "Backspace".to_owned(),
+        physical: Some("Backspace".to_owned()),
+    };
+
+    assert_eq!(
+        tree.press_key(key.clone()),
+        vec![UiEvent::widget(
+            id,
+            Event::key_unchanged(key, KeyModifiers::default())
+        )]
+    );
+}
+
+#[test]
+fn delete_at_the_end_of_the_field_reports_an_unchanged_key() {
+    let (mut tree, id) = focused_field("ab");
+    tree.press_key("End");
+    let modifiers = KeyModifiers {
+        alt: true,
+        ..KeyModifiers::default()
+    };
+    tree.set_modifiers(modifiers);
+    let key = KeyPress {
+        code: "Delete".to_owned(),
+        physical: None,
+    };
+
+    assert_eq!(
+        tree.press_key(key.clone()),
+        vec![UiEvent::widget(id, Event::key_unchanged(key, modifiers))]
+    );
+}
+
+#[test]
 fn space_inserts_a_space_and_enter_submits_instead_of_clicking() {
     let (mut tree, id) = focused_field("a");
 

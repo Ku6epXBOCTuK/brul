@@ -122,6 +122,13 @@ macro_rules! events {
                     $(Self::$variant => $arguments),+
                 }
             }
+
+            pub const fn dispatch_kind(self) -> Self {
+                match self {
+                    Self::KeyUnchanged => Self::Key,
+                    other => other,
+                }
+            }
         }
 
         impl fmt::Display for EventKind {
@@ -152,18 +159,18 @@ macro_rules! events {
             }
 
             pub const fn contains(self, kind: EventKind) -> bool {
-                self.0 & (1u64 << (kind as u8)) != 0
+                self.0 & (1u64 << (kind.dispatch_kind() as u8)) != 0
             }
 
             pub fn insert(&mut self, kind: EventKind) {
-                self.0 |= 1u64 << (kind as u8);
+                self.0 |= 1u64 << (kind.dispatch_kind() as u8);
             }
 
             pub fn iter(self) -> impl Iterator<Item = EventKind> {
                 EventKind::ALL
                     .iter()
                     .copied()
-                    .filter(move |kind| self.contains(*kind))
+                    .filter(move |kind| kind.dispatch_kind() == *kind && self.contains(*kind))
             }
         }
 
@@ -193,6 +200,7 @@ events! {
     (Click, "click", "Click", click, (), 0),
     (Drag, "drag", "Drag", drag, (), 0),
     (Key, "key", "Key", key, (key: KeyPress, modifiers: KeyModifiers), 1),
+    (KeyUnchanged, "key_unchanged", "KeyUnchanged", key_unchanged, (key: KeyPress, modifiers: KeyModifiers), 1),
     (Close, "close", "Close", close, (), 0),
     (Timer, "timer", "Timer", timer, (owner: TimerOwner, function: FunctionName), 0),
     (Focus, "focus", "Focus", focus, (), 0),
@@ -232,5 +240,14 @@ mod tests {
             set.iter().collect::<Vec<_>>(),
             [EventKind::Click, EventKind::Key]
         );
+    }
+
+    #[test]
+    fn an_unchanged_key_uses_the_key_subscription() {
+        let set = EventSet::from([EventKind::KeyUnchanged]);
+        assert!(set.contains(EventKind::Key));
+        assert!(set.contains(EventKind::KeyUnchanged));
+        assert_eq!(set.iter().collect::<Vec<_>>(), [EventKind::Key]);
+        assert_eq!(EventKind::KeyUnchanged.dispatch_kind(), EventKind::Key);
     }
 }

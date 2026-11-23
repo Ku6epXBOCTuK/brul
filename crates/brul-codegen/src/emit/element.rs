@@ -829,7 +829,10 @@ pub(super) fn attachment_bindings(
             let kinds = EventKind::ALL
                 .iter()
                 .copied()
-                .filter(|kind| events.contains(kind))
+                .filter(|kind| {
+                    kind.dispatch_kind() == *kind
+                        && (events.contains(kind) || events.contains(&kind.dispatch_kind()))
+                })
                 .map(|kind| format!("brul::EventKind::{}", kind.field()))
                 .collect::<Vec<_>>()
                 .join(", ");

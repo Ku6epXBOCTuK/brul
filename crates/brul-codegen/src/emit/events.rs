@@ -44,6 +44,12 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
                 format!("event '{event}' is not supported yet"),
             ));
         };
+        if event.dispatch_kind() != event {
+            return Err(error_at(
+                element.position,
+                format!("event '{event}' is not supported yet"),
+            ));
+        }
         if event == EventKind::Close {
             return Err(error_at(
                 element.position,
@@ -121,7 +127,7 @@ pub(super) fn window(
                 format!("event '{}' is not supported yet", item.event),
             ));
         };
-        if !matches!(event, EventKind::Key | EventKind::Close) {
+        if event.dispatch_kind() != event || !matches!(event, EventKind::Key | EventKind::Close) {
             return Err(error_at(
                 item.position,
                 format!("window event '{}' is not supported yet", event.name()),

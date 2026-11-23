@@ -160,6 +160,7 @@ errors! {
     rejects_a_window_handler_that_ignores_the_key,
     rejects_a_window_used_as_a_component,
     rejects_assignment_to_local_constant_at_build,
+    rejects_an_unchanged_key_event,
     rejects_broken_resources,
     rejects_broken_resources_2,
     rejects_broken_resources_3,
