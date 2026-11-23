@@ -4,8 +4,8 @@ use crate::error::{Error, Expected};
 use crate::lexer::Span;
 use crate::markup::Widget;
 use crate::markup::ast::{
-    Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element, Event,
-    EventParam, File, IfBlock, Member, Prop, PropType, Slot,
+    AnchorArg, Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element,
+    Event, EventParam, File, IfBlock, Member, Prop, PropType, Slot,
 };
 
 pub fn parse_file(source: &str) -> Result<File, Error> {
@@ -154,6 +154,7 @@ impl Cursor<'_> {
     }
 
     fn arg(&mut self) -> Result<Arg, Error> {
+        let start = self.pos();
         let name = self.ident()?;
         if name == "on" {
             let event = self.ident()?;
@@ -164,6 +165,16 @@ impl Cursor<'_> {
         self.skip_trivia();
         if self.peek() == Some(':') {
             self.bump();
+            if name == "anchor" {
+                self.skip_trivia();
+                if self.eat('@') {
+                    let target = self.ident()?;
+                    return Ok(Arg::Anchor(AnchorArg {
+                        target,
+                        position: position(self, start),
+                    }));
+                }
+            }
             let (value, end) = crate::parser::parse_expression_at(self.source(), self.pos())?;
             self.set_pos(end);
             return Ok(Arg::Named { name, value });

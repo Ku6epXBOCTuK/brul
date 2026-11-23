@@ -12,6 +12,7 @@ use crate::{Import, Registry, Resource};
 pub(super) use structure::StructureNames;
 
 mod alloc;
+mod anchor;
 mod builtin;
 mod builtins;
 mod class;
@@ -81,6 +82,7 @@ pub(super) struct Emit<'a> {
     prop_types: &'a HashMap<String, Type>,
     program: Option<&'a Program>,
     widgets: &'a Widgets,
+    anchor_ids: &'a anchor::AnchorIds,
     scope_defs: Vec<ScopeInfo>,
     functions: &'a mut Vec<String>,
     bases: &'a [String],
@@ -102,6 +104,7 @@ struct EmitSources<'a> {
     prop_types: &'a HashMap<String, Type>,
     program: Option<&'a Program>,
     widgets: &'a Widgets,
+    anchor_ids: &'a anchor::AnchorIds,
     base: &'a str,
     resource_prefix: &'a str,
 }
@@ -139,6 +142,7 @@ impl<'a> Emit<'a> {
             scope_defs: Vec::new(),
             program: sources.program,
             widgets: sources.widgets,
+            anchor_ids: sources.anchor_ids,
             functions: outputs.functions,
             bases: outputs.bases,
             structures: outputs.structures,

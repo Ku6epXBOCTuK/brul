@@ -16,8 +16,10 @@
 
         Container (tooltip, on enter: show, on leave: hide) {
             @slot
-            Container (bubble, visible: shown) {
-                Text (bubble-text) { text }
+            Layer (bubble-layer, visible: shown) {
+                Container (bubble, anchor: @tooltip) {
+                    Text (bubble-text) { text }
+                }
             }
         }
     }
@@ -26,9 +28,12 @@
 <style>
     .tooltip {
         width: 100%;
-        gap: 6px;
     }
     .bubble {
+        anchor-side: bottom;
+        anchor-gap: 6px;
+        anchor-align: center;
+        anchor-flip: true;
         padding: 8px 12px;
         background: theme.surface;
         border: 1px theme.border;

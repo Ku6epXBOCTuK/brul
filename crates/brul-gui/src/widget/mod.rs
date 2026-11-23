@@ -26,6 +26,12 @@ pub use tree::WidgetTree;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct WidgetId(u32);
 
+impl WidgetId {
+    pub const fn new(value: u32) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct PlatformViewId(u64);
 
@@ -43,6 +49,17 @@ impl PlatformViewId {
 pub struct PlatformViewSpec {
     pub id: PlatformViewId,
     pub source: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Anchor {
+    pub target: WidgetId,
+}
+
+impl Anchor {
+    pub const fn new(target: WidgetId) -> Self {
+        Self { target }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -84,6 +101,7 @@ pub struct Widget {
     styles: StyleSet,
     state: WidgetState,
     offset: Option<Offset>,
+    anchor: Option<Anchor>,
     draggable: bool,
     focusable: bool,
     layer: bool,
@@ -175,6 +193,16 @@ impl Widget {
         self
     }
 
+    pub fn anchored(mut self, anchor: Anchor) -> Self {
+        self.anchor = Some(anchor);
+        self
+    }
+
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = id;
+        self
+    }
+
     pub fn text(content: impl Into<String>) -> Self {
         Self::styled_text(content, TextStyle::default())
     }
@@ -240,6 +268,7 @@ impl Widget {
             styles: StyleSet::default(),
             state: WidgetState::default(),
             offset: None,
+            anchor: None,
             draggable: false,
             focusable: false,
             layer: false,

@@ -13,6 +13,7 @@ use crate::widgets::WidgetSpec;
 use super::Emit;
 use super::Frame;
 use super::Out;
+use super::anchor;
 use super::builtin;
 use super::classes;
 use super::{component, events, expression, structure};
@@ -32,6 +33,19 @@ pub(super) fn widget(
         .map(|import| import.definition)
     {
         return component::component(out, element, index, emit, counter, frame);
+    }
+    if element.args.iter().any(|arg| matches!(arg, Arg::Anchor(_)))
+        && element.args.iter().any(|arg| {
+            matches!(
+                arg,
+                Arg::Named { name, .. } if name == "x" || name == "y"
+            )
+        })
+    {
+        return Err(error_at(
+            element.position,
+            "anchor cannot be combined with x or y",
+        ));
     }
     if let Some(spec) = emit.widgets.get(&element.name).cloned() {
         return registered_widget(out, element, &spec, emit, frame, counter);
@@ -135,6 +149,10 @@ fn element_expression(
             rule.name
         ));
     }
+    let suffix = anchor::suffix(element, emit)?;
+    if !suffix.is_empty() {
+        out.push(format_args!("{suffix}"));
+    }
     Ok(content)
 }
 
@@ -155,7 +173,7 @@ fn classes(element: &Element) -> Vec<&str> {
         .iter()
         .filter_map(|arg| match arg {
             Arg::Class(class) => Some(class.as_str()),
-            Arg::Named { .. } | Arg::Handler { .. } => None,
+            Arg::Named { .. } | Arg::Handler { .. } | Arg::Anchor(_) => None,
         })
         .collect()
 }
@@ -603,7 +621,7 @@ fn registered_widget(
     let mut class = None;
     for arg in &element.args {
         match arg {
-            Arg::Class(_) => {}
+            Arg::Class(_) | Arg::Anchor(_) => {}
             Arg::Handler { event, handler } => {
                 if handlers.iter().any(|(name, _, _)| *name == event.as_str()) {
                     return Err(error_at(
@@ -658,6 +676,7 @@ fn registered_widget(
         .collect::<Vec<_>>();
     let name = format!("widget{}", *counter);
     *counter += 1;
+    let suffix = anchor::suffix(element, emit)?;
     out.line(format_args!("{{"));
     out.indented(|out| -> Result<(), Error> {
         out.line(format_args!("let built = brul::instance(build, component, brul::Instance {{"));
@@ -703,7 +722,7 @@ fn registered_widget(
             out.line(format_args!("{field}.extend(built.{field});"));
         }
         if class_indices.is_empty() {
-            out.line(format_args!("let {name} = built.widget;"));
+            out.line(format_args!("let {name} = built.widget{suffix};"));
         } else {
             let list = class_indices
                 .iter()
@@ -711,7 +730,7 @@ fn registered_widget(
                 .collect::<Vec<_>>()
                 .join(", ");
             out.line(format_args!(
-                "let {name} = {}styled(built.widget, &[{list}], theme);",
+                "let {name} = {}styled(built.widget{suffix}, &[{list}], theme);",
                 emit.resource_prefix
             ));
         }

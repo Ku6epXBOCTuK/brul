@@ -13,6 +13,7 @@ use crate::loader::Definition;
 use super::Emit;
 use super::Frame;
 use super::Out;
+use super::anchor;
 use super::{events, expression, items_spliced};
 
 type Props<'a> = Vec<(&'a str, &'a PropType, &'a Expr)>;
@@ -26,6 +27,7 @@ struct Call<'a> {
     slots: Vec<SlotFill<'a>>,
     classes: Vec<&'a str>,
     class: Option<&'a Expr>,
+    suffix: String,
 }
 
 struct SlotFill<'a> {
@@ -66,7 +68,7 @@ pub(super) fn component(
         .iter()
         .filter_map(|arg| match arg {
             Arg::Class(class) => Some(class.as_str()),
-            Arg::Named { .. } | Arg::Handler { .. } => None,
+            Arg::Named { .. } | Arg::Handler { .. } | Arg::Anchor(_) => None,
         })
         .collect();
     let class = element.args.iter().find_map(|arg| match arg {
@@ -92,6 +94,7 @@ pub(super) fn component(
             slots,
             classes,
             class,
+            suffix: anchor::suffix(element, emit)?,
         },
         counter,
         emit,
@@ -261,7 +264,7 @@ fn collect<'a>(
     let mut events = Events::new();
     for arg in &element.args {
         match arg {
-            Arg::Class(_) => {}
+            Arg::Class(_) | Arg::Anchor(_) => {}
             Arg::Handler { event, handler } => events.push(event_of(
                 element, definition, name, emit, &events, event, handler,
             )?),
@@ -406,6 +409,7 @@ fn write(
         slots,
         classes,
         class,
+        suffix,
     } = call;
     let widget = format!("widget{}", *counter);
     *counter += 1;
@@ -484,7 +488,7 @@ fn write(
             out.line(format_args!("{field}.extend(built.{field});"));
         }
         if classes.is_empty() {
-            out.line(format_args!("let {widget} = built.widget;"));
+            out.line(format_args!("let {widget} = built.widget{suffix};"));
         } else {
             let classes = classes
                 .iter()
@@ -492,7 +496,7 @@ fn write(
                 .collect::<Vec<_>>()
                 .join(", ");
             out.line(format_args!(
-                "let {widget} = {prefix}styled(built.widget, &[{classes}], theme);"
+                "let {widget} = {prefix}styled(built.widget{suffix}, &[{classes}], theme);"
             ));
         }
         if let Some(value) = class {

@@ -1,0 +1,14 @@
+<markup>
+window Demo (title: "demo") {
+    Container (frame) {
+        Container (trigger) {
+            Text { "trigger" }
+        }
+        Layer (visible: true) {
+            Container (bubble, anchor: @trigger) {
+                Text { "tip" }
+            }
+        }
+    }
+}
+</markup>

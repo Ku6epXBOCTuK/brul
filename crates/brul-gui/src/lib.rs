@@ -91,9 +91,9 @@ pub use effect::{EFFECT_SLOTS, EffectSpec};
 pub use gradient::{Gradient, Paint};
 pub use image::{Image, Vector};
 pub use layout::{
-    Align, Area, AreaTemplate, BorderWidths, Dimension, Direction, Display, GridAutoFlow, GridLine,
-    Justify, LayoutBox, LayoutError, LayoutNode, LayoutPatch, LayoutStyle, LinePlacement, Offset,
-    Padding, RepeatCount, Sides, Size, TrackSize, layout,
+    Align, AnchorAlign, AnchorSide, Area, AreaTemplate, BorderWidths, Dimension, Direction,
+    Display, GridAutoFlow, GridLine, Justify, LayoutBox, LayoutError, LayoutNode, LayoutPatch,
+    LayoutStyle, LinePlacement, Offset, Padding, RepeatCount, Sides, Size, TrackSize, layout,
 };
 pub use paint::Frame;
 pub use rect::{ClipRect, Rect, RectSample, Shadow};
@@ -104,7 +104,7 @@ pub use text::{
 pub use texture::{ExternalTexture, Revision, Texture, TextureError, TextureFrame};
 pub use theme::{Theme, UnknownTheme};
 pub use widget::{
-    CaretArea, Class, Dirty, FunctionName, KeyModifiers, KeyPress, Layers, PlatformViewId,
+    Anchor, CaretArea, Class, Dirty, FunctionName, KeyModifiers, KeyPress, Layers, PlatformViewId,
     PlatformViewSpec, StyleSet, StyleState, TextStylePatch, TextStyleSet, TimerOwner, Transitions,
     Widget, WidgetError, WidgetEvent, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode,
     WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,

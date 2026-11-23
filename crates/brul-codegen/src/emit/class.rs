@@ -88,9 +88,9 @@ mod convert {
     use std::time::Duration;
 
     use brul_gui::{
-        Align, AreaTemplate, Color, Cursor, Dimension, Direction, Display, Gradient, GridAutoFlow,
-        GridLine, Justify, LinePlacement, Padding, Paint, RepeatCount, TextAlign, TrackSize,
-        VerticalAlign,
+        Align, AnchorAlign, AnchorSide, AreaTemplate, Color, Cursor, Dimension, Direction, Display,
+        Gradient, GridAutoFlow, GridLine, Justify, LinePlacement, Padding, Paint, RepeatCount,
+        TextAlign, TrackSize, VerticalAlign,
     };
 
     pub(super) fn padding(value: &Padding) -> String {
@@ -119,6 +119,14 @@ mod convert {
 
     pub(super) fn align(value: &Align) -> String {
         format!("brul::gui::Align::{value:?}")
+    }
+
+    pub(super) fn anchor_side(value: &AnchorSide) -> String {
+        format!("brul::gui::AnchorSide::{value:?}")
+    }
+
+    pub(super) fn anchor_align(value: &AnchorAlign) -> String {
+        format!("brul::gui::AnchorAlign::{value:?}")
     }
 
     pub(super) fn vertical_align(value: &VerticalAlign) -> String {

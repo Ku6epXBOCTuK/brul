@@ -53,6 +53,34 @@ pub enum Direction {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AnchorSide {
+    Top,
+    #[default]
+    Bottom,
+    Left,
+    Right,
+}
+
+impl AnchorSide {
+    pub fn opposite(self) -> Self {
+        match self {
+            Self::Top => Self::Bottom,
+            Self::Bottom => Self::Top,
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AnchorAlign {
+    Start,
+    #[default]
+    Center,
+    End,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum GridAutoFlow {
     #[default]
     Row,

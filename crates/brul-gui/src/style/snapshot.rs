@@ -9,8 +9,8 @@ use super::value::{
 };
 use crate::widget::{TextStylePatch, Transitions, WidgetStyle, WidgetStylePatch};
 use crate::{
-    Align, Cursor, Direction, Display, GridAutoFlow, Justify, LayoutStyle, TextAlign, TextStyle,
-    VerticalAlign,
+    Align, AnchorAlign, AnchorSide, Cursor, Direction, Display, GridAutoFlow, Justify, LayoutStyle,
+    TextAlign, TextStyle, VerticalAlign,
 };
 
 include!(concat!(env!("OUT_DIR"), "/style_snapshot.rs"));

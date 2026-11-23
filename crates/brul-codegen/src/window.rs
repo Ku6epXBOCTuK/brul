@@ -32,7 +32,7 @@ pub fn arguments(declaration: &Declaration) -> Result<(WindowConfig, Vec<Handler
                 function: handler.clone(),
                 position: declaration.position,
             }),
-            Arg::Class(_) => {
+            Arg::Class(_) | Arg::Anchor(_) => {
                 return Err(error_at(
                     declaration.position,
                     "window arguments must be named",

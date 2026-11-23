@@ -1,0 +1,7 @@
+<markup>
+window Demo (title: "demo") {
+    Container (bubble, anchor: @missing) {
+        Text { "tip" }
+    }
+}
+</markup>

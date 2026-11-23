@@ -27,6 +27,10 @@
 | `gap` | `Px` | `0` | `Forbidden` | `Layout(Gap)` | `false` |
 | `row-gap` | `Px` | `gap` | `Forbidden` | `Layout(RowGap)` | `false` |
 | `column-gap` | `Px` | `gap` | `Forbidden` | `Layout(ColumnGap)` | `false` |
+| `anchor-side` | `Keywords(["bottom", "top", "left", "right"])` | `bottom` | `Forbidden` | `Layout(AnchorSide)` | `false` |
+| `anchor-gap` | `SignedPx` | `0` | `Forbidden` | `Layout(AnchorGap)` | `false` |
+| `anchor-align` | `Keywords(["center", "start", "end"])` | `center` | `Forbidden` | `Layout(AnchorAlign)` | `false` |
+| `anchor-flip` | `Bool` | `true` | `Forbidden` | `Layout(AnchorFlip)` | `false` |
 | `border-left-width` | `Px` | `0` | `Forbidden` | `Layout(BorderWidthSide(Left))` | `false` |
 | `border-top-width` | `Px` | `0` | `Forbidden` | `Layout(BorderWidthSide(Top))` | `false` |
 | `border-right-width` | `Px` | `0` | `Forbidden` | `Layout(BorderWidthSide(Right))` | `false` |

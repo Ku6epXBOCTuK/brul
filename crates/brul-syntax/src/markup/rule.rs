@@ -13,6 +13,7 @@ rule! {
         Element,
         ArgList,
         Arg,
+        AnchorRef,
         HandlerRef,
         Block,
         BlockItem,

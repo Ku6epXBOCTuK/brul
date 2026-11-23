@@ -25,6 +25,7 @@ use super::EmitOutputs;
 use super::EmitSources;
 use super::Out;
 use super::StructureNames;
+use super::anchor::{self, AnchorIds};
 use super::classes::ClassNames;
 use super::{alloc, classes, events, names, resources, script, state, style, theme, view};
 
@@ -147,6 +148,7 @@ pub fn split_component_file_with_widgets(
     validate_components(&registry.definitions, &command_names)?;
     let source = crate::Source::empty();
     let names = names::table(&source, &registry.definitions, widgets);
+    let anchor_table = anchor::collect(&source, &registry.definitions)?;
     let mut used = HashSet::new();
     let bases: Vec<String> = registry
         .definitions
@@ -164,7 +166,11 @@ pub fn split_component_file_with_widgets(
         &registry,
         &bases,
         &names,
-        &Discovery { commands, widgets },
+        &Discovery {
+            commands,
+            widgets,
+            anchor_ids: &anchor_table,
+        },
         &mut sinks,
     )?;
     let source = emitted.file.source;
@@ -200,6 +206,7 @@ fn module_at(
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
     let names = names::table(&parsed, &registry.definitions, widgets);
+    let anchor_table = anchor::collect(&parsed, &registry.definitions)?;
     let root_props = names::declared(&declaration.members);
     let mut root_external = names::declared_events(&declaration.members);
     let command_names = commands::names(commands);
@@ -308,6 +315,7 @@ fn module_at(
                 base: &view.base,
                 resource_prefix: &prefix,
                 widgets,
+                anchor_ids: &anchor_table,
             },
             EmitOutputs {
                 functions: &mut functions,
@@ -362,7 +370,11 @@ fn module_at(
             &registry,
             &definition_bases,
             &names,
-            &Discovery { commands, widgets },
+            &Discovery {
+                commands,
+                widgets,
+                anchor_ids: &anchor_table,
+            },
             &mut sinks,
         )?;
         files.push(emitted.file);
@@ -470,6 +482,7 @@ struct ComponentSinks<'a> {
 struct Discovery<'a> {
     commands: &'a Commands,
     widgets: &'a Widgets,
+    anchor_ids: &'a AnchorIds,
 }
 
 fn emit_component(
@@ -514,6 +527,7 @@ fn emit_component(
             base,
             resource_prefix: &prefix,
             widgets: discovery.widgets,
+            anchor_ids: discovery.anchor_ids,
         },
         EmitOutputs {
             functions: &mut functions,

@@ -87,6 +87,8 @@ fn keyword_fn(ty: FieldType) -> Ident {
         FieldType::Direction => "flex_direction",
         FieldType::Justify => "justify",
         FieldType::Align => "align",
+        FieldType::AnchorSide => "anchor_side",
+        FieldType::AnchorAlign => "anchor_align",
         FieldType::GridAutoFlow => "grid_auto_flow",
         FieldType::TextAlign => "text_align",
         FieldType::VerticalAlign => "vertical_align",

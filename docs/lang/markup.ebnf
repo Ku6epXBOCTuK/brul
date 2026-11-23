@@ -13,7 +13,9 @@ Element       = Ident [ "(" ArgList ")" ] Block ;
 ArgList       = Arg { "," Arg } ;
 Arg           = Ident                       (* класс стилей *)
               | Ident ":" Script.Expr       (* параметр/привязка *)
+              | AnchorRef                   (* цель якоря *)
               | HandlerRef ;                (* обработчик *)
+AnchorRef     = "anchor" ":" "@" Ident ;    (* геометрия якоря задаётся стилями *)
 HandlerRef    = "on" EventName ":" Ident ;  (* справа имя функции, не выражение *)
 Block         = "{" { BlockItem } "}" ;
 BlockItem     = Element | IfBlock | EachBlock | Slot ;

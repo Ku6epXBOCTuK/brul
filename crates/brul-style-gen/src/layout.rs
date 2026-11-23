@@ -2,7 +2,7 @@ use brul_style_schema::StyleOwner;
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::tokens::field_type;
+use crate::tokens::{default_expr, field_type};
 use crate::util::{fields, ident, is_copy};
 
 pub(crate) fn layout_style() -> TokenStream {
@@ -13,6 +13,14 @@ pub(crate) fn layout_style() -> TokenStream {
             let name = ident(spec.name);
             let ty = field_type(spec.ty);
             quote!(pub #name: #ty,)
+        })
+        .collect();
+    let style_defaults: Vec<_> = specs
+        .iter()
+        .map(|spec| {
+            let name = ident(spec.name);
+            let value = default_expr(spec);
+            quote!(#name: #value,)
         })
         .collect();
     let patch_fields: Vec<_> = specs
@@ -61,9 +69,17 @@ pub(crate) fn layout_style() -> TokenStream {
         })
         .collect();
     quote! {
-        #[derive(Clone, Debug, Default, PartialEq)]
+        #[derive(Clone, Debug, PartialEq)]
         pub struct LayoutStyle {
             #(#style_fields)*
+        }
+
+        impl Default for LayoutStyle {
+            fn default() -> Self {
+                Self {
+                    #(#style_defaults)*
+                }
+            }
         }
 
         #[derive(Clone, Debug, Default, PartialEq)]

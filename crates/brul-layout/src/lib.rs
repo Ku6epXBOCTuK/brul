@@ -9,8 +9,8 @@ mod validate;
 pub use layout::layout;
 pub use layouter::{Layouter, NodeShape};
 pub use style::{
-    Align, BorderWidths, Dimension, Direction, Display, GridAutoFlow, Justify, LayoutBox,
-    LayoutError, LayoutNode, LayoutPatch, LayoutStyle, Offset, Padding, ScrollOffset, Size,
-    inset_x, inset_y,
+    Align, AnchorAlign, AnchorSide, BorderWidths, Dimension, Direction, Display, GridAutoFlow,
+    Justify, LayoutBox, LayoutError, LayoutNode, LayoutPatch, LayoutStyle, Offset, Padding,
+    ScrollOffset, Size, inset_x, inset_y,
 };
 pub use validate::validate;

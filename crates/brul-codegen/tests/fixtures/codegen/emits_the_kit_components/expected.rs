@@ -806,18 +806,20 @@ pub fn tooltip_view(theme: Option<&str>, build: &mut brul::Build, component: &br
                     props.extend(built.props);
                     children.extend(built.widget.into_children());
                 }                children.push({
-                    let widget1 = tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
-                        {
-                            let widget2 = tooltip_styled(brul::gui::Widget::text(""), &[2], theme);
-                            bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(5))?)).map_err(|error| error.at(brul::ast::Position { line: 20, column: 38 }))?; value }) })));
-                            widget2
-                        },
+                    let widget1 = tooltip_styled(brul::gui::Widget::layer(vec![
+                        tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
+                            {
+                                let widget2 = tooltip_styled(brul::gui::Widget::text(""), &[3], theme);
+                                bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(5))?)).map_err(|error| error.at(brul::ast::Position { line: 21, column: 42 }))?; value }) })));
+                                widget2
+                            },
+                        ]), &[2], theme).anchored(brul::gui::Anchor::new(brul::gui::WidgetId::new(2147483648))),
                     ]), &[1], theme);
                     bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok(component.state::<TooltipScriptState>().shown.get()) })));
                     widget1
                 });
                 children
-            }), &[0], theme);
+            }), &[0], theme).with_id(brul::gui::WidgetId::new(2147483648));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Enter, tooltip_script_event_show));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Leave, tooltip_script_event_hide));
             widget0
@@ -832,15 +834,21 @@ pub fn tooltip_view(theme: Option<&str>, build: &mut brul::Build, component: &br
 }
 
 #[allow(dead_code)]
-static TOOLTIP_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 3]> = std::sync::LazyLock::new(|| [
+static TOOLTIP_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 4]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
-        layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Percent(100.0)), gap: Some(6), ..brul::gui::LayoutPatch::DEFAULT },
+        layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Percent(100.0)), ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
     brul::gui::Class {
-        layout: brul::gui::LayoutPatch { padding: Some(brul::gui::Padding { left: 12, top: 8, right: 12, bottom: 8 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), ..brul::gui::LayoutPatch::DEFAULT },
+        layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
+        text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+        transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+    },
+    brul::gui::Class {
+        layout: brul::gui::LayoutPatch { padding: Some(brul::gui::Padding { left: 12, top: 8, right: 12, bottom: 8 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), anchor_gap: Some(6), ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 30, g: 41, b: 59, a: 255 })), border_left: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_top: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_right: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_bottom: Some(brul::gui::Color { r: 51, g: 65, b: 85, a: 255 }), border_radius: Some(8), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
@@ -854,15 +862,21 @@ static TOOLTIP_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 3]> = std::s
 ]);
 
 #[allow(dead_code)]
-static TOOLTIP_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 3]> = std::sync::LazyLock::new(|| [
+static TOOLTIP_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 4]> = std::sync::LazyLock::new(|| [
     brul::gui::Class {
-        layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Percent(100.0)), gap: Some(6), ..brul::gui::LayoutPatch::DEFAULT },
+        layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Percent(100.0)), ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
     },
     brul::gui::Class {
-        layout: brul::gui::LayoutPatch { padding: Some(brul::gui::Padding { left: 12, top: 8, right: 12, bottom: 8 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), ..brul::gui::LayoutPatch::DEFAULT },
+        layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
+        text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+        transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+    },
+    brul::gui::Class {
+        layout: brul::gui::LayoutPatch { padding: Some(brul::gui::Padding { left: 12, top: 8, right: 12, bottom: 8 }), border_width: Some(brul::gui::BorderWidths { left: 1, top: 1, right: 1, bottom: 1 }), anchor_gap: Some(6), ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { background: Some(brul::gui::Paint::Color(brul::gui::Color { r: 241, g: 245, b: 249, a: 255 })), border_left: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_top: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_right: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_bottom: Some(brul::gui::Color { r: 203, g: 213, b: 225, a: 255 }), border_radius: Some(8), ..brul::gui::WidgetStylePatch::DEFAULT }),
         text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
         transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
@@ -914,7 +928,6 @@ fn tooltip_styles() -> &'static brul::style::Stylesheet {
                 state: None,
                 properties: vec![
                     s::Property { kind: s::Kind::Width, value: s::Value::Percent(100.0) },
-                    s::Property { kind: s::Kind::Gap, value: s::Value::Px(6.0) },
                 ],
                 animations: vec![],
             },
@@ -922,6 +935,10 @@ fn tooltip_styles() -> &'static brul::style::Stylesheet {
                 class: "bubble".into(),
                 state: None,
                 properties: vec![
+                    s::Property { kind: s::Kind::AnchorSide, value: s::Value::Keyword("bottom".into()) },
+                    s::Property { kind: s::Kind::AnchorGap, value: s::Value::Px(6.0) },
+                    s::Property { kind: s::Kind::AnchorAlign, value: s::Value::Keyword("center".into()) },
+                    s::Property { kind: s::Kind::AnchorFlip, value: s::Value::Bool(true) },
                     s::Property { kind: s::Kind::PaddingSide(s::Side::Top), value: s::Value::Px(8.0) },
                     s::Property { kind: s::Kind::PaddingSide(s::Side::Right), value: s::Value::Px(12.0) },
                     s::Property { kind: s::Kind::PaddingSide(s::Side::Bottom), value: s::Value::Px(8.0) },
