@@ -1,7 +1,9 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::component::ComponentHandle;
 use super::slot::Slots;
+use super::state::{SharedStates, StateId, States};
 use super::structure::Structure;
 
 #[derive(Default)]
@@ -9,6 +11,7 @@ pub struct Build {
     slots: Option<Rc<Slots>>,
     structures: Vec<Structure>,
     components: Vec<ComponentHandle>,
+    states: SharedStates,
 }
 
 impl Build {
@@ -21,7 +24,25 @@ impl Build {
             slots,
             structures: Vec::new(),
             components: Vec::new(),
+            states: Rc::new(RefCell::new(States::default())),
         }
+    }
+
+    pub fn set_states(&mut self, states: SharedStates) {
+        self.states = states;
+    }
+
+    pub fn take_states(&self) -> SharedStates {
+        Rc::clone(&self.states)
+    }
+
+    pub fn state<T: 'static>(
+        &mut self,
+        id: StateId,
+        owner: &ComponentHandle,
+        make: impl FnOnce() -> T,
+    ) -> Rc<T> {
+        self.states.borrow_mut().get(id, owner, make)
     }
 
     pub fn slots(&self) -> Option<Rc<Slots>> {

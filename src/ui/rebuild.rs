@@ -6,7 +6,9 @@ use brul_gui::{WidgetId, WidgetTree};
 
 use super::{Owned, OwnedStructure};
 use crate::each::reconcile_each;
-use crate::{Binding, Build, Built, ComponentHandle, Handler, PropBinding, RowInfo, Structure};
+use crate::{
+    Binding, Build, Built, ComponentHandle, Handler, PropBinding, RowInfo, SharedStates, Structure,
+};
 
 #[derive(Default)]
 pub(super) struct Staged {
@@ -29,6 +31,7 @@ pub(super) struct Pending {
     pub(super) structures: Vec<OwnedStructure>,
     pub(super) rows: Vec<(WidgetId, Vec<RowInfo>)>,
     pub(super) by_parent: HashMap<WidgetId, Structure>,
+    states: SharedStates,
     pub(super) staged: Staged,
 }
 
@@ -36,6 +39,7 @@ impl Pending {
     pub(super) fn new(
         structures: Vec<OwnedStructure>,
         rows: Vec<(WidgetId, Vec<RowInfo>)>,
+        states: SharedStates,
     ) -> Self {
         let by_parent = structures
             .iter()
@@ -45,6 +49,7 @@ impl Pending {
             structures,
             rows,
             by_parent,
+            states,
             staged: Staged::default(),
         }
     }
@@ -67,7 +72,7 @@ impl Pending {
             rows,
             structures,
             components,
-        }) = rebuild_structure(structure, theme, &old_rows)
+        }) = rebuild_structure(structure, theme, &old_rows, Rc::clone(&self.states))
         else {
             if structure.each {
                 self.rows.push((parent, old_rows));
@@ -118,11 +123,13 @@ fn rebuild_structure(
     structure: &Structure,
     theme: Option<&str>,
     old_rows: &[RowInfo],
+    states: SharedStates,
 ) -> Option<Rebuilt> {
     let component = Rc::clone(&structure.component);
     let previous = component.borrow().scope().clone();
     component.borrow_mut().set_scope(structure.scope.clone());
     let mut build = Build::with_slots(structure.slots.clone());
+    build.set_states(states);
     let rebuilt = (structure.rebuild)(theme, &mut build, &component, old_rows);
     let structures = build.take_structures();
     let components = build.take_components();

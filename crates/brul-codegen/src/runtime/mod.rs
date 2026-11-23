@@ -5,6 +5,7 @@ mod error;
 mod event;
 mod paint;
 mod slot;
+mod state;
 mod structure;
 
 #[cfg(test)]
@@ -20,6 +21,7 @@ pub use error::ViewError;
 pub use event::{ComponentEvent, Handler, HandlerEvent, PendingEvent, take_event};
 pub use paint::{TextureCache, Textures, set_flag, set_input, set_offset, set_text, set_texture};
 pub use slot::{DEFAULT_SLOT, SlotArgument, Slots, slot};
+pub use state::{SharedStates, StateId, States};
 pub use structure::{
     Built, Rebuilt, RowInfo, RowKey, Structure, StructureRebuild, StructureValue, View,
     register_structure,

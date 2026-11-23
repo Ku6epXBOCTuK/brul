@@ -17,8 +17,9 @@ pub mod build {
 pub use brul_codegen::runtime::{
     Binding, BindingTarget, Build, Built, ClassTable, ComponentEvent, ComponentHandle,
     DEFAULT_SLOT, FlagExpression, Handler, HandlerEvent, Instance, NumberExpression, PropArgument,
-    PropBinding, PropExpression, Rebuilt, RowInfo, RowKey, SlotArgument, Slots, Structure,
-    TextExpression, View, ViewError, instance, register_structure, slot,
+    PropBinding, PropExpression, Rebuilt, RowInfo, RowKey, SharedStates, SlotArgument, Slots,
+    StateId, States, Structure, TextExpression, View, ViewError, instance, register_structure,
+    slot,
 };
 pub use brul_gpu::effect;
 pub use brul_gui as gui;

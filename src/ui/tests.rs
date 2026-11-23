@@ -1507,7 +1507,11 @@ fn a_timer_from_a_nested_component_runs_in_its_component() {
         built,
         nested_timer_view,
         None,
-        AssemblyParts { structures, nested },
+        AssemblyParts {
+            structures,
+            nested,
+            states: Rc::new(RefCell::new(crate::States::default())),
+        },
         Rc::clone(&commands),
         true,
     );

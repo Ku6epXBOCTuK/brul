@@ -13,8 +13,8 @@ use brul_window::{TimerCommand, WindowCommand};
 use crate::Host;
 use crate::event::{arguments, call, handler_target};
 use crate::{
-    Binding, Build, Built, ComponentHandle, Handler, HandlerEvent, PropBinding, RowInfo, Structure,
-    Theme, TimerRequest, Value, ViewError,
+    Binding, Build, Built, ComponentHandle, Dyn, FunctionName, Handler, HandlerEvent, PropBinding,
+    RowInfo, SharedStates, StateId, Structure, Theme, TimerRequest, Value, ViewError,
 };
 
 mod host;
@@ -31,6 +31,7 @@ const EVENT_DEPTH: usize = 64;
 pub(crate) struct AssemblyParts {
     pub(crate) structures: Vec<Structure>,
     pub(crate) nested: Vec<ComponentHandle>,
+    pub(crate) states: SharedStates,
 }
 
 fn timer_command(request: TimerRequest, owner: TimerOwner) -> Option<WindowCommand> {
@@ -113,6 +114,7 @@ pub struct Ui<T: Theme> {
     view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
     pub(crate) theme: Option<T>,
     textures: runtime::Textures,
+    pub(crate) states: SharedStates,
     scope: EffectScope,
 }
 
@@ -146,6 +148,7 @@ impl<T: Theme> Ui<T> {
             AssemblyParts {
                 structures,
                 nested: Vec::new(),
+                states: Rc::new(RefCell::new(crate::States::default())),
             },
             Rc::clone(&commands),
             true,
@@ -174,6 +177,11 @@ impl<T: Theme> Ui<T> {
             handlers,
             props,
         } = built;
+        let AssemblyParts {
+            structures,
+            nested,
+            states,
+        } = parts;
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         tree.borrow_mut().set_root_scroll(scroll);
         let window_handlers = handlers
@@ -200,16 +208,17 @@ impl<T: Theme> Ui<T> {
             view,
             theme,
             textures: runtime::Textures::default(),
+            states,
             scope: EffectScope::new(),
         };
-        for handle in std::iter::once(component).chain(parts.nested) {
+        for handle in std::iter::once(component).chain(nested) {
             let owned = ui.adopt(handle);
             ui.components.push(owned);
         }
         schedule_timers(&ui.components, &ui.active, &ui.commands);
         ui.bind(bindings);
         ui.bind_props(props);
-        ui.bind_structures(parts.structures);
+        ui.bind_structures(structures);
         ui.index_handlers();
         ui
     }
@@ -397,6 +406,7 @@ impl<T: Theme> Ui<T> {
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
         let mut build = Build::new();
+        build.set_states(Rc::clone(&self.states));
         let built = (self.view)(self.theme, &mut build, &self.component);
         let structures = build.take_structures();
         let nested = build.take_components();
@@ -491,6 +501,27 @@ impl<T: Theme> Ui<T> {
         }
     }
 
+    pub(crate) fn widget_component(&self, state: StateId) -> Option<ComponentHandle> {
+        self.states.borrow().owner(state)
+    }
+
+    pub(crate) fn call_widget_event(
+        &self,
+        state: StateId,
+        event: &str,
+        arguments: Vec<Value>,
+    ) -> bool {
+        let Some(component) = self.widget_component(state) else {
+            return false;
+        };
+        let Some(function) = component.borrow().event_call(&FunctionName::from(event)) else {
+            return false;
+        };
+        let arguments = arguments.into_iter().map(Dyn::from).collect();
+        call(&component, function, arguments);
+        true
+    }
+
     fn take_commands(&mut self) -> Vec<WindowCommand> {
         schedule_timers(&self.components, &self.active, &self.commands);
         let mut commands = std::mem::take(&mut *self.commands.borrow_mut());
@@ -507,6 +538,7 @@ impl<T: Theme> Ui<T> {
         let mut pending = Pending::new(
             std::mem::take(&mut self.structures),
             std::mem::take(&mut self.rows),
+            Rc::clone(&self.states),
         );
         let mut changed = false;
         for parent in requests {
@@ -516,7 +548,7 @@ impl<T: Theme> Ui<T> {
             structures,
             rows,
             staged,
-            by_parent: _,
+            ..
         } = pending;
         self.structures = structures;
         self.rows = rows;

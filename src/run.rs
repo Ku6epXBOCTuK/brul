@@ -266,6 +266,7 @@ impl<T: Theme> Runtime<T> {
             view(self.fixed_theme, &mut build, &self.component).map_err(WindowError::app)?;
         let structures = build.take_structures();
         let components = build.take_components();
+        let states = build.take_states();
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
             built,
@@ -274,6 +275,7 @@ impl<T: Theme> Runtime<T> {
             AssemblyParts {
                 structures,
                 nested: components,
+                states,
             },
             Rc::clone(&self.commands),
             config.scroll,
@@ -336,6 +338,19 @@ impl<T: Theme> Runtime<T> {
                         tracing::error!(%error, "typed handle call failed");
                     }
                 }
+                Message::Widget {
+                    state,
+                    event,
+                    arguments,
+                } => {
+                    let routed = self
+                        .uis
+                        .get(&window)
+                        .is_some_and(|ui| ui.call_widget_event(state, &event, arguments));
+                    if !routed {
+                        tracing::warn!(?state, %event, "widget event has no owner");
+                    }
+                }
             }
             brul_reactive::flush();
             for ui in self.uis.values_mut() {
@@ -374,7 +389,7 @@ mod tests {
 
     use crate::ui::{CommandHost, Ui};
     use crate::{
-        Binding, BindingTarget, Built, ComponentHandle, Dyn, Handler, HandlerEvent, Value,
+        Binding, BindingTarget, Built, ComponentHandle, Dyn, Handler, HandlerEvent, StateId, Value,
     };
 
     const NAMES: &[&str] = &["name"];
@@ -544,8 +559,11 @@ mod tests {
         }
     }
 
+    const WIDGET_STATE: StateId = StateId::new(7);
+
     thread_local! {
         static SEEN: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static WIDGET_CALLS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     }
 
     fn theme_text(component: &mut crate::Component) -> Result<String, crate::Error> {
@@ -694,6 +712,99 @@ mod tests {
 
         let tree = &mut runtime.uis[&WindowKey(0)].tree.borrow_mut();
         assert!(!tree.set_text(id, "called".to_owned()));
+    }
+
+    fn record_widget_event(
+        _component: &mut Component,
+        _arguments: &[Dyn],
+    ) -> Result<Dyn, crate::Error> {
+        WIDGET_CALLS.with(|calls| calls.borrow_mut().push("changed".to_owned()));
+        Ok(Dyn::null())
+    }
+
+    fn stateful_view(
+        _theme: Option<TestTheme>,
+        build: &mut Build,
+        component: &ComponentHandle,
+    ) -> Result<Built, ViewError> {
+        let count = build.state(WIDGET_STATE, component, || Rc::new(RefCell::new(0)));
+        *count.borrow_mut() += 1;
+        component
+            .borrow_mut()
+            .register_event_call("changed", record_widget_event);
+        Ok(Built {
+            widget: Widget::text(""),
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            props: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn a_widget_state_survives_a_rebuild() {
+        let component = generated_component(NAMES, None, &[]).expect("component");
+        let mut runtime = Runtime::new(
+            vec![WindowDef {
+                name: "Only",
+                config: WindowConfig::default(),
+                view: stateful_view,
+            }],
+            component,
+            Rc::new(RefCell::new(Vec::new())),
+            Some(TestTheme::Dark),
+            Rc::new(RefCell::new(Some("dark".to_owned()))),
+            Vec::new(),
+            None,
+        );
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("window");
+        let states = Rc::clone(&runtime.uis[&WindowKey(0)].states);
+        let count = states
+            .borrow()
+            .get_cloned::<Rc<RefCell<i32>>>(WIDGET_STATE)
+            .expect("state");
+        assert_eq!(*count.borrow(), 1);
+
+        runtime
+            .uis
+            .get_mut(&WindowKey(0))
+            .expect("ui")
+            .set_theme(TestTheme::Light)
+            .expect("theme");
+        assert_eq!(*count.borrow(), 2);
+    }
+
+    #[test]
+    fn a_widget_event_reaches_the_state_owner() {
+        let component = generated_component(NAMES, None, &[]).expect("component");
+        let mut runtime = Runtime::new(
+            vec![WindowDef {
+                name: "Only",
+                config: WindowConfig::default(),
+                view: stateful_view,
+            }],
+            component,
+            Rc::new(RefCell::new(Vec::new())),
+            None,
+            Rc::new(RefCell::new(None)),
+            Vec::new(),
+            None,
+        );
+        runtime
+            .create(WindowKey(0), ColorScheme::Dark)
+            .expect("window");
+
+        runtime.apply(vec![scoped(Message::Widget {
+            state: WIDGET_STATE,
+            event: "changed".to_owned(),
+            arguments: Vec::new(),
+        })]);
+
+        assert_eq!(
+            WIDGET_CALLS.with(|calls| calls.borrow().clone()),
+            vec!["changed".to_owned()]
+        );
     }
 
     #[test]

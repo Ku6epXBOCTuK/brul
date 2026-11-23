@@ -2,12 +2,17 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use brul_window::{Waker, WindowKey};
 
-use crate::Value;
+use crate::{StateId, Value};
 
 pub enum Message {
     Set(String, Value),
     Call(String, Vec<Value>),
     Invoke(Box<dyn std::any::Any + Send>),
+    Widget {
+        state: StateId,
+        event: String,
+        arguments: Vec<Value>,
+    },
 }
 
 impl std::fmt::Debug for Message {
@@ -24,6 +29,16 @@ impl std::fmt::Debug for Message {
                 .field(arguments)
                 .finish(),
             Self::Invoke(_) => formatter.write_str("Invoke(..)"),
+            Self::Widget {
+                state,
+                event,
+                arguments,
+            } => formatter
+                .debug_struct("Widget")
+                .field("state", state)
+                .field("event", event)
+                .field("arguments", arguments)
+                .finish(),
         }
     }
 }
@@ -75,6 +90,14 @@ impl Handle {
     /// Calls a script function with `arguments` and wakes the event loop.
     pub fn call_with(&self, function: &str, arguments: Vec<Value>) {
         self.push(Message::Call(function.to_owned(), arguments));
+    }
+
+    pub fn widget(&self, state: StateId, event: impl Into<String>, arguments: Vec<Value>) {
+        self.push(Message::Widget {
+            state,
+            event: event.into(),
+            arguments,
+        });
     }
 
     pub fn send<M: Into<Message> + Send + 'static>(&self, message: M) {
