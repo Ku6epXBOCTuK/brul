@@ -1,7 +1,7 @@
 use super::*;
 
 impl WidgetTree {
-    pub(super) fn focus_next(&mut self) -> Vec<UiEvent> {
+    pub(super) fn focus_next(&mut self) -> Vec<DispatchEvent> {
         self.enter_modal_scope();
         let slots = self.focusable_slots();
         let Some(first) = slots.first().copied() else {
@@ -17,7 +17,7 @@ impl WidgetTree {
         self.focus_events(Some(target))
     }
 
-    pub(super) fn focus_previous(&mut self) -> Vec<UiEvent> {
+    pub(super) fn focus_previous(&mut self) -> Vec<DispatchEvent> {
         self.enter_modal_scope();
         let slots = self.focusable_slots();
         if slots.is_empty() {
@@ -37,6 +37,16 @@ impl WidgetTree {
         let mut path = Vec::new();
         self.collect_path(self.root, target, &mut path);
         path
+    }
+
+    pub fn path_to_id(&self, id: WidgetId) -> Vec<WidgetId> {
+        let Some(slot) = self.index.get(&id).copied() else {
+            return Vec::new();
+        };
+        self.path_to(slot)
+            .into_iter()
+            .map(|slot| self.nodes[slot.index()].id)
+            .collect()
     }
 
     fn collect_path(&self, slot: Slot, target: Slot, path: &mut Vec<Slot>) -> bool {
@@ -169,16 +179,19 @@ impl WidgetTree {
         }
     }
 
-    pub(super) fn focus_events(&mut self, slot: Option<Slot>) -> Vec<UiEvent> {
+    pub(super) fn focus_events(&mut self, slot: Option<Slot>) -> Vec<DispatchEvent> {
         if self.focused_slot() == slot {
             return Vec::new();
         }
         let mut events = Vec::with_capacity(2);
         if let Some(previous) = self.focused {
-            events.push(UiEvent::widget(previous, Event::blur()));
+            events.push(DispatchEvent::semantic(previous, Event::blur()));
         }
         if let Some(next) = slot {
-            events.push(UiEvent::widget(self.nodes[next.index()].id, Event::focus()));
+            events.push(DispatchEvent::semantic(
+                self.nodes[next.index()].id,
+                Event::focus(),
+            ));
         }
         self.set_focused(slot);
         events

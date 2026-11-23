@@ -1,9 +1,7 @@
-//! `brul-event`: the shared vocabulary of `Event` payloads, `EventKind` names and `EventSet` subscriptions.
+//! `brul-event`: the shared vocabulary of raw input events and semantic UI events.
 
 use std::fmt;
 use std::str::FromStr;
-
-use brul_ident::{FunctionName, TimerOwner};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct KeyModifiers {
@@ -68,24 +66,28 @@ impl fmt::Display for UnknownEvent {
 
 impl std::error::Error for UnknownEvent {}
 
-macro_rules! events {
-    ($((
-        $variant:ident,
-        $name:literal,
-        $field:literal,
-        $constructor:ident,
-        ($($part:ident : $ty:ty),*),
-        $arguments:literal
-    )),+ $(,)?) => {
+macro_rules! event_family {
+    (
+        $event:ident, $kind:ident, $set:ident,
+        [$($from:ident => $to:ident),* $(,)?],
+        $((
+            $variant:ident,
+            $name:literal,
+            $field:literal,
+            $constructor:ident,
+            ($($part:ident : $ty:ty),*),
+            $arguments:literal
+        )),+ $(,)?
+    ) => {
         #[derive(Clone, Debug, Eq, PartialEq)]
-        pub enum Event {
+        pub enum $event {
             $($variant { $($part: $ty),* }),+
         }
 
-        impl Event {
-            pub fn kind(&self) -> EventKind {
+        impl $event {
+            pub fn kind(&self) -> $kind {
                 match self {
-                    $(Self::$variant { .. } => EventKind::$variant),+
+                    $(Self::$variant { .. } => $kind::$variant),+
                 }
             }
 
@@ -98,11 +100,11 @@ macro_rules! events {
 
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[repr(u8)]
-        pub enum EventKind {
+        pub enum $kind {
             $($variant),+
         }
 
-        impl EventKind {
+        impl $kind {
             pub const ALL: &'static [Self] = &[$(Self::$variant),+];
 
             pub const fn name(self) -> &'static str {
@@ -125,19 +127,19 @@ macro_rules! events {
 
             pub const fn dispatch_kind(self) -> Self {
                 match self {
-                    Self::KeyUnchanged => Self::Key,
+                    $(Self::$from => Self::$to,)*
                     other => other,
                 }
             }
         }
 
-        impl fmt::Display for EventKind {
+        impl fmt::Display for $kind {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 f.write_str(self.name())
             }
         }
 
-        impl FromStr for EventKind {
+        impl FromStr for $kind {
             type Err = UnknownEvent;
 
             fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -151,37 +153,37 @@ macro_rules! events {
         }
 
         #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-        pub struct EventSet(u64);
+        pub struct $set(u64);
 
-        impl EventSet {
+        impl $set {
             pub const fn empty() -> Self {
                 Self(0)
             }
 
-            pub const fn contains(self, kind: EventKind) -> bool {
+            pub const fn contains(self, kind: $kind) -> bool {
                 self.0 & (1u64 << (kind.dispatch_kind() as u8)) != 0
             }
 
-            pub fn insert(&mut self, kind: EventKind) {
+            pub fn insert(&mut self, kind: $kind) {
                 self.0 |= 1u64 << (kind.dispatch_kind() as u8);
             }
 
-            pub fn iter(self) -> impl Iterator<Item = EventKind> {
-                EventKind::ALL
+            pub fn iter(self) -> impl Iterator<Item = $kind> {
+                $kind::ALL
                     .iter()
                     .copied()
                     .filter(move |kind| kind.dispatch_kind() == *kind && self.contains(*kind))
             }
         }
 
-        impl<const N: usize> From<[EventKind; N]> for EventSet {
-            fn from(kinds: [EventKind; N]) -> Self {
+        impl<const N: usize> From<[$kind; N]> for $set {
+            fn from(kinds: [$kind; N]) -> Self {
                 kinds.into_iter().collect()
             }
         }
 
-        impl FromIterator<EventKind> for EventSet {
-            fn from_iter<T: IntoIterator<Item = EventKind>>(kinds: T) -> Self {
+        impl FromIterator<$kind> for $set {
+            fn from_iter<T: IntoIterator<Item = $kind>>(kinds: T) -> Self {
                 let mut set = Self::empty();
                 for kind in kinds {
                     set.insert(kind);
@@ -192,25 +194,48 @@ macro_rules! events {
     };
 }
 
-events! {
+event_family! {
+    RawEvent, RawKind, RawEventSet,
+    [KeyUnchanged => Key],
     (PointerEnter, "enter", "PointerEnter", pointer_enter, (), 0),
     (PointerLeave, "leave", "PointerLeave", pointer_leave, (), 0),
     (Press, "press", "Press", press, (), 0),
     (Release, "release", "Release", release, (), 0),
-    (Click, "click", "Click", click, (), 0),
     (Drag, "drag", "Drag", drag, (), 0),
+    (Key, "key", "Key", key, (key: KeyPress, modifiers: KeyModifiers), 0),
+    (
+        KeyUnchanged,
+        "key_unchanged",
+        "KeyUnchanged",
+        key_unchanged,
+        (key: KeyPress, modifiers: KeyModifiers),
+        0
+    ),
+    (Ime, "ime", "Ime", ime, (kind: ImeKind), 0),
+    (Paste, "paste", "Paste", paste, (text: String), 0),
+    (Wheel, "wheel", "Wheel", wheel, (delta: i32), 0),
+}
+
+event_family! {
+    Event, EventKind, EventSet,
+    [],
     (Key, "key", "Key", key, (key: KeyPress, modifiers: KeyModifiers), 1),
-    (KeyUnchanged, "key_unchanged", "KeyUnchanged", key_unchanged, (key: KeyPress, modifiers: KeyModifiers), 1),
+    (Click, "click", "Click", click, (), 0),
     (Close, "close", "Close", close, (), 0),
-    (Timer, "timer", "Timer", timer, (owner: TimerOwner, function: FunctionName), 0),
+    (
+        Timer,
+        "timer",
+        "Timer",
+        timer,
+        (owner: brul_ident::TimerOwner, function: brul_ident::FunctionName),
+        0
+    ),
     (Focus, "focus", "Focus", focus, (), 0),
     (Blur, "blur", "Blur", blur, (), 0),
     (Input, "input", "Input", input, (value: String, caret: usize), 1),
-    (Ime, "ime", "Ime", ime, (kind: ImeKind), 0),
     (Submit, "submit", "Submit", submit, (), 0),
     (Dismiss, "dismiss", "Dismiss", dismiss, (), 0),
     (Copy, "copy", "Copy", copy, (text: String), 0),
-    (Paste, "paste", "Paste", paste, (), 0),
 }
 
 #[cfg(test)]
@@ -219,35 +244,36 @@ mod tests {
 
     #[test]
     fn names_and_fields_share_one_table() {
+        for kind in RawKind::ALL {
+            let name = kind.name();
+            assert_eq!(name.parse::<RawKind>().unwrap(), *kind);
+            assert_eq!(kind.field().parse::<RawKind>().unwrap(), *kind);
+        }
         for kind in EventKind::ALL {
-            assert_eq!(kind.to_string().parse::<EventKind>().unwrap(), *kind);
+            let name = kind.name();
+            assert_eq!(name.parse::<EventKind>().unwrap(), *kind);
             assert_eq!(kind.field().parse::<EventKind>().unwrap(), *kind);
         }
-        assert_eq!(EventKind::PointerEnter.name(), "enter");
-        assert_eq!(
-            Event::key(KeyPress::from("a"), KeyModifiers::default()).kind(),
-            EventKind::Key
-        );
     }
 
     #[test]
     fn an_event_set_keeps_the_kinds_it_was_given() {
-        let set = EventSet::from([EventKind::Key, EventKind::Click]);
-        assert!(set.contains(EventKind::Key));
-        assert!(set.contains(EventKind::Click));
-        assert!(!set.contains(EventKind::Ime));
+        let raw = RawEventSet::from([RawKind::Key, RawKind::Press]);
         assert_eq!(
-            set.iter().collect::<Vec<_>>(),
-            [EventKind::Click, EventKind::Key]
+            raw.iter().collect::<Vec<_>>(),
+            vec![RawKind::Press, RawKind::Key]
+        );
+        let semantic = EventSet::from([EventKind::Input, EventKind::Click]);
+        assert_eq!(
+            semantic.iter().collect::<Vec<_>>(),
+            vec![EventKind::Click, EventKind::Input]
         );
     }
 
     #[test]
-    fn an_unchanged_key_uses_the_key_subscription() {
-        let set = EventSet::from([EventKind::KeyUnchanged]);
-        assert!(set.contains(EventKind::Key));
-        assert!(set.contains(EventKind::KeyUnchanged));
-        assert_eq!(set.iter().collect::<Vec<_>>(), [EventKind::Key]);
-        assert_eq!(EventKind::KeyUnchanged.dispatch_kind(), EventKind::Key);
+    fn an_unchanged_raw_key_uses_the_key_subscription() {
+        let set = RawEventSet::from([RawKind::Key]);
+        assert!(set.contains(RawKind::KeyUnchanged));
+        assert_eq!(RawKind::KeyUnchanged.dispatch_kind(), RawKind::Key);
     }
 }

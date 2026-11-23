@@ -5,7 +5,7 @@
 <markup>
 window Demo (title: "demo") {
     Container (on drag: dragWindow) {
-        Container (on click: toggle, on enter: toggle) { }
+        Container (on click: toggle) { }
     }
 }
 </markup>

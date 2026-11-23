@@ -1,4 +1,4 @@
-use brul_event::Event;
+use brul_event::{Event, RawEvent};
 
 use super::WidgetId;
 use crate::layout::LayoutError;
@@ -56,6 +56,67 @@ impl UiEvent {
     }
 
     pub fn at(target: EventTarget, event: Event) -> Self {
+        Self { target, event }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DispatchEvent {
+    Raw(RawUiEvent),
+    Semantic(UiEvent),
+}
+
+impl DispatchEvent {
+    pub fn target(&self) -> EventTarget {
+        match self {
+            Self::Raw(event) => event.target,
+            Self::Semantic(event) => event.target,
+        }
+    }
+
+    pub fn raw(id: WidgetId, event: RawEvent) -> Self {
+        Self::Raw(RawUiEvent::widget(id, event))
+    }
+
+    pub fn semantic(id: WidgetId, event: Event) -> Self {
+        Self::Semantic(UiEvent::widget(id, event))
+    }
+}
+
+impl From<RawUiEvent> for DispatchEvent {
+    fn from(event: RawUiEvent) -> Self {
+        Self::Raw(event)
+    }
+}
+
+impl From<UiEvent> for DispatchEvent {
+    fn from(event: UiEvent) -> Self {
+        Self::Semantic(event)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RawUiEvent {
+    pub target: EventTarget,
+    pub event: RawEvent,
+}
+
+impl RawUiEvent {
+    pub fn window(event: RawEvent) -> Self {
+        Self {
+            target: EventTarget::Window,
+            event,
+        }
+    }
+
+    pub fn widget(id: WidgetId, event: RawEvent) -> Self {
+        Self {
+            target: EventTarget::Widget(id),
+            event,
+        }
+    }
+
+    pub fn at(target: EventTarget, event: RawEvent) -> Self {
         Self { target, event }
     }
 }

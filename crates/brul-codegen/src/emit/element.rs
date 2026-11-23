@@ -1,5 +1,5 @@
 use brul_case::constant;
-use brul_event::EventKind;
+use brul_event::{EventKind, RawKind};
 use brul_gui::Direction;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
@@ -814,7 +814,8 @@ pub(super) fn attachment_bindings(
                 ),
             ));
         }
-        let events = &hooks.events;
+        let events = &hooks.events.semantic;
+        let raw_events = &hooks.events.raw;
         out.start(format_args!(
             "let _ = build.capability(brul::Capability::hooks(brul::Hooks {{\n"
         ));
@@ -837,6 +838,16 @@ pub(super) fn attachment_bindings(
                 .collect::<Vec<_>>()
                 .join(", ");
             out.line(format_args!("events: brul::EventSet::from([{kinds}]),"));
+            let raw_kinds = RawKind::ALL
+                .iter()
+                .copied()
+                .filter(|kind| kind.dispatch_kind() == *kind && raw_events.contains(kind))
+                .map(|kind| format!("brul::RawKind::{}", kind.field()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.line(format_args!(
+                "raw_events: brul::RawEventSet::from([{raw_kinds}]),"
+            ));
             Ok::<(), Error>(())
         })?;
         out.line(format_args!("}}));"));

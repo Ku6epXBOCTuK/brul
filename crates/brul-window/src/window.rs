@@ -15,7 +15,7 @@ use winit::icon::{Icon, RgbaIcon};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use brul_gpu::effect::Effects;
-use brul_gui::{Color, Image, UiEvent, WidgetTree};
+use brul_gui::{Color, DispatchEvent, Image, WidgetTree};
 use brul_ident::{FunctionName, TimerId, TimerKind, TimerOwner};
 
 use crate::input::{Input, event_input, window_input};
@@ -294,7 +294,7 @@ pub fn run_tree(
     config: WindowConfig,
     tree: Rc<RefCell<WidgetTree>>,
     initial: Vec<WindowCommand>,
-    handler: impl FnMut(&[UiEvent]) -> Vec<WindowCommand> + 'static,
+    handler: impl FnMut(&[DispatchEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
     run_tree_themed(config, initial, move |_| Rc::clone(&tree), handler)
 }
@@ -303,7 +303,7 @@ pub fn run_tree_themed(
     config: WindowConfig,
     initial: Vec<WindowCommand>,
     mut build: impl FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>> + 'static,
-    handler: impl FnMut(&[UiEvent]) -> Vec<WindowCommand> + 'static,
+    handler: impl FnMut(&[DispatchEvent]) -> Vec<WindowCommand> + 'static,
 ) -> Result<(), WindowError> {
     crate::perf::start();
     config.validate()?;
@@ -332,7 +332,7 @@ pub fn run_tree_themed(
 pub fn run_windows(
     initial: WindowKey,
     create: impl FnMut(WindowKey, ColorScheme) -> Result<WindowSpec, WindowError> + 'static,
-    handler: impl FnMut(WindowKey, &[UiEvent]) -> Vec<WindowCommand> + 'static,
+    handler: impl FnMut(WindowKey, &[DispatchEvent]) -> Vec<WindowCommand> + 'static,
     closed: impl FnMut(WindowKey) + 'static,
     ready: impl FnOnce(Waker) + 'static,
     wake: impl FnMut() + 'static,

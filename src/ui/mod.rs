@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use brul_codegen::runtime::{self, Build, Hooks, accepts_prop};
-use brul_gui::{TimerOwner, UiEvent, WidgetId, WidgetTree};
+use brul_gui::{DispatchEvent, EventTarget, RawUiEvent, TimerOwner, UiEvent, WidgetId, WidgetTree};
 use brul_ident::TimerId;
 use brul_reactive::EffectScope;
 use brul_window::{TimerCommand, WindowCommand};
@@ -14,7 +14,7 @@ use brul_window::{TimerCommand, WindowCommand};
 use crate::Host;
 use crate::event::{arguments, call};
 use crate::{
-    Built, ComponentHandle, Dyn, Event, EventKind, EventSink, EventTarget, FunctionName, Handler,
+    Built, ComponentHandle, Dispatch, Dyn, Event, EventKind, EventSink, FunctionName, Handler,
     PropBinding, SharedStates, StateId, Structure, Theme, TimerRequest, Value, ViewError,
 };
 
@@ -30,6 +30,30 @@ use registry::{Context, ElementOwner, Owner, Registry, capability_context, owner
 mod tests;
 
 const EVENT_DEPTH: usize = 64;
+
+struct DispatchPath {
+    capabilities: Vec<EventTarget>,
+    handlers: Vec<EventTarget>,
+}
+
+impl DispatchPath {
+    fn new(tree: &WidgetTree, target: EventTarget) -> Self {
+        let capabilities = match target {
+            EventTarget::Window => vec![EventTarget::Window],
+            EventTarget::Widget(id) => tree
+                .path_to_id(id)
+                .into_iter()
+                .rev()
+                .map(EventTarget::Widget)
+                .chain(std::iter::once(EventTarget::Window))
+                .collect(),
+        };
+        Self {
+            capabilities,
+            handlers: vec![target],
+        }
+    }
+}
 
 pub(crate) struct AssemblyParts {
     pub(crate) structures: Vec<Structure>,
@@ -373,63 +397,103 @@ impl<T: Theme> Ui<T> {
         Ok(())
     }
 
-    pub fn dispatch(&mut self, events: &[UiEvent]) -> Vec<WindowCommand> {
+    pub fn dispatch(&mut self, events: &[DispatchEvent]) -> Vec<WindowCommand> {
         for event in events {
-            match &event.event {
-                Event::Timer { owner, function } => {
-                    let component = self
-                        .components
-                        .iter()
-                        .find(|owned| owned.owner == *owner)
-                        .map(|owned| Rc::clone(&owned.component));
-                    if let Some(component) = component {
-                        let call = component.borrow().event_call(function);
-                        if let Some(call) = call {
-                            let _ = call(&mut component.borrow_mut(), &[]);
+            match event {
+                DispatchEvent::Raw(raw) => self.dispatch_raw_event(raw),
+                DispatchEvent::Semantic(semantic) => match &semantic.event {
+                    Event::Timer { owner, function } => {
+                        let component = self
+                            .components
+                            .iter()
+                            .find(|owned| owned.owner == *owner)
+                            .map(|owned| Rc::clone(&owned.component));
+                        if let Some(component) = component {
+                            let call = component.borrow().event_call(function);
+                            if let Some(call) = call {
+                                let _ = call(&mut component.borrow_mut(), &[]);
+                            }
                         }
                     }
-                }
-                Event::Close { .. } => self.close(),
-                _ => self.dispatch_event(event),
+                    Event::Close { .. } => self.close(),
+                    _ => self.dispatch_event(semantic),
+                },
             }
             self.pump_events();
         }
         self.take_commands()
     }
 
+    pub fn dispatch_raw(&mut self, events: &[RawUiEvent]) -> Vec<WindowCommand> {
+        for event in events {
+            self.dispatch_raw_event(event);
+            self.pump_events();
+        }
+        self.take_commands()
+    }
+
+    fn dispatch_raw_event(&self, event: &RawUiEvent) {
+        let path = DispatchPath::new(&self.tree.borrow(), event.target);
+        let kind = event.event.kind().dispatch_kind();
+        let dispatch = DispatchEvent::Raw(event.clone());
+        self.dispatch_capabilities(&path, &dispatch, |hooks| hooks.raw_events.contains(kind));
+    }
+
     fn pump_events(&mut self) {
         for _ in 0..EVENT_DEPTH {
-            let Some(event) = runtime::take_event() else {
+            let Some(pending) = runtime::take_pending() else {
                 return;
             };
-            call(&event.component, event.call, event.arguments);
+            match pending {
+                runtime::Pending::Component(event) => {
+                    call(&event.component, event.call, event.arguments);
+                }
+                runtime::Pending::Ui(event) => self.dispatch_event(&event),
+            }
             brul_reactive::flush();
         }
         tracing::error!(depth = EVENT_DEPTH, "event chain is too deep");
     }
 
-    fn dispatch_event(&mut self, event: &UiEvent) {
-        let kind = event.event.kind().dispatch_kind();
-        for target in event.target.chain() {
-            if let Some(widget) = target.widget() {
-                for owner in self.owners.capabilities(widget) {
-                    if !owner.hooks.events.contains(kind) {
-                        continue;
-                    }
-                    let mut build = capability_context(
-                        &self.tree,
-                        &self.states,
-                        &self.event_sink,
-                        widget,
-                        owner.state,
-                        &owner.hooks.component,
-                    );
-                    if (owner.hooks.event)(&mut build, owner.state, event) {
-                        return;
-                    }
+    fn dispatch_capabilities(
+        &self,
+        path: &DispatchPath,
+        event: &DispatchEvent,
+        accepts: impl Fn(&Hooks) -> bool,
+    ) -> bool {
+        for target in &path.capabilities {
+            let Some(widget) = target.widget() else {
+                continue;
+            };
+            for owner in self.owners.capabilities(widget) {
+                if !accepts(&owner.hooks) {
+                    continue;
+                }
+                let mut build = capability_context(
+                    &self.tree,
+                    &self.states,
+                    &self.event_sink,
+                    widget,
+                    owner.state,
+                    &owner.hooks.component,
+                );
+                if (owner.hooks.event)(&mut build, owner.state, event) == Dispatch::Stop {
+                    return true;
                 }
             }
-            if let Some(handler) = self.handler_index.get(&(target, kind)) {
+        }
+        false
+    }
+
+    fn dispatch_event(&self, event: &UiEvent) {
+        let path = DispatchPath::new(&self.tree.borrow(), event.target);
+        let kind = event.event.kind().dispatch_kind();
+        let dispatch = DispatchEvent::Semantic(event.clone());
+        if self.dispatch_capabilities(&path, &dispatch, |hooks| hooks.events.contains(kind)) {
+            return;
+        }
+        for target in &path.handlers {
+            if let Some(handler) = self.handler_index.get(&(*target, kind)) {
                 call(
                     &handler.component,
                     handler.call,

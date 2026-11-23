@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_gui::{
-    Color, Dimension, Event, LayoutStyle, Padding, Paint, StyleSet, StyleState, UiEvent, Widget,
-    WidgetStyle, WidgetTree,
+    Color, Dimension, DispatchEvent, Event, LayoutStyle, Padding, Paint, StyleSet, StyleState,
+    UiEvent, Widget, WidgetStyle, WidgetTree,
 };
 use brul_reactive::{Effect, Signal, batch};
 use brul_window::{WindowCommand, WindowConfig, run_tree};
@@ -49,10 +49,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if events.iter().any(|event| {
             matches!(
                 event,
-                UiEvent {
+                DispatchEvent::Semantic(UiEvent {
                     event: Event::Click { .. },
                     ..
-                }
+                })
             )
         }) {
             batch(|| checked.set(!checked.get()));
@@ -60,10 +60,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if events.iter().any(|event| {
             matches!(
                 event,
-                UiEvent {
+                DispatchEvent::Semantic(UiEvent {
                     event: Event::Close { .. },
                     ..
-                }
+                })
             )
         }) {
             return vec![WindowCommand::Close];

@@ -1,6 +1,7 @@
 use brul_gui::{
-    Color, Dimension, Direction, Event, KeyModifiers, KeyPress, LayoutStyle, Paint, Size, StyleSet,
-    StyleState, TextEngine, UiEvent, Widget, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Color, Dimension, Direction, DispatchEvent, Event, EventTarget, KeyModifiers, KeyPress,
+    LayoutStyle, Paint, Size, StyleSet, StyleState, TextEngine, Widget, WidgetId, WidgetStyle,
+    WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -32,10 +33,18 @@ fn field() -> Widget {
         .focusable(true)
 }
 
-fn focus_events(events: Vec<UiEvent>) -> Vec<UiEvent> {
+fn focus_events(events: Vec<DispatchEvent>) -> Vec<DispatchEvent> {
     events
         .into_iter()
-        .filter(|event| matches!(event.event, Event::Focus { .. } | Event::Blur { .. }))
+        .filter(|event| {
+            matches!(
+                event,
+                DispatchEvent::Semantic(brul_gui::UiEvent {
+                    event: Event::Focus { .. } | Event::Blur { .. },
+                    ..
+                })
+            )
+        })
         .collect()
 }
 
@@ -48,22 +57,22 @@ fn a_click_focuses_the_nearest_focusable_widget_and_background_blurs_it() {
 
     assert_eq!(
         focus_events(tree.pointer_down(5, 5).expect("down")),
-        vec![UiEvent::widget(first_id, Event::focus())]
+        vec![DispatchEvent::semantic(first_id, Event::focus())]
     );
     assert_eq!(tree.focused(), Some(first_id));
 
     assert_eq!(
         focus_events(tree.pointer_down(5, 25).expect("down")),
         vec![
-            UiEvent::widget(first_id, Event::blur()),
-            UiEvent::widget(second_id, Event::focus())
+            DispatchEvent::semantic(first_id, Event::blur()),
+            DispatchEvent::semantic(second_id, Event::focus())
         ]
     );
     assert_eq!(tree.focused(), Some(second_id));
 
     assert_eq!(
         focus_events(tree.pointer_down(95, 95).expect("down")),
-        vec![UiEvent::widget(second_id, Event::blur())]
+        vec![DispatchEvent::semantic(second_id, Event::blur())]
     );
     assert_eq!(tree.focused(), None);
 }
@@ -90,7 +99,7 @@ fn focus_applies_the_focused_style_and_blur_removes_it() {
 
     assert_eq!(
         focus_events(tree.press_key("Tab")),
-        vec![UiEvent::widget(id, Event::focus())]
+        vec![DispatchEvent::semantic(id, Event::focus())]
     );
     {
         let snapshot = tree.snapshot().expect("snapshot");
@@ -115,13 +124,13 @@ fn tab_walks_the_focusable_widgets_and_keeps_other_keys_for_the_window() {
 
     assert_eq!(
         tree.press_key("Tab"),
-        vec![UiEvent::widget(first_id, Event::focus())]
+        vec![DispatchEvent::semantic(first_id, Event::focus())]
     );
     assert_eq!(
         tree.press_key("Tab"),
         vec![
-            UiEvent::widget(first_id, Event::blur()),
-            UiEvent::widget(second_id, Event::focus())
+            DispatchEvent::semantic(first_id, Event::blur()),
+            DispatchEvent::semantic(second_id, Event::focus())
         ]
     );
     tree.press_key("Tab");
@@ -129,16 +138,16 @@ fn tab_walks_the_focusable_widgets_and_keeps_other_keys_for_the_window() {
     assert_eq!(
         tree.press_key("Tab"),
         vec![
-            UiEvent::widget(third_id, Event::blur()),
-            UiEvent::widget(first_id, Event::focus())
+            DispatchEvent::semantic(third_id, Event::blur()),
+            DispatchEvent::semantic(first_id, Event::focus())
         ]
     );
     assert_eq!(
         tree.press_key("Escape"),
-        vec![UiEvent::widget(
+        vec![DispatchEvent::Raw(brul_gui::RawUiEvent::widget(
             first_id,
-            Event::key(KeyPress::from("Escape"), KeyModifiers::default()),
-        )]
+            brul_gui::RawEvent::key(KeyPress::from("Escape"), KeyModifiers::default()),
+        ),)]
     );
     assert_eq!(tree.focused(), Some(first_id));
 }
@@ -153,14 +162,14 @@ fn enter_and_space_click_the_focused_widget_and_its_ancestors() {
 
     assert_eq!(
         tree.press_key("Tab"),
-        vec![UiEvent::widget(button_id, Event::focus())]
+        vec![DispatchEvent::semantic(button_id, Event::focus())]
     );
     for key in ["Enter", " "] {
         assert_eq!(
             tree.press_key(key),
             vec![
-                UiEvent::widget(button_id, Event::click()),
-                UiEvent::widget(root_id, Event::click()),
+                DispatchEvent::semantic(button_id, Event::click()),
+                DispatchEvent::semantic(root_id, Event::click()),
             ]
         );
     }
@@ -176,13 +185,13 @@ fn a_disabled_widget_is_not_focusable() {
 
     assert_eq!(
         tree.press_key("Tab"),
-        vec![UiEvent::widget(first_id, Event::focus())]
+        vec![DispatchEvent::semantic(first_id, Event::focus())]
     );
     assert_eq!(
         tree.press_key("Tab"),
         vec![
-            UiEvent::widget(first_id, Event::blur()),
-            UiEvent::widget(third_id, Event::focus())
+            DispatchEvent::semantic(first_id, Event::blur()),
+            DispatchEvent::semantic(third_id, Event::focus())
         ]
     );
 }
@@ -198,7 +207,7 @@ fn tab_stays_inside_a_visible_modal_layer() {
 
     assert_eq!(
         tree.press_key("Tab"),
-        vec![UiEvent::widget(inside_id, Event::focus())]
+        vec![DispatchEvent::semantic(inside_id, Event::focus())]
     );
     assert!(tree.press_key("Tab").is_empty());
     assert_eq!(tree.focused(), Some(inside_id));
@@ -212,7 +221,7 @@ fn tab_stays_inside_a_visible_modal_layer() {
     assert_ne!(tree.focused(), Some(trigger_id));
     assert_eq!(
         tree.press_key("Escape"),
-        vec![UiEvent::widget(dialog_id, Event::dismiss())]
+        vec![DispatchEvent::semantic(dialog_id, Event::dismiss())]
     );
 }
 
@@ -228,7 +237,7 @@ fn a_hidden_modal_layer_gives_the_focus_back() {
 
     assert_eq!(
         tree.press_key("Tab"),
-        vec![UiEvent::widget(trigger_id, Event::focus())]
+        vec![DispatchEvent::semantic(trigger_id, Event::focus())]
     );
     tree.set_visible(dialog_id, true);
     assert_eq!(tree.focused(), Some(inside_id));
@@ -255,7 +264,7 @@ fn replacing_the_same_children_keeps_the_focus_on_its_widget() {
 
     assert_eq!(
         tree.press_key("Tab"),
-        vec![UiEvent::widget(first_id, Event::focus())]
+        vec![DispatchEvent::semantic(first_id, Event::focus())]
     );
     let children = tree.take_children(root_id).expect("children");
     assert!(tree.replace_all_children(root_id, children));
@@ -269,8 +278,8 @@ fn replacing_the_same_children_keeps_the_focus_on_its_widget() {
     assert_eq!(
         tree.press_key("Tab"),
         vec![
-            UiEvent::widget(first_id, Event::blur()),
-            UiEvent::widget(second_id, Event::focus())
+            DispatchEvent::semantic(first_id, Event::blur()),
+            DispatchEvent::semantic(second_id, Event::focus())
         ]
     );
 }

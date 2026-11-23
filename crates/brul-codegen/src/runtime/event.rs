@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use brul_event::EventKind;
-use brul_gui::WidgetId;
+use brul_gui::{UiEvent, WidgetId};
 use brul_script::{Dyn, Error as ScriptError, EventCall, Host, Value};
 use brul_syntax::markup::PropType;
 
@@ -47,11 +47,20 @@ pub struct PendingEvent {
     pub arguments: Vec<Dyn>,
 }
 
-thread_local! {
-    static PENDING: RefCell<VecDeque<PendingEvent>> = const { RefCell::new(VecDeque::new()) };
+pub enum Pending {
+    Component(PendingEvent),
+    Ui(UiEvent),
 }
 
-pub fn take_event() -> Option<PendingEvent> {
+thread_local! {
+    static PENDING: RefCell<VecDeque<Pending>> = const { RefCell::new(VecDeque::new()) };
+}
+
+pub fn push_ui_event(event: UiEvent) {
+    PENDING.with(|pending| pending.borrow_mut().push_back(Pending::Ui(event)));
+}
+
+pub fn take_pending() -> Option<Pending> {
     PENDING.with(|pending| pending.borrow_mut().pop_front())
 }
 
@@ -81,11 +90,13 @@ impl Host for EventHost {
             }
         }
         PENDING.with(|pending| {
-            pending.borrow_mut().push_back(PendingEvent {
-                component: Rc::clone(&event.component),
-                call: event.call,
-                arguments: arguments.iter().cloned().map(Dyn::from).collect(),
-            });
+            pending
+                .borrow_mut()
+                .push_back(Pending::Component(PendingEvent {
+                    component: Rc::clone(&event.component),
+                    call: event.call,
+                    arguments: arguments.iter().cloned().map(Dyn::from).collect(),
+                }));
         });
         Ok(Value::Null)
     }

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{CaretArea, Cursor, Size, TextEngine, UiEvent, WidgetTree};
+use brul_gui::{CaretArea, Cursor, DispatchEvent, Size, TextEngine, WidgetTree};
 use raw_window_handle::HasWindowHandle;
 use tracing::{error, info};
 use winit::application::ApplicationHandler;
@@ -32,7 +32,7 @@ use timer::earliest;
 
 pub(crate) use timer::{Timer, cancel, due, wakeup_at};
 
-type EventHandler = Box<dyn FnMut(&[UiEvent]) -> Vec<WindowCommand>>;
+type EventHandler = Box<dyn FnMut(&[DispatchEvent]) -> Vec<WindowCommand>>;
 type TreeBuilder = Box<dyn FnMut(ColorScheme) -> Rc<RefCell<WidgetTree>>>;
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);

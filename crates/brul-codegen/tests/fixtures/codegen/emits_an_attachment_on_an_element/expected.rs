@@ -50,7 +50,8 @@ pub fn editor_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
                 apply: crate::__brul_attach_editor_apply,
                 event: crate::__brul_attach_editor_event,
                 cleanup: crate::__brul_attach_editor_cleanup,
-                events: brul::EventSet::from([brul::EventKind::Click, brul::EventKind::Key, brul::EventKind::Focus, brul::EventKind::Blur, brul::EventKind::Input, brul::EventKind::Ime, brul::EventKind::Submit]),
+                events: brul::EventSet::from([brul::EventKind::Key, brul::EventKind::Click, brul::EventKind::Focus, brul::EventKind::Blur, brul::EventKind::Input, brul::EventKind::Submit]),
+                raw_events: brul::RawEventSet::from([brul::RawKind::Ime]),
             }));
             widget0
         }

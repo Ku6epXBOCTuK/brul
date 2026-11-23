@@ -16,14 +16,18 @@ pub mod build {
 
 pub use brul_codegen::runtime::{
     Binding, BindingTarget, Build, Built, Capability, ClassTable, ComponentEvent, ComponentHandle,
-    DEFAULT_SLOT, Element, EventSink, FlagExpression, Handler, Hooks, Instance, NumberExpression,
-    PropArgument, PropBinding, PropExpression, Rebuilt, RowInfo, RowKey, SharedStates,
-    SlotArgument, Slots, StateId, States, Structure, TextExpression, View, ViewError,
-    apply_capability, emit_widget_event, instance, register_structure, slot,
+    DEFAULT_SLOT, Dispatch, Element, EventSink, FlagExpression, Handler, Hooks, Instance,
+    NumberExpression, PropArgument, PropBinding, PropExpression, RawEvent, RawEventSet, RawKind,
+    Rebuilt, RowInfo, RowKey, SharedStates, SlotArgument, Slots, StateId, States, Structure,
+    TextExpression, View, ViewError, apply_capability, emit_widget_event, instance,
+    register_structure, slot,
 };
 pub use brul_gpu::effect;
 pub use brul_gui as gui;
-pub use brul_gui::{Event, EventKind, EventSet, EventTarget, Theme, UiEvent, UnknownTheme};
+pub use brul_gui::{
+    DispatchEvent, Event, EventKind, EventSet, EventTarget, RawUiEvent, Theme, UiEvent,
+    UnknownTheme,
+};
 pub use brul_macros::{attach, command, effect, host, widget};
 pub use brul_reactive::Signal;
 pub use brul_script::{

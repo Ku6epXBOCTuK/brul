@@ -43,7 +43,6 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
             {
                 let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]);
                 handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Click, demo_script_event_toggle));
-                handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::PointerEnter, demo_script_event_toggle));
                 widget0
             },
         ]), &[0], theme).draggable(true)

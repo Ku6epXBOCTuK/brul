@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use brul_case::snake;
-use brul_event::EventKind;
+use brul_event::{EventKind, RawKind};
 use proc_macro2::TokenStream;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
@@ -21,9 +21,15 @@ pub struct EventArg {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AttachEvents {
+    pub semantic: BTreeSet<EventKind>,
+    pub raw: BTreeSet<RawKind>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AttachAttr {
     pub name: Option<String>,
-    pub events: BTreeSet<EventKind>,
+    pub events: AttachEvents,
     pub update: Option<Ident>,
     pub event: Option<Ident>,
     pub cleanup: Option<Ident>,
@@ -155,7 +161,7 @@ impl From<EventArgument> for EventArg {
 
 enum AttachArgument {
     Name(LitStr),
-    Events(BTreeSet<EventKind>),
+    Events(AttachEvents),
     Update(Ident),
     Event(Ident),
     Cleanup(Ident),
@@ -170,11 +176,20 @@ impl Parse for AttachArgument {
                 let content;
                 syn::parenthesized!(content in input);
                 let events = Punctuated::<Ident, Token![,]>::parse_terminated(&content)?;
-                let mut result = BTreeSet::new();
+                let mut result = AttachEvents::default();
                 for event in events {
-                    result.insert(event.to_string().parse::<EventKind>().map_err(|error| {
-                        syn::Error::new(event.span(), UnknownAttachEvent(error.0))
-                    })?);
+                    let name = event.to_string();
+                    match (name.parse::<EventKind>(), name.parse::<RawKind>()) {
+                        (Ok(kind), _) => {
+                            result.semantic.insert(kind);
+                        }
+                        (Err(_), Ok(kind)) => {
+                            result.raw.insert(kind);
+                        }
+                        (Err(error), Err(_)) => {
+                            return Err(syn::Error::new(event.span(), UnknownAttachEvent(error.0)));
+                        }
+                    }
                 }
                 Ok(Self::Events(result))
             }
@@ -241,17 +256,19 @@ mod tests {
         assert_eq!(attribute.name.as_deref(), Some("counter"));
         assert_eq!(
             attribute.events,
-            [
-                EventKind::Key,
-                EventKind::Ime,
-                EventKind::Input,
-                EventKind::Submit,
-                EventKind::Focus,
-                EventKind::Blur,
-                EventKind::Click,
-            ]
-            .into_iter()
-            .collect()
+            AttachEvents {
+                semantic: [
+                    EventKind::Key,
+                    EventKind::Input,
+                    EventKind::Submit,
+                    EventKind::Focus,
+                    EventKind::Blur,
+                    EventKind::Click,
+                ]
+                .into_iter()
+                .collect(),
+                raw: [RawKind::Ime].into_iter().collect(),
+            }
         );
         assert_eq!(
             attribute.update.as_ref().unwrap().to_string(),

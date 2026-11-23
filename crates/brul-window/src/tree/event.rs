@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{Event, ImeKind, KeyPress, UiEvent};
+use brul_gui::{
+    DispatchEvent, Event, EventTarget, ImeKind, KeyPress, RawEvent, RawUiEvent, UiEvent,
+};
 use tracing::{debug, trace, warn};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
@@ -35,9 +37,10 @@ impl TreeApp {
         }
         let started = Instant::now();
         let step = match input {
-            Some(Input::Exit) => {
-                self.dispatch_events(&window, vec![UiEvent::window(Event::close())])
-            }
+            Some(Input::Exit) => self.dispatch_events(
+                &window,
+                vec![DispatchEvent::Semantic(UiEvent::window(Event::close()))],
+            ),
             Some(Input::Redraw) => self.render(&window),
             Some(input) => {
                 let step = self.handle(&window, input);
@@ -169,10 +172,24 @@ impl TreeApp {
         }
         let (x, y) = self.cursor;
         let dy = pixels.round() as i32;
-        if self.tree.borrow_mut().wheel(x, y, dy) {
+        let target = self
+            .tree
+            .borrow()
+            .hit(x, y)
+            .ok()
+            .flatten()
+            .map_or(EventTarget::Window, EventTarget::Widget);
+        let scrolled = self.tree.borrow_mut().wheel(x, y, dy);
+        if scrolled {
             surface.redraw();
         }
-        Step::Continue
+        self.dispatch_events(
+            surface,
+            vec![DispatchEvent::Raw(RawUiEvent::at(
+                target,
+                RawEvent::wheel(dy),
+            ))],
+        )
     }
 
     pub(super) fn leave_pointer(&mut self, surface: &dyn Surface) -> Step {
@@ -199,7 +216,7 @@ impl TreeApp {
     pub(super) fn dispatch(
         &mut self,
         surface: &dyn Surface,
-        events: Result<Vec<UiEvent>, brul_gui::WidgetError>,
+        events: Result<Vec<DispatchEvent>, brul_gui::WidgetError>,
     ) -> Step {
         match events {
             Ok(events) => self.dispatch_events(surface, events),
@@ -207,12 +224,19 @@ impl TreeApp {
         }
     }
 
-    pub(super) fn dispatch_events(&mut self, surface: &dyn Surface, events: Vec<UiEvent>) -> Step {
+    pub(super) fn dispatch_events(
+        &mut self,
+        surface: &dyn Surface,
+        events: Vec<DispatchEvent>,
+    ) -> Step {
         self.sync_cursor(surface);
         if events.is_empty() {
             return Step::Continue;
         }
         for event in &events {
+            let DispatchEvent::Semantic(event) = event else {
+                continue;
+            };
             let view = match (&event.event, event.target.widget()) {
                 (Event::Focus { .. } | Event::Blur { .. }, Some(id)) => {
                     self.tree.borrow().platform_view(id)
@@ -225,18 +249,27 @@ impl TreeApp {
                 _ => {}
             }
         }
-        if events
-            .iter()
-            .any(|event| matches!(event.event, Event::Drag { .. }))
-        {
+        if events.iter().any(|event| {
+            matches!(
+                event,
+                DispatchEvent::Raw(RawUiEvent {
+                    event: RawEvent::Drag { .. },
+                    ..
+                })
+            )
+        }) {
             surface.drag();
         }
         for event in &events {
-            match &event.event {
-                Event::Copy { text } => {
-                    self.clipboard = (!text.is_empty()).then(|| text.clone());
-                }
-                Event::Paste { .. } => self.paste = true,
+            match event {
+                DispatchEvent::Semantic(UiEvent {
+                    event: Event::Copy { text },
+                    ..
+                }) => self.clipboard = (!text.is_empty()).then(|| text.clone()),
+                DispatchEvent::Raw(RawUiEvent {
+                    event: RawEvent::Paste { .. },
+                    ..
+                }) => self.paste = true,
                 _ => {}
             }
         }

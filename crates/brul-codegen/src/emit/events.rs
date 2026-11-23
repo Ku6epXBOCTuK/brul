@@ -38,6 +38,16 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
         let Arg::Handler { event, handler } = arg else {
             continue;
         };
+        if event == "drag" {
+            if handler != "dragWindow" {
+                return Err(error_at(
+                    element.position,
+                    "drag handler must be dragWindow",
+                ));
+            }
+            drag = true;
+            continue;
+        }
         let Ok(event) = event.parse::<EventKind>() else {
             return Err(error_at(
                 element.position,
@@ -55,16 +65,6 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
                 element.position,
                 "close events are only supported on the window",
             ));
-        }
-        if event == EventKind::Drag {
-            if handler != "dragWindow" {
-                return Err(error_at(
-                    element.position,
-                    "drag handler must be dragWindow",
-                ));
-            }
-            drag = true;
-            continue;
         }
         if handlers
             .iter()

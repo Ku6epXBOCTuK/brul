@@ -14,7 +14,7 @@
     component Tooltip {
         prop text: String = "";
 
-        Container (tooltip, #tooltip-anchor, on enter: show, on leave: hide) {
+        Container (tooltip, #tooltip-anchor) {
             @slot
             Layer (bubble-layer, visible: shown) {
                 Container (bubble, anchor: @tooltip-anchor) {

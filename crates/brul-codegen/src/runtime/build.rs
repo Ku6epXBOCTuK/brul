@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use brul_gui::{WidgetId, WidgetTree};
+use brul_gui::{UiEvent, WidgetId, WidgetTree};
 use brul_script::Value;
 
 use super::component::ComponentHandle;
@@ -101,6 +101,10 @@ impl Build {
 
     pub fn emit(&self, event: &str, arguments: Vec<Value>) {
         event_sink::emit(&self.event_sink, self.state_id(), event, arguments);
+    }
+
+    pub fn emit_event(&self, event: UiEvent) {
+        super::event::push_ui_event(event);
     }
 
     pub fn capability(&mut self, capability: Capability<'_>) -> Result<Option<Built>, ViewError> {

@@ -22,34 +22,34 @@ impl WidgetTree {
         self.modifiers = modifiers;
     }
 
-    pub(super) fn key_event(&self, code: &str, physical: Option<&str>) -> UiEvent {
-        UiEvent::at(
+    pub(super) fn key_event(&self, code: &str, physical: Option<&str>) -> DispatchEvent {
+        DispatchEvent::Raw(RawUiEvent::at(
             self.event_target(),
-            Event::key(
+            RawEvent::key(
                 KeyPress {
                     code: code.to_owned(),
                     physical: physical.map(str::to_owned),
                 },
                 self.modifiers,
             ),
-        )
+        ))
     }
 
-    pub(super) fn key_unchanged_event(&self, key: &KeyPress) -> UiEvent {
-        UiEvent::at(
+    pub(super) fn key_unchanged_event(&self, key: &KeyPress) -> DispatchEvent {
+        DispatchEvent::Raw(RawUiEvent::at(
             self.event_target(),
-            Event::key_unchanged(key.clone(), self.modifiers),
-        )
+            RawEvent::key_unchanged(key.clone(), self.modifiers),
+        ))
     }
 
-    pub fn press_key(&mut self, key: impl Into<KeyPress>) -> Vec<UiEvent> {
+    pub fn press_key(&mut self, key: impl Into<KeyPress>) -> Vec<DispatchEvent> {
         let key = key.into();
         let code = key.code.as_str();
         let physical = key.physical.as_deref();
         if code == "Escape"
             && let Some(scope) = self.modal_scope()
         {
-            return vec![UiEvent::widget(
+            return vec![DispatchEvent::semantic(
                 self.nodes[scope.index()].id,
                 Event::dismiss(),
             )];
@@ -74,7 +74,7 @@ impl WidgetTree {
                 .path_to(slot)
                 .into_iter()
                 .rev()
-                .map(|slot| UiEvent::widget(self.nodes[slot.index()].id, Event::click()))
+                .map(|slot| DispatchEvent::semantic(self.nodes[slot.index()].id, Event::click()))
                 .collect();
         }
         let Some(slot) = self
@@ -128,7 +128,7 @@ impl WidgetTree {
                     vec![self.key_unchanged_event(&key)]
                 }
             }
-            "Enter" if !multiline => vec![UiEvent::widget(
+            "Enter" if !multiline => vec![DispatchEvent::semantic(
                 self.nodes[slot.index()].id,
                 Event::submit(),
             )],
@@ -140,7 +140,10 @@ impl WidgetTree {
                 }
                 "C" => self.copy_input(slot),
                 "X" => self.cut_input(slot),
-                "V" => vec![UiEvent::widget(self.nodes[slot.index()].id, Event::paste())],
+                "V" => vec![DispatchEvent::raw(
+                    self.nodes[slot.index()].id,
+                    RawEvent::paste(String::new()),
+                )],
                 _ => Vec::new(),
             },
             text => {
@@ -151,7 +154,7 @@ impl WidgetTree {
         }
     }
 
-    pub(super) fn input_event(&mut self, slot: Slot, changed: bool) -> Vec<UiEvent> {
+    pub(super) fn input_event(&mut self, slot: Slot, changed: bool) -> Vec<DispatchEvent> {
         if !changed {
             return Vec::new();
         }
@@ -159,7 +162,7 @@ impl WidgetTree {
         let Content::Input { value, caret, .. } = &node.data else {
             return Vec::new();
         };
-        vec![UiEvent::widget(
+        vec![DispatchEvent::semantic(
             node.id,
             Event::input(value.clone(), *caret),
         )]

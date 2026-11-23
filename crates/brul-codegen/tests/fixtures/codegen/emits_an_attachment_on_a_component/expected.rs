@@ -148,6 +148,7 @@ pub fn editor_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                 event: crate::__brul_attach_editor_event,
                 cleanup: crate::__brul_attach_editor_cleanup,
                 events: brul::EventSet::from([brul::EventKind::Key]),
+                raw_events: brul::RawEventSet::from([]),
             }));
             widget0
         }

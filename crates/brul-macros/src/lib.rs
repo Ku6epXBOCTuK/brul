@@ -130,8 +130,17 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
         None => quote! { let _ = (&mut *state, &*ctx, #(#values),*); },
     };
     let event_call = match &arguments.event {
-        Some(hook) => quote! { #hook(&mut *state, ctx, event) },
-        None => quote! { let _ = (&mut *state, &*ctx, event); false },
+        Some(hook) => quote! {
+            if #hook(&mut *state, ctx, event) {
+                ::brul::Dispatch::Stop
+            } else {
+                ::brul::Dispatch::Continue
+            }
+        },
+        None => quote! {
+            let _ = (&mut *state, &*ctx, event);
+            ::brul::Dispatch::Continue
+        },
     };
     let cleanup_call = match &arguments.cleanup {
         Some(hook) => quote! { #hook(&mut *state, ctx); },
@@ -161,13 +170,13 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
         pub fn #event(
             ctx: &mut ::brul::Build,
             _state: ::brul::StateId,
-            event: &::brul::UiEvent,
-        ) -> bool {
+            event: &::brul::DispatchEvent,
+        ) -> ::brul::Dispatch {
             let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
-                return false;
+                return ::brul::Dispatch::Continue;
             };
             let Ok(mut state) = cell.try_borrow_mut() else {
-                return false;
+                return ::brul::Dispatch::Continue;
             };
             #event_call
         }

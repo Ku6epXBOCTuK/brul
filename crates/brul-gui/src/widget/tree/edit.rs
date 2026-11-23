@@ -2,38 +2,41 @@ use super::frame::boundary_before;
 use super::*;
 
 impl WidgetTree {
-    pub(super) fn copy_input(&self, slot: Slot) -> Vec<UiEvent> {
+    pub(super) fn copy_input(&self, slot: Slot) -> Vec<DispatchEvent> {
         self.selected_text(slot).map_or_else(Vec::new, |text| {
-            vec![UiEvent::widget(
+            vec![DispatchEvent::semantic(
                 self.nodes[slot.index()].id,
                 Event::copy(text),
             )]
         })
     }
 
-    pub(super) fn cut_input(&mut self, slot: Slot) -> Vec<UiEvent> {
+    pub(super) fn cut_input(&mut self, slot: Slot) -> Vec<DispatchEvent> {
         let Some(text) = self.selected_text(slot) else {
             return Vec::new();
         };
         let changed = self.delete_input(slot, true);
         let mut events = self.input_event(slot, changed);
-        events.push(UiEvent::widget(
+        events.push(DispatchEvent::semantic(
             self.nodes[slot.index()].id,
             Event::copy(text),
         ));
         events
     }
 
-    pub fn paste_text(&mut self, text: &str) -> Vec<UiEvent> {
+    pub fn paste_text(&mut self, text: &str) -> Vec<DispatchEvent> {
         let Some(slot) = self.focused_input() else {
             return Vec::new();
         };
+        let id = self.nodes[slot.index()].id;
         let text = self.field_text(slot, text);
         let changed = self.insert_input(slot, &text);
-        self.input_event(slot, changed)
+        let mut events = vec![DispatchEvent::raw(id, RawEvent::paste(text))];
+        events.extend(self.input_event(slot, changed));
+        events
     }
 
-    pub fn ime(&mut self, kind: ImeKind) -> Vec<UiEvent> {
+    pub fn ime(&mut self, kind: ImeKind) -> Vec<DispatchEvent> {
         let mut events = match &kind {
             ImeKind::Preedit(text) => {
                 self.set_preedit(text);
@@ -47,7 +50,7 @@ impl WidgetTree {
             ImeKind::Enabled | ImeKind::Disabled => Vec::new(),
         };
         if let Some(id) = self.focused() {
-            events.push(UiEvent::widget(id, Event::ime(kind)));
+            events.push(DispatchEvent::raw(id, RawEvent::ime(kind)));
         }
         events
     }
@@ -69,7 +72,7 @@ impl WidgetTree {
         true
     }
 
-    pub fn commit_text(&mut self, text: &str) -> Vec<UiEvent> {
+    pub fn commit_text(&mut self, text: &str) -> Vec<DispatchEvent> {
         let Some(slot) = self.focused_input() else {
             return Vec::new();
         };
@@ -79,7 +82,7 @@ impl WidgetTree {
         self.input_event(slot, changed)
     }
 
-    pub fn delete_surrounding(&mut self, before: usize, after: usize) -> Vec<UiEvent> {
+    pub fn delete_surrounding(&mut self, before: usize, after: usize) -> Vec<DispatchEvent> {
         let Some(slot) = self.focused_input() else {
             return Vec::new();
         };

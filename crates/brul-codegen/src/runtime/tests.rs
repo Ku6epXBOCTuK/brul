@@ -10,6 +10,13 @@ use brul_syntax::markup::PropType;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+fn take_component() -> PendingEvent {
+    match take_pending().expect("queued") {
+        Pending::Component(event) => event,
+        Pending::Ui(_) => panic!("a component event was expected"),
+    }
+}
+
 macro_rules! typed_expr {
     ($macro:ident, $name:literal, $ty:ty) => {{
         fn read(component: &mut Component) -> Result<$ty, ScriptError> {
@@ -166,7 +173,7 @@ fn an_event_raised_from_an_expression_is_delivered_after_the_expression_returns(
         component,
         call,
         arguments,
-    } = take_event().expect("the event is queued");
+    } = take_component();
     assert!(call(&mut component.borrow_mut(), &arguments).is_ok());
 }
 
@@ -320,7 +327,7 @@ fn event_host_queues_the_body_and_leaves_errors_to_the_delivery() {
         component,
         call,
         arguments,
-    } = take_event().expect("queued");
+    } = take_component();
     assert_eq!(
         call(&mut component.borrow_mut(), &arguments)
             .unwrap_err()

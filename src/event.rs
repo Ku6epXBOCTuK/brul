@@ -11,7 +11,7 @@ pub(crate) fn call(component: &ComponentHandle, function: EventCall, arguments: 
 
 pub(crate) fn arguments(event: &Event, target: &EventTarget) -> Vec<Dyn> {
     let mut object = match event {
-        Event::Key { key, modifiers } | Event::KeyUnchanged { key, modifiers } => vec![
+        Event::Key { key, modifiers } => vec![
             ("code".to_owned(), Dyn::text(key.code.as_str())),
             (
                 "physical".to_owned(),
@@ -21,10 +21,6 @@ pub(crate) fn arguments(event: &Event, target: &EventTarget) -> Vec<Dyn> {
             ("shift".to_owned(), Dyn::flag(modifiers.shift)),
             ("alt".to_owned(), Dyn::flag(modifiers.alt)),
             ("meta".to_owned(), Dyn::flag(modifiers.meta)),
-            (
-                "text_unchanged".to_owned(),
-                Dyn::flag(matches!(event, Event::KeyUnchanged { .. })),
-            ),
         ],
         Event::Input { value, caret } => vec![
             ("value".to_owned(), Dyn::text(value.as_str())),
@@ -88,31 +84,6 @@ mod tests {
                 ("shift".to_owned(), Dyn::flag(false)),
                 ("alt".to_owned(), Dyn::flag(false)),
                 ("meta".to_owned(), Dyn::flag(false)),
-                ("text_unchanged".to_owned(), Dyn::flag(false)),
-                ("target".to_owned(), Dyn::null()),
-            ])]
-        );
-    }
-
-    #[test]
-    fn an_unchanged_key_event_marks_the_text_unchanged() {
-        let event = Event::key_unchanged(
-            KeyPress {
-                code: "Backspace".to_owned(),
-                physical: Some("Backspace".to_owned()),
-            },
-            KeyModifiers::default(),
-        );
-        assert_eq!(
-            arguments(&event, &EventTarget::Window),
-            vec![Dyn::object(vec![
-                ("code".to_owned(), Dyn::text("Backspace")),
-                ("physical".to_owned(), Dyn::text("Backspace")),
-                ("ctrl".to_owned(), Dyn::flag(false)),
-                ("shift".to_owned(), Dyn::flag(false)),
-                ("alt".to_owned(), Dyn::flag(false)),
-                ("meta".to_owned(), Dyn::flag(false)),
-                ("text_unchanged".to_owned(), Dyn::flag(true)),
                 ("target".to_owned(), Dyn::null()),
             ])]
         );
@@ -130,7 +101,6 @@ mod tests {
                 ("shift".to_owned(), Dyn::flag(false)),
                 ("alt".to_owned(), Dyn::flag(false)),
                 ("meta".to_owned(), Dyn::flag(false)),
-                ("text_unchanged".to_owned(), Dyn::flag(false)),
                 ("target".to_owned(), Dyn::null()),
             ])]
         );

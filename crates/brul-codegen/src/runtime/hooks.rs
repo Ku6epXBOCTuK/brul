@@ -1,16 +1,22 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use brul_event::EventSet;
-use brul_gui::{UiEvent, WidgetId, WidgetTree};
+use brul_event::{EventSet, RawEventSet};
+use brul_gui::{DispatchEvent, WidgetId, WidgetTree};
 use brul_script::{Component, Dyn, Error as ScriptError};
 
 use super::{Build, ComponentHandle, StateId, ViewError};
 
 pub type Param = fn(&mut Component) -> Result<Dyn, ScriptError>;
 pub type Apply = fn(&mut Build, StateId, &[Dyn]) -> Result<(), ViewError>;
-pub type EventHook = fn(&mut Build, StateId, &UiEvent) -> bool;
+pub type EventHook = fn(&mut Build, StateId, &DispatchEvent) -> Dispatch;
 pub type CleanupHook = fn(&mut Build, StateId);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Dispatch {
+    Continue,
+    Stop,
+}
 
 #[derive(Clone)]
 pub struct Hooks {
@@ -22,6 +28,7 @@ pub struct Hooks {
     pub event: EventHook,
     pub cleanup: CleanupHook,
     pub events: EventSet,
+    pub raw_events: RawEventSet,
 }
 
 pub fn apply(build: &mut Build, params: &[Param], apply: Apply) -> Result<(), ViewError> {

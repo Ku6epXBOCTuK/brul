@@ -11,7 +11,9 @@ use brul_syntax::script::{BUILTINS, BuiltinEmit};
 use brul_window::{TimerCommand, WindowCommand, WindowKey};
 
 use crate::run::generated_built;
-use crate::{Binding, BindingTarget, Component, Dyn, Error, EventSet, RowInfo, RowKey, Script};
+use crate::{
+    Binding, BindingTarget, Component, Dyn, Error, EventSet, RawEventSet, RowInfo, RowKey, Script,
+};
 
 const NAMES: &[&str] = &[
     "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code", "accent",
@@ -1079,7 +1081,7 @@ fn dispatch_calls_the_handler_of_the_widget() {
             set_ran,
         )]
     });
-    ui.dispatch(&[UiEvent::widget(id, Event::click())]);
+    ui.dispatch(&[DispatchEvent::semantic(id, Event::click())]);
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
 }
 
@@ -1107,15 +1109,21 @@ fn probe_apply(ctx: &mut Build, state: StateId, params: &[Dyn]) -> Result<(), Vi
     Ok(())
 }
 
-fn probe_event(ctx: &mut Build, _state: StateId, event: &UiEvent) -> bool {
-    if matches!(event.event, Event::Click { .. }) {
+fn probe_event(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
+    if matches!(
+        event,
+        DispatchEvent::Semantic(UiEvent {
+            event: Event::Click { .. },
+            ..
+        })
+    ) {
         ctx.component()
             .borrow_mut()
             .assign("ran", Value::Bool(true))
             .expect("ran");
-        true
+        Dispatch::Stop
     } else {
-        false
+        Dispatch::Continue
     }
 }
 
@@ -1150,6 +1158,7 @@ fn attachment_reruns_vetoes_events_and_cleans_up() {
         event: probe_event,
         cleanup: probe_cleanup,
         events: EventSet::from([EventKind::Click]),
+        raw_events: RawEventSet::empty(),
     };
     let built = Built {
         widget,
@@ -1198,7 +1207,7 @@ fn attachment_reruns_vetoes_events_and_cleans_up() {
         ["first".to_owned(), "second".to_owned()]
     );
 
-    ui.dispatch(&[UiEvent::widget(id, Event::click())]);
+    ui.dispatch(&[DispatchEvent::semantic(id, Event::click())]);
     assert_eq!(component.borrow().read("ran"), Ok(Value::Bool(true)));
     assert_ne!(component.borrow().read("script"), Ok(Value::Bool(true)));
 
@@ -1216,7 +1225,7 @@ fn dispatch_runs_the_first_of_two_handlers_of_a_widget() {
         ]
     });
 
-    ui.dispatch(&[UiEvent::widget(id, Event::click())]);
+    ui.dispatch(&[DispatchEvent::semantic(id, Event::click())]);
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
     assert_ne!(ui.component.borrow().read("off"), Ok(Value::Bool(true)));
 }
@@ -1230,7 +1239,8 @@ fn dispatch_passes_the_key_code() {
     ui.dispatch(&[UiEvent::window(Event::key(
         brul_gui::KeyPress::from("Enter"),
         brul_gui::KeyModifiers::default(),
-    ))]);
+    ))
+    .into()]);
     let seen = ui.component.borrow().read("seen").expect("seen");
     assert_eq!(
         seen,
@@ -1242,7 +1252,6 @@ fn dispatch_passes_the_key_code() {
                 ("shift".to_owned(), Value::Bool(false)),
                 ("alt".to_owned(), Value::Bool(false)),
                 ("meta".to_owned(), Value::Bool(false)),
-                ("text_unchanged".to_owned(), Value::Bool(false)),
                 ("target".to_owned(), Value::Null),
             ]
             .into()
@@ -1251,7 +1260,7 @@ fn dispatch_passes_the_key_code() {
 }
 
 #[test]
-fn dispatch_passes_a_key_to_the_widget_then_the_window() {
+fn dispatch_passes_a_key_to_the_widget_target_only() {
     let component = component_with(&["seen", "ran"]);
     let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
         vec![
@@ -1259,7 +1268,7 @@ fn dispatch_passes_a_key_to_the_widget_then_the_window() {
             Handler::new(&component, None, EventKind::Key, set_ran),
         ]
     });
-    ui.dispatch(&[UiEvent::widget(
+    ui.dispatch(&[DispatchEvent::semantic(
         id,
         Event::key(
             brul_gui::KeyPress::from("Escape"),
@@ -1278,11 +1287,11 @@ fn dispatch_passes_a_key_to_the_widget_then_the_window() {
         Some(&Value::Number(id.get() as f64)),
         "widget target is preserved"
     );
-    assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+    assert_ne!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
 }
 
 #[test]
-fn an_unchanged_key_reaches_capability_element_and_window() {
+fn a_raw_unchanged_key_reaches_the_capability_only() {
     let component = component_with(&["attach", "seen", "ran", "cleaned"]);
     let widget = Widget::text("");
     let id = widget.id();
@@ -1304,6 +1313,7 @@ fn an_unchanged_key_reaches_capability_element_and_window() {
         event: record_attachment_target,
         cleanup: probe_cleanup,
         events: EventSet::from([EventKind::Key]),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
     let mut ui = Ui::assemble_with(
         Rc::clone(&component),
@@ -1320,37 +1330,29 @@ fn an_unchanged_key_reaches_capability_element_and_window() {
         Rc::new(RefCell::new(Vec::new())),
         false,
     );
-    ui.dispatch(&[UiEvent::widget(
+    ui.dispatch(&[RawUiEvent::widget(
         id,
-        Event::key_unchanged(
+        brul_gui::RawEvent::key_unchanged(
             brul_gui::KeyPress::from("Backspace"),
             brul_gui::KeyModifiers::default(),
         ),
-    )]);
+    )
+    .into()]);
 
     let component = ui.component.borrow();
     assert_eq!(component.read("attach"), Ok(Value::Number(id.get() as f64)));
-    let Value::Object(fields) = component.read("seen").expect("seen") else {
-        panic!("unchanged key is not an object");
-    };
-    assert_eq!(
-        fields
-            .iter()
-            .find(|(name, _)| name == "text_unchanged")
-            .map(|(_, value)| value),
-        Some(&Value::Bool(true))
-    );
-    assert_eq!(component.read("ran"), Ok(Value::Bool(true)));
+    assert!(!matches!(component.read("seen"), Ok(Value::Object(_))));
+    assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
-fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &UiEvent) -> bool {
-    if let Some(id) = event.target.widget() {
+fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
+    if let Some(id) = event.target().widget() {
         ctx.component()
             .borrow_mut()
             .assign("attach", Value::Number(id.get() as f64))
             .expect("attach");
     }
-    false
+    Dispatch::Continue
 }
 
 fn record_script_target(
@@ -1372,7 +1374,7 @@ fn record_window_script_target(component: &mut Component, arguments: &[Dyn]) -> 
 }
 
 #[test]
-fn one_targeted_event_reaches_the_attachment_script_and_window_handlers() {
+fn one_targeted_event_reaches_the_attachment_and_script_but_not_the_window() {
     let component = component_with(&["attach", "script", "window"]);
     let widget = Widget::text("");
     let id = widget.id();
@@ -1404,6 +1406,7 @@ fn one_targeted_event_reaches_the_attachment_script_and_window_handlers() {
         event: record_attachment_target,
         cleanup: |_, _| {},
         events: EventSet::from([EventKind::Key]),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
     let mut ui = Ui::assemble_with(
         Rc::clone(&component),
@@ -1420,7 +1423,7 @@ fn one_targeted_event_reaches_the_attachment_script_and_window_handlers() {
         Rc::new(RefCell::new(Vec::new())),
         false,
     );
-    ui.dispatch(&[UiEvent::widget(
+    ui.dispatch(&[DispatchEvent::semantic(
         id,
         Event::key(
             brul_gui::KeyPress::from("a"),
@@ -1430,8 +1433,8 @@ fn one_targeted_event_reaches_the_attachment_script_and_window_handlers() {
     let expected = Value::Number(id.get() as f64);
     let component = ui.component.borrow();
     assert_eq!(component.read("attach"), Ok(expected.clone()));
-    assert_eq!(component.read("script"), Ok(expected.clone()));
-    assert_eq!(component.read("window"), Ok(expected));
+    assert_eq!(component.read("script"), Ok(expected));
+    assert_ne!(component.read("window"), Ok(Value::Number(id.get() as f64)));
 }
 
 #[test]
@@ -1441,7 +1444,10 @@ fn a_close_handler_keeps_the_window_open() {
         vec![Handler::new(&component, None, EventKind::Close, set_ran)]
     });
 
-    assert!(ui.dispatch(&[UiEvent::window(Event::close())]).is_empty());
+    assert!(
+        ui.dispatch(&[UiEvent::window(Event::close()).into()])
+            .is_empty()
+    );
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
 }
 
@@ -1451,7 +1457,7 @@ fn a_close_without_a_handler_closes_the_window() {
     let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
 
     assert_eq!(
-        ui.dispatch(&[UiEvent::window(Event::close())]),
+        ui.dispatch(&[UiEvent::window(Event::close()).into()]),
         vec![WindowCommand::Close]
     );
 }
@@ -1460,10 +1466,7 @@ fn a_close_without_a_handler_closes_the_window() {
 fn dispatch_runs_a_timer() {
     let component = component_with(&["ran"]);
     let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
-    ui.dispatch(&[UiEvent::window(Event::timer(
-        TimerOwner::new(0),
-        "tick".into(),
-    ))]);
+    ui.dispatch(&[UiEvent::window(Event::timer(TimerOwner::new(0), "tick".into())).into()]);
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
 }
 
@@ -1490,7 +1493,7 @@ fn a_timer_from_a_rebuilt_component_does_not_reach_the_new_one() {
     let stale = ui.components[0].owner;
     ui.set_theme(TestTheme::Dark).expect("theme changes");
     assert_ne!(ui.components[0].owner, stale);
-    ui.dispatch(&[UiEvent::window(Event::timer(stale, "tick".into()))]);
+    ui.dispatch(&[UiEvent::window(Event::timer(stale, "tick".into())).into()]);
     assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Null));
 }
 
@@ -1609,10 +1612,7 @@ fn every_from_a_handler_is_scheduled_without_an_app_host() {
     let component = component_with(&[]);
     let (_, mut ui) = dispatching(&component, Widget::text(""), |_| Vec::new());
     assert_eq!(
-        ui.dispatch(&[UiEvent::window(Event::timer(
-            TimerOwner::new(0),
-            "schedule".into()
-        ))]),
+        ui.dispatch(&[UiEvent::window(Event::timer(TimerOwner::new(0), "schedule".into())).into()]),
         vec![WindowCommand::Timer(TimerCommand::Start {
             id: brul_ident::TimerId::new(0),
             owner: TimerOwner::new(0),
@@ -1630,8 +1630,8 @@ fn dispatch_ignores_events_without_a_handler() {
     let other = Widget::text("other").id();
     assert!(
         ui.dispatch(&[
-            UiEvent::widget(id, Event::drag()),
-            UiEvent::widget(other, Event::click()),
+            RawUiEvent::widget(id, brul_gui::RawEvent::drag()).into(),
+            DispatchEvent::semantic(other, Event::click()),
         ])
         .is_empty()
     );
@@ -1744,7 +1744,7 @@ fn a_handler_event_runs_after_the_handler_returns() {
     component.borrow_mut().set_dispatch(applied_dispatch);
     let mut ui = Ui::assemble(component, built, raising_view, None, structures, None);
 
-    ui.dispatch(&[UiEvent::widget(click, Event::click())]);
+    ui.dispatch(&[DispatchEvent::semantic(click, Event::click())]);
 
     assert_eq!(
         ui.component.borrow().read("label"),
@@ -1841,10 +1841,7 @@ fn a_timer_from_a_nested_component_runs_in_its_component() {
         })]
     );
     let child = Rc::clone(&ui.components[1].component);
-    ui.dispatch(&[UiEvent::window(Event::timer(
-        TimerOwner::new(1),
-        "child_tick".into(),
-    ))]);
+    ui.dispatch(&[UiEvent::window(Event::timer(TimerOwner::new(1), "child_tick".into())).into()]);
     assert_eq!(child.borrow().read("ran"), Ok(Value::Bool(true)));
     assert_eq!(root.borrow().read("ran"), Ok(Value::Null));
 }

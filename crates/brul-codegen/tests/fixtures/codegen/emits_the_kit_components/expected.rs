@@ -881,34 +881,29 @@ pub fn tooltip_view(theme: Option<&str>, build: &mut brul::Build, component: &br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        {
-            let widget0 = tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, {
-                let mut children = Vec::new();
-                {
-                    let built = brul::slot(theme, build, brul::DEFAULT_SLOT)?;
-                    bindings.extend(built.bindings);
-                    handlers.extend(built.handlers);
-                    props.extend(built.props);
-                    children.extend(built.widget.into_children());
-                }                children.push({
-                    let widget1 = tooltip_styled(brul::gui::Widget::layer(vec![
-                        tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
-                            {
-                                let widget2 = tooltip_styled(brul::gui::Widget::text(""), &[3], theme);
-                                bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(5))?)).map_err(|error| error.at(brul::ast::Position { line: 21, column: 42 }))?; value }) })));
-                                widget2
-                            },
-                        ]), &[2], theme).anchored(brul::gui::Anchor::new(brul::gui::WidgetId::new(2147483648))),
-                    ]), &[1], theme);
-                    bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok(component.state::<TooltipScriptState>().shown.get()) })));
-                    widget1
-                });
-                children
-            }), &[0], theme).with_id(brul::gui::WidgetId::new(2147483648));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::PointerEnter, tooltip_script_event_show));
-            handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::PointerLeave, tooltip_script_event_hide));
-            widget0
-        }
+        tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, {
+            let mut children = Vec::new();
+            {
+                let built = brul::slot(theme, build, brul::DEFAULT_SLOT)?;
+                bindings.extend(built.bindings);
+                handlers.extend(built.handlers);
+                props.extend(built.props);
+                children.extend(built.widget.into_children());
+            }            children.push({
+                let widget0 = tooltip_styled(brul::gui::Widget::layer(vec![
+                    tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
+                        {
+                            let widget1 = tooltip_styled(brul::gui::Widget::text(""), &[3], theme);
+                            bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(5))?)).map_err(|error| error.at(brul::ast::Position { line: 21, column: 42 }))?; value }) })));
+                            widget1
+                        },
+                    ]), &[2], theme).anchored(brul::gui::Anchor::new(brul::gui::WidgetId::new(2147483648))),
+                ]), &[1], theme);
+                bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok(component.state::<TooltipScriptState>().shown.get()) })));
+                widget0
+            });
+            children
+        }), &[0], theme).with_id(brul::gui::WidgetId::new(2147483648))
     };
     Ok(brul::Built {
         widget,

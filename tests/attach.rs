@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul::{
-    Build, Component, ComponentHandle, Dyn, Event, SharedStates, StateId, States, UiEvent,
-    ViewError,
+    Build, Component, ComponentHandle, Dispatch, DispatchEvent, Dyn, Event, SharedStates, StateId,
+    States, UiEvent, ViewError,
 };
 
 thread_local! {
@@ -52,8 +52,14 @@ fn counter_update(
     Ok(())
 }
 
-fn counter_event(_state: &mut CounterState, _ctx: &mut Build, event: &UiEvent) -> bool {
-    matches!(event.event, Event::Key { .. })
+fn counter_event(_state: &mut CounterState, _ctx: &mut Build, event: &DispatchEvent) -> bool {
+    matches!(
+        event,
+        DispatchEvent::Semantic(UiEvent {
+            event: Event::Key { .. },
+            ..
+        })
+    )
 }
 
 fn counter_cleanup(state: &mut CounterState, _ctx: &mut Build) {
@@ -103,13 +109,22 @@ fn attach_shims_create_update_event_and_cleanup_state() {
 
     let key = brul::gui::KeyPress::from("Enter");
     let modifiers = brul::gui::KeyModifiers::default();
-    let key_event = UiEvent::widget(brul::gui::WidgetId::new(1), Event::key(key, modifiers));
-    assert!(__brul_attach_counter_event(&mut ctx, state_id, &key_event));
-    assert!(!__brul_attach_counter_event(
-        &mut ctx,
-        state_id,
-        &UiEvent::window(Event::submit())
+    let key_event = DispatchEvent::Semantic(UiEvent::widget(
+        brul::gui::WidgetId::new(1),
+        Event::key(key, modifiers),
     ));
+    assert_eq!(
+        __brul_attach_counter_event(&mut ctx, state_id, &key_event),
+        Dispatch::Stop
+    );
+    assert_eq!(
+        __brul_attach_counter_event(
+            &mut ctx,
+            state_id,
+            &DispatchEvent::Semantic(UiEvent::window(Event::submit()))
+        ),
+        Dispatch::Continue
+    );
 
     __brul_attach_counter_cleanup(&mut ctx, state_id);
     assert!(ctx.get_state::<CounterState>().is_none());

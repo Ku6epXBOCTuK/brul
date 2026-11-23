@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use brul_gui::{PlatformViewId, UiEvent};
+use brul_gui::{DispatchEvent, PlatformViewId};
 use brul_window::{
     ColorScheme, NoopPlatformBackendFactory, PlatformBackendFactory, PlatformMessageHandler,
     PlatformSpec, ScopedCommand, Waker, WindowCommand, WindowError, WindowKey, WindowSpec,
@@ -366,7 +366,7 @@ impl<T: Theme> Runtime<T> {
         })
     }
 
-    fn dispatch(&mut self, key: WindowKey, events: &[UiEvent]) -> Vec<WindowCommand> {
+    fn dispatch(&mut self, key: WindowKey, events: &[DispatchEvent]) -> Vec<WindowCommand> {
         let Some(ui) = self.uis.get_mut(&key) else {
             tracing::warn!(%key, "event for an unknown window");
             return Vec::new();
@@ -1128,9 +1128,11 @@ mod tests {
 
         let commands = runtime.dispatch(
             WindowKey(1),
-            &[UiEvent::window(Event::key(
-                brul_gui::KeyPress::from("Escape"),
-                brul_gui::KeyModifiers::default(),
+            &[DispatchEvent::Semantic(brul_gui::UiEvent::window(
+                Event::key(
+                    brul_gui::KeyPress::from("Escape"),
+                    brul_gui::KeyModifiers::default(),
+                ),
             ))],
         );
 
