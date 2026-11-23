@@ -1,0 +1,9 @@
+<script>
+    function received(message: String): Void { }
+</script>
+
+<markup>
+    window WebViewDemo (title: "webview") {
+        WebView (source: "https://example.com", visible: true, on message: received)
+    }
+</markup>

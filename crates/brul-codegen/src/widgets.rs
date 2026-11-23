@@ -85,7 +85,25 @@ pub(crate) fn builtins() -> Widgets {
             },
         ],
     };
-    Widgets::from([(video.name.clone(), video)])
+    let webview = WidgetSpec {
+        name: "WebView".to_owned(),
+        view: "::brul::webview::view".to_owned(),
+        props: vec![
+            WidgetProp {
+                name: "source".to_owned(),
+                ty: Type::String,
+            },
+            WidgetProp {
+                name: "visible".to_owned(),
+                ty: Type::Bool,
+            },
+        ],
+        events: vec![WidgetEvent {
+            name: "message".to_owned(),
+            params: vec![Type::String],
+        }],
+    };
+    Widgets::from([(video.name.clone(), video), (webview.name.clone(), webview)])
 }
 
 fn is_widget(function: &ItemFn) -> bool {

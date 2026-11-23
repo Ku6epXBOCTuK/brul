@@ -62,14 +62,11 @@ impl TreeApp {
         brul_reactive::flush();
         match self.render_frame(surface) {
             Ok(()) => Step::Continue,
-            Err(error) => self.fail(error.into()),
+            Err(error) => self.fail(error),
         }
     }
 
-    pub(super) fn render_frame(
-        &mut self,
-        surface: &dyn Surface,
-    ) -> Result<(), brul_gui::WidgetError> {
+    pub(super) fn render_frame(&mut self, surface: &dyn Surface) -> Result<(), crate::WindowError> {
         trace!("rendering a frame");
         let now = Instant::now();
         let delta = now.saturating_duration_since(self.tick);
@@ -111,7 +108,7 @@ impl TreeApp {
         if rebuild || !dirty.is_empty() || !self.presented || crate::perf::measuring() {
             let mut tree = self.tree.borrow_mut();
             let snapshot = tree.snapshot()?;
-            self.platform.sync(snapshot, surface.scale_factor());
+            self.platform.sync(snapshot, surface.scale_factor())?;
             let paint = if dirty.is_empty() {
                 Dirty::all()
             } else {

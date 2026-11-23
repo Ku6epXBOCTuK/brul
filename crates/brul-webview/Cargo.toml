@@ -1,0 +1,19 @@
+[package]
+name = "brul-webview"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+brul-codegen = { workspace = true }
+brul-gui = { workspace = true }
+brul-syntax = { workspace = true }
+brul-window = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+raw-window-handle = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+wry = "0.55.0"

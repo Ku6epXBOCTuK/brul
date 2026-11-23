@@ -36,6 +36,9 @@ aurora-software:
 aurora-gpu:
     $env:BRUL_EXAMPLE_BACKEND = 'gpu'; cargo run -p aurora
 
+webview:
+    cargo run -p webview
+
 check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings

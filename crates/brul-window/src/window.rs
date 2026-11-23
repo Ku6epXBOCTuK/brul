@@ -19,6 +19,7 @@ use brul_gui::{Color, Image, WidgetEvent, WidgetTree};
 use brul_ident::{FunctionName, TimerId, TimerKind, TimerOwner};
 
 use crate::input::{Input, event_input, window_input};
+use crate::platform::PlatformSpec;
 use crate::surface::{Renderer, create_renderer};
 
 pub(crate) const CLEAR: wgpu::Color = wgpu::Color {
@@ -190,6 +191,7 @@ pub struct WindowSpec {
     pub config: WindowConfig,
     pub tree: Rc<RefCell<WidgetTree>>,
     pub commands: Vec<WindowCommand>,
+    pub platform: Option<PlatformSpec>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -317,6 +319,7 @@ pub fn run_tree_themed(
         Box::new(handler),
         Rc::clone(&error),
         initial,
+        None,
     );
     let result = event_loop.run_app(app);
 

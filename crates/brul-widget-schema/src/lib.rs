@@ -167,6 +167,24 @@ const VIDEO_EVENTS: &[EventSpec] = &[
     },
 ];
 
+const WEBVIEW_PROPS: &[PropSpec] = &[
+    PropSpec {
+        name: "source",
+        ty: "String",
+        target: "Text",
+    },
+    PropSpec {
+        name: "visible",
+        ty: "Bool",
+        target: "Flag",
+    },
+];
+
+const WEBVIEW_EVENTS: &[EventSpec] = &[EventSpec {
+    name: "message",
+    params: &["String"],
+}];
+
 pub const ELEMENTS: &[ElementSpec] = &[
     ElementSpec {
         name: "Container",
@@ -203,6 +221,12 @@ pub const ELEMENTS: &[ElementSpec] = &[
         kind: ElementKind::Leaf,
         props: VIDEO_PROPS,
         events: VIDEO_EVENTS,
+    },
+    ElementSpec {
+        name: "WebView",
+        kind: ElementKind::Leaf,
+        props: WEBVIEW_PROPS,
+        events: WEBVIEW_EVENTS,
     },
 ];
 

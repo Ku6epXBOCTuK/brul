@@ -19,6 +19,7 @@ brul-script = { workspace = true }
 brul-style = { workspace = true }
 brul-syntax = { workspace = true }
 brul-video = { workspace = true }
+brul-webview = { workspace = true }
 brul-window = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -80,6 +81,7 @@ brul-style-gen = { path = 'crates\brul-style-gen' }
 brul-style-schema = { path = 'crates\brul-style-schema' }
 brul-syntax = { path = 'crates\brul-syntax' }
 brul-video = { path = 'crates\brul-video' }
+brul-webview = { path = 'crates\brul-webview' }
 brul-window = { path = 'crates\brul-window' }
 brul-widget-gen = { path = 'crates\brul-widget-gen' }
 brul-widget-schema = { path = 'crates\brul-widget-schema' }
@@ -92,6 +94,7 @@ pest = "2.9.5"
 pest_derive = "2.9.5"
 prettyplease = "0.2"
 proc-macro2 = "1.0.107"
+raw-window-handle = "0.6.2"
 quote = "1.0.47"
 syn = { version = "2.0.119", features = ["full"] }
 taffy = "0.15.1"

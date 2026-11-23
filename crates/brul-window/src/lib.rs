@@ -30,6 +30,10 @@ mod tree;
 mod window;
 mod windows;
 
+pub use platform::{
+    NoopPlatformBackendFactory, PlatformBackendFactory, PlatformMessageHandler, PlatformSpec,
+    PlatformViewBackend, PlatformViewBounds, PlatformWindow,
+};
 pub use window::{
     Backend, ColorScheme, ScopedCommand, TimerCommand, UnknownBackend, Waker, WindowCommand,
     WindowConfig, WindowError, WindowKey, WindowPosition, WindowSpec, run, run_tree,

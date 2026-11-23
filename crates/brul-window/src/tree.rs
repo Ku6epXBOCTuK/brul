@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{CaretArea, Cursor, Size, TextEngine, WidgetEvent, WidgetTree};
+use raw_window_handle::HasWindowHandle;
 use tracing::{error, info};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -11,7 +12,9 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
 
 use crate::input::system_scheme;
-use crate::platform::PlatformViews;
+use crate::platform::{
+    PlatformBackendFactory, PlatformMessageHandler, PlatformSpec, PlatformViews, PlatformWindow,
+};
 use crate::surface::{Renderer, Surface, create_renderer};
 use crate::window::{
     ColorScheme, WindowCommand, WindowConfig, WindowError, WindowKey, create_window,
@@ -49,6 +52,8 @@ pub(crate) struct TreeApp {
     handler: EventHandler,
     // NOTE: child platform windows must drop before their parent window
     platform: PlatformViews,
+    platform_factory: Option<Arc<dyn PlatformBackendFactory>>,
+    platform_messages: PlatformMessageHandler,
     window: Option<Arc<dyn Window>>,
     renderer: Option<Renderer>,
     engine: Option<TextEngine>,
@@ -100,7 +105,15 @@ pub(crate) fn tree_app(
     handler: EventHandler,
     error: Rc<Cell<Option<WindowError>>>,
     initial: Vec<WindowCommand>,
+    platform: Option<PlatformSpec>,
 ) -> TreeApp {
+    let (platform_factory, platform_messages): (
+        Option<Arc<dyn PlatformBackendFactory>>,
+        PlatformMessageHandler,
+    ) = match platform {
+        Some(spec) => (Some(spec.factory), spec.messages),
+        None => (None, Arc::new(|_, _| {})),
+    };
     let mut app = TreeApp {
         config,
         tree,
@@ -110,6 +123,8 @@ pub(crate) fn tree_app(
         renderer: None,
         engine: None,
         platform: PlatformViews::default(),
+        platform_factory,
+        platform_messages,
         error,
         timers: Vec::new(),
         cursor: (0, 0),
@@ -147,6 +162,19 @@ impl TreeApp {
             Ok(window) => window,
             Err(error) => return self.fail(error),
         };
+        if let Some(factory) = &self.platform_factory {
+            let handle = match window.window_handle() {
+                Ok(handle) => handle,
+                Err(error) => return self.fail(WindowError::window(error)),
+            };
+            let platform_window = PlatformWindow::new(handle);
+            let backend =
+                match factory.create(&platform_window, Arc::clone(&self.platform_messages)) {
+                    Ok(backend) => backend,
+                    Err(error) => return self.fail(error),
+                };
+            self.platform.set_backend(backend);
+        }
         let renderer = match create_renderer(self.config.backend, &window, self.config.transparent)
         {
             Ok(renderer) => renderer,

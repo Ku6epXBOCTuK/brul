@@ -34,11 +34,14 @@ pub use brul_style as style;
 pub use brul_syntax::ast;
 pub use brul_syntax::markup::PropType;
 pub use brul_video as video;
+pub use brul_webview as webview;
 pub use brul_window::perf;
 pub use brul_window::{Backend, UnknownBackend, WindowConfig, WindowKey, WindowPosition};
 pub use each::RowMatcher;
 pub use handle::Handle;
-pub use run::{WindowDef, run_generated, run_generated_with};
+pub use run::{
+    PlatformRunOptions, WindowDef, run_generated, run_generated_with, run_generated_with_platform,
+};
 pub use ui::Ui;
 
 #[cfg(test)]

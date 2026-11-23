@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use brul_gui::WidgetEvent;
+use brul_gui::{PlatformViewId, WidgetEvent};
 use brul_window::{
-    ColorScheme, ScopedCommand, Waker, WindowCommand, WindowError, WindowKey, WindowSpec,
+    ColorScheme, NoopPlatformBackendFactory, PlatformBackendFactory, PlatformMessageHandler,
+    PlatformSpec, ScopedCommand, Waker, WindowCommand, WindowError, WindowKey, WindowSpec,
     run_windows,
 };
 
@@ -64,6 +65,36 @@ pub fn run_generated_with<T: Theme>(
     host: Option<Box<dyn Host>>,
     ready: impl FnOnce(Handle) + 'static,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    run_generated_with_platform(
+        windows,
+        script,
+        names,
+        theme,
+        seeds,
+        host,
+        PlatformRunOptions {
+            factory: Arc::new(NoopPlatformBackendFactory),
+            ready: Box::new(ready),
+        },
+    )
+}
+
+pub struct PlatformRunOptions {
+    pub factory: Arc<dyn PlatformBackendFactory>,
+    pub ready: Box<dyn FnOnce(Handle) + 'static>,
+}
+
+/// Like [`run_generated_with`], but installs a backend for platform views.
+pub fn run_generated_with_platform<T: Theme>(
+    windows: Vec<WindowDef<T>>,
+    script: Option<Script>,
+    names: &'static [&'static str],
+    theme: Option<T>,
+    seeds: &[(&str, Value)],
+    host: Option<Box<dyn Host>>,
+    options: PlatformRunOptions,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let PlatformRunOptions { factory, ready } = options;
     crate::logging::init();
     if windows.is_empty() {
         return Err(std::io::Error::other("no window declarations").into());
@@ -92,6 +123,7 @@ pub fn run_generated_with<T: Theme>(
     let runtime = Rc::new(RefCell::new(Runtime::new(
         windows, component, commands, theme, shown, pending, None,
     )));
+    runtime.borrow_mut().platform = factory;
 
     let creator = Rc::clone(&runtime);
     let handler = Rc::clone(&runtime);
@@ -175,6 +207,7 @@ struct Runtime<T: Theme> {
     pending: Vec<WindowCommand>,
     sink: Option<Box<dyn CommandSink>>,
     handle: Option<Handle>,
+    platform: Arc<dyn PlatformBackendFactory>,
 }
 
 impl<T: Theme> Runtime<T> {
@@ -198,6 +231,7 @@ impl<T: Theme> Runtime<T> {
             pending,
             sink,
             handle: None,
+            platform: Arc::new(NoopPlatformBackendFactory),
         };
         let pending = std::mem::take(&mut runtime.pending);
         runtime.pending = runtime.absorb(pending);
@@ -253,6 +287,16 @@ impl<T: Theme> Runtime<T> {
         };
         let theme = self.theme_for(scheme);
         *self.shown.borrow_mut() = theme.map(Theme::name).map(str::to_owned);
+        let messages: PlatformMessageHandler = match self.handle.clone() {
+            Some(handle) => Arc::new(move |id: PlatformViewId, body: String| {
+                handle.widget(
+                    StateId::new(id.get()),
+                    "message",
+                    vec![Value::String(body.into())],
+                );
+            }),
+            None => Arc::new(|_, _| {}),
+        };
         if let Some(ui) = self.uis.get_mut(&key) {
             tracing::debug!(%key, "reusing window");
             if let Some(theme) = theme {
@@ -265,6 +309,10 @@ impl<T: Theme> Runtime<T> {
                 config,
                 tree: Rc::clone(&ui.tree),
                 commands: Vec::new(),
+                platform: Some(PlatformSpec {
+                    factory: Arc::clone(&self.platform),
+                    messages: Arc::clone(&messages),
+                }),
             });
         }
 
@@ -309,6 +357,10 @@ impl<T: Theme> Runtime<T> {
             config,
             tree,
             commands,
+            platform: Some(PlatformSpec {
+                factory: Arc::clone(&self.platform),
+                messages,
+            }),
         })
     }
 

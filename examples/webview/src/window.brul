@@ -1,0 +1,21 @@
+<script>
+    function received(message: String): Void { }
+</script>
+
+<markup>
+    window WebViewDemo (
+        title: "webview",
+        width: 960,
+        height: 640,
+        centered: true
+    ) {
+        WebView (page, source: "https://example.com", visible: true, on message: received)
+    }
+</markup>
+
+<style>
+    .page {
+        width: 100%;
+        height: 100%;
+    }
+</style>

@@ -133,6 +133,7 @@ where
             events,
             Rc::clone(&self.error),
             spec.commands,
+            spec.platform,
         );
 
         if app.open(event_loop, Some(spec.tree)) == Step::Exit {

@@ -154,6 +154,7 @@ fn tree_app(handler: EventHandler) -> TreeApp {
         handler,
         Rc::new(Cell::new(None)),
         Vec::new(),
+        None,
     )
 }
 
@@ -177,6 +178,7 @@ fn the_initial_timers_are_started_at_launch() {
                 kind: brul_ident::TimerKind::Every,
             }),
         ],
+        None,
     );
 
     assert_eq!(app.timers.len(), 1);
@@ -612,6 +614,7 @@ fn a_window_hidden_by_its_config_stays_hidden_after_the_first_frame() {
         commands(Vec::new()),
         Rc::new(Cell::new(None)),
         Vec::new(),
+        None,
     );
     app.engine = Some(TextEngine::new());
     let (renderer, _) = FakeRenderer::new();

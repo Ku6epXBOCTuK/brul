@@ -1,16 +1,20 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use brul_gui::{PlatformViewId, WidgetKind, WidgetSnapshot};
+use raw_window_handle::{HasWindowHandle, WindowHandle};
+
+use crate::window::WindowError;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct PlatformViewBounds {
+pub struct PlatformViewBounds {
     pub x: i32,
     pub y: i32,
     pub width: u32,
     pub height: u32,
 }
 
-pub(crate) trait PlatformViewBackend {
+pub trait PlatformViewBackend {
     fn create(&mut self, id: PlatformViewId, source: &str, bounds: PlatformViewBounds, scale: f64);
     fn set_bounds(&mut self, id: PlatformViewId, bounds: PlatformViewBounds, scale: f64);
     fn set_source(&mut self, id: PlatformViewId, source: &str);
@@ -18,6 +22,54 @@ pub(crate) trait PlatformViewBackend {
     fn focus(&mut self, id: PlatformViewId);
     fn blur(&mut self);
     fn remove(&mut self, id: PlatformViewId);
+}
+
+pub type PlatformMessageHandler = Arc<dyn Fn(PlatformViewId, String) + Send + Sync + 'static>;
+
+pub struct PlatformWindow<'a> {
+    handle: WindowHandle<'a>,
+}
+
+impl<'a> PlatformWindow<'a> {
+    pub fn new(handle: WindowHandle<'a>) -> Self {
+        Self { handle }
+    }
+
+    pub fn handle(&self) -> WindowHandle<'_> {
+        self.handle
+    }
+}
+
+impl HasWindowHandle for PlatformWindow<'_> {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
+        Ok(self.handle)
+    }
+}
+
+pub trait PlatformBackendFactory {
+    fn create(
+        &self,
+        window: &PlatformWindow<'_>,
+        messages: PlatformMessageHandler,
+    ) -> Result<Box<dyn PlatformViewBackend>, WindowError>;
+}
+
+pub struct NoopPlatformBackendFactory;
+
+impl PlatformBackendFactory for NoopPlatformBackendFactory {
+    fn create(
+        &self,
+        _: &PlatformWindow<'_>,
+        _: PlatformMessageHandler,
+    ) -> Result<Box<dyn PlatformViewBackend>, WindowError> {
+        Ok(Box::new(NoopBackend))
+    }
+}
+
+#[derive(Clone)]
+pub struct PlatformSpec {
+    pub factory: Arc<dyn PlatformBackendFactory>,
+    pub messages: PlatformMessageHandler,
 }
 
 struct NoopBackend;
@@ -61,7 +113,6 @@ impl PlatformViews {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn set_backend(&mut self, backend: Box<dyn PlatformViewBackend>) {
         self.views.clear();
         self.focused = None;
@@ -82,8 +133,12 @@ impl PlatformViews {
         }
     }
 
-    pub(crate) fn sync(&mut self, snapshot: &WidgetSnapshot, scale: f64) {
-        let fresh: Vec<(PlatformViewId, String, PlatformViewBounds)> = snapshot
+    pub(crate) fn sync(
+        &mut self,
+        snapshot: &WidgetSnapshot,
+        scale: f64,
+    ) -> Result<(), WindowError> {
+        let fresh: Vec<(PlatformViewId, String, PlatformViewBounds, bool)> = snapshot
             .nodes
             .iter()
             .filter(|node| node.kind == WidgetKind::PlatformView)
@@ -98,6 +153,7 @@ impl PlatformViews {
                         width: node.width,
                         height: node.height,
                     },
+                    node.state.visible,
                 ))
             })
             .collect();
@@ -111,8 +167,8 @@ impl PlatformViews {
                 self.views.remove(&id);
             }
         }
-        for (id, source, bounds) in fresh {
-            let visible = bounds.width > 0 && bounds.height > 0;
+        for (id, source, bounds, wanted) in fresh {
+            let visible = wanted && bounds.width > 0 && bounds.height > 0;
             match self.views.get_mut(&id) {
                 Some(entry) => {
                     if entry.source != source {
@@ -146,6 +202,7 @@ impl PlatformViews {
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -250,7 +307,7 @@ mod tests {
         let mut views = PlatformViews::new(Box::new(Recorder {
             calls: Rc::clone(&calls),
         }));
-        views.sync(&snapshot("about:blank", 10), 2.0);
+        views.sync(&snapshot("about:blank", 10), 2.0).expect("sync");
         assert_eq!(
             calls.borrow().as_slice(),
             &[Call::Create(
@@ -273,11 +330,11 @@ mod tests {
         let mut views = PlatformViews::new(Box::new(Recorder {
             calls: Rc::clone(&calls),
         }));
-        views.sync(&snapshot("about:blank", 10), 2.0);
+        views.sync(&snapshot("about:blank", 10), 2.0).expect("sync");
         calls.borrow_mut().clear();
-        views.sync(&snapshot("about:blank", 10), 2.0);
+        views.sync(&snapshot("about:blank", 10), 2.0).expect("sync");
         assert!(calls.borrow().is_empty());
-        views.sync(&snapshot("about:blank", 12), 2.0);
+        views.sync(&snapshot("about:blank", 12), 2.0).expect("sync");
         assert_eq!(calls.borrow().len(), 1);
     }
 
@@ -287,10 +344,10 @@ mod tests {
         let mut views = PlatformViews::new(Box::new(Recorder {
             calls: Rc::clone(&calls),
         }));
-        views.sync(&snapshot("about:blank", 10), 2.0);
+        views.sync(&snapshot("about:blank", 10), 2.0).expect("sync");
         views.focus(PlatformViewId::new(1));
         calls.borrow_mut().clear();
-        views.sync(&empty_snapshot(), 2.0);
+        views.sync(&empty_snapshot(), 2.0).expect("sync");
         assert_eq!(
             calls.borrow().as_slice(),
             &[Call::Blur, Call::Remove(PlatformViewId::new(1))]

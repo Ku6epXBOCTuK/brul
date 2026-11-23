@@ -102,7 +102,7 @@ impl Cursor<'_> {
             Vec::new()
         };
         self.skip_trivia();
-        let block = if widget == Some(Widget::Video) {
+        let block = if matches!(widget, Some(Widget::Video | Widget::WebView)) {
             Block { items: Vec::new() }
         } else if widget.is_some_and(Widget::is_leaf) {
             self.leaf_block(&name)?

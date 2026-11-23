@@ -47,7 +47,7 @@ fn element_widget_names<'a>(element: &'a Element, widgets: &'a Widgets, names: &
         for prop in &spec.props {
             names.intern(&prop.name);
         }
-        if spec.name == "Video" {
+        if matches!(spec.name.as_str(), "Video" | "WebView") {
             names.intern("state");
         }
     }
