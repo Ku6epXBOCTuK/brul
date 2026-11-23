@@ -1,11 +1,9 @@
 use std::collections::{BTreeSet, HashMap};
-use std::fs;
-use std::path::Path;
 
 use brul_capability::AttachEventKind;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use syn::{FnArg, Item, ItemFn, Pat};
+use syn::{FnArg, ItemFn, Pat};
 
 use crate::error_at;
 
@@ -26,35 +24,16 @@ pub struct AttachSpec {
 
 pub type Attachments = HashMap<String, AttachSpec>;
 
-pub fn collect(root: &Path) -> Result<Attachments, Error> {
-    let mut attachments = Attachments::new();
-    if !root.is_dir() {
-        return Ok(attachments);
+pub(crate) fn collect_into(attachments: &mut Attachments, function: &ItemFn) -> Result<(), Error> {
+    let spec = parse(function)?;
+    if attachments.contains_key(&spec.name) {
+        return Err(at(format!(
+            "attachment '{}' is registered twice",
+            spec.name
+        )));
     }
-    let sources = crate::commands::rust_sources(root)
-        .map_err(|error| at(format!("cannot read '{}': {error}", root.display())))?;
-    for path in sources {
-        let source = fs::read_to_string(&path)
-            .map_err(|error| at(format!("cannot read '{}': {error}", path.display())))?;
-        let file = syn::parse_file(&source).map_err(|error| at(error.to_string()))?;
-        for item in &file.items {
-            let Item::Fn(function) = item else {
-                continue;
-            };
-            if !brul_capability::is_attach(function) {
-                continue;
-            }
-            let spec = parse(function)?;
-            if attachments.contains_key(&spec.name) {
-                return Err(at(format!(
-                    "attachment '{}' is registered twice",
-                    spec.name
-                )));
-            }
-            attachments.insert(spec.name.clone(), spec);
-        }
-    }
-    Ok(attachments)
+    attachments.insert(spec.name.clone(), spec);
+    Ok(())
 }
 
 fn parse(function: &ItemFn) -> Result<AttachSpec, Error> {

@@ -1,13 +1,11 @@
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 
 use brul_case::pascal;
 use brul_command::Kind;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
-use syn::{FnArg, Item, ItemFn, Pat};
+use syn::{FnArg, ItemFn, Pat};
 
 use crate::error_at;
 
@@ -33,29 +31,13 @@ pub struct WidgetSpec {
 
 pub type Widgets = HashMap<String, WidgetSpec>;
 
-pub fn collect(root: &Path) -> Result<Widgets, Error> {
-    let mut widgets = builtins();
-    let sources = crate::commands::rust_sources(root)
-        .map_err(|error| at(format!("cannot read '{}': {error}", root.display())))?;
-    for path in sources {
-        let source = fs::read_to_string(&path)
-            .map_err(|error| at(format!("cannot read '{}': {error}", path.display())))?;
-        let file = syn::parse_file(&source).map_err(|error| at(error.to_string()))?;
-        for item in &file.items {
-            let Item::Fn(function) = item else {
-                continue;
-            };
-            if !brul_capability::is_widget(function) {
-                continue;
-            }
-            let spec = parse(function)?;
-            if widgets.contains_key(&spec.name) {
-                return Err(at(format!("widget '{}' is registered twice", spec.name)));
-            }
-            widgets.insert(spec.name.clone(), spec);
-        }
+pub(crate) fn collect_into(widgets: &mut Widgets, function: &ItemFn) -> Result<(), Error> {
+    let spec = parse(function)?;
+    if widgets.contains_key(&spec.name) {
+        return Err(at(format!("widget '{}' is registered twice", spec.name)));
     }
-    Ok(widgets)
+    widgets.insert(spec.name.clone(), spec);
+    Ok(())
 }
 
 pub(crate) fn builtins() -> Widgets {

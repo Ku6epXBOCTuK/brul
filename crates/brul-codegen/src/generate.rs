@@ -6,40 +6,19 @@ use std::path::Path;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 
-use crate::commands::{self, Commands};
+use crate::discovery::Capabilities;
 use crate::emit::{self, Module};
-use crate::widgets::{self, Widgets};
 use crate::{error_at, parse_source};
 
 pub fn generate(entry: &Path, root: &Path) -> Result<Module, Error> {
-    let dir = root.join("src");
-    let commands = if dir.is_dir() {
-        commands::collect(&dir)?
-    } else {
-        Commands::new()
-    };
-    generate_with(entry, &commands)
+    generate_with(entry, &Capabilities::discover(root, entry)?)
 }
 
-pub fn generate_with(entry: &Path, commands: &Commands) -> Result<Module, Error> {
-    let dir = entry.parent().unwrap_or(Path::new(".")).join("src");
-    let widgets = if dir.is_dir() {
-        widgets::collect(&dir)?
-    } else {
-        widgets::builtins()
-    };
-    generate_with_widgets(entry, commands, &widgets)
-}
-
-pub fn generate_with_widgets(
-    entry: &Path,
-    commands: &Commands,
-    widgets: &Widgets,
-) -> Result<Module, Error> {
+pub fn generate_with(entry: &Path, capabilities: &Capabilities) -> Result<Module, Error> {
     if is_application(entry)? {
-        emit::split_module_file_with_widgets(entry, commands, widgets)
+        emit::split_module_file_with_capabilities(entry, capabilities)
     } else {
-        emit::split_component_file_with_widgets(entry, commands, widgets)
+        emit::split_component_file_with_capabilities(entry, capabilities)
     }
 }
 

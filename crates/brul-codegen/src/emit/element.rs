@@ -1,26 +1,22 @@
-use std::collections::HashMap;
-
 use brul_capability::AttachEventKind;
 use brul_case::constant;
 use brul_gui::Direction;
-use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Slot, Widget};
 use brul_syntax::style::EffectRule;
 use brul_syntax::types::Type;
 
-use crate::attachments::Attachments;
 use crate::error_at;
 use crate::styles;
 use crate::widgets::WidgetSpec;
 
+use super::CodegenContext;
 use super::Emit;
 use super::Frame;
 use super::Out;
 use super::anchor;
 use super::classes;
-use super::state::State;
 use super::{ScopeInfo, component, events, expression, structure};
 use crate::runtime::HandlerEvent;
 
@@ -32,6 +28,7 @@ pub(super) fn widget(
     counter: &mut usize,
 ) -> Result<(), Error> {
     if let Some(index) = emit
+        .context
         .imports
         .iter()
         .find(|import| import.name == element.name)
@@ -52,7 +49,13 @@ pub(super) fn widget(
             "anchor cannot be combined with x or y",
         ));
     }
-    if let Some(spec) = emit.widgets.get(&element.name).cloned() {
+    if let Some(spec) = emit
+        .context
+        .capabilities
+        .widgets
+        .get(&element.name)
+        .cloned()
+    {
         return registered_widget(out, element, &spec, emit, frame, counter);
     }
     let element_classes = classes(element);
@@ -61,6 +64,7 @@ pub(super) fn widget(
         .map(|class| classes::index(emit.classes, class))
         .collect::<Vec<_>>();
     let effect = emit
+        .context
         .effects
         .iter()
         .find(|rule| element_classes.contains(&rule.class.as_str()));
@@ -68,7 +72,7 @@ pub(super) fn widget(
         classes: &classes,
         effect,
     };
-    let events = events::widget(element, emit.program)?;
+    let events = events::widget(element, emit.context.program)?;
     let needs = effect.is_some()
         || content_needed(element, emit)
         || !events.handlers.is_empty()
@@ -94,19 +98,14 @@ pub(super) fn widget(
             effect_binding(out, rule, &name, emit, frame)?;
         }
         parameters(out, element, &name, emit, frame)?;
-        handler_bindings(out, &events.handlers, &name, emit.script_name);
+        handler_bindings(out, &events.handlers, &name, emit.context.script_name);
         attachment_bindings(
             out,
             element,
             &name,
-            AttachmentContext {
-                attachments: emit.attachments,
-                names: emit.names,
-                state: emit.state,
-                prop_types: emit.prop_types,
-                scopes: &emit.scope_defs,
-                scope: frame.scope,
-            },
+            emit.context,
+            &emit.scope_defs,
+            frame.scope,
         )?;
         out.line(format_args!("{name}"));
         Ok(())
@@ -132,7 +131,7 @@ fn element_expression(
     let classes = style.classes;
     let styled = !classes.is_empty();
     if styled {
-        out.push(format_args!("{}styled(", emit.resource_prefix));
+        out.push(format_args!("{}styled(", emit.context.resource_prefix));
     }
     let content = kind(out, element, emit, frame, counter)?;
     if styled {
@@ -174,7 +173,7 @@ fn content_needed(element: &Element, emit: &Emit<'_>) -> bool {
     };
     match element.widget {
         Some(Widget::Text | Widget::TextInput) => !matches!(expression.kind, ExprKind::String(_)),
-        Some(Widget::Image) => super::resource(expression, emit.resources).is_none(),
+        Some(Widget::Image) => super::resource(expression, emit.context.resources).is_none(),
         Some(Widget::Container | Widget::Layer | Widget::Video | Widget::WebView) | None => false,
     }
 }
@@ -271,7 +270,7 @@ fn container(
     counter: &mut usize,
 ) -> Result<(), Error> {
     let call = group.call();
-    let resolved = styles::resolve(emit.stylesheet, &classes(element), frame.theme())
+    let resolved = styles::resolve(emit.context.stylesheet, &classes(element), frame.theme())
         .map_err(|error| error_at(element.position, error.to_string()))?;
     let direction = match group {
         Group::Layer => Direction::Column,
@@ -323,18 +322,18 @@ fn content_binding(
     let closure = if ty == brul_syntax::types::Type::Image {
         expression::closure(
             &expression,
-            emit.names,
-            emit.state,
-            emit.prop_types,
+            emit.context.names,
+            emit.context.state,
+            emit.context.prop_types,
             &emit.scope_defs,
             frame.scope,
         )?
     } else {
         expression::typed_closure(
             &expression,
-            emit.names,
-            emit.state,
-            emit.prop_types,
+            emit.context.names,
+            emit.context.state,
+            emit.context.prop_types,
             &emit.scope_defs,
             frame.scope,
             &ty,
@@ -357,9 +356,9 @@ fn effect_binding(
     for expression in &rule.args {
         args.push(expression::typed_closure(
             expression,
-            emit.names,
-            emit.state,
-            emit.prop_types,
+            emit.context.names,
+            emit.context.state,
+            emit.context.prop_types,
             &emit.scope_defs,
             frame.scope,
             &brul_syntax::types::Type::Number,
@@ -588,10 +587,10 @@ fn image_widget(
             "Image requires a single content expression",
         ));
     };
-    if let Some(name) = super::resource(expression, emit.resources) {
+    if let Some(name) = super::resource(expression, emit.context.resources) {
         out.push(format_args!(
             "brul::gui::Widget::image(brul::gui::Image::from_bytes({}resource_{name}()).expect(\"resource '{name}' cannot be decoded\"))",
-            emit.resource_prefix
+            emit.context.resource_prefix
         ));
         return Ok(None);
     }
@@ -648,7 +647,7 @@ fn registered_widget(
                     ));
                 };
                 let params: Vec<Type> = definition.params.clone();
-                events::define(handler, emit.program, &params, element.position)?;
+                events::define(handler, emit.context.program, &params, element.position)?;
                 handlers.push((event, handler, params));
             }
             Arg::Named { name, value } if name == "class" => class = Some(value),
@@ -702,11 +701,11 @@ fn registered_widget(
                 out,
                 "props",
                 &props,
-                emit.names,
-                emit.state,
-                emit.prop_types,
-                emit.resources,
-                emit.resource_prefix,
+                emit.context.names,
+                emit.context.state,
+                emit.context.prop_types,
+                emit.context.resources,
+                emit.context.resource_prefix,
                 &emit.scope_defs,
                 frame.scope,
             )?;
@@ -719,7 +718,7 @@ fn registered_widget(
                         .map(|ty| format!("brul::{}", ty.rust_path()))
                         .collect::<Vec<_>>()
                         .join(", ");
-                    let call = super::script::event_call(emit.script_name, handler);
+                    let call = super::script::event_call(emit.context.script_name, handler);
                     out.line(format_args!(
                         "brul::ComponentEvent {{ name: {event:?}, call: {call}, params: &[{params}], component: std::rc::Rc::clone(component) }},"
                     ));
@@ -743,19 +742,19 @@ fn registered_widget(
                 .join(", ");
             out.line(format_args!(
                 "let {name} = {}styled(built.widget{suffix}, &[{list}], theme);",
-                emit.resource_prefix
+                emit.context.resource_prefix
             ));
         }
         if let Some(value) = class {
             *emit.dynamic_classes = true;
             out.line(format_args!(
                 "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {}, expression: {} }}));",
-                classes::table(emit.resource_prefix),
+                classes::table(emit.context.resource_prefix),
                 expression::closure(
                     value,
-                    emit.names,
-                    emit.state,
-                    emit.prop_types,
+                    emit.context.names,
+                    emit.context.state,
+                    emit.context.prop_types,
                     &emit.scope_defs,
                     frame.scope
                 )?
@@ -765,14 +764,9 @@ fn registered_widget(
             out,
             element,
             &name,
-            AttachmentContext {
-                attachments: emit.attachments,
-                names: emit.names,
-                state: emit.state,
-                prop_types: emit.prop_types,
-                scopes: &emit.scope_defs,
-                scope: frame.scope,
-            },
+            emit.context,
+            &emit.scope_defs,
+            frame.scope,
         )?;
         out.line(format_args!("{name}"));
         Ok(())
@@ -781,29 +775,18 @@ fn registered_widget(
     Ok(())
 }
 
-pub(super) struct AttachmentContext<'a> {
-    pub(super) attachments: &'a Attachments,
-    pub(super) names: &'a Names<'a>,
-    pub(super) state: &'a State,
-    pub(super) prop_types: &'a HashMap<String, Type>,
-    pub(super) scopes: &'a [ScopeInfo],
-    pub(super) scope: Option<usize>,
-}
-
 pub(super) fn attachment_bindings(
     out: &mut Out<'_>,
     element: &Element,
     widget: &str,
-    context: AttachmentContext<'_>,
+    context: &CodegenContext<'_>,
+    scopes: &[ScopeInfo],
+    scope: Option<usize>,
 ) -> Result<(), Error> {
-    let AttachmentContext {
-        attachments,
-        names,
-        state,
-        prop_types,
-        scopes,
-        scope,
-    } = context;
+    let attachments = &context.capabilities.attachments;
+    let names = context.names;
+    let state = context.state;
+    let prop_types = context.prop_types;
     let id = state_id(element);
     for arg in &element.args {
         let Arg::Attach {
@@ -908,9 +891,9 @@ fn parameters(
         };
         let closure = expression::typed_closure(
             value,
-            emit.names,
-            emit.state,
-            emit.prop_types,
+            emit.context.names,
+            emit.context.state,
+            emit.context.prop_types,
             &emit.scope_defs,
             frame.scope,
             &brul_syntax::types::Type::Bool,
@@ -928,10 +911,10 @@ fn parameters(
     }
     if let Some(value) = class {
         *emit.dynamic_classes = true;
-        let table = classes::table(emit.resource_prefix);
+        let table = classes::table(emit.context.resource_prefix);
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
-            expression::closure(value, emit.names, emit.state, emit.prop_types, &emit.scope_defs, frame.scope)?
+            expression::closure(value, emit.context.names, emit.context.state, emit.context.prop_types, &emit.scope_defs, frame.scope)?
         ));
     }
     Ok(())
@@ -947,9 +930,9 @@ fn optional_expression(
             "Some({})",
             expression::typed_closure(
                 item,
-                emit.names,
-                emit.state,
-                emit.prop_types,
+                emit.context.names,
+                emit.context.state,
+                emit.context.prop_types,
                 &emit.scope_defs,
                 frame.scope,
                 &brul_syntax::types::Type::Number,

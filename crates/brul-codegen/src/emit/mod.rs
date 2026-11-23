@@ -2,13 +2,9 @@ use std::collections::HashMap;
 
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
-use brul_syntax::script::Program;
-use brul_syntax::style::{EffectRule, Stylesheet};
 use brul_syntax::types::Type;
 
-use crate::attachments::Attachments;
-use crate::widgets::Widgets;
-use crate::{Import, Registry, Resource};
+use crate::Resource;
 
 pub(super) use structure::StructureNames;
 
@@ -18,6 +14,7 @@ mod builtins;
 mod class;
 mod classes;
 mod component;
+mod context;
 mod element;
 mod events;
 mod expression;
@@ -40,13 +37,12 @@ pub(super) type PropTypes = HashMap<String, Type>;
 pub use state::State;
 
 pub use alloc::allocations;
+pub(super) use context::{CodegenContext, Emit, EmitOutputs};
 pub use expression::operation;
 pub use module::{
-    GeneratedFile, Module, ResourceFile, component_file, component_file_with_commands,
-    component_file_with_widgets, module, module_file, module_file_with_commands,
-    module_file_with_widgets, module_with_commands, module_with_widgets,
-    split_component_file_with_commands, split_component_file_with_widgets, split_module_file,
-    split_module_file_with_commands, split_module_file_with_widgets,
+    GeneratedFile, Module, ResourceFile, component_file, component_file_with_capabilities, module,
+    module_file, module_file_with_capabilities, module_with_capabilities,
+    split_component_file_with_capabilities, split_module_file, split_module_file_with_capabilities,
 };
 pub(super) use out::Out;
 
@@ -67,94 +63,6 @@ pub fn identifiers(expression: &brul_syntax::ast::Expr) -> Names<'_> {
 }
 
 pub(super) use element::{contains_slot, items, items_spliced};
-
-pub(super) struct Emit<'a> {
-    script_name: &'a str,
-    registry: &'a Registry,
-    imports: &'a [Import],
-    resources: &'a [Resource],
-    base: &'a str,
-    resource_prefix: &'a str,
-    stylesheet: &'a Stylesheet,
-    effects: &'a [EffectRule],
-    names: &'a Names<'a>,
-    state: &'a State,
-    prop_types: &'a HashMap<String, Type>,
-    program: Option<&'a Program>,
-    widgets: &'a Widgets,
-    attachments: &'a Attachments,
-    anchor_ids: &'a anchor::AnchorIds,
-    scope_defs: Vec<ScopeInfo>,
-    functions: &'a mut Vec<String>,
-    bases: &'a [String],
-    structures: &'a mut StructureNames,
-    dynamic_classes: &'a mut bool,
-    classes: &'a mut classes::ClassNames,
-    slots: bool,
-}
-
-struct EmitSources<'a> {
-    script_name: &'a str,
-    registry: &'a Registry,
-    imports: &'a [Import],
-    resources: &'a [Resource],
-    stylesheet: &'a Stylesheet,
-    effects: &'a [EffectRule],
-    names: &'a Names<'a>,
-    state: &'a State,
-    prop_types: &'a HashMap<String, Type>,
-    program: Option<&'a Program>,
-    widgets: &'a Widgets,
-    attachments: &'a Attachments,
-    anchor_ids: &'a anchor::AnchorIds,
-    base: &'a str,
-    resource_prefix: &'a str,
-}
-
-struct EmitOutputs<'a> {
-    functions: &'a mut Vec<String>,
-    bases: &'a [String],
-    structures: &'a mut StructureNames,
-    dynamic_classes: &'a mut bool,
-    classes: &'a mut classes::ClassNames,
-}
-
-impl<'a> Emit<'a> {
-    fn window(sources: EmitSources<'a>, outputs: EmitOutputs<'a>) -> Self {
-        Self::new(sources, outputs, false)
-    }
-
-    fn component(sources: EmitSources<'a>, outputs: EmitOutputs<'a>) -> Self {
-        Self::new(sources, outputs, true)
-    }
-
-    fn new(sources: EmitSources<'a>, outputs: EmitOutputs<'a>, slots: bool) -> Self {
-        Self {
-            script_name: sources.script_name,
-            registry: sources.registry,
-            imports: sources.imports,
-            resources: sources.resources,
-            base: sources.base,
-            resource_prefix: sources.resource_prefix,
-            stylesheet: sources.stylesheet,
-            effects: sources.effects,
-            names: sources.names,
-            state: sources.state,
-            prop_types: sources.prop_types,
-            scope_defs: Vec::new(),
-            program: sources.program,
-            widgets: sources.widgets,
-            attachments: sources.attachments,
-            anchor_ids: sources.anchor_ids,
-            functions: outputs.functions,
-            bases: outputs.bases,
-            structures: outputs.structures,
-            dynamic_classes: outputs.dynamic_classes,
-            classes: outputs.classes,
-            slots,
-        }
-    }
-}
 
 #[derive(Clone, Copy)]
 pub(super) struct Frame<'a> {
@@ -199,38 +107,5 @@ impl<'a> Frame<'a> {
 
     pub(super) fn column_gap(&self) -> u32 {
         self.column_gap
-    }
-}
-
-impl<'a> Emit<'a> {
-    pub(super) fn prop_type(&self, name: &str) -> Option<&Type> {
-        self.prop_types.get(name)
-    }
-
-    pub(super) fn item_type(&self, collection: &Expr) -> Type {
-        let ExprKind::Ident(name) = &collection.kind else {
-            return Type::Object;
-        };
-        let ty = self.prop_type(name).or_else(|| self.state.field_type(name));
-        match ty {
-            Some(Type::Array(inner)) => (**inner).clone(),
-            _ => Type::Object,
-        }
-    }
-
-    pub(super) fn scope_def(&self, index: usize) -> Option<&ScopeInfo> {
-        self.scope_defs.get(index)
-    }
-
-    pub(super) fn add_scope(&mut self, info: ScopeInfo) -> usize {
-        self.scope_defs.push(info);
-        self.scope_defs.len() - 1
-    }
-
-    pub(super) fn default_theme(&self) -> Option<&'a str> {
-        self.stylesheet
-            .themes
-            .first()
-            .map(|theme| theme.name.as_str())
     }
 }

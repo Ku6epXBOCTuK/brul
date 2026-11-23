@@ -12,17 +12,17 @@ use brul_syntax::script::{Program, validate_build};
 use brul_syntax::style::{EffectRule, Stylesheet};
 use brul_syntax::types::Type;
 
-use crate::commands::{self, Commands};
+use crate::commands;
+use crate::discovery::Capabilities;
 use crate::error_at;
 use crate::loader::Import;
 use crate::runtime::HandlerEvent;
 use crate::source::Script;
-use crate::widgets::Widgets;
 use crate::{Definition, Registry, Resource};
 
+use super::CodegenContext;
 use super::Emit;
 use super::EmitOutputs;
-use super::EmitSources;
 use super::Out;
 use super::StructureNames;
 use super::anchor::{self, AnchorIds};
@@ -58,52 +58,36 @@ impl Module {
 }
 
 pub fn module(source: &str) -> Result<String, Error> {
-    module_with_commands(source, &Commands::new())
+    module_with_capabilities(source, &Capabilities::default())
 }
 
-pub fn module_with_commands(source: &str, commands: &Commands) -> Result<String, Error> {
-    module_with_widgets(source, commands, &Widgets::new())
-}
-
-pub fn module_with_widgets(
+pub fn module_with_capabilities(
     source: &str,
-    commands: &Commands,
-    widgets: &Widgets,
+    capabilities: &Capabilities,
 ) -> Result<String, Error> {
-    let module = module_at(source, None, false, None, commands, widgets)?;
+    let module = module_at(source, None, false, None, capabilities)?;
     Ok(module.flat)
 }
 
 pub fn module_file(path: &Path) -> Result<String, Error> {
-    let module = split_module_file(path)?;
-    Ok(module.flat)
+    module_file_with_capabilities(path, &Capabilities::default())
 }
 
-pub fn module_file_with_commands(path: &Path, commands: &Commands) -> Result<String, Error> {
-    module_file_with_widgets(path, commands, &Widgets::new())
-}
-
-pub fn module_file_with_widgets(
+pub fn module_file_with_capabilities(
     path: &Path,
-    commands: &Commands,
-    widgets: &Widgets,
+    capabilities: &Capabilities,
 ) -> Result<String, Error> {
-    let module = split_module_file_with_widgets(path, commands, widgets)?;
+    let module = split_module_file_with_capabilities(path, capabilities)?;
     Ok(module.flat)
 }
 
 pub fn split_module_file(path: &Path) -> Result<Module, Error> {
-    split_module_file_with_commands(path, &Commands::new())
+    split_module_file_with_capabilities(path, &Capabilities::default())
 }
 
-pub fn split_module_file_with_commands(path: &Path, commands: &Commands) -> Result<Module, Error> {
-    split_module_file_with_widgets(path, commands, &Widgets::new())
-}
-
-pub fn split_module_file_with_widgets(
+pub fn split_module_file_with_capabilities(
     path: &Path,
-    commands: &Commands,
-    widgets: &Widgets,
+    capabilities: &Capabilities,
 ) -> Result<Module, Error> {
     let position = Position { line: 1, column: 1 };
     let source = fs::read_to_string(path).map_err(|error| {
@@ -112,44 +96,30 @@ pub fn split_module_file_with_widgets(
             format!("cannot read '{}': {error}", path.display()),
         )
     })?;
-    module_at(&source, path.parent(), true, Some(path), commands, widgets)
+    module_at(&source, path.parent(), true, Some(path), capabilities)
 }
 
 pub fn component_file(path: &Path) -> Result<String, Error> {
-    component_file_with_commands(path, &Commands::new())
+    component_file_with_capabilities(path, &Capabilities::default())
 }
 
-pub fn component_file_with_commands(path: &Path, commands: &Commands) -> Result<String, Error> {
-    component_file_with_widgets(path, commands, &Widgets::new())
-}
-
-pub fn component_file_with_widgets(
+pub fn component_file_with_capabilities(
     path: &Path,
-    commands: &Commands,
-    widgets: &Widgets,
+    capabilities: &Capabilities,
 ) -> Result<String, Error> {
-    Ok(split_component_file_with_widgets(path, commands, widgets)?.flat)
+    Ok(split_component_file_with_capabilities(path, capabilities)?.flat)
 }
 
-pub fn split_component_file_with_commands(
+pub fn split_component_file_with_capabilities(
     path: &Path,
-    commands: &Commands,
-) -> Result<Module, Error> {
-    split_component_file_with_widgets(path, commands, &Widgets::new())
-}
-
-pub fn split_component_file_with_widgets(
-    path: &Path,
-    commands: &Commands,
-    widgets: &Widgets,
+    capabilities: &Capabilities,
 ) -> Result<Module, Error> {
     let (mut registry, entry) = crate::load_entry(path)?;
-    let command_names = commands::names(commands);
+    let command_names = commands::names(&capabilities.commands);
     validate_components(&registry.definitions, &command_names)?;
     let mut source = crate::Source::empty();
-    crate::builtin::compose(&mut source, &mut registry, widgets)?;
-    let attachments = attachments_from(Some(path))?;
-    let names = names::table(&source, &registry.definitions, widgets);
+    crate::builtin::compose(&mut source, &mut registry, &capabilities.widgets)?;
+    let names = names::table(&source, &registry.definitions, &capabilities.widgets);
     let anchor_table = anchor::collect(&source, &registry.definitions)?;
     let mut used = HashSet::new();
     let bases: Vec<String> = registry
@@ -165,14 +135,12 @@ pub fn split_component_file_with_widgets(
     let emitted = emit_component(
         &registry.definitions[entry],
         &bases[entry],
-        &registry,
-        &bases,
-        &names,
-        &Discovery {
-            commands,
-            widgets,
+        &ComponentSources {
+            registry: &registry,
+            bases: &bases,
+            names: &names,
+            capabilities,
             anchor_ids: &anchor_table,
-            attachments: &attachments,
         },
         &mut sinks,
     )?;
@@ -192,13 +160,12 @@ fn module_at(
     base: Option<&Path>,
     _split: bool,
     entry: Option<&Path>,
-    commands: &Commands,
-    widgets: &Widgets,
+    capabilities: &Capabilities,
 ) -> Result<Module, Error> {
     let mut parsed = crate::parse_source(source)?;
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
-    crate::builtin::compose(&mut parsed, &mut registry, widgets)?;
+    crate::builtin::compose(&mut parsed, &mut registry, &capabilities.widgets)?;
     let declaration = parsed
         .declaration
         .as_ref()
@@ -209,12 +176,11 @@ fn module_at(
             "entry declaration must be a window",
         ));
     }
-    let attachments = attachments_from(entry)?;
-    let names = names::table(&parsed, &registry.definitions, widgets);
+    let names = names::table(&parsed, &registry.definitions, &capabilities.widgets);
     let anchor_table = anchor::collect(&parsed, &registry.definitions)?;
     let root_props = names::declared(&declaration.members);
     let mut root_external = names::declared_events(&declaration.members);
-    let command_names = commands::names(commands);
+    let command_names = commands::names(&capabilities.commands);
     let effect_names: BTreeSet<String> = parsed
         .effects
         .iter()
@@ -293,8 +259,8 @@ fn module_at(
         let root = crate::root(view.declaration)?;
         let script_name = format!("{}_script", view.base);
         let prefix = format!("{}_", view.base);
-        let view_state =
-            state::State::new(view.program, &state_type(&script_name))?.with_commands(commands);
+        let view_state = state::State::new(view.program, &state_type(&script_name))?
+            .with_commands(&capabilities.commands);
         let types = prop_types(&view.declaration.members);
         head.push('\n');
         head.push_str(HEADER);
@@ -306,22 +272,21 @@ fn module_at(
             &format!("{}_view", view.base),
             root,
             &window_handlers,
-            EmitSources {
-                script_name: &script_name,
+            &CodegenContext {
+                capabilities,
                 registry: &registry,
+                anchor_ids: &anchor_table,
+                script_name: &script_name,
                 imports: view.imports,
                 resources: view.resources,
+                base: &view.base,
+                resource_prefix: &prefix,
                 stylesheet: view.stylesheet,
                 effects: view.effects,
                 names: &names,
                 state: &view_state,
                 prop_types: &types,
                 program: view.program,
-                base: &view.base,
-                resource_prefix: &prefix,
-                widgets,
-                attachments: &attachments,
-                anchor_ids: &anchor_table,
             },
             EmitOutputs {
                 functions: &mut functions,
@@ -373,13 +338,11 @@ fn module_at(
         let emitted = emit_component(
             definition,
             &definition_bases[index],
-            &registry,
-            &definition_bases,
-            &names,
-            &Discovery {
-                commands,
-                widgets,
-                attachments: &attachments,
+            &ComponentSources {
+                registry: &registry,
+                bases: &definition_bases,
+                names: &names,
+                capabilities,
                 anchor_ids: &anchor_table,
             },
             &mut sinks,
@@ -486,31 +449,27 @@ struct ComponentSinks<'a> {
     scripts: Option<&'a mut Vec<GeneratedFile>>,
 }
 
-struct Discovery<'a> {
-    commands: &'a Commands,
-    widgets: &'a Widgets,
-    attachments: &'a crate::attachments::Attachments,
+struct ComponentSources<'a> {
+    registry: &'a Registry,
+    bases: &'a [String],
+    names: &'a Names<'a>,
+    capabilities: &'a Capabilities,
     anchor_ids: &'a AnchorIds,
-}
-
-fn attachments_from(entry: Option<&Path>) -> Result<crate::attachments::Attachments, Error> {
-    match entry {
-        Some(path) => {
-            crate::attachments::collect(&path.parent().unwrap_or(Path::new(".")).join("src"))
-        }
-        None => Ok(crate::attachments::Attachments::new()),
-    }
 }
 
 fn emit_component(
     definition: &Definition,
     base: &str,
-    registry: &Registry,
-    bases: &[String],
-    names: &Names<'_>,
-    discovery: &Discovery<'_>,
+    sources: &ComponentSources<'_>,
     sinks: &mut ComponentSinks<'_>,
 ) -> Result<ComponentOutput, Error> {
+    let ComponentSources {
+        registry,
+        bases,
+        names,
+        capabilities,
+        anchor_ids,
+    } = sources;
     let root = definition_root(definition)?;
     let prefix = format!("{base}_");
     let name = format!("bc_{base}");
@@ -522,7 +481,7 @@ fn emit_component(
         definition.program.as_ref(),
         &state_type(&format!("{prefix}script")),
     )?
-    .with_commands(discovery.commands);
+    .with_commands(&capabilities.commands);
     let component_prop_types = prop_types(&definition.declaration.members);
     body.push_str(HEADER);
     emit_view(
@@ -530,22 +489,21 @@ fn emit_component(
         &format!("{prefix}view"),
         root,
         &[],
-        EmitSources {
-            script_name: &format!("{prefix}script"),
+        &CodegenContext {
+            capabilities,
             registry,
+            anchor_ids,
+            script_name: &format!("{prefix}script"),
             imports: &definition.imports,
             resources: &definition.resources,
+            base,
+            resource_prefix: &prefix,
             stylesheet: &definition.stylesheet,
             effects: &definition.effects,
             names,
             state: &component_state,
             prop_types: &component_prop_types,
             program: definition.program.as_ref(),
-            base,
-            resource_prefix: &prefix,
-            widgets: discovery.widgets,
-            attachments: discovery.attachments,
-            anchor_ids: discovery.anchor_ids,
         },
         EmitOutputs {
             functions: &mut functions,
@@ -609,19 +567,17 @@ impl ViewKind {
     }
 }
 
-fn emit_view(
+fn emit_view<'a>(
     out: &mut String,
     name: &str,
     root: &Element,
     handlers: &[(HandlerEvent, String)],
-    sources: EmitSources<'_>,
-    outputs: EmitOutputs<'_>,
+    context: &'a CodegenContext<'a>,
+    outputs: EmitOutputs<'a>,
     kind: ViewKind,
 ) -> Result<(), Error> {
-    let mut emit = match kind {
-        ViewKind::Window => Emit::window(sources, outputs),
-        ViewKind::Component => Emit::component(sources, outputs),
-    };
+    let slots = matches!(kind, ViewKind::Component);
+    let mut emit = Emit::new(context, outputs, slots);
     view::view(out, name, root, handlers, &mut emit, kind.typed())
 }
 

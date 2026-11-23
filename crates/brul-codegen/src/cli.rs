@@ -6,6 +6,7 @@ use std::fs;
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 
+use crate::discovery::Capabilities;
 use crate::emit::{self, Module};
 use crate::{commands, generate, generate_with};
 
@@ -122,7 +123,9 @@ pub fn run(args: impl IntoIterator<Item = String>) -> Result<(), Error> {
 
 fn source(input: &Path, root: &Path, commands_path: &Path) -> Result<Module, Error> {
     if commands_path.is_file() {
-        generate_with(input, &commands::read(commands_path)?).map_err(Error::from)
+        let capabilities =
+            Capabilities::discover_with_commands(input, commands::read(commands_path)?)?;
+        generate_with(input, &capabilities).map_err(Error::from)
     } else {
         generate(input, root).map_err(Error::from)
     }

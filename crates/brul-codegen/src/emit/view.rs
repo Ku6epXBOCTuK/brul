@@ -41,7 +41,7 @@ pub(super) fn view(
         for (event, handler) in handlers {
             out.line(format_args!(
                 "handlers.push(brul::Handler::new(component, None, brul::HandlerEvent::{event:?}, {}));",
-                super::script::event_call(emit.script_name, handler)
+                super::script::event_call(emit.context.script_name, handler)
             ));
         }
         out.line(format_args!("Ok(brul::Built {{"));

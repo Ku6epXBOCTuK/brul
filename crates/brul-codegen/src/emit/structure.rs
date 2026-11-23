@@ -46,17 +46,22 @@ pub(super) fn structure_if(
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let name = emit.structures.next(emit.base, "if");
+    let name = emit.structures.next(emit.context.base, "if");
     for (index, branch) in block.branches.iter().enumerate() {
-        check_condition(&branch.condition, emit.names, emit.state, emit.prop_types)?;
+        check_condition(
+            &branch.condition,
+            emit.context.names,
+            emit.context.state,
+            emit.context.prop_types,
+        )?;
         let function = format!("{name}_value{index}");
         emit.functions.push(value_function(
             &function,
             &branch.condition,
             ValueKind::Bool,
-            emit.names,
-            emit.state,
-            emit.prop_types,
+            emit.context.names,
+            emit.context.state,
+            emit.context.prop_types,
         )?);
     }
     let arm = rebuild_arm(&name, block, emit, frame)?;
@@ -72,24 +77,29 @@ pub(super) fn structure_each(
     frame: Frame<'_>,
     counter: &mut usize,
 ) -> Result<(), Error> {
-    let name = emit.structures.next(emit.base, "each");
-    check_collection(&block.collection, emit.names, emit.state, emit.prop_types)?;
+    let name = emit.structures.next(emit.context.base, "each");
+    check_collection(
+        &block.collection,
+        emit.context.names,
+        emit.context.state,
+        emit.context.prop_types,
+    )?;
     emit.functions.push(value_function(
         &format!("{name}_value"),
         &block.collection,
         ValueKind::Items,
-        emit.names,
-        emit.state,
-        emit.prop_types,
+        emit.context.names,
+        emit.context.state,
+        emit.context.prop_types,
     )?);
     if let Some(key) = &block.key {
         emit.functions.push(value_function(
             &format!("{name}_key"),
             key,
             ValueKind::Inferred,
-            emit.names,
-            emit.state,
-            emit.prop_types,
+            emit.context.names,
+            emit.context.state,
+            emit.context.prop_types,
         )?);
     }
     let mut fields = vec![ScopeField {

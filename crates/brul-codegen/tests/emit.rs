@@ -2,7 +2,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use brul_codegen::emit;
-use brul_codegen::{commands, generate as generate_module, generate_with};
+use brul_codegen::{Capabilities, commands, generate as generate_module, generate_with};
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -15,11 +15,26 @@ fn generate(name: &str) -> Result<String, brul_syntax::error::Error> {
     let input = dir.join("input.brul");
     let commands_path = dir.join("commands.txt");
     let module = if commands_path.is_file() {
-        generate_with(&input, &commands::read(&commands_path)?)?
+        let capabilities =
+            Capabilities::discover_with_commands(&input, commands::read(&commands_path)?)?;
+        generate_with(&input, &capabilities)?
     } else {
         generate_module(&input, &dir)?
     };
     Ok(module.flat().to_owned())
+}
+
+#[test]
+fn discovers_capabilities_for_explicit_generation() {
+    let dir = fixture("emits_an_attachment_on_an_element");
+    let input = dir.join("input.brul");
+    let capabilities = Capabilities::discover(&dir, &input).expect("capabilities");
+    assert!(capabilities.commands.is_empty());
+    assert!(capabilities.attachments.contains_key("editor"));
+    assert!(capabilities.widgets.contains_key("Video"));
+    let module = generate_with(&input, &capabilities).expect("generated module");
+    let expected = include_str!("fixtures/codegen/emits_an_attachment_on_an_element/expected.rs");
+    assert_eq!(module.flat(), expected);
 }
 
 macro_rules! goldens {

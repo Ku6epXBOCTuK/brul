@@ -56,7 +56,7 @@ pub(super) fn component(
     counter: &mut usize,
     frame: super::Frame<'_>,
 ) -> Result<(), Error> {
-    let definition = &emit.registry.definitions[index];
+    let definition = &emit.context.registry.definitions[index];
     if definition.is_window() {
         return Err(error_at(
             element.position,
@@ -226,7 +226,7 @@ fn walk_block<'a>(
 }
 
 fn filler(block: &Block, emit: &mut Emit<'_>) -> Result<String, Error> {
-    let name = emit.structures.next(emit.base, "slot");
+    let name = emit.structures.next(emit.context.base, "slot");
     let theme = emit.default_theme();
     let mut text = String::new();
     let mut out = Out::new(&mut text);
@@ -309,7 +309,7 @@ fn event_of<'a>(
         .iter()
         .map(|param| param.ty.clone())
         .collect();
-    events::define(handler, emit.program, &params, element.position)?;
+    events::define(handler, emit.context.program, &params, element.position)?;
     Ok((event, handler, params))
 }
 
@@ -394,13 +394,13 @@ fn write(
     frame: Frame<'_>,
 ) -> Result<(), Error> {
     let bases = emit.bases;
-    let names = emit.names;
-    let state = emit.state;
-    let prefix = emit.resource_prefix;
-    let resources = emit.resources;
+    let names = emit.context.names;
+    let state = emit.context.state;
+    let prefix = emit.context.resource_prefix;
+    let resources = emit.context.resources;
     let scopes = &emit.scope_defs;
     let scope = frame.scope;
-    let prop_types = emit.prop_types;
+    let prop_types = emit.context.prop_types;
     let dynamic_classes = &mut *emit.dynamic_classes;
     let base = bases[index].as_str();
     let Call {
@@ -432,8 +432,8 @@ fn write(
                 "props",
                 &props,
                 names,
-                emit.state,
-                emit.prop_types,
+                emit.context.state,
+                emit.context.prop_types,
                 resources,
                 prefix,
                 scopes,
@@ -444,8 +444,8 @@ fn write(
                 "defaults",
                 &defaults,
                 names,
-                emit.state,
-                emit.prop_types,
+                emit.context.state,
+                emit.context.prop_types,
                 resources,
                 prefix,
                 scopes,
@@ -459,7 +459,7 @@ fn write(
                         .map(|ty| format!("brul::{}", ty.rust_path()))
                         .collect::<Vec<_>>()
                         .join(", ");
-                    let call = super::script::event_call(emit.script_name, handler);
+                    let call = super::script::event_call(emit.context.script_name, handler);
                     out.line(format_args!(
                         "brul::ComponentEvent {{ name: {event:?}, call: {call}, params: &[{params}], component: std::rc::Rc::clone(component) }},"
                     ));
@@ -509,19 +509,7 @@ fn write(
                 expression::closure(value, names, state, prop_types, scopes, scope)?
             ));
         }
-        element::attachment_bindings(
-            out,
-            element,
-            &widget,
-            element::AttachmentContext {
-                attachments: emit.attachments,
-                names,
-                state,
-                prop_types,
-                scopes,
-                scope,
-            },
-        )?;
+        element::attachment_bindings(out, element, &widget, emit.context, scopes, scope)?;
         out.line(format_args!("{widget}"));
         Ok(())
     })?;

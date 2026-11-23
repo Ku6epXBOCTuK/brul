@@ -44,10 +44,10 @@ pub(super) fn collect(source: &Source, definitions: &[Definition]) -> Result<Anc
 pub(super) fn suffix(element: &Element, emit: &super::Emit<'_>) -> Result<String, Error> {
     let mut result = String::new();
     if let Some(name) = element.args.iter().find_map(|arg| match arg {
-        Arg::Name(name) if emit.anchor_ids.contains_key(&name.name) => Some(&name.name),
+        Arg::Name(name) if emit.context.anchor_ids.contains_key(&name.name) => Some(&name.name),
         _ => None,
     }) {
-        let id = emit.anchor_ids[name];
+        let id = emit.context.anchor_ids[name];
         result.push_str(&format!(".with_id(brul::gui::WidgetId::new({id}))"));
     }
     if let Some(anchor) = element.args.iter().find_map(|arg| match arg {
@@ -60,7 +60,7 @@ pub(super) fn suffix(element: &Element, emit: &super::Emit<'_>) -> Result<String
 }
 
 fn expression(anchor: &AnchorName, emit: &super::Emit<'_>) -> Result<String, Error> {
-    let Some(&id) = emit.anchor_ids.get(&anchor.name) else {
+    let Some(&id) = emit.context.anchor_ids.get(&anchor.name) else {
         return Err(error_at(
             anchor.position,
             format!("anchor target '{}' is not defined", anchor.name),

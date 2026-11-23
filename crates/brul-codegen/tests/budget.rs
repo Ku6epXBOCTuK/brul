@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use brul_codegen::{Command, Commands, emit};
+use brul_codegen::{Capabilities, Command, Commands, emit};
 use brul_syntax::types::Type;
 
 const CEILING: usize = 1_200;
@@ -17,7 +17,8 @@ fn fixed_markup_stays_within_the_output_budget() {
     };
     commands.insert(command.name.clone(), command.clone());
     commands.insert("toggle_label".to_owned(), command);
-    let module = emit::module_file_with_commands(&path, &commands).expect("module");
+    let capabilities = Capabilities::discover_with_commands(&path, commands).expect("capabilities");
+    let module = emit::module_file_with_capabilities(&path, &capabilities).expect("module");
 
     let lines = module.lines().count();
     assert!(
