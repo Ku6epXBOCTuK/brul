@@ -4,7 +4,7 @@ use crate::error::{Error, Expected};
 use crate::lexer::Span;
 use crate::markup::Widget;
 use crate::markup::ast::{
-    AnchorArg, Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element,
+    AnchorName, Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element,
     Event, EventParam, File, IfBlock, Member, Prop, PropType, Slot,
 };
 
@@ -154,7 +154,15 @@ impl Cursor<'_> {
     }
 
     fn arg(&mut self) -> Result<Arg, Error> {
+        self.skip_trivia();
         let start = self.pos();
+        if self.eat('#') {
+            let name = self.ident()?;
+            return Ok(Arg::Name(AnchorName {
+                name,
+                position: position(self, start),
+            }));
+        }
         let name = self.ident()?;
         if name == "on" {
             let event = self.ident()?;
@@ -168,9 +176,9 @@ impl Cursor<'_> {
             if name == "anchor" {
                 self.skip_trivia();
                 if self.eat('@') {
-                    let target = self.ident()?;
-                    return Ok(Arg::Anchor(AnchorArg {
-                        target,
+                    let name = self.ident()?;
+                    return Ok(Arg::Anchor(AnchorName {
+                        name,
                         position: position(self, start),
                     }));
                 }

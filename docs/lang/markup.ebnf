@@ -12,9 +12,11 @@ EventParam    = Ident ":" PropType ;
 Element       = Ident [ "(" ArgList ")" ] Block ;
 ArgList       = Arg { "," Arg } ;
 Arg           = Ident                       (* класс стилей *)
+              | AnchorName                  (* статическое имя якоря *)
               | Ident ":" Script.Expr       (* параметр/привязка *)
-              | AnchorRef                   (* цель якоря *)
+              | AnchorRef                   (* ссылка на имя якоря *)
               | HandlerRef ;                (* обработчик *)
+AnchorName    = "#" Ident ;                 (* объявление имени, не класс *)
 AnchorRef     = "anchor" ":" "@" Ident ;    (* геометрия якоря задаётся стилями *)
 HandlerRef    = "on" EventName ":" Ident ;  (* справа имя функции, не выражение *)
 Block         = "{" { BlockItem } "}" ;

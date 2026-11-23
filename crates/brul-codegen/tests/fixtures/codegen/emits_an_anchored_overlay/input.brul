@@ -1,11 +1,11 @@
 <markup>
 window Demo (title: "demo") {
     Container (frame) {
-        Container (trigger) {
+        Container (trigger, #tip-target) {
             Text { "trigger" }
         }
         Layer (visible: true) {
-            Container (bubble, anchor: @trigger) {
+            Container (bubble, anchor: @tip-target) {
                 Text { "tip" }
             }
         }

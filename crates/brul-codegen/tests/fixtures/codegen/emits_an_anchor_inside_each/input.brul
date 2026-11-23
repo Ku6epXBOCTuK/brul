@@ -1,0 +1,16 @@
+<markup>
+window Demo (title: "demo") {
+    Container (frame) {
+        @each (items as item, position (item.name)) {
+            Container (row, #row-target) {
+                Text { item.name }
+            }
+            Layer (visible: true) {
+                Container (bubble, anchor: @row-target) {
+                    Text { "tip" }
+                }
+            }
+        }
+    }
+}
+</markup>

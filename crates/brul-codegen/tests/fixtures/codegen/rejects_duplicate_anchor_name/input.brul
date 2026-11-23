@@ -1,0 +1,8 @@
+<markup>
+window Demo (title: "demo") {
+    Container (frame) {
+        Container (first, #tip) { }
+        Container (second, #tip) { }
+    }
+}
+</markup>

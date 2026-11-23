@@ -156,15 +156,16 @@ pub struct EventParam {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AnchorArg {
-    pub target: String,
+pub struct AnchorName {
+    pub name: String,
     pub position: Position,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Arg {
     Class(String),
+    Name(AnchorName),
     Named { name: String, value: Expr },
     Handler { event: String, handler: String },
-    Anchor(AnchorArg),
+    Anchor(AnchorName),
 }

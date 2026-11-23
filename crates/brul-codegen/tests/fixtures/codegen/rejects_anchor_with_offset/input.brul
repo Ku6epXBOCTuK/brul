@@ -1,10 +1,10 @@
 <markup>
 window Demo (title: "demo") {
     Container (frame) {
-        Container (trigger) {
+        Container (trigger, #tip-target) {
             Text { "trigger" }
         }
-        Container (bubble, x: 4, anchor: @trigger) {
+        Container (bubble, x: 4, anchor: @tip-target) {
             Text { "tip" }
         }
     }

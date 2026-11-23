@@ -68,7 +68,7 @@ pub(super) fn component(
         .iter()
         .filter_map(|arg| match arg {
             Arg::Class(class) => Some(class.as_str()),
-            Arg::Named { .. } | Arg::Handler { .. } | Arg::Anchor(_) => None,
+            Arg::Named { .. } | Arg::Handler { .. } | Arg::Anchor(_) | Arg::Name(_) => None,
         })
         .collect();
     let class = element.args.iter().find_map(|arg| match arg {
@@ -264,7 +264,7 @@ fn collect<'a>(
     let mut events = Events::new();
     for arg in &element.args {
         match arg {
-            Arg::Class(_) | Arg::Anchor(_) => {}
+            Arg::Class(_) | Arg::Anchor(_) | Arg::Name(_) => {}
             Arg::Handler { event, handler } => events.push(event_of(
                 element, definition, name, emit, &events, event, handler,
             )?),

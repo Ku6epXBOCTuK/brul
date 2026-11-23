@@ -1,10 +1,10 @@
 <markup>
 window Demo (title: "demo") {
     Container (frame) {
-        Container (bubble, anchor: @later) {
+        Container (bubble, anchor: @later-target) {
             Text { "tip" }
         }
-        Container (later) {
+        Container (later, #later-target) {
             Text { "target" }
         }
     }

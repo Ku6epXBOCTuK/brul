@@ -14,10 +14,10 @@
     component Tooltip {
         prop text: String = "";
 
-        Container (tooltip, on enter: show, on leave: hide) {
+        Container (tooltip, #tooltip-anchor, on enter: show, on leave: hide) {
             @slot
             Layer (bubble-layer, visible: shown) {
-                Container (bubble, anchor: @tooltip) {
+                Container (bubble, anchor: @tooltip-anchor) {
                     Text (bubble-text) { text }
                 }
             }

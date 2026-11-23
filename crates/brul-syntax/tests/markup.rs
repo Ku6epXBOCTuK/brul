@@ -1,7 +1,7 @@
 use brul_syntax::ast::{BinaryOp, Expr, ExprKind, Position, TemplatePart, UnaryOp};
 use brul_syntax::markup::{
-    Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element, Event,
-    EventParam, File, IfBlock, Member, Prop, PropType, Widget, parse_file,
+    AnchorName, Arg, Block, BlockItem, Branch, Declaration, DeclarationKind, EachBlock, Element,
+    Event, EventParam, File, IfBlock, Member, Prop, PropType, Widget, parse_file,
 };
 
 fn expr(kind: ExprKind) -> Expr {
@@ -91,6 +91,33 @@ fn element_args_parse_handlers_and_expressions() {
             block: Block { items: Vec::new() },
         })]
     );
+}
+
+#[test]
+fn anchor_name_parses_separately_from_classes() {
+    let source = r#"component Tip {
+        Container (trigger, #tip-target) {
+            Container (bubble, anchor: @tip-target) { }
+        }
+    }"#;
+    let file = parse_file(source).unwrap();
+    let declaration = file.declaration.as_ref().unwrap();
+    let Member::Element(trigger) = &declaration.members[0] else {
+        panic!("expected an element")
+    };
+    assert_eq!(trigger.args[0], Arg::Class("trigger".to_owned()));
+    assert!(matches!(
+        &trigger.args[1],
+        Arg::Name(AnchorName { name, .. }) if name == "tip-target"
+    ));
+    let BlockItem::Element(bubble) = &trigger.block.items[0] else {
+        panic!("expected an element")
+    };
+    assert_eq!(bubble.args[0], Arg::Class("bubble".to_owned()));
+    assert!(matches!(
+        &bubble.args[1],
+        Arg::Anchor(AnchorName { name, .. }) if name == "tip-target"
+    ));
 }
 
 #[test]

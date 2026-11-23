@@ -173,7 +173,7 @@ fn classes(element: &Element) -> Vec<&str> {
         .iter()
         .filter_map(|arg| match arg {
             Arg::Class(class) => Some(class.as_str()),
-            Arg::Named { .. } | Arg::Handler { .. } | Arg::Anchor(_) => None,
+            Arg::Named { .. } | Arg::Handler { .. } | Arg::Anchor(_) | Arg::Name(_) => None,
         })
         .collect()
 }
@@ -621,7 +621,7 @@ fn registered_widget(
     let mut class = None;
     for arg in &element.args {
         match arg {
-            Arg::Class(_) | Arg::Anchor(_) => {}
+            Arg::Class(_) | Arg::Anchor(_) | Arg::Name(_) => {}
             Arg::Handler { event, handler } => {
                 if handlers.iter().any(|(name, _, _)| *name == event.as_str()) {
                     return Err(error_at(
