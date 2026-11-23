@@ -146,10 +146,7 @@ pub fn split_component_file_with_widgets(
     let command_names = commands::names(commands);
     validate_components(&registry.definitions, &command_names)?;
     let source = crate::Source::empty();
-    let mut names = names::table(&source, &registry.definitions);
-    for name in crate::widgets::names(widgets) {
-        names.intern(name);
-    }
+    let names = names::table(&source, &registry.definitions, widgets);
     let mut used = HashSet::new();
     let bases: Vec<String> = registry
         .definitions
@@ -202,10 +199,7 @@ fn module_at(
     }
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
-    let mut names = names::table(&parsed, &registry.definitions);
-    for name in crate::widgets::names(widgets) {
-        names.intern(name);
-    }
+    let names = names::table(&parsed, &registry.definitions, widgets);
     let root_props = names::declared(&declaration.members);
     let mut root_external = names::declared_events(&declaration.members);
     let command_names = commands::names(commands);

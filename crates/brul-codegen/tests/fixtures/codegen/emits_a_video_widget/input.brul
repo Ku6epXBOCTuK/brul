@@ -1,0 +1,10 @@
+<script>
+    function finished(): Void { }
+    function failed(message: String): Void { }
+</script>
+
+<markup>
+    window VideoDemo (title: "video") {
+        Video (source: "clip.gif", playing: true, on ended: finished, on error: failed)
+    }
+</markup>

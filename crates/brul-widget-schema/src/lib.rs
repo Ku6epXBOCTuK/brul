@@ -143,6 +143,30 @@ const EVENTS: &[EventSpec] = &[
     },
 ];
 
+const VIDEO_PROPS: &[PropSpec] = &[
+    PropSpec {
+        name: "source",
+        ty: "String",
+        target: "Text",
+    },
+    PropSpec {
+        name: "playing",
+        ty: "Bool",
+        target: "Flag",
+    },
+];
+
+const VIDEO_EVENTS: &[EventSpec] = &[
+    EventSpec {
+        name: "ended",
+        params: &[],
+    },
+    EventSpec {
+        name: "error",
+        params: &["String"],
+    },
+];
+
 pub const ELEMENTS: &[ElementSpec] = &[
     ElementSpec {
         name: "Container",
@@ -173,6 +197,12 @@ pub const ELEMENTS: &[ElementSpec] = &[
         kind: ElementKind::Container,
         props: PROPS,
         events: EVENTS,
+    },
+    ElementSpec {
+        name: "Video",
+        kind: ElementKind::Leaf,
+        props: VIDEO_PROPS,
+        events: VIDEO_EVENTS,
     },
 ];
 

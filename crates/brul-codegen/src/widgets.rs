@@ -36,7 +36,7 @@ pub struct WidgetSpec {
 pub type Widgets = HashMap<String, WidgetSpec>;
 
 pub fn collect(root: &Path) -> Result<Widgets, Error> {
-    let mut widgets = Widgets::new();
+    let mut widgets = builtins();
     let sources = crate::commands::rust_sources(root)
         .map_err(|error| at(format!("cannot read '{}': {error}", root.display())))?;
     for path in sources {
@@ -60,14 +60,32 @@ pub fn collect(root: &Path) -> Result<Widgets, Error> {
     Ok(widgets)
 }
 
-pub fn names(widgets: &Widgets) -> Vec<&str> {
-    let mut names: Vec<&str> = widgets
-        .values()
-        .flat_map(|widget| widget.props.iter().map(|prop| prop.name.as_str()))
-        .collect();
-    names.sort_unstable();
-    names.dedup();
-    names
+pub(crate) fn builtins() -> Widgets {
+    let video = WidgetSpec {
+        name: "Video".to_owned(),
+        view: "::brul::video::view".to_owned(),
+        props: vec![
+            WidgetProp {
+                name: "source".to_owned(),
+                ty: Type::String,
+            },
+            WidgetProp {
+                name: "playing".to_owned(),
+                ty: Type::Bool,
+            },
+        ],
+        events: vec![
+            WidgetEvent {
+                name: "ended".to_owned(),
+                params: Vec::new(),
+            },
+            WidgetEvent {
+                name: "error".to_owned(),
+                params: vec![Type::String],
+            },
+        ],
+    };
+    Widgets::from([(video.name.clone(), video)])
 }
 
 fn is_widget(function: &ItemFn) -> bool {

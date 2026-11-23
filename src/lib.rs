@@ -16,10 +16,10 @@ pub mod build {
 
 pub use brul_codegen::runtime::{
     Binding, BindingTarget, Build, Built, ClassTable, ComponentEvent, ComponentHandle,
-    DEFAULT_SLOT, FlagExpression, Handler, HandlerEvent, Instance, NumberExpression, PropArgument,
-    PropBinding, PropExpression, Rebuilt, RowInfo, RowKey, SharedStates, SlotArgument, Slots,
-    StateId, States, Structure, TextExpression, View, ViewError, instance, register_structure,
-    slot,
+    DEFAULT_SLOT, EventSink, FlagExpression, Handler, HandlerEvent, Instance, NumberExpression,
+    PropArgument, PropBinding, PropExpression, Rebuilt, RowInfo, RowKey, SharedStates,
+    SlotArgument, Slots, StateId, States, Structure, TextExpression, View, ViewError,
+    emit_widget_event, instance, register_structure, slot,
 };
 pub use brul_gpu::effect;
 pub use brul_gui as gui;
@@ -33,6 +33,7 @@ pub use brul_script::{
 pub use brul_style as style;
 pub use brul_syntax::ast;
 pub use brul_syntax::markup::PropType;
+pub use brul_video as video;
 pub use brul_window::perf;
 pub use brul_window::{Backend, UnknownBackend, WindowConfig, WindowKey, WindowPosition};
 pub use each::RowMatcher;

@@ -1511,6 +1511,7 @@ fn a_timer_from_a_nested_component_runs_in_its_component() {
             structures,
             nested,
             states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
         },
         Rc::clone(&commands),
         true,

@@ -1,13 +1,15 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use brul_gui::{WidgetId, WidgetTree};
 
 use super::{Owned, OwnedStructure};
 use crate::each::reconcile_each;
 use crate::{
-    Binding, Build, Built, ComponentHandle, Handler, PropBinding, RowInfo, SharedStates, Structure,
+    Binding, Build, Built, ComponentHandle, EventSink, Handler, PropBinding, RowInfo, SharedStates,
+    Structure,
 };
 
 #[derive(Default)]
@@ -32,6 +34,7 @@ pub(super) struct Pending {
     pub(super) rows: Vec<(WidgetId, Vec<RowInfo>)>,
     pub(super) by_parent: HashMap<WidgetId, Structure>,
     states: SharedStates,
+    event_sink: Option<Arc<dyn EventSink>>,
     pub(super) staged: Staged,
 }
 
@@ -40,6 +43,7 @@ impl Pending {
         structures: Vec<OwnedStructure>,
         rows: Vec<(WidgetId, Vec<RowInfo>)>,
         states: SharedStates,
+        event_sink: Option<Arc<dyn EventSink>>,
     ) -> Self {
         let by_parent = structures
             .iter()
@@ -50,6 +54,7 @@ impl Pending {
             rows,
             by_parent,
             states,
+            event_sink,
             staged: Staged::default(),
         }
     }
@@ -72,7 +77,13 @@ impl Pending {
             rows,
             structures,
             components,
-        }) = rebuild_structure(structure, theme, &old_rows, Rc::clone(&self.states))
+        }) = rebuild_structure(
+            structure,
+            theme,
+            &old_rows,
+            Rc::clone(&self.states),
+            self.event_sink.clone(),
+        )
         else {
             if structure.each {
                 self.rows.push((parent, old_rows));
@@ -124,12 +135,14 @@ fn rebuild_structure(
     theme: Option<&str>,
     old_rows: &[RowInfo],
     states: SharedStates,
+    event_sink: Option<Arc<dyn EventSink>>,
 ) -> Option<Rebuilt> {
     let component = Rc::clone(&structure.component);
     let previous = component.borrow().scope().clone();
     component.borrow_mut().set_scope(structure.scope.clone());
     let mut build = Build::with_slots(structure.slots.clone());
     build.set_states(states);
+    build.set_event_sink(event_sink);
     let rebuilt = (structure.rebuild)(theme, &mut build, &component, old_rows);
     let structures = build.take_structures();
     let components = build.take_components();

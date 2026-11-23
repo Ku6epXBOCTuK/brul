@@ -12,9 +12,17 @@ use brul_window::{
 use crate::handle::{Handle, Message, ScopedMessage, take};
 use crate::ui::{AssemblyParts, CommandHost};
 use crate::{
-    Build, Built, Component, ComponentHandle, Host, Script, Theme, Ui, Value, ViewError,
-    WindowConfig,
+    Build, Built, Component, ComponentHandle, EventSink, Host, Script, StateId, Theme, Ui, Value,
+    ViewError, WindowConfig,
 };
+
+struct HandleSink(Handle);
+
+impl EventSink for HandleSink {
+    fn widget(&self, state: StateId, event: &str, arguments: Vec<Value>) {
+        self.0.widget(state, event, arguments);
+    }
+}
 
 pub(crate) trait CommandSink {
     fn send(&self, command: ScopedCommand);
@@ -99,7 +107,9 @@ pub fn run_generated_with<T: Theme>(
         move |key| closed.borrow_mut().close(key),
         move |waker| {
             attaching.borrow_mut().sink = Some(Box::new(waker.clone()));
-            ready(Handle::new(queue, waker, WindowKey(0)));
+            let handle = Handle::new(queue, waker, WindowKey(0));
+            attaching.borrow_mut().handle = Some(handle.clone());
+            ready(handle);
         },
         move || {
             let messages = take(&waking_queue);
@@ -164,6 +174,7 @@ struct Runtime<T: Theme> {
     shown: Rc<RefCell<Option<String>>>,
     pending: Vec<WindowCommand>,
     sink: Option<Box<dyn CommandSink>>,
+    handle: Option<Handle>,
 }
 
 impl<T: Theme> Runtime<T> {
@@ -186,6 +197,7 @@ impl<T: Theme> Runtime<T> {
             shown,
             pending,
             sink,
+            handle: None,
         };
         let pending = std::mem::take(&mut runtime.pending);
         runtime.pending = runtime.absorb(pending);
@@ -262,6 +274,11 @@ impl<T: Theme> Runtime<T> {
             "creating window"
         );
         let mut build = Build::new();
+        let event_sink = self
+            .handle
+            .clone()
+            .map(|handle| Arc::new(HandleSink(handle)) as Arc<dyn EventSink>);
+        build.set_event_sink(event_sink.clone());
         let built =
             view(self.fixed_theme, &mut build, &self.component).map_err(WindowError::app)?;
         let structures = build.take_structures();
@@ -276,6 +293,7 @@ impl<T: Theme> Runtime<T> {
                 structures,
                 nested: components,
                 states,
+                event_sink,
             },
             Rc::clone(&self.commands),
             config.scroll,

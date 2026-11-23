@@ -1,0 +1,16 @@
+[package]
+name = "brul-video"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+brul-codegen = { workspace = true }
+brul-gui = { workspace = true }
+brul-script = { workspace = true }
+brul-syntax = { workspace = true }
+image = { workspace = true, features = ["gif", "png"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }

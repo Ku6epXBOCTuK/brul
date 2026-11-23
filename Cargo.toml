@@ -18,6 +18,7 @@ brul-reactive = { workspace = true }
 brul-script = { workspace = true }
 brul-style = { workspace = true }
 brul-syntax = { workspace = true }
+brul-video = { workspace = true }
 brul-window = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -78,6 +79,7 @@ brul-style = { path = 'crates\brul-style' }
 brul-style-gen = { path = 'crates\brul-style-gen' }
 brul-style-schema = { path = 'crates\brul-style-schema' }
 brul-syntax = { path = 'crates\brul-syntax' }
+brul-video = { path = 'crates\brul-video' }
 brul-window = { path = 'crates\brul-window' }
 brul-widget-gen = { path = 'crates\brul-widget-gen' }
 brul-widget-schema = { path = 'crates\brul-widget-schema' }

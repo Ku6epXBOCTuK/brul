@@ -202,5 +202,5 @@ pub fn script() -> Option<brul::Script> {
 }
 
 pub fn names() -> &'static [&'static str] {
-    &["amount", "label", "value"]
+    &["amount", "value", "label"]
 }

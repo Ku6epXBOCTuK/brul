@@ -65,6 +65,7 @@ goldens! {
     emits_a_dynamic_class_binding_and_its_table,
     emits_a_layer,
     emits_a_registered_widget,
+    emits_a_video_widget,
     emits_a_linear_gradient_background,
     emits_a_modal_layer_that_dismisses,
     emits_a_multiline_text_input,

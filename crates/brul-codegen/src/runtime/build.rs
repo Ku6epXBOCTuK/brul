@@ -1,7 +1,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use super::component::ComponentHandle;
+use super::event_sink::EventSink;
 use super::slot::Slots;
 use super::state::{SharedStates, StateId, States};
 use super::structure::Structure;
@@ -12,6 +14,7 @@ pub struct Build {
     structures: Vec<Structure>,
     components: Vec<ComponentHandle>,
     states: SharedStates,
+    event_sink: Option<Arc<dyn EventSink>>,
 }
 
 impl Build {
@@ -25,6 +28,7 @@ impl Build {
             structures: Vec::new(),
             components: Vec::new(),
             states: Rc::new(RefCell::new(States::default())),
+            event_sink: None,
         }
     }
 
@@ -34,6 +38,14 @@ impl Build {
 
     pub fn take_states(&self) -> SharedStates {
         Rc::clone(&self.states)
+    }
+
+    pub fn set_event_sink(&mut self, sink: Option<Arc<dyn EventSink>>) {
+        self.event_sink = sink;
+    }
+
+    pub fn event_sink(&self) -> Option<Arc<dyn EventSink>> {
+        self.event_sink.clone()
     }
 
     pub fn state<T: 'static>(

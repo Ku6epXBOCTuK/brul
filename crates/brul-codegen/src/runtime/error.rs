@@ -13,6 +13,8 @@ pub enum ViewError {
         expected: &'static str,
         found: &'static str,
     },
+    #[error("{0}")]
+    Message(String),
 }
 
 impl ViewError {

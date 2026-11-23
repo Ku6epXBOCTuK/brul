@@ -26,7 +26,7 @@ pub fn generate_with(entry: &Path, commands: &Commands) -> Result<Module, Error>
     let widgets = if dir.is_dir() {
         widgets::collect(&dir)?
     } else {
-        Widgets::new()
+        widgets::builtins()
     };
     generate_with_widgets(entry, commands, &widgets)
 }

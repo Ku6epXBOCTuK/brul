@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use brul_codegen::runtime::{self, accepts_prop};
@@ -13,8 +14,8 @@ use brul_window::{TimerCommand, WindowCommand};
 use crate::Host;
 use crate::event::{arguments, call, handler_target};
 use crate::{
-    Binding, Build, Built, ComponentHandle, Dyn, FunctionName, Handler, HandlerEvent, PropBinding,
-    RowInfo, SharedStates, StateId, Structure, Theme, TimerRequest, Value, ViewError,
+    Binding, Build, Built, ComponentHandle, Dyn, EventSink, FunctionName, Handler, HandlerEvent,
+    PropBinding, RowInfo, SharedStates, StateId, Structure, Theme, TimerRequest, Value, ViewError,
 };
 
 mod host;
@@ -32,6 +33,7 @@ pub(crate) struct AssemblyParts {
     pub(crate) structures: Vec<Structure>,
     pub(crate) nested: Vec<ComponentHandle>,
     pub(crate) states: SharedStates,
+    pub(crate) event_sink: Option<Arc<dyn EventSink>>,
 }
 
 fn timer_command(request: TimerRequest, owner: TimerOwner) -> Option<WindowCommand> {
@@ -115,6 +117,7 @@ pub struct Ui<T: Theme> {
     pub(crate) theme: Option<T>,
     textures: runtime::Textures,
     pub(crate) states: SharedStates,
+    event_sink: Option<Arc<dyn EventSink>>,
     scope: EffectScope,
 }
 
@@ -149,6 +152,7 @@ impl<T: Theme> Ui<T> {
                 structures,
                 nested: Vec::new(),
                 states: Rc::new(RefCell::new(crate::States::default())),
+                event_sink: None,
             },
             Rc::clone(&commands),
             true,
@@ -181,6 +185,7 @@ impl<T: Theme> Ui<T> {
             structures,
             nested,
             states,
+            event_sink,
         } = parts;
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         tree.borrow_mut().set_root_scroll(scroll);
@@ -209,6 +214,7 @@ impl<T: Theme> Ui<T> {
             theme,
             textures: runtime::Textures::default(),
             states,
+            event_sink,
             scope: EffectScope::new(),
         };
         for handle in std::iter::once(component).chain(nested) {
@@ -407,6 +413,7 @@ impl<T: Theme> Ui<T> {
     fn rebuild(&mut self) -> Result<(), ViewError> {
         let mut build = Build::new();
         build.set_states(Rc::clone(&self.states));
+        build.set_event_sink(self.event_sink.clone());
         let built = (self.view)(self.theme, &mut build, &self.component);
         let structures = build.take_structures();
         let nested = build.take_components();
@@ -539,6 +546,7 @@ impl<T: Theme> Ui<T> {
             std::mem::take(&mut self.structures),
             std::mem::take(&mut self.rows),
             Rc::clone(&self.states),
+            self.event_sink.clone(),
         );
         let mut changed = false;
         for parent in requests {
