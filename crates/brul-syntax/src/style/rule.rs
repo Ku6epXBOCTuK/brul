@@ -2,6 +2,8 @@
 rule! {
     pub enum Rule {
         Stylesheet,
+        BuiltinStylesheet,
+        Binding,
         ThemeBlock,
         ThemeProp,
         OverrideBlock,

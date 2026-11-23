@@ -67,6 +67,7 @@ pub fn parse(source: &str) -> Result<Source, Error> {
             },
             overrides: Vec::new(),
             effects: Vec::new(),
+            bindings: Vec::new(),
         },
     };
     let uses = match sfc.uses {

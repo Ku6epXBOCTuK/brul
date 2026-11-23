@@ -13,7 +13,6 @@ pub(super) use structure::StructureNames;
 
 mod alloc;
 mod anchor;
-mod builtin;
 mod builtins;
 mod class;
 mod classes;

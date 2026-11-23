@@ -1,3 +1,6 @@
+@apply TextInput brul-input;
+@apply on drag brul-draggable;
+
 .brul-input {
     cursor: text;
 }

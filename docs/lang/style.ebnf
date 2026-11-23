@@ -1,4 +1,6 @@
 Stylesheet  = { ThemeBlock | OverrideBlock | ClassRule } ;
+BuiltinStylesheet = { Binding | ClassRule } ;
+Binding     = "@apply" [ "on" ] Ident Ident ";" ;
 ThemeBlock  = "theme" Ident "{" { ThemeProp } "}" ;
 ThemeProp   = Ident ":" ThemeValue ";" ;
 OverrideBlock = "override" Ident "{" { ClassRule } "}" ;

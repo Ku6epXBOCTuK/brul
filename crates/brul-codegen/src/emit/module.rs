@@ -143,10 +143,11 @@ pub fn split_component_file_with_widgets(
     commands: &Commands,
     widgets: &Widgets,
 ) -> Result<Module, Error> {
-    let (registry, entry) = crate::load_entry(path)?;
+    let (mut registry, entry) = crate::load_entry(path)?;
     let command_names = commands::names(commands);
     validate_components(&registry.definitions, &command_names)?;
-    let source = crate::Source::empty();
+    let mut source = crate::Source::empty();
+    crate::builtin::compose(&mut source, &mut registry, widgets)?;
     let names = names::table(&source, &registry.definitions, widgets);
     let anchor_table = anchor::collect(&source, &registry.definitions)?;
     let mut used = HashSet::new();
@@ -192,7 +193,10 @@ fn module_at(
     commands: &Commands,
     widgets: &Widgets,
 ) -> Result<Module, Error> {
-    let parsed = crate::parse_source(source)?;
+    let mut parsed = crate::parse_source(source)?;
+    let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
+    crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
+    crate::builtin::compose(&mut parsed, &mut registry, widgets)?;
     let declaration = parsed
         .declaration
         .as_ref()
@@ -203,8 +207,6 @@ fn module_at(
             "entry declaration must be a window",
         ));
     }
-    let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
-    crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
     let names = names::table(&parsed, &registry.definitions, widgets);
     let anchor_table = anchor::collect(&parsed, &registry.definitions)?;
     let root_props = names::declared(&declaration.members);

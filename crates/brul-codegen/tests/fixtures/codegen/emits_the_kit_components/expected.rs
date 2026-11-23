@@ -182,7 +182,13 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
 }
 
 #[allow(dead_code)]
-static DEMO_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
+static DEMO_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 2]> = std::sync::LazyLock::new(|| [
+    brul::gui::Class {
+        layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Text), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+        transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+    },
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
@@ -192,7 +198,13 @@ static DEMO_CLASSES_DARK: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync
 ]);
 
 #[allow(dead_code)]
-static DEMO_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
+static DEMO_CLASSES_LIGHT: std::sync::LazyLock<[brul::gui::Class; 2]> = std::sync::LazyLock::new(|| [
+    brul::gui::Class {
+        layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Text), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+        transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+    },
     brul::gui::Class {
         layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
         style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
@@ -234,7 +246,32 @@ fn demo_styles() -> &'static brul::style::Stylesheet {
                 s::ThemeEntry { key: "muted".into(), value: s::Value::Color(s::Color::rgba(71, 85, 105, 255)) },
             ] },
         ],
-        rules: vec![],
+        rules: vec![
+            s::ClassRule {
+                class: "brul-input".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("text".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grab".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: Some(s::State::Pressed),
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grabbing".into()) },
+                ],
+                animations: vec![],
+            },
+        ],
     });
     &STYLES
 }
@@ -435,6 +472,30 @@ fn button_styles() -> &'static brul::style::Stylesheet {
             ] },
         ],
         rules: vec![
+            s::ClassRule {
+                class: "brul-input".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("text".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grab".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: Some(s::State::Pressed),
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grabbing".into()) },
+                ],
+                animations: vec![],
+            },
             s::ClassRule {
                 class: "button".into(),
                 state: None,
@@ -737,6 +798,30 @@ fn card_styles() -> &'static brul::style::Stylesheet {
         ],
         rules: vec![
             s::ClassRule {
+                class: "brul-input".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("text".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grab".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: Some(s::State::Pressed),
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grabbing".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
                 class: "card".into(),
                 state: None,
                 properties: vec![
@@ -923,6 +1008,30 @@ fn tooltip_styles() -> &'static brul::style::Stylesheet {
             ] },
         ],
         rules: vec![
+            s::ClassRule {
+                class: "brul-input".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("text".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grab".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: Some(s::State::Pressed),
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grabbing".into()) },
+                ],
+                animations: vec![],
+            },
             s::ClassRule {
                 class: "tooltip".into(),
                 state: None,
@@ -1205,6 +1314,30 @@ fn checkbox_styles() -> &'static brul::style::Stylesheet {
             ] },
         ],
         rules: vec![
+            s::ClassRule {
+                class: "brul-input".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("text".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grab".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: Some(s::State::Pressed),
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grabbing".into()) },
+                ],
+                animations: vec![],
+            },
             s::ClassRule {
                 class: "checkbox".into(),
                 state: None,
@@ -1562,6 +1695,30 @@ fn dialog_styles() -> &'static brul::style::Stylesheet {
         ],
         rules: vec![
             s::ClassRule {
+                class: "brul-input".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("text".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grab".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: Some(s::State::Pressed),
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grabbing".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
                 class: "dialog-layer".into(),
                 state: None,
                 properties: vec![
@@ -1784,12 +1941,7 @@ fn demo_slot5(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut props = Vec::new();
     let mut children = Vec::new();
     children.push({
-        let widget0 = demo_styled(brul::gui::Widget::input("").with_class(&brul::gui::Class {
-            layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
-            style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Text), ..brul::gui::WidgetStylePatch::DEFAULT }),
-            text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
-            transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
-        }), &[0], theme);
+        let widget0 = demo_styled(brul::gui::Widget::input(""), &[0, 1], theme);
         bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<DemoScriptState>().draft.get()) })));
         widget0
     });

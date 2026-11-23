@@ -5,6 +5,12 @@ use crate::runtime::ViewError;
 
 pub use brul_gui::style::Resolved;
 
+pub fn compose(user: &Stylesheet, builtin: &Stylesheet) -> Stylesheet {
+    let mut composed = builtin.clone();
+    composed.rules.extend(user.rules.iter().cloned());
+    composed
+}
+
 pub fn resolve(
     stylesheet: &Stylesheet,
     classes: &[&str],

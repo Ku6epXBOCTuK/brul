@@ -14,7 +14,6 @@ use super::Emit;
 use super::Frame;
 use super::Out;
 use super::anchor;
-use super::builtin;
 use super::classes;
 use super::{component, events, expression, structure};
 use crate::runtime::HandlerEvent;
@@ -117,12 +116,6 @@ fn element_expression(
         out.push(format_args!("{}styled(", emit.resource_prefix));
     }
     let content = kind(out, element, emit, frame, counter)?;
-    if events.drag {
-        builtin::apply(out, builtin::Class::Draggable)?;
-    }
-    if matches!(element.widget, Some(Widget::TextInput)) {
-        builtin::apply(out, builtin::Class::Input)?;
-    }
     if styled {
         let list = classes
             .iter()

@@ -15,6 +15,20 @@ pub struct Style {
     pub stylesheet: Stylesheet,
     pub overrides: Vec<Override>,
     pub effects: Vec<EffectRule>,
+    pub bindings: Vec<Binding>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Target {
+    Element(String),
+    Event(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct Binding {
+    pub target: Target,
+    pub class: String,
+    pub at: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -54,16 +68,17 @@ pub fn parse_root(source: &str) -> Result<Style, Error> {
 }
 
 #[derive(Clone, Copy)]
-enum Scope<'a> {
+pub(super) enum Scope<'a> {
     Root,
     Standalone,
     Imported(&'a [Theme]),
+    Builtin(&'a [Theme]),
 }
 
 impl<'a> Scope<'a> {
     fn palette(self) -> Option<&'a [Theme]> {
         match self {
-            Self::Imported(palette) => Some(palette),
+            Self::Imported(palette) | Self::Builtin(palette) => Some(palette),
             Self::Root | Self::Standalone => None,
         }
     }
@@ -71,9 +86,13 @@ impl<'a> Scope<'a> {
     fn allows_overrides(self) -> bool {
         matches!(self, Self::Root)
     }
+
+    fn allows_bindings(self) -> bool {
+        matches!(self, Self::Builtin(_))
+    }
 }
 
-fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
+pub(super) fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
     let mut cursor = Cursor::new(source);
     let mut themes = Vec::new();
     let mut theme_positions = Vec::new();
@@ -81,12 +100,32 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
     let mut positions = Vec::new();
     let mut overrides = Vec::new();
     let mut effects = Vec::new();
+    let mut bindings = Vec::new();
     loop {
         cursor.skip_trivia();
         if cursor.peek().is_none() {
             break;
         }
-        if cursor.eat_keyword("theme") {
+        if cursor.peek() == Some('@') {
+            if !scope.allows_bindings() {
+                return Err(cursor.error(Error::custom(
+                    "bindings are only allowed in the builtin stylesheet",
+                )));
+            }
+            let binding = binding(&mut cursor)?;
+            if bindings
+                .iter()
+                .any(|other: &Binding| other.target == binding.target)
+            {
+                // NOTE: duplicate targets would make the applied class order-dependent
+                return Err(Error::at(
+                    source,
+                    binding.at,
+                    Error::custom(format!("duplicate binding for '{:?}'", binding.target)),
+                ));
+            }
+            bindings.push(binding);
+        } else if cursor.eat_keyword("theme") {
             if scope.palette().is_some() {
                 return Err(cursor.error(Error::ThemeNotRoot));
             }
@@ -108,6 +147,13 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
             overrides.push(over);
         } else {
             let (rule, position, rule_effects) = cursor.class_rule()?;
+            if !scope.allows_bindings() && rule.class.starts_with("brul-") {
+                return Err(Error::at(
+                    source,
+                    position.class_at,
+                    Error::custom(format!("class name '{}' is reserved", rule.class)),
+                ));
+            }
             rules.push(rule);
             positions.push(position);
             effects.extend(rule_effects);
@@ -128,6 +174,21 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
         validate::refs(declared, &over.rules, &over.positions).map_err(report)?;
     }
     validate::states(&rules, &positions).map_err(report)?;
+    for binding in &bindings {
+        if !rules
+            .iter()
+            .any(|rule: &brul_style::ClassRule| rule.class == binding.class)
+        {
+            return Err(Error::at(
+                source,
+                binding.at,
+                Error::custom(format!(
+                    "binding references unknown class '{}'",
+                    binding.class
+                )),
+            ));
+        }
+    }
     Ok(Style {
         stylesheet: Stylesheet {
             themes: declared.to_vec(),
@@ -135,7 +196,25 @@ fn parse(source: &str, scope: Scope<'_>) -> Result<Style, Error> {
         },
         overrides,
         effects,
+        bindings,
     })
+}
+
+fn binding(cursor: &mut Cursor<'_>) -> Result<Binding, Error> {
+    let at = cursor.pos();
+    cursor.expect('@')?;
+    let name = cursor.ident()?;
+    if name != "apply" {
+        return Err(cursor.error_at(at, Error::UnexpectedDirective(name)));
+    }
+    let target = if cursor.eat_keyword("on") {
+        Target::Event(cursor.ident()?)
+    } else {
+        Target::Element(cursor.ident()?)
+    };
+    let class = cursor.ident()?;
+    cursor.expect(';')?;
+    Ok(Binding { target, class, at })
 }
 
 fn arguments_end(source: &str, start: usize) -> Result<usize, Error> {

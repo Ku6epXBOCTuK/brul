@@ -82,6 +82,30 @@ fn demo_styles() -> &'static brul::style::Stylesheet {
         ],
         rules: vec![
             s::ClassRule {
+                class: "brul-input".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("text".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grab".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: Some(s::State::Pressed),
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grabbing".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
                 class: "a".into(),
                 state: None,
                 properties: vec![

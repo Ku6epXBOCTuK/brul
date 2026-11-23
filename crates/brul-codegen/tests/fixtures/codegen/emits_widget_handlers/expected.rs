@@ -39,20 +39,14 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        brul::gui::Widget::view(brul::gui::Direction::Row, vec![
+        demo_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
             {
                 let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]);
                 handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Click, demo_script_event_toggle));
                 handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::HandlerEvent::Enter, demo_script_event_toggle));
                 widget0
             },
-        ]).with_class(&brul::gui::Class {
-            layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
-            style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Grab), ..brul::gui::WidgetStylePatch::DEFAULT })
-                .with(brul::gui::StyleState::Pressed, brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Grabbing), ..brul::gui::WidgetStylePatch::DEFAULT }),
-            text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
-            transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
-        }).draggable(true)
+        ]), &[0], theme).draggable(true)
     };
     Ok(brul::Built {
         widget,
@@ -63,7 +57,14 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
 }
 
 #[allow(dead_code)]
-static DEMO_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
+static DEMO_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
+    brul::gui::Class {
+        layout: brul::gui::LayoutPatch { ..brul::gui::LayoutPatch::DEFAULT },
+        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Grab), ..brul::gui::WidgetStylePatch::DEFAULT })
+            .with(brul::gui::StyleState::Pressed, brul::gui::WidgetStylePatch { cursor: Some(brul::gui::Cursor::Grabbing), ..brul::gui::WidgetStylePatch::DEFAULT }),
+        text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
+        transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
+    },
 ]);
 
 fn demo_classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
@@ -76,7 +77,32 @@ fn demo_styles() -> &'static brul::style::Stylesheet {
 
     static STYLES: std::sync::LazyLock<s::Stylesheet> = std::sync::LazyLock::new(|| s::Stylesheet {
         themes: vec![],
-        rules: vec![],
+        rules: vec![
+            s::ClassRule {
+                class: "brul-input".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("text".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: None,
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grab".into()) },
+                ],
+                animations: vec![],
+            },
+            s::ClassRule {
+                class: "brul-draggable".into(),
+                state: Some(s::State::Pressed),
+                properties: vec![
+                    s::Property { kind: s::Kind::Cursor, value: s::Value::Keyword("grabbing".into()) },
+                ],
+                animations: vec![],
+            },
+        ],
     });
     &STYLES
 }

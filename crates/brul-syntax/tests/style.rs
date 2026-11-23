@@ -1,7 +1,8 @@
 use brul_style::{AreaTemplate, GridLine, LinePlacement, RepeatCount, TrackSize};
 use brul_syntax::style::{
     Animation, ClassRule, Color, ColorExpr, ColorValue, Gradient, Kind, Property, Side, State,
-    Stylesheet, Theme, ThemeEntry, Value, parse_file, parse_file_in, parse_root,
+    Stylesheet, Target, Theme, ThemeEntry, Value, parse_builtin, parse_file, parse_file_in,
+    parse_root,
 };
 
 fn sheet(rules: Vec<ClassRule>) -> Stylesheet {
@@ -1315,4 +1316,59 @@ fn grid_areas_parse() {
 fn malformed_grid_areas_are_rejected() {
     let source = ".grid { grid-template-areas: \"a b\" \"b a\"; }";
     assert!(parse_file(source).is_err());
+}
+
+#[test]
+fn bindings_are_declared_next_to_their_rules() {
+    let source = "@apply TextInput brul-input;\n@apply on drag brul-draggable;\n.brul-input { cursor: text; }\n.brul-draggable { cursor: grab; }";
+    let builtin = parse_builtin(source, &[]).unwrap();
+    assert_eq!(builtin.bindings.len(), 2);
+    assert_eq!(
+        builtin.bindings[0].target,
+        Target::Element("TextInput".into())
+    );
+    assert_eq!(builtin.bindings[0].class, "brul-input");
+    assert_eq!(builtin.bindings[1].target, Target::Event("drag".into()));
+    assert_eq!(builtin.bindings[1].class, "brul-draggable");
+    assert_eq!(builtin.stylesheet.rules.len(), 2);
+}
+
+#[test]
+fn builtin_rules_use_the_root_palette() {
+    let palette = parse_file("theme dark { accent: #fff; }").unwrap().themes;
+    let source = "@apply TextInput brul-input;\n.brul-input { color: theme.accent; }";
+    let builtin = parse_builtin(source, &palette).unwrap();
+    assert_eq!(builtin.stylesheet.themes, palette);
+}
+
+#[test]
+fn a_binding_needs_a_declared_class() {
+    let source = "@apply TextInput brul-missing;";
+    let error = parse_builtin(source, &[]).unwrap_err();
+    assert_eq!(
+        error.message(),
+        "binding references unknown class 'brul-missing'"
+    );
+}
+
+#[test]
+fn a_binding_target_cannot_repeat() {
+    let source = "@apply TextInput brul-input;\n@apply TextInput brul-other;\n.brul-input { }\n.brul-other { }";
+    let error = parse_builtin(source, &[]).unwrap_err();
+    assert!(error.message().contains("duplicate binding"));
+}
+
+#[test]
+fn a_reserved_class_cannot_be_declared_by_the_user() {
+    let error = parse_file(".brul-input { cursor: text; }").unwrap_err();
+    assert_eq!(error.message(), "class name 'brul-input' is reserved");
+}
+
+#[test]
+fn bindings_are_only_allowed_in_the_builtin_stylesheet() {
+    let error = parse_file("@apply TextInput brul-input;").unwrap_err();
+    assert_eq!(
+        error.message(),
+        "bindings are only allowed in the builtin stylesheet"
+    );
 }
