@@ -2,14 +2,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use brul_case::{pascal, snake};
+use brul_case::pascal;
 use brul_command::Kind;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::{FnArg, Ident, Item, ItemFn, LitStr, Pat, Token};
+use syn::{FnArg, Item, ItemFn, Pat};
 
 use crate::error_at;
 
@@ -47,7 +45,7 @@ pub fn collect(root: &Path) -> Result<Widgets, Error> {
             let Item::Fn(function) = item else {
                 continue;
             };
-            if !is_widget(function) {
+            if !brul_capability::is_widget(function) {
                 continue;
             }
             let spec = parse(function)?;
@@ -106,44 +104,13 @@ pub(crate) fn builtins() -> Widgets {
     Widgets::from([(video.name.clone(), video), (webview.name.clone(), webview)])
 }
 
-fn is_widget(function: &ItemFn) -> bool {
-    function.attrs.iter().any(|attribute| {
-        attribute
-            .path()
-            .segments
-            .last()
-            .is_some_and(|segment| segment.ident == "widget")
-    })
-}
-
 fn parse(function: &ItemFn) -> Result<WidgetSpec, Error> {
-    let attribute = function
-        .attrs
-        .iter()
-        .find(|attribute| {
-            attribute
-                .path()
-                .segments
-                .last()
-                .is_some_and(|segment| segment.ident == "widget")
-        })
-        .expect("widget attribute");
-    let arguments = if matches!(attribute.meta, syn::Meta::List(_)) {
-        attribute
-            .parse_args_with(Punctuated::<WidgetArg, Token![,]>::parse_terminated)
-            .map_err(|error| at(error.to_string()))?
-    } else {
-        Punctuated::new()
-    };
-    let mut name = None;
-    let mut events = Vec::new();
-    for argument in arguments {
-        match argument {
-            WidgetArg::Name(value) => name = Some(value.value()),
-            WidgetArg::Events(values) => events = values,
-        }
-    }
-    let name = name.unwrap_or_else(|| pascal(&function.sig.ident.to_string()));
+    let attribute = brul_capability::widget_attribute(function).expect("widget attribute");
+    let arguments =
+        brul_capability::widget_attr(attribute).map_err(|error| at(error.to_string()))?;
+    let name = arguments
+        .name
+        .unwrap_or_else(|| pascal(&function.sig.ident.to_string()));
     let mut inputs = function.sig.inputs.iter();
     for _ in 0..3 {
         if !matches!(inputs.next(), Some(FnArg::Typed(_))) {
@@ -164,18 +131,29 @@ fn parse(function: &ItemFn) -> Result<WidgetSpec, Error> {
             ty,
         });
     }
-    let events = events
+    let events = arguments
+        .events
         .into_iter()
-        .map(|event| WidgetEvent {
-            name: event.name,
-            params: event.params,
+        .map(|event| {
+            let params = event
+                .params
+                .into_iter()
+                .map(|param| {
+                    Type::from_name(&param)
+                        .ok_or_else(|| at(format!("unknown event parameter type '{param}'")))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(WidgetEvent {
+                name: event.name,
+                params,
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, Error>>()?;
     Ok(WidgetSpec {
         name,
         view: format!(
-            "crate::__brul_widget_{}",
-            snake(&function.sig.ident.to_string())
+            "crate::{}",
+            brul_capability::widget_shim(&function.sig.ident)
         ),
         props,
         events,
@@ -194,52 +172,4 @@ fn prop_type(kind: Kind) -> Result<Type, Error> {
 
 fn at(message: impl Into<String>) -> Error {
     error_at(Position { line: 1, column: 1 }, message)
-}
-
-enum WidgetArg {
-    Name(LitStr),
-    Events(Vec<EventArg>),
-}
-
-struct EventArg {
-    name: String,
-    params: Vec<Type>,
-}
-
-impl Parse for WidgetArg {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let key: Ident = input.parse()?;
-        if key == "name" {
-            input.parse::<Token![=]>()?;
-            return Ok(Self::Name(input.parse()?));
-        }
-        if key == "events" {
-            let content;
-            syn::parenthesized!(content in input);
-            let events = Punctuated::<EventArg, Token![,]>::parse_terminated(&content)?;
-            return Ok(Self::Events(events.into_iter().collect()));
-        }
-        Err(syn::Error::new(key.span(), "expected `name` or `events`"))
-    }
-}
-
-impl Parse for EventArg {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let name: Ident = input.parse()?;
-        input.parse::<Token![:]>()?;
-        let content;
-        syn::bracketed!(content in input);
-        let params = Punctuated::<Ident, Token![,]>::parse_terminated(&content)?;
-        let params = params
-            .into_iter()
-            .map(|param| {
-                Type::from_name(&param.to_string())
-                    .ok_or_else(|| syn::Error::new(param.span(), "unknown event parameter type"))
-            })
-            .collect::<syn::Result<Vec<_>>>()?;
-        Ok(Self {
-            name: name.to_string(),
-            params,
-        })
-    }
 }

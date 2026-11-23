@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+brul-capability = { workspace = true }
 brul-case = { workspace = true }
 brul-command = { workspace = true }
 brul-gpu = { workspace = true }

@@ -1,16 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::Path;
 
-use brul_case::snake;
+use brul_capability::AttachEventKind;
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::{FnArg, Ident, Item, ItemFn, LitStr, Pat, Token};
+use syn::{FnArg, Item, ItemFn, Pat};
 
 use crate::error_at;
-use crate::runtime::AttachEvents;
 
 #[derive(Clone, Debug)]
 pub struct AttachParam {
@@ -24,7 +21,7 @@ pub struct AttachSpec {
     pub event: String,
     pub cleanup: String,
     pub params: Vec<AttachParam>,
-    pub events: AttachEvents,
+    pub events: BTreeSet<AttachEventKind>,
 }
 
 pub type Attachments = HashMap<String, AttachSpec>;
@@ -44,7 +41,7 @@ pub fn collect(root: &Path) -> Result<Attachments, Error> {
             let Item::Fn(function) = item else {
                 continue;
             };
-            if !function.attrs.iter().any(is_attach) {
+            if !brul_capability::is_attach(function) {
                 continue;
             }
             let spec = parse(function)?;
@@ -60,49 +57,11 @@ pub fn collect(root: &Path) -> Result<Attachments, Error> {
     Ok(attachments)
 }
 
-fn is_attach(attribute: &syn::Attribute) -> bool {
-    attribute
-        .path()
-        .segments
-        .last()
-        .is_some_and(|segment| segment.ident == "attach")
-}
-
 fn parse(function: &ItemFn) -> Result<AttachSpec, Error> {
-    let attribute = function
-        .attrs
-        .iter()
-        .find(|attribute| is_attach(attribute))
-        .expect("attach attribute");
-    let arguments = if matches!(attribute.meta, syn::Meta::List(_)) {
-        attribute
-            .parse_args_with(Punctuated::<AttachArg, Token![,]>::parse_terminated)
-            .map_err(|error| at(error.to_string()))?
-    } else {
-        Punctuated::new()
-    };
-    let mut name = None;
-    let mut events = AttachEvents::default();
-    for argument in arguments {
-        match argument {
-            AttachArg::Name(value) => name = Some(value.value()),
-            AttachArg::Events(values) => {
-                for value in values {
-                    match value.as_str() {
-                        "Key" => events.key = true,
-                        "Ime" => events.ime = true,
-                        "Input" => events.input = true,
-                        "Submit" => events.submit = true,
-                        "Focus" => events.focus = true,
-                        "Blur" => events.blur = true,
-                        "Click" => events.click = true,
-                        _ => return Err(at(format!("unknown attachment event '{value}'"))),
-                    }
-                }
-            }
-        }
-    }
-    let Some(name) = name else {
+    let attribute = brul_capability::attach_attribute(function).expect("attach attribute");
+    let arguments =
+        brul_capability::attach_attr(attribute).map_err(|error| at(error.to_string()))?;
+    let Some(name) = arguments.name else {
         return Err(at("an attachment needs a `name`"));
     };
     let mut inputs = function.sig.inputs.iter();
@@ -127,41 +86,17 @@ fn parse(function: &ItemFn) -> Result<AttachSpec, Error> {
             name: pattern.ident.to_string(),
         });
     }
-    let base = format!("__brul_attach_{}", snake(&function.sig.ident.to_string()));
+    let shims = brul_capability::attach_shims(&function.sig.ident);
     Ok(AttachSpec {
         name,
-        apply: format!("crate::{base}_apply"),
-        event: format!("crate::{base}_event"),
-        cleanup: format!("crate::{base}_cleanup"),
+        apply: format!("crate::{}", shims.apply),
+        event: format!("crate::{}", shims.event),
+        cleanup: format!("crate::{}", shims.cleanup),
         params,
-        events,
+        events: arguments.events,
     })
 }
 
 fn at(message: impl Into<String>) -> Error {
     error_at(Position { line: 1, column: 1 }, message)
-}
-
-enum AttachArg {
-    Name(LitStr),
-    Events(Vec<String>),
-}
-
-impl Parse for AttachArg {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let key: Ident = input.parse()?;
-        if key == "name" {
-            input.parse::<Token![=]>()?;
-            return Ok(Self::Name(input.parse()?));
-        }
-        if key == "events" {
-            let content;
-            syn::parenthesized!(content in input);
-            let events = Punctuated::<Ident, Token![,]>::parse_terminated(&content)?;
-            return Ok(Self::Events(
-                events.into_iter().map(|item| item.to_string()).collect(),
-            ));
-        }
-        Err(syn::Error::new(key.span(), "expected `name` or `events`"))
-    }
 }

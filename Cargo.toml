@@ -65,6 +65,7 @@ debug = false
 
 [workspace.dependencies]
 brul-case = { path = 'crates\brul-case' }
+brul-capability = { path = 'crates\brul-capability' }
 brul-command = { path = 'crates\brul-command' }
 brul-codegen = { path = 'crates\brul-codegen' }
 brul-gpu = { path = 'crates\brul-gpu' }

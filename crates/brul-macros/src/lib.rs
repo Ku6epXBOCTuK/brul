@@ -41,9 +41,11 @@ pub fn effect(input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn widget(attribute: TokenStream, item: TokenStream) -> TokenStream {
-    let arguments = syn::parse_macro_input!(attribute as WidgetArguments);
+    if let Err(error) = brul_capability::parse_widget(attribute.into()) {
+        return error.to_compile_error().into();
+    }
     let function = syn::parse_macro_input!(item as ItemFn);
-    match expand_widget(arguments, function) {
+    match expand_widget(function) {
         Ok(tokens) => tokens.into(),
         Err(error) => error.to_compile_error().into(),
     }
@@ -51,7 +53,10 @@ pub fn widget(attribute: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn attach(attribute: TokenStream, item: TokenStream) -> TokenStream {
-    let arguments = syn::parse_macro_input!(attribute as AttachArguments);
+    let arguments = match brul_capability::parse_attach(attribute.into()) {
+        Ok(arguments) => arguments,
+        Err(error) => return error.to_compile_error().into(),
+    };
     let function = syn::parse_macro_input!(item as ItemFn);
     match expand_attach(arguments, function) {
         Ok(tokens) => tokens.into(),
@@ -59,68 +64,7 @@ pub fn attach(attribute: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-struct AttachArguments {
-    update: Option<Ident>,
-    event: Option<Ident>,
-    cleanup: Option<Ident>,
-}
-
-impl Parse for AttachArguments {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut result = Self {
-            update: None,
-            event: None,
-            cleanup: None,
-        };
-        for argument in Punctuated::<AttachArg, Token![,]>::parse_terminated(input)? {
-            match argument {
-                AttachArg::Update(value) => result.update = Some(value),
-                AttachArg::Event(value) => result.event = Some(value),
-                AttachArg::Cleanup(value) => result.cleanup = Some(value),
-                AttachArg::Ignored => {}
-            }
-        }
-        Ok(result)
-    }
-}
-
-enum AttachArg {
-    Update(Ident),
-    Event(Ident),
-    Cleanup(Ident),
-    Ignored,
-}
-
-impl Parse for AttachArg {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let key: Ident = input.parse()?;
-        match key.to_string().as_str() {
-            "update" | "event" | "cleanup" => {
-                input.parse::<Token![=]>()?;
-                let value = input.parse()?;
-                Ok(match key.to_string().as_str() {
-                    "update" => Self::Update(value),
-                    "event" => Self::Event(value),
-                    _ => Self::Cleanup(value),
-                })
-            }
-            "name" => {
-                input.parse::<Token![=]>()?;
-                let _: LitStr = input.parse()?;
-                Ok(Self::Ignored)
-            }
-            "events" => {
-                let content;
-                syn::parenthesized!(content in input);
-                let _: Punctuated<Ident, Token![,]> = Punctuated::parse_terminated(&content)?;
-                Ok(Self::Ignored)
-            }
-            _ => Err(syn::Error::new(key.span(), "unknown attachment argument")),
-        }
-    }
-}
-
-fn expand_attach(arguments: AttachArguments, function: ItemFn) -> Result<TokenStream2> {
+fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Result<TokenStream2> {
     if !function.sig.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &function.sig.generics,
@@ -163,10 +107,10 @@ fn expand_attach(arguments: AttachArguments, function: ItemFn) -> Result<TokenSt
     }
     let state_ty = attachment_state_type(&function.sig.output)?;
     let name = &function.sig.ident;
-    let base = format_ident!("__brul_attach_{}", snake(&name.to_string()));
-    let apply = format_ident!("{base}_apply");
-    let event = format_ident!("{base}_event");
-    let cleanup = format_ident!("{base}_cleanup");
+    let shims = brul_capability::attach_shims(name);
+    let apply = shims.apply;
+    let event = shims.event;
+    let cleanup = shims.cleanup;
     let indices = 0..names.len();
     let reads = indices
         .clone()
@@ -268,59 +212,7 @@ fn attachment_state_type(output: &ReturnType) -> Result<Type> {
     Ok(state.clone())
 }
 
-struct WidgetArguments;
-
-impl Parse for WidgetArguments {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut name = None;
-        let mut events = 0;
-        for argument in Punctuated::<WidgetArgument, Token![,]>::parse_terminated(input)? {
-            match argument {
-                WidgetArgument::Name(value) => name = Some(value),
-                WidgetArgument::Events(count) => events = count,
-            }
-        }
-        let _ = (name, events);
-        Ok(Self)
-    }
-}
-
-enum WidgetArgument {
-    Name(LitStr),
-    Events(usize),
-}
-
-impl Parse for WidgetArgument {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let key: Ident = input.parse()?;
-        if key == "name" {
-            input.parse::<Token![=]>()?;
-            return Ok(Self::Name(input.parse()?));
-        }
-        if key == "events" {
-            let content;
-            syn::parenthesized!(content in input);
-            let events = Punctuated::<WidgetEvent, Token![,]>::parse_terminated(&content)?;
-            return Ok(Self::Events(events.len()));
-        }
-        Err(syn::Error::new(key.span(), "expected `name` or `events`"))
-    }
-}
-
-struct WidgetEvent;
-
-impl Parse for WidgetEvent {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let _: Ident = input.parse()?;
-        input.parse::<Token![:]>()?;
-        let content;
-        syn::bracketed!(content in input);
-        let _: Punctuated<Ident, Token![,]> = Punctuated::parse_terminated(&content)?;
-        Ok(Self)
-    }
-}
-
-fn expand_widget(_arguments: WidgetArguments, function: ItemFn) -> Result<TokenStream2> {
+fn expand_widget(function: ItemFn) -> Result<TokenStream2> {
     if !function.sig.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
             &function.sig.generics,
@@ -378,7 +270,7 @@ fn expand_widget(_arguments: WidgetArguments, function: ItemFn) -> Result<TokenS
         bindings.push(binding);
     }
     let name = function.sig.ident.clone();
-    let wrapper = format_ident!("__brul_widget_{}", snake(&name.to_string()));
+    let wrapper = brul_capability::widget_shim(&name);
     let call = quote! { #name(theme, build, component #(, #names)*) };
     let result = if is_result(&function.sig.output) {
         call

@@ -50,7 +50,7 @@ pub fn editor_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
                 apply: crate::__brul_attach_editor_apply,
                 event: crate::__brul_attach_editor_event,
                 cleanup: crate::__brul_attach_editor_cleanup,
-                events: brul::AttachEvents { key: true, ime: true, input: false, submit: false, focus: false, blur: false, click: false },
+                events: brul::AttachEvents { key: true, ime: true, input: true, submit: true, focus: true, blur: true, click: true },
             });
             widget0
         }

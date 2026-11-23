@@ -284,6 +284,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "brul-capability"
+version = "0.1.0"
+dependencies = [
+ "brul-case",
+ "proc-macro2",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "brul-case"
 version = "0.1.0"
 dependencies = [
@@ -294,6 +303,7 @@ dependencies = [
 name = "brul-codegen"
 version = "0.1.0"
 dependencies = [
+ "brul-capability",
  "brul-case",
  "brul-command",
  "brul-gpu",
@@ -375,6 +385,7 @@ dependencies = [
 name = "brul-macros"
 version = "0.1.0"
 dependencies = [
+ "brul-capability",
  "brul-case",
  "brul-command",
  "proc-macro2",

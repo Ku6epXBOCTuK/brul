@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use brul_capability::AttachEventKind;
 use brul_case::constant;
 use brul_gui::Direction;
 use brul_script::Names;
@@ -843,23 +844,16 @@ pub(super) fn attachment_bindings(
             out.line(format_args!("widget: {widget}.id(),"));
             out.line(format_args!("state: brul::StateId::new({id}u64),"));
             out.line(format_args!("component: std::rc::Rc::clone(component),"));
-            out.line(format_args!(
-                "params: vec![{}],",
-                expressions.join(", ")
-            ));
+            out.line(format_args!("params: vec![{}],", expressions.join(", ")));
             out.line(format_args!("apply: {},", spec.apply));
             out.line(format_args!("event: {},", spec.event));
             out.line(format_args!("cleanup: {},", spec.cleanup));
-            out.line(format_args!(
-                "events: brul::AttachEvents {{ key: {}, ime: {}, input: {}, submit: {}, focus: {}, blur: {}, click: {} }},",
-                events.key,
-                events.ime,
-                events.input,
-                events.submit,
-                events.focus,
-                events.blur,
-                events.click
-            ));
+            let fields = AttachEventKind::ALL
+                .iter()
+                .map(|kind| format!("{}: {}", kind.field(), events.contains(kind)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.line(format_args!("events: brul::AttachEvents {{ {fields} }},"));
             Ok::<(), Error>(())
         })?;
         out.line(format_args!("}});"));
