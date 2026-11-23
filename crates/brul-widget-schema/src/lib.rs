@@ -130,6 +130,10 @@ const EVENTS: &[EventSpec] = &[
         params: &[],
     },
     EventSpec {
+        name: "key",
+        params: &["Object"],
+    },
+    EventSpec {
         name: "input",
         params: &["Object"],
     },

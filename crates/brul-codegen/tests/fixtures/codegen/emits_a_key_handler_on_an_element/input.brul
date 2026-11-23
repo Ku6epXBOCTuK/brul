@@ -1,0 +1,9 @@
+<script>
+    function pressed(ev: Object): Void { }
+</script>
+
+<markup>
+window Demo (title: "demo") {
+    Container (on key: pressed) { }
+}
+</markup>

@@ -1249,6 +1249,37 @@ fn dispatch_passes_the_key_code() {
     );
 }
 
+#[test]
+fn dispatch_passes_a_key_to_the_widget_then_the_window() {
+    let component = component_with(&["seen", "ran"]);
+    let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
+        vec![
+            Handler::new(&component, Some(id), EventKind::Key, key_code),
+            Handler::new(&component, None, EventKind::Key, set_ran),
+        ]
+    });
+    ui.dispatch(&[UiEvent::widget(
+        id,
+        Event::key(
+            brul_gui::KeyPress::from("Escape"),
+            brul_gui::KeyModifiers::default(),
+        ),
+    )]);
+    let seen = ui.component.borrow().read("seen").expect("seen");
+    let Value::Object(fields) = seen else {
+        panic!("key event is not an object");
+    };
+    assert_eq!(
+        fields
+            .iter()
+            .find(|(name, _)| name == "target")
+            .map(|(_, value)| value),
+        Some(&Value::Number(id.get() as f64)),
+        "widget target is preserved"
+    );
+    assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+}
+
 fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &UiEvent) -> bool {
     if let Some(id) = event.target.widget() {
         ctx.component()

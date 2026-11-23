@@ -44,12 +44,6 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
                 format!("event '{event}' is not supported yet"),
             ));
         };
-        if event == EventKind::Key {
-            return Err(error_at(
-                element.position,
-                "key events are only supported on the window",
-            ));
-        }
         if event == EventKind::Close {
             return Err(error_at(
                 element.position,
