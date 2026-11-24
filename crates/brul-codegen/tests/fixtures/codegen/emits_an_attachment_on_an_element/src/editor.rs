@@ -1,6 +1,7 @@
 #[brul::attach(
     name = "editor",
-    events(Key, Ime, Input, Submit, Focus, Blur, Click),
+    events(Key, Input, Submit, Focus, Blur, Click),
+    raw_events(Ime),
     update = editor_update,
     event = editor_event,
     cleanup = editor_cleanup

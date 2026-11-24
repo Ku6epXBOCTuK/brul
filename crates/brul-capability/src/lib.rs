@@ -91,7 +91,8 @@ pub fn parse_attach(tokens: TokenStream) -> syn::Result<AttachAttr> {
     for argument in arguments {
         match argument {
             AttachArgument::Name(name) => result.name = Some(name.value()),
-            AttachArgument::Events(events) => result.events = events,
+            AttachArgument::Events(events) => result.events.semantic.extend(events.semantic),
+            AttachArgument::RawEvents(events) => result.events.raw.extend(events.raw),
             AttachArgument::Update(hook) => result.update = Some(hook),
             AttachArgument::Event(hook) => result.event = Some(hook),
             AttachArgument::RawEvent(hook) => result.raw_event = Some(hook),
@@ -164,10 +165,82 @@ impl From<EventArgument> for EventArg {
 enum AttachArgument {
     Name(LitStr),
     Events(AttachEvents),
+    RawEvents(AttachEvents),
     Update(Ident),
     Event(Ident),
     RawEvent(Ident),
     Cleanup(Ident),
+}
+
+#[derive(Clone, Copy)]
+enum EventFamily {
+    Semantic,
+    Raw,
+}
+
+impl EventFamily {
+    fn keyword(self) -> &'static str {
+        match self {
+            Self::Semantic => "events",
+            Self::Raw => "raw_events",
+        }
+    }
+
+    fn other(self) -> &'static str {
+        match self {
+            Self::Semantic => "raw_events",
+            Self::Raw => "events",
+        }
+    }
+}
+
+fn parse_events(input: ParseStream, family: EventFamily) -> syn::Result<AttachEvents> {
+    let content;
+    syn::parenthesized!(content in input);
+    let events = Punctuated::<Ident, Token![,]>::parse_terminated(&content)?;
+    let mut result = AttachEvents::default();
+    for event in events {
+        let name = event.to_string();
+        match family {
+            EventFamily::Semantic => match name.parse::<EventKind>() {
+                Ok(kind) => {
+                    result.semantic.insert(kind);
+                }
+                Err(_) if name.parse::<RawKind>().is_ok() => {
+                    return Err(syn::Error::new(
+                        event.span(),
+                        WrongAttachEventFamily {
+                            name,
+                            expected: family.keyword(),
+                            found: family.other(),
+                        },
+                    ));
+                }
+                Err(error) => {
+                    return Err(syn::Error::new(event.span(), UnknownAttachEvent(error.0)));
+                }
+            },
+            EventFamily::Raw => match name.parse::<RawKind>() {
+                Ok(kind) => {
+                    result.raw.insert(kind);
+                }
+                Err(_) if name.parse::<EventKind>().is_ok() => {
+                    return Err(syn::Error::new(
+                        event.span(),
+                        WrongAttachEventFamily {
+                            name,
+                            expected: family.keyword(),
+                            found: family.other(),
+                        },
+                    ));
+                }
+                Err(error) => {
+                    return Err(syn::Error::new(event.span(), UnknownAttachEvent(error.0)));
+                }
+            },
+        }
+    }
+    Ok(result)
 }
 
 impl Parse for AttachArgument {
@@ -175,27 +248,8 @@ impl Parse for AttachArgument {
         let key: Ident = input.parse()?;
         match key.to_string().as_str() {
             "name" => Ok(Self::Name(value(input)?)),
-            "events" => {
-                let content;
-                syn::parenthesized!(content in input);
-                let events = Punctuated::<Ident, Token![,]>::parse_terminated(&content)?;
-                let mut result = AttachEvents::default();
-                for event in events {
-                    let name = event.to_string();
-                    match (name.parse::<EventKind>(), name.parse::<RawKind>()) {
-                        (Ok(kind), _) => {
-                            result.semantic.insert(kind);
-                        }
-                        (Err(_), Ok(kind)) => {
-                            result.raw.insert(kind);
-                        }
-                        (Err(error), Err(_)) => {
-                            return Err(syn::Error::new(event.span(), UnknownAttachEvent(error.0)));
-                        }
-                    }
-                }
-                Ok(Self::Events(result))
-            }
+            "events" => Ok(Self::Events(parse_events(input, EventFamily::Semantic)?)),
+            "raw_events" => Ok(Self::RawEvents(parse_events(input, EventFamily::Raw)?)),
             "update" => Ok(Self::Update(value(input)?)),
             "event" => Ok(Self::Event(value(input)?)),
             "raw_event" => Ok(Self::RawEvent(value(input)?)),
@@ -215,6 +269,25 @@ impl fmt::Display for UnknownAttachEvent {
 }
 
 impl std::error::Error for UnknownAttachEvent {}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WrongAttachEventFamily {
+    pub name: String,
+    pub expected: &'static str,
+    pub found: &'static str,
+}
+
+impl fmt::Display for WrongAttachEventFamily {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "attachment event '{}' belongs to {}, use {}()",
+            self.name, self.found, self.expected
+        )
+    }
+}
+
+impl std::error::Error for WrongAttachEventFamily {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AttachShims {
@@ -255,9 +328,9 @@ mod tests {
     #[test]
     fn parses_full_attach_syntax() {
         let attribute = parse_attach(tokens(
-            "name = \"counter\", events(Key, Ime, Input, Submit, Focus, Blur, Click), \
-             update = counter_update, event = counter_event, raw_event = counter_raw_event, \
-             cleanup = counter_cleanup",
+            "name = \"counter\", events(Key, Input, Submit, Focus, Blur, Click), \
+             raw_events(Ime), update = counter_update, event = counter_event, \
+             raw_event = counter_raw_event, cleanup = counter_cleanup",
         ))
         .expect("attach attribute");
         assert_eq!(attribute.name.as_deref(), Some("counter"));
@@ -343,6 +416,49 @@ mod tests {
         let error =
             parse_attach(tokens("name = \"editor\", events(Pointer)")).expect_err("unknown event");
         assert_eq!(error.to_string(), "unknown attachment event 'Pointer'");
+    }
+
+    #[test]
+    fn raw_events_can_name_a_key_shared_by_both_families() {
+        let attribute =
+            parse_attach(tokens("name = \"keys\", raw_events(Key, KeyNoop)")).expect("raw key");
+        assert!(attribute.events.semantic.is_empty());
+        assert_eq!(
+            attribute.events.raw,
+            [RawKind::Key, RawKind::KeyNoop].into_iter().collect()
+        );
+    }
+
+    #[test]
+    fn rejects_an_event_from_the_other_family() {
+        let semantic =
+            parse_attach(tokens("name = \"editor\", events(Ime)")).expect_err("raw name in events");
+        assert_eq!(
+            semantic.to_string(),
+            "attachment event 'Ime' belongs to raw_events, use events()"
+        );
+        let raw = parse_attach(tokens("name = \"editor\", raw_events(Click)"))
+            .expect_err("semantic name in raw_events");
+        assert_eq!(
+            raw.to_string(),
+            "attachment event 'Click' belongs to events, use raw_events()"
+        );
+    }
+
+    #[test]
+    fn repeated_event_arguments_are_merged() {
+        let attribute = parse_attach(tokens(
+            "name = \"editor\", events(Key), raw_events(Ime), raw_events(Press)",
+        ))
+        .expect("merged events");
+        assert_eq!(
+            attribute.events.semantic,
+            [EventKind::Key].into_iter().collect()
+        );
+        assert_eq!(
+            attribute.events.raw,
+            [RawKind::Ime, RawKind::Press].into_iter().collect()
+        );
     }
 
     #[test]
