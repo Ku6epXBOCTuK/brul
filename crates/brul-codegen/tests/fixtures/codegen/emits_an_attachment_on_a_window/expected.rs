@@ -45,6 +45,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
         params: vec![],
         apply: crate::__brul_attach_keys_apply,
         event: crate::__brul_attach_keys_event,
+        raw_event: crate::__brul_attach_keys_raw_event,
         cleanup: crate::__brul_attach_keys_cleanup,
         events: brul::EventSet::from([brul::EventKind::Key]),
         raw_events: brul::RawEventSet::from([]),

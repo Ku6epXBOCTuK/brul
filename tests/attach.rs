@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul::{
-    Build, Component, ComponentHandle, Dispatch, DispatchEvent, Dyn, Event, SharedStates, StateId,
+    Build, Component, ComponentHandle, Dispatch, Dyn, Event, RawUiEvent, SharedStates, StateId,
     States, UiEvent, ViewError,
 };
 
@@ -22,6 +22,7 @@ struct CounterState {
     events(Key),
     update = counter_update,
     event = counter_event,
+    raw_event = counter_raw_event,
     cleanup = counter_cleanup
 )]
 fn counter(
@@ -52,14 +53,12 @@ fn counter_update(
     Ok(())
 }
 
-fn counter_event(_state: &mut CounterState, _ctx: &mut Build, event: &DispatchEvent) -> bool {
-    matches!(
-        event,
-        DispatchEvent::Semantic(UiEvent {
-            event: Event::Key { .. },
-            ..
-        })
-    )
+fn counter_event(_state: &mut CounterState, _ctx: &mut Build, event: &UiEvent) -> bool {
+    matches!(event.event, Event::Key { .. })
+}
+
+fn counter_raw_event(_state: &mut CounterState, _ctx: &mut Build, event: &RawUiEvent) -> bool {
+    matches!(event.event, brul::gui::RawEvent::Key { .. })
 }
 
 fn counter_cleanup(state: &mut CounterState, _ctx: &mut Build) {
@@ -113,21 +112,26 @@ fn attach_shims_create_update_event_and_cleanup_state() {
 
     let key = brul::gui::KeyPress::from("Enter");
     let modifiers = brul::gui::KeyModifiers::default();
-    let key_event = DispatchEvent::Semantic(UiEvent::widget(
-        brul::gui::WidgetId::new(1),
-        Event::key(key, modifiers),
-    ));
+    let key_event = UiEvent::widget(brul::gui::WidgetId::new(1), Event::key(key, modifiers));
     assert_eq!(
         __brul_attach_counter_event(&mut ctx, state_id, &key_event),
         Dispatch::Stop
     );
     assert_eq!(
-        __brul_attach_counter_event(
-            &mut ctx,
-            state_id,
-            &DispatchEvent::Semantic(UiEvent::window(Event::submit()))
-        ),
+        __brul_attach_counter_event(&mut ctx, state_id, &UiEvent::window(Event::submit())),
         Dispatch::Continue
+    );
+
+    let raw_key = RawUiEvent::widget(
+        brul::gui::WidgetId::new(1),
+        brul::gui::RawEvent::key(
+            brul::gui::KeyPress::from("Enter"),
+            brul::gui::KeyModifiers::default(),
+        ),
+    );
+    assert_eq!(
+        __brul_attach_counter_raw_event(&mut ctx, state_id, &raw_key),
+        Dispatch::Stop
     );
 
     __brul_attach_counter_cleanup(&mut ctx, state_id);

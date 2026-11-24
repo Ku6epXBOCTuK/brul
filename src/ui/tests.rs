@@ -1109,14 +1109,8 @@ fn probe_apply(ctx: &mut Build, state: StateId, params: &[Dyn]) -> Result<(), Vi
     Ok(())
 }
 
-fn probe_event(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
-    if matches!(
-        event,
-        DispatchEvent::Semantic(UiEvent {
-            event: Event::Click { .. },
-            ..
-        })
-    ) {
+fn probe_event(ctx: &mut Build, _state: StateId, event: &UiEvent) -> Dispatch {
+    if matches!(event.event, Event::Click { .. }) {
         ctx.component()
             .borrow_mut()
             .assign("ran", Value::Bool(true))
@@ -1125,6 +1119,10 @@ fn probe_event(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispa
     } else {
         Dispatch::Continue
     }
+}
+
+fn ignore_raw_event(_ctx: &mut Build, _state: StateId, _event: &RawUiEvent) -> Dispatch {
+    Dispatch::Continue
 }
 
 fn probe_cleanup(ctx: &mut Build, _state: StateId) {
@@ -1156,6 +1154,7 @@ fn attachment_reruns_vetoes_events_and_cleans_up() {
         }],
         apply: probe_apply,
         event: probe_event,
+        raw_event: ignore_raw_event,
         cleanup: probe_cleanup,
         events: EventSet::from([EventKind::Click]),
         raw_events: RawEventSet::empty(),
@@ -1310,9 +1309,10 @@ fn a_raw_noop_key_reaches_the_capability_only() {
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: record_attachment_target,
+        event: ignore_ui_event,
+        raw_event: record_raw_target,
         cleanup: probe_cleanup,
-        events: EventSet::from([EventKind::Key]),
+        events: EventSet::empty(),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
     let mut ui = Ui::assemble_with(
@@ -1362,7 +1362,8 @@ fn a_capability_can_emit_a_raw_event_to_other_capabilities() {
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: emit_raw_on_key,
+        event: ignore_ui_event,
+        raw_event: emit_raw_on_key,
         cleanup: probe_cleanup,
         events: EventSet::empty(),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
@@ -1373,7 +1374,8 @@ fn a_capability_can_emit_a_raw_event_to_other_capabilities() {
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: record_raw_paste,
+        event: ignore_ui_event,
+        raw_event: record_raw_paste,
         cleanup: probe_cleanup,
         events: EventSet::empty(),
         raw_events: RawEventSet::from([brul_gui::RawKind::Paste]),
@@ -1407,25 +1409,23 @@ fn a_capability_can_emit_a_raw_event_to_other_capabilities() {
     assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
-fn window_key_capability(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
-    match event {
-        DispatchEvent::Raw(_) => {
-            ctx.component()
-                .borrow_mut()
-                .assign("attach", Value::Bool(true))
-                .expect("attach");
-            ctx.emit_event(UiEvent::window(Event::key(
-                brul_gui::KeyPress::from("Enter"),
-                brul_gui::KeyModifiers::default(),
-            )));
-        }
-        DispatchEvent::Semantic(_) => {
-            ctx.component()
-                .borrow_mut()
-                .assign("seen", Value::Bool(true))
-                .expect("seen");
-        }
-    }
+fn window_raw_key(ctx: &mut Build, _state: StateId, _event: &RawUiEvent) -> Dispatch {
+    ctx.component()
+        .borrow_mut()
+        .assign("attach", Value::Bool(true))
+        .expect("attach");
+    ctx.emit_event(UiEvent::window(Event::key(
+        brul_gui::KeyPress::from("Enter"),
+        brul_gui::KeyModifiers::default(),
+    )));
+    Dispatch::Continue
+}
+
+fn window_semantic_key(ctx: &mut Build, _state: StateId, _event: &UiEvent) -> Dispatch {
+    ctx.component()
+        .borrow_mut()
+        .assign("seen", Value::Bool(true))
+        .expect("seen");
     Dispatch::Continue
 }
 
@@ -1438,16 +1438,29 @@ fn a_window_capability_sees_a_raw_key_and_emits_a_semantic_key() {
         handlers: vec![Handler::new(&component, None, EventKind::Key, set_ran)],
         props: Vec::new(),
     };
-    let hooks = Hooks {
+    let raw = Hooks {
         target: EventTarget::Window,
         state: StateId::source("test", "seven"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: window_key_capability,
+        event: ignore_ui_event,
+        raw_event: window_raw_key,
+        cleanup: |_, _| {},
+        events: EventSet::empty(),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+    };
+    let semantic = Hooks {
+        target: EventTarget::Window,
+        state: StateId::source("test", "eight"),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: window_semantic_key,
+        raw_event: ignore_raw_event,
         cleanup: |_, _| {},
         events: EventSet::from([EventKind::Key]),
-        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+        raw_events: RawEventSet::empty(),
     };
     let mut ui = Ui::assemble_with(
         Rc::clone(&component),
@@ -1456,7 +1469,7 @@ fn a_window_capability_sees_a_raw_key_and_emits_a_semantic_key() {
         None,
         AssemblyParts {
             structures: Vec::new(),
-            capabilities: vec![hooks],
+            capabilities: vec![raw, semantic],
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
@@ -1493,7 +1506,8 @@ fn a_raw_window_key_stays_with_capabilities() {
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: |ctx: &mut Build, _: StateId, _: &DispatchEvent| {
+        event: ignore_ui_event,
+        raw_event: |ctx: &mut Build, _: StateId, _: &RawUiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("attach", Value::Bool(true))
@@ -1546,7 +1560,14 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: |ctx: &mut Build, _: StateId, _: &DispatchEvent| {
+        event: |ctx: &mut Build, _: StateId, _: &UiEvent| {
+            ctx.component()
+                .borrow_mut()
+                .assign("attach", Value::Bool(true))
+                .expect("attach");
+            Dispatch::Stop
+        },
+        raw_event: |ctx: &mut Build, _: StateId, _: &RawUiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("attach", Value::Bool(true))
@@ -1563,7 +1584,14 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: |ctx: &mut Build, _: StateId, _: &DispatchEvent| {
+        event: |ctx: &mut Build, _: StateId, _: &UiEvent| {
+            ctx.component()
+                .borrow_mut()
+                .assign("off", Value::Bool(true))
+                .expect("off");
+            Dispatch::Continue
+        },
+        raw_event: |ctx: &mut Build, _: StateId, _: &RawUiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("off", Value::Bool(true))
@@ -1607,8 +1635,12 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
     assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
-fn emit_raw_on_key(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
-    if let Some(id) = event.target().widget() {
+fn ignore_ui_event(_ctx: &mut Build, _state: StateId, _event: &UiEvent) -> Dispatch {
+    Dispatch::Continue
+}
+
+fn emit_raw_on_key(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+    if let Some(id) = event.target.widget() {
         ctx.emit_raw_event(RawUiEvent::widget(
             id,
             brul_gui::RawEvent::paste(String::new()),
@@ -1617,14 +1649,8 @@ fn emit_raw_on_key(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> D
     Dispatch::Continue
 }
 
-fn record_raw_paste(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
-    if matches!(
-        event,
-        DispatchEvent::Raw(RawUiEvent {
-            event: brul_gui::RawEvent::Paste { .. },
-            ..
-        })
-    ) {
+fn record_raw_paste(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+    if matches!(event.event, brul_gui::RawEvent::Paste { .. }) {
         ctx.component()
             .borrow_mut()
             .assign("seen", Value::Bool(true))
@@ -1633,8 +1659,18 @@ fn record_raw_paste(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> 
     Dispatch::Continue
 }
 
-fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
-    if let Some(id) = event.target().widget() {
+fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &UiEvent) -> Dispatch {
+    if let Some(id) = event.target.widget() {
+        ctx.component()
+            .borrow_mut()
+            .assign("attach", Value::Number(id.get() as f64))
+            .expect("attach");
+    }
+    Dispatch::Continue
+}
+
+fn record_raw_target(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+    if let Some(id) = event.target.widget() {
         ctx.component()
             .borrow_mut()
             .assign("attach", Value::Number(id.get() as f64))
@@ -1692,6 +1728,7 @@ fn one_targeted_event_reaches_the_attachment_and_script_but_not_the_window() {
         params: Vec::new(),
         apply: probe_apply,
         event: record_attachment_target,
+        raw_event: ignore_raw_event,
         cleanup: |_, _| {},
         events: EventSet::from([EventKind::Key]),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),

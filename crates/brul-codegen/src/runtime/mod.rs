@@ -33,7 +33,8 @@ pub use event::{
 };
 pub use event_sink::{EventSink, emit as emit_widget_event};
 pub use hooks::{
-    CleanupHook, Dispatch, Element, EventHook, Hooks, Param, apply as apply_capability,
+    CleanupHook, Dispatch, Element, EventHook, Hooks, Param, RawEventHook,
+    apply as apply_capability,
 };
 pub use paint::{TextureCache, Textures, set_flag, set_input, set_offset, set_text, set_texture};
 pub use slot::{DEFAULT_SLOT, SlotArgument, Slots, slot};

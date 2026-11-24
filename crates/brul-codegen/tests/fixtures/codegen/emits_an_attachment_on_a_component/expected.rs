@@ -146,6 +146,7 @@ pub fn editor_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                 params: vec![|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text(component.state::<EditorScriptState>().draft.get()); Ok(value) }],
                 apply: crate::__brul_attach_editor_apply,
                 event: crate::__brul_attach_editor_event,
+                raw_event: crate::__brul_attach_editor_raw_event,
                 cleanup: crate::__brul_attach_editor_cleanup,
                 events: brul::EventSet::from([brul::EventKind::Key]),
                 raw_events: brul::RawEventSet::from([]),

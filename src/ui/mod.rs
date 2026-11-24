@@ -435,8 +435,12 @@ impl<T: Theme> Ui<T> {
     fn dispatch_raw_event(&self, event: &RawUiEvent) {
         let path = DispatchPath::new(&self.tree.borrow(), event.target);
         let kind = event.event.kind().dispatch_kind();
-        let dispatch = DispatchEvent::Raw(event.clone());
-        self.dispatch_capabilities(&path, &dispatch, |hooks| hooks.raw_events.contains(kind));
+        self.dispatch_capabilities(
+            &path,
+            event,
+            |hooks| hooks.raw_events.contains(kind),
+            |hooks, build, state, event| (hooks.raw_event)(build, state, event),
+        );
     }
 
     fn pump_events(&mut self) {
@@ -456,11 +460,12 @@ impl<T: Theme> Ui<T> {
         tracing::error!(depth = EVENT_DEPTH, "event chain is too deep");
     }
 
-    fn dispatch_capabilities(
+    fn dispatch_capabilities<E>(
         &self,
         path: &DispatchPath,
-        event: &DispatchEvent,
+        event: &E,
         accepts: impl Fn(&Hooks) -> bool,
+        invoke: impl Fn(&Hooks, &mut Build, StateId, &E) -> Dispatch,
     ) -> bool {
         for target in &path.capabilities {
             for owner in self.owners.capabilities(target) {
@@ -475,7 +480,7 @@ impl<T: Theme> Ui<T> {
                     owner.state,
                     &owner.hooks.component,
                 );
-                if (owner.hooks.event)(&mut build, owner.state, event) == Dispatch::Stop {
+                if invoke(&owner.hooks, &mut build, owner.state, event) == Dispatch::Stop {
                     return true;
                 }
             }
@@ -486,17 +491,17 @@ impl<T: Theme> Ui<T> {
     fn dispatch_event(&self, event: &UiEvent) {
         let path = DispatchPath::new(&self.tree.borrow(), event.target);
         let kind = event.event.kind().dispatch_kind();
-        let dispatch = DispatchEvent::Semantic(event.clone());
-        if self.dispatch_capabilities(&path, &dispatch, |hooks| hooks.events.contains(kind)) {
+        if self.dispatch_capabilities(
+            &path,
+            event,
+            |hooks| hooks.events.contains(kind),
+            |hooks, build, state, event| (hooks.event)(build, state, event),
+        ) {
             return;
         }
         for target in &path.handlers {
             if let Some(handler) = self.handler_index.get(&(*target, kind)) {
-                call(
-                    &handler.component,
-                    handler.call,
-                    arguments(&event.event, &event.target),
-                );
+                call(&handler.component, handler.call, arguments(event));
             }
         }
     }

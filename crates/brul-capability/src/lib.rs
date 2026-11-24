@@ -32,6 +32,7 @@ pub struct AttachAttr {
     pub events: AttachEvents,
     pub update: Option<Ident>,
     pub event: Option<Ident>,
+    pub raw_event: Option<Ident>,
     pub cleanup: Option<Ident>,
 }
 
@@ -93,6 +94,7 @@ pub fn parse_attach(tokens: TokenStream) -> syn::Result<AttachAttr> {
             AttachArgument::Events(events) => result.events = events,
             AttachArgument::Update(hook) => result.update = Some(hook),
             AttachArgument::Event(hook) => result.event = Some(hook),
+            AttachArgument::RawEvent(hook) => result.raw_event = Some(hook),
             AttachArgument::Cleanup(hook) => result.cleanup = Some(hook),
         }
     }
@@ -164,6 +166,7 @@ enum AttachArgument {
     Events(AttachEvents),
     Update(Ident),
     Event(Ident),
+    RawEvent(Ident),
     Cleanup(Ident),
 }
 
@@ -195,6 +198,7 @@ impl Parse for AttachArgument {
             }
             "update" => Ok(Self::Update(value(input)?)),
             "event" => Ok(Self::Event(value(input)?)),
+            "raw_event" => Ok(Self::RawEvent(value(input)?)),
             "cleanup" => Ok(Self::Cleanup(value(input)?)),
             _ => Err(syn::Error::new(key.span(), "unknown attachment argument")),
         }
@@ -216,6 +220,7 @@ impl std::error::Error for UnknownAttachEvent {}
 pub struct AttachShims {
     pub apply: Ident,
     pub event: Ident,
+    pub raw_event: Ident,
     pub cleanup: Ident,
 }
 
@@ -234,6 +239,7 @@ pub fn attach_shims(function: &Ident) -> AttachShims {
     AttachShims {
         apply: shim("__brul_attach", function, "_apply"),
         event: shim("__brul_attach", function, "_event"),
+        raw_event: shim("__brul_attach", function, "_raw_event"),
         cleanup: shim("__brul_attach", function, "_cleanup"),
     }
 }
@@ -250,7 +256,8 @@ mod tests {
     fn parses_full_attach_syntax() {
         let attribute = parse_attach(tokens(
             "name = \"counter\", events(Key, Ime, Input, Submit, Focus, Blur, Click), \
-             update = counter_update, event = counter_event, cleanup = counter_cleanup",
+             update = counter_update, event = counter_event, raw_event = counter_raw_event, \
+             cleanup = counter_cleanup",
         ))
         .expect("attach attribute");
         assert_eq!(attribute.name.as_deref(), Some("counter"));
@@ -277,6 +284,10 @@ mod tests {
         assert_eq!(
             attribute.event.as_ref().unwrap().to_string(),
             "counter_event"
+        );
+        assert_eq!(
+            attribute.raw_event.as_ref().unwrap().to_string(),
+            "counter_raw_event"
         );
         assert_eq!(
             attribute.cleanup.as_ref().unwrap().to_string(),
@@ -349,6 +360,10 @@ mod tests {
         assert_eq!(
             shims.event.to_string(),
             "__brul_attach_text_input_box_event"
+        );
+        assert_eq!(
+            shims.raw_event.to_string(),
+            "__brul_attach_text_input_box_raw_event"
         );
         assert_eq!(
             shims.cleanup.to_string(),

@@ -31,6 +31,7 @@ pub struct CapabilityParam {
 pub struct HooksSpec {
     pub apply: String,
     pub event: String,
+    pub raw_event: String,
     pub cleanup: String,
     pub params: Vec<CapabilityParam>,
     pub events: AttachEvents,
@@ -209,6 +210,7 @@ fn parse_hooks(function: &ItemFn) -> Result<CapabilitySpec, Error> {
         hooks: Some(HooksSpec {
             apply: format!("crate::{}", shims.apply),
             event: format!("crate::{}", shims.event),
+            raw_event: format!("crate::{}", shims.raw_event),
             cleanup: format!("crate::{}", shims.cleanup),
             params,
             events: arguments.events,

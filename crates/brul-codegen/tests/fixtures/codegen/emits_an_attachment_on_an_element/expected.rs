@@ -49,6 +49,7 @@ pub fn editor_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
                 params: vec![|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text(component.state::<EditorDemoScriptState>().draft.get()); Ok(value) }, |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::flag(true); Ok(value) }],
                 apply: crate::__brul_attach_editor_apply,
                 event: crate::__brul_attach_editor_event,
+                raw_event: crate::__brul_attach_editor_raw_event,
                 cleanup: crate::__brul_attach_editor_cleanup,
                 events: brul::EventSet::from([brul::EventKind::Key, brul::EventKind::Click, brul::EventKind::Focus, brul::EventKind::Blur, brul::EventKind::Input, brul::EventKind::Submit]),
                 raw_events: brul::RawEventSet::from([brul::RawKind::Ime]),

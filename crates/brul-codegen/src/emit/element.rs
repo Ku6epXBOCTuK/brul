@@ -875,6 +875,7 @@ pub(super) fn hooks_binding(out: &mut Out<'_>, spec: HooksSpec<'_>) -> Result<()
         out.line(format_args!("params: vec![{}],", expressions.join(", ")));
         out.line(format_args!("apply: {},", hooks.apply));
         out.line(format_args!("event: {},", hooks.event));
+        out.line(format_args!("raw_event: {},", hooks.raw_event));
         out.line(format_args!("cleanup: {},", hooks.cleanup));
         let kinds = EventKind::ALL
             .iter()

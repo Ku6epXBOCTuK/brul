@@ -3,14 +3,15 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use brul_event::{EventSet, RawEventSet};
-use brul_gui::{DispatchEvent, EditBuffer, EventTarget, Position, WidgetId, WidgetTree};
+use brul_gui::{EditBuffer, EventTarget, Position, RawUiEvent, UiEvent, WidgetId, WidgetTree};
 use brul_script::{Component, Dyn, Error as ScriptError};
 
 use super::{Build, ComponentHandle, StateId, ViewError};
 
 pub type Param = fn(&mut Component) -> Result<Dyn, ScriptError>;
 pub type Apply = fn(&mut Build, StateId, &[Dyn]) -> Result<(), ViewError>;
-pub type EventHook = fn(&mut Build, StateId, &DispatchEvent) -> Dispatch;
+pub type EventHook = fn(&mut Build, StateId, &UiEvent) -> Dispatch;
+pub type RawEventHook = fn(&mut Build, StateId, &RawUiEvent) -> Dispatch;
 pub type CleanupHook = fn(&mut Build, StateId);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,6 +28,7 @@ pub struct Hooks {
     pub params: Vec<Param>,
     pub apply: Apply,
     pub event: EventHook,
+    pub raw_event: RawEventHook,
     pub cleanup: CleanupHook,
     pub events: EventSet,
     pub raw_events: RawEventSet,

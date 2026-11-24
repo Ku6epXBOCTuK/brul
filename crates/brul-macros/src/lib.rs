@@ -110,6 +110,7 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
     let shims = brul_capability::attach_shims(name);
     let apply = shims.apply;
     let event = shims.event;
+    let raw_event = shims.raw_event;
     let cleanup = shims.cleanup;
     let indices = 0..names.len();
     let reads = indices
@@ -130,6 +131,19 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
         None => quote! { let _ = (&mut *state, &*ctx, #(#values),*); },
     };
     let event_call = match &arguments.event {
+        Some(hook) => quote! {
+            if #hook(&mut *state, ctx, event) {
+                ::brul::Dispatch::Stop
+            } else {
+                ::brul::Dispatch::Continue
+            }
+        },
+        None => quote! {
+            let _ = (&mut *state, &*ctx, event);
+            ::brul::Dispatch::Continue
+        },
+    };
+    let raw_event_call = match &arguments.raw_event {
         Some(hook) => quote! {
             if #hook(&mut *state, ctx, event) {
                 ::brul::Dispatch::Stop
@@ -170,7 +184,7 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
         pub fn #event(
             ctx: &mut ::brul::Build,
             _state: ::brul::StateId,
-            event: &::brul::DispatchEvent,
+            event: &::brul::UiEvent,
         ) -> ::brul::Dispatch {
             let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
                 return ::brul::Dispatch::Continue;
@@ -179,6 +193,20 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
                 return ::brul::Dispatch::Continue;
             };
             #event_call
+        }
+
+        pub fn #raw_event(
+            ctx: &mut ::brul::Build,
+            _state: ::brul::StateId,
+            event: &::brul::RawUiEvent,
+        ) -> ::brul::Dispatch {
+            let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
+                return ::brul::Dispatch::Continue;
+            };
+            let Ok(mut state) = cell.try_borrow_mut() else {
+                return ::brul::Dispatch::Continue;
+            };
+            #raw_event_call
         }
 
         pub fn #cleanup(ctx: &mut ::brul::Build, _state: ::brul::StateId) {

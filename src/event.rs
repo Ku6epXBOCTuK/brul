@@ -1,4 +1,4 @@
-use brul_gui::{Event, EventTarget};
+use brul_gui::{Event, EventTarget, UiEvent};
 
 use crate::{ComponentHandle, Dyn, EventCall};
 
@@ -9,8 +9,8 @@ pub(crate) fn call(component: &ComponentHandle, function: EventCall, arguments: 
     }
 }
 
-pub(crate) fn arguments(event: &Event, target: &EventTarget) -> Vec<Dyn> {
-    let mut object = match event {
+pub(crate) fn arguments(event: &UiEvent) -> Vec<Dyn> {
+    let mut object = match &event.event {
         Event::Key { key, modifiers } => vec![
             ("code".to_owned(), Dyn::text(key.code.as_str())),
             (
@@ -28,7 +28,7 @@ pub(crate) fn arguments(event: &Event, target: &EventTarget) -> Vec<Dyn> {
         ],
         _ => return Vec::new(),
     };
-    object.push(("target".to_owned(), target_value(target)));
+    object.push(("target".to_owned(), target_value(&event.target)));
     vec![Dyn::object(object)]
 }
 
@@ -52,7 +52,7 @@ mod tests {
     #[test]
     fn an_input_event_carries_the_value_and_the_caret() {
         let id = Widget::input("x").id();
-        let arguments = arguments(&Event::input("xy".to_owned(), 2), &EventTarget::Widget(id));
+        let arguments = arguments(&UiEvent::widget(id, Event::input("xy".to_owned(), 2)));
         assert_eq!(
             arguments,
             vec![Dyn::object(vec![
@@ -76,7 +76,7 @@ mod tests {
             },
         );
         assert_eq!(
-            arguments(&event, &EventTarget::Window),
+            arguments(&UiEvent::window(event)),
             vec![Dyn::object(vec![
                 ("code".to_owned(), Dyn::text("Enter")),
                 ("physical".to_owned(), Dyn::text("KeyQ")),
@@ -93,7 +93,7 @@ mod tests {
     fn a_logical_only_key_event_has_no_physical_code() {
         let event = Event::key(KeyPress::from("a"), KeyModifiers::default());
         assert_eq!(
-            arguments(&event, &EventTarget::Window),
+            arguments(&UiEvent::window(event)),
             vec![Dyn::object(vec![
                 ("code".to_owned(), Dyn::text("a")),
                 ("physical".to_owned(), Dyn::null()),
