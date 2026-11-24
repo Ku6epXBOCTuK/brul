@@ -148,6 +148,13 @@ fn key(code: &str) -> RawUiEvent {
     RawUiEvent::window(RawEvent::key(KeyPress::from(code), KeyModifiers::default()))
 }
 
+fn key_noop(code: &str) -> RawUiEvent {
+    RawUiEvent::window(RawEvent::key_noop(
+        KeyPress::from(code),
+        KeyModifiers::default(),
+    ))
+}
+
 #[test]
 fn tab_moves_focus_and_emits_blur_before_focus() {
     let first = Widget::text("first").focusable(true);
@@ -212,18 +219,40 @@ fn other_keys_become_semantic_key_events() {
 }
 
 #[test]
+fn a_focused_input_gets_a_semantic_key_when_no_policy_handled_it() {
+    let input = Widget::input("").focusable(true);
+    let input_id = input.id();
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble(input, vec![keyboard(&component), observer(&component)]);
+    ui.tree.borrow_mut().set_focused(Some(input_id));
+
+    ui.dispatch_raw(&[key("a")]);
+    assert_eq!(seen(), ["key:a"]);
+
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[key_noop("a")]);
+    assert_eq!(seen(), ["key:a"]);
+}
+
+#[test]
 fn a_handled_key_is_left_to_the_other_policies() {
+    let input = Widget::input("").focusable(true);
+    let input_id = input.id();
     let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
     let mut ui = assemble(
-        Widget::text("view"),
+        input,
         vec![
             first_handled(&component),
             keyboard(&component),
             observer(&component),
         ],
     );
+    ui.tree.borrow_mut().set_focused(Some(input_id));
 
     ui.dispatch_raw(&[key("a")]);
+    assert!(seen().is_empty());
 
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[key_noop("a")]);
     assert!(seen().is_empty());
 }
