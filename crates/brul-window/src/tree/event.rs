@@ -1,9 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{
-    DispatchEvent, Event, EventTarget, ImeKind, KeyPress, RawEvent, RawUiEvent, UiEvent,
-};
+use brul_gui::{DispatchEvent, Event, ImeKind, KeyPress, RawEvent, RawUiEvent, UiEvent};
 use tracing::{debug, trace, warn};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
@@ -80,7 +78,7 @@ impl TreeApp {
                 Step::Continue
             }
             Input::Paste(text) => {
-                let events = self.tree.borrow_mut().paste_text(&text);
+                let events = self.tree.borrow_mut().raw_paste(&text);
                 self.dispatch_events(surface, events)
             }
             Input::Ime(ime) => self.ime(surface, ime),
@@ -102,7 +100,7 @@ impl TreeApp {
     }
 
     pub(super) fn press_key(&mut self, surface: &dyn Surface, key: KeyPress) -> Step {
-        let events = self.tree.borrow_mut().press_key(key);
+        let events = self.tree.borrow_mut().raw_key(key);
         self.dispatch_events(surface, events)
     }
 
@@ -120,7 +118,7 @@ impl TreeApp {
             },
             ImeEvent::Disabled => ImeKind::Disabled,
         };
-        let events = self.tree.borrow_mut().ime(kind);
+        let events = self.tree.borrow_mut().raw_ime(kind);
         self.dispatch_events(surface, events)
     }
 
@@ -162,7 +160,7 @@ impl TreeApp {
     pub(super) fn move_pointer(&mut self, surface: &dyn Surface, x: f64, y: f64) -> Step {
         let (x, y) = point(x, y);
         self.cursor = (x, y);
-        let events = self.tree.borrow_mut().pointer_moved(x, y);
+        let events = self.tree.borrow_mut().pointer_raw_moved(x, y);
         self.dispatch(surface, events)
     }
 
@@ -172,28 +170,12 @@ impl TreeApp {
         }
         let (x, y) = self.cursor;
         let dy = pixels.round() as i32;
-        let target = self
-            .tree
-            .borrow()
-            .hit(x, y)
-            .ok()
-            .flatten()
-            .map_or(EventTarget::Window, EventTarget::Widget);
-        let scrolled = self.tree.borrow_mut().wheel(x, y, dy);
-        if scrolled {
-            surface.redraw();
-        }
-        self.dispatch_events(
-            surface,
-            vec![DispatchEvent::Raw(RawUiEvent::at(
-                target,
-                RawEvent::wheel(dy),
-            ))],
-        )
+        let events = self.tree.borrow_mut().raw_wheel(x, y, dy);
+        self.dispatch_events(surface, events)
     }
 
     pub(super) fn leave_pointer(&mut self, surface: &dyn Surface) -> Step {
-        let events = self.tree.borrow_mut().pointer_leave();
+        let events = self.tree.borrow_mut().pointer_raw_leave();
         self.dispatch_events(surface, events)
     }
 
@@ -203,13 +185,13 @@ impl TreeApp {
             return Step::Continue;
         }
         let (x, y) = point(x, y);
-        let events = self.tree.borrow_mut().pointer_down(x, y);
+        let events = self.tree.borrow_mut().pointer_raw_down(x, y);
         self.dispatch(surface, events)
     }
 
     pub(super) fn release_pointer(&mut self, surface: &dyn Surface, x: f64, y: f64) -> Step {
         let (x, y) = point(x, y);
-        let events = self.tree.borrow_mut().pointer_up(x, y);
+        let events = self.tree.borrow_mut().pointer_raw_up(x, y);
         self.dispatch(surface, events)
     }
 

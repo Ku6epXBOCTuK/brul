@@ -70,7 +70,7 @@ fn draggable_widget_reports_a_drag_on_press() {
     )
     .expect("layout");
 
-    let events = tree.pointer_down(5, 5).expect("down");
+    let events = tree.pointer_raw_down(5, 5).expect("down");
     assert!(events.contains(&DispatchEvent::raw(text_id, RawEvent::drag())));
 }
 
@@ -348,20 +348,20 @@ fn the_wheel_scrolls_the_nearest_scroll_container() {
         height: 100,
     };
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
-    assert!(tree.wheel(10, 10, 50));
+    assert!(!tree.raw_wheel(10, 10, 50).is_empty());
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
     assert_eq!(first.expect("first").y, -50);
 
-    assert!(tree.wheel(10, 10, 1_000));
+    assert!(!tree.raw_wheel(10, 10, 1_000).is_empty());
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
     assert_eq!(first.expect("first").y, -80);
-    assert!(tree.wheel(10, 10, -40));
+    assert!(!tree.raw_wheel(10, 10, -40).is_empty());
 
     let (mut tree, _, _) = list(false);
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
-    assert!(!tree.wheel(10, 10, 50));
+    assert!(tree.raw_wheel(10, 10, 50).is_empty());
 }
 
 #[test]
@@ -389,7 +389,7 @@ fn a_class_scroll_is_applied_to_the_wheel() {
     };
     assert!(tree.apply_class(list_id, Some(&class)));
 
-    assert!(tree.wheel(10, 10, 50));
+    assert!(!tree.raw_wheel(10, 10, 50).is_empty());
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
     assert_eq!(first.expect("first").y, -20);
@@ -416,7 +416,7 @@ fn the_root_scrolls_when_the_window_asks_for_it() {
     let mut tree = WidgetTree::new(root);
     tree.set_root_scroll(true);
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
-    assert!(tree.wheel(10, 10, 50));
+    assert!(!tree.raw_wheel(10, 10, 50).is_empty());
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
     assert_eq!(first.expect("first").y, -50);
@@ -425,7 +425,7 @@ fn the_root_scrolls_when_the_window_asks_for_it() {
     let mut tree = WidgetTree::new(root);
     tree.set_root_scroll(false);
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
-    assert!(!tree.wheel(10, 10, 50));
+    assert!(tree.raw_wheel(10, 10, 50).is_empty());
 }
 
 #[test]
@@ -454,7 +454,7 @@ fn an_inner_scroll_container_wins_over_the_root() {
     };
 
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
-    assert!(tree.wheel(10, 10, 40));
+    assert!(!tree.raw_wheel(10, 10, 40).is_empty());
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let snapshot = tree.snapshot().expect("snapshot");
     let first = snapshot.node(inner_first_id).cloned().expect("first");
@@ -490,7 +490,7 @@ fn a_modal_layer_keeps_the_wheel_away_from_the_content_below() {
     };
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
 
-    assert!(!tree.wheel(60, 60, 40));
+    assert!(tree.raw_wheel(60, 60, 40).is_empty());
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
     assert_eq!(first.expect("first").y, 0);
@@ -510,7 +510,7 @@ fn a_plain_layer_still_lets_the_wheel_through() {
     };
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
 
-    assert!(tree.wheel(60, 60, 40));
+    assert!(!tree.raw_wheel(60, 60, 40).is_empty());
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
     assert_eq!(first.expect("first").y, -40);
@@ -529,7 +529,7 @@ fn a_list_inside_a_modal_layer_still_scrolls() {
     };
     tree.layout(&mut engine, viewport, 1.0).expect("layout");
 
-    assert!(tree.wheel(10, 10, 40));
+    assert!(!tree.raw_wheel(10, 10, 40).is_empty());
     tree.layout(&mut engine, viewport, 1.0).expect("relayout");
     let first = tree.snapshot().expect("snapshot").node(first_id).cloned();
     assert_eq!(first.expect("first").y, -40);
@@ -624,11 +624,11 @@ fn clipped_child_hover_does_not_stick_across_moves() {
     )
     .expect("layout");
 
-    let inside = tree.pointer_moved(8, 8).expect("move inside");
+    let inside = tree.pointer_raw_moved(8, 8).expect("move inside");
     assert!(inside.contains(&DispatchEvent::raw(child_id, RawEvent::pointer_enter())));
-    let outside = tree.pointer_moved(20, 8).expect("move outside");
+    let outside = tree.pointer_raw_moved(20, 8).expect("move outside");
     assert!(outside.contains(&DispatchEvent::raw(child_id, RawEvent::pointer_leave())));
-    let back = tree.pointer_moved(8, 8).expect("move back");
+    let back = tree.pointer_raw_moved(8, 8).expect("move back");
     assert!(back.contains(&DispatchEvent::raw(child_id, RawEvent::pointer_enter())));
 }
 
@@ -660,9 +660,10 @@ fn hover_switches_style_snapshot() {
     .expect("layout");
 
     assert_eq!(
-        tree.pointer_moved(10, 10).expect("move"),
+        tree.pointer_raw_moved(10, 10).expect("move"),
         vec![DispatchEvent::raw(id, RawEvent::pointer_enter())]
     );
+    tree.set_hovered(id, true);
     {
         let snapshot = tree.snapshot().expect("snapshot");
         let node = snapshot.node(id).expect("view");
@@ -671,9 +672,10 @@ fn hover_switches_style_snapshot() {
     }
 
     assert_eq!(
-        tree.pointer_leave(),
+        tree.pointer_raw_leave(),
         vec![DispatchEvent::raw(id, RawEvent::pointer_leave())]
     );
+    tree.set_hovered(id, false);
     let snapshot = tree.snapshot().expect("snapshot");
     let node = snapshot.node(id).expect("view");
     assert_eq!(node.style.background, base.background);
@@ -729,11 +731,11 @@ fn cursor_follows_the_hovered_path() {
     )
     .expect("layout");
 
-    tree.pointer_moved(5, 5).expect("move");
+    tree.pointer_raw_moved(5, 5).expect("move");
     assert_eq!(tree.cursor(), Cursor::Text);
-    tree.pointer_moved(60, 60).expect("move");
+    tree.pointer_raw_moved(60, 60).expect("move");
     assert_eq!(tree.cursor(), Cursor::Pointer);
-    tree.pointer_leave();
+    tree.pointer_raw_leave();
     assert_eq!(tree.cursor(), Cursor::Default);
 }
 
@@ -748,6 +750,7 @@ fn cursor_can_change_in_a_state() {
                 ..WidgetStylePatch::default()
             },
         ));
+    let id = view.id();
     let mut tree = WidgetTree::new(view);
     let mut engine = TextEngine::new();
     tree.layout(
@@ -760,9 +763,9 @@ fn cursor_can_change_in_a_state() {
     )
     .expect("layout");
 
-    tree.pointer_moved(5, 5).expect("move");
+    tree.pointer_raw_moved(5, 5).expect("move");
     assert_eq!(tree.cursor(), Cursor::Default);
-    tree.pointer_down(5, 5).expect("down");
+    tree.set_pressed(id, true);
     assert_eq!(tree.cursor(), Cursor::Grabbing);
 }
 
@@ -796,7 +799,7 @@ fn hover_switches_the_text_variant_without_relayout() {
         node.text.clone().expect("text layout")
     };
 
-    tree.pointer_moved(10, 10).expect("move");
+    tree.set_hovered(id, true);
     let hovered = {
         let snapshot = tree.snapshot().expect("snapshot");
         let node = snapshot.node(id).expect("text");
@@ -806,7 +809,7 @@ fn hover_switches_the_text_variant_without_relayout() {
     };
     assert!(hovered.glyphs[0].x > base.glyphs[0].x);
 
-    tree.pointer_leave();
+    tree.set_hovered(id, false);
     let after = {
         let snapshot = tree.snapshot().expect("snapshot");
         let node = snapshot.node(id).expect("text");
@@ -837,7 +840,7 @@ fn click_bubbles_from_leaf_to_root() {
     .expect("layout");
 
     assert_eq!(
-        tree.pointer_down(5, 5).expect("down"),
+        tree.pointer_raw_down(5, 5).expect("down"),
         vec![
             DispatchEvent::raw(text_id, RawEvent::press()),
             DispatchEvent::raw(child_id, RawEvent::press()),
@@ -845,7 +848,7 @@ fn click_bubbles_from_leaf_to_root() {
         ]
     );
     assert_eq!(
-        tree.pointer_up(5, 5).expect("up"),
+        tree.pointer_raw_up(5, 5).expect("up"),
         vec![
             DispatchEvent::raw(text_id, RawEvent::release()),
             DispatchEvent::raw(child_id, RawEvent::release()),
@@ -886,8 +889,8 @@ fn disabled_subtree_does_not_receive_clicks() {
     )
     .expect("layout");
 
-    let down = tree.pointer_down(5, 5).expect("down");
-    let up = tree.pointer_up(5, 5).expect("up");
+    let down = tree.pointer_raw_down(5, 5).expect("down");
+    let up = tree.pointer_raw_up(5, 5).expect("up");
 
     assert_eq!(down, vec![DispatchEvent::raw(root_id, RawEvent::press())]);
     assert!(!up.contains(&DispatchEvent::semantic(child_id, Event::click())));
@@ -1099,7 +1102,7 @@ fn a_class_carries_state_patches_and_transitions() {
         ..Class::default()
     };
     assert!(tree.apply_class(id, Some(&class)));
-    tree.pointer_moved(10, 10).expect("move");
+    tree.set_hovered(id, true);
     let node = tree.snapshot().expect("snapshot").node(id).cloned();
     assert_eq!(node.expect("node").style.background, base.background);
 
@@ -1337,7 +1340,7 @@ fn a_grown_branch_is_laid_out_again_when_its_sibling_shrinks() {
 fn events_before_layout_are_errors() {
     let mut tree = WidgetTree::new(Widget::column(vec![]));
 
-    assert_eq!(tree.pointer_moved(0, 0), Err(WidgetError::NoLayout));
+    assert_eq!(tree.pointer_raw_moved(0, 0), Err(WidgetError::NoLayout));
     assert!(matches!(tree.snapshot(), Err(WidgetError::NoLayout)));
 }
 

@@ -1,6 +1,6 @@
 use brul_gui::{
-    Dimension, DispatchEvent, Event, KeyModifiers, KeyPress, LayoutStyle, RawEvent, RawUiEvent,
-    Size, TextEngine, Widget, WidgetTree,
+    Dimension, DispatchEvent, Event, KeyModifiers, KeyPress, LayoutStyle, Position, RawEvent,
+    RawUiEvent, Size, TextEngine, Widget, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -34,7 +34,7 @@ fn focused_field(value: &str) -> (WidgetTree, brul_gui::WidgetId) {
     let input = field(value);
     let id = input.id();
     let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
-    tree.press_key("Tab");
+    tree.raw_key("Tab");
     (tree, id)
 }
 
@@ -42,17 +42,17 @@ fn focused_field(value: &str) -> (WidgetTree, brul_gui::WidgetId) {
 fn typing_inserts_at_the_caret_and_moves_it() {
     let (mut tree, id) = focused_field("ab");
 
-    assert_eq!(tree.press_key("Home"), Vec::new());
+    assert_eq!(tree.raw_key("Home"), Vec::new());
     assert_eq!(
-        tree.press_key("X"),
+        tree.raw_key("X"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("Xab".to_owned(), 1)
         )]
     );
-    assert_eq!(tree.press_key("ArrowRight"), Vec::new());
+    assert_eq!(tree.raw_key("ArrowRight"), Vec::new());
     assert_eq!(
-        tree.press_key("Y"),
+        tree.raw_key("Y"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("XaYb".to_owned(), 3)
@@ -65,18 +65,18 @@ fn backspace_and_delete_remove_whole_characters() {
     let word = "\u{43f}\u{440}\u{438}\u{432}\u{435}\u{442}";
     let (mut tree, id) = focused_field(word);
 
-    assert_eq!(tree.press_key("Home"), Vec::new());
-    assert_eq!(tree.press_key("End"), Vec::new());
+    assert_eq!(tree.raw_key("Home"), Vec::new());
+    assert_eq!(tree.raw_key("End"), Vec::new());
     assert_eq!(
-        tree.press_key("Backspace"),
+        tree.raw_key("Backspace"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("\u{43f}\u{440}\u{438}\u{432}\u{435}".to_owned(), 10)
         )]
     );
-    assert_eq!(tree.press_key("Home"), Vec::new());
+    assert_eq!(tree.raw_key("Home"), Vec::new());
     assert_eq!(
-        tree.press_key("Delete"),
+        tree.raw_key("Delete"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("\u{440}\u{438}\u{432}\u{435}".to_owned(), 0)
@@ -93,7 +93,7 @@ fn backspace_on_an_empty_field_reports_an_unchanged_key() {
     };
 
     assert_eq!(
-        tree.press_key(key.clone()),
+        tree.raw_key(key.clone()),
         vec![DispatchEvent::raw(
             id,
             RawEvent::key_unchanged(key, KeyModifiers::default())
@@ -104,7 +104,7 @@ fn backspace_on_an_empty_field_reports_an_unchanged_key() {
 #[test]
 fn delete_at_the_end_of_the_field_reports_an_unchanged_key() {
     let (mut tree, id) = focused_field("ab");
-    tree.press_key("End");
+    tree.raw_key("End");
     let modifiers = KeyModifiers {
         alt: true,
         ..KeyModifiers::default()
@@ -116,7 +116,7 @@ fn delete_at_the_end_of_the_field_reports_an_unchanged_key() {
     };
 
     assert_eq!(
-        tree.press_key(key.clone()),
+        tree.raw_key(key.clone()),
         vec![DispatchEvent::raw(
             id,
             RawEvent::key_unchanged(key, modifiers)
@@ -129,14 +129,14 @@ fn space_inserts_a_space_and_enter_submits_instead_of_clicking() {
     let (mut tree, id) = focused_field("a");
 
     assert_eq!(
-        tree.press_key(" "),
+        tree.raw_key(" "),
         vec![DispatchEvent::semantic(
             id,
             Event::input("a ".to_owned(), 2)
         )]
     );
     assert_eq!(
-        tree.press_key("Enter"),
+        tree.raw_key("Enter"),
         vec![DispatchEvent::semantic(id, Event::submit())]
     );
 }
@@ -146,21 +146,21 @@ fn enter_submits_and_escape_and_tab_leave_the_field() {
     let (first, second) = (field("a"), field("b"));
     let (first_id, second_id) = (first.id(), second.id());
     let mut tree = laid_out(Widget::column(vec![first, second]).with_layout(fixed(100, 100)));
-    tree.press_key("Tab");
+    tree.raw_key("Tab");
 
     assert_eq!(
-        tree.press_key("Enter"),
+        tree.raw_key("Enter"),
         vec![DispatchEvent::semantic(first_id, Event::submit())]
     );
     assert_eq!(
-        tree.press_key("Escape"),
+        tree.raw_key("Escape"),
         vec![DispatchEvent::raw(
             first_id,
             RawEvent::key(KeyPress::from("Escape"), KeyModifiers::default()),
         )]
     );
     assert_eq!(
-        tree.press_key("Tab"),
+        tree.raw_key("Tab"),
         vec![
             DispatchEvent::semantic(first_id, Event::blur()),
             DispatchEvent::semantic(second_id, Event::focus())
@@ -171,12 +171,12 @@ fn enter_submits_and_escape_and_tab_leave_the_field() {
 #[test]
 fn an_external_write_replaces_the_text_and_clamps_the_caret() {
     let (mut tree, id) = focused_field("abc");
-    assert_eq!(tree.press_key("End"), Vec::new());
+    assert_eq!(tree.raw_key("End"), Vec::new());
 
     assert!(tree.set_input_text(id, "xy".to_owned()));
-    assert_eq!(tree.press_key("ArrowRight"), Vec::new());
+    assert_eq!(tree.raw_key("ArrowRight"), Vec::new());
     assert_eq!(
-        tree.press_key("Z"),
+        tree.raw_key("Z"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("xyZ".to_owned(), 3)
@@ -186,7 +186,7 @@ fn an_external_write_replaces_the_text_and_clamps_the_caret() {
 
     assert!(tree.set_input_text(id, "q".to_owned()));
     assert_eq!(
-        tree.press_key("W"),
+        tree.raw_key("W"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("qW".to_owned(), 2)
@@ -208,7 +208,7 @@ fn the_caret_is_snapshot_only_while_the_field_is_focused() {
         .caret;
     assert_eq!(caret, None);
 
-    tree.press_key("Tab");
+    tree.raw_key("Tab");
     let mut engine = TextEngine::new();
     tree.layout(
         &mut engine,
@@ -234,9 +234,9 @@ fn a_click_places_the_caret() {
     let id = input.id();
     let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
 
-    let _ = tree.pointer_down(60, 5).expect("down");
+    let _ = tree.pointer_raw_down(60, 5).expect("down");
     assert_eq!(
-        tree.press_key("Z"),
+        tree.raw_key("Z"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("abZ".to_owned(), 3)
@@ -250,7 +250,7 @@ fn a_key_press_without_a_focused_field_still_reaches_the_window() {
     let mut tree = laid_out(Widget::column(vec![plain]).with_layout(fixed(100, 40)));
 
     assert_eq!(
-        tree.press_key("a"),
+        tree.raw_key("a"),
         vec![
             RawUiEvent::window(RawEvent::key(KeyPress::from("a"), KeyModifiers::default(),)).into()
         ]
@@ -267,7 +267,7 @@ fn a_physical_code_reaches_the_window_event() {
     };
 
     assert_eq!(
-        tree.press_key(key.clone()),
+        tree.raw_key(key.clone()),
         vec![RawUiEvent::window(RawEvent::key(key, KeyModifiers::default())).into()]
     );
 }
@@ -280,7 +280,7 @@ fn multiline(value: &str) -> Widget {
 
 fn focused(tree: WidgetTree) -> WidgetTree {
     let mut tree = tree;
-    tree.press_key("Tab");
+    tree.raw_key("Tab");
     tree
 }
 
@@ -306,14 +306,14 @@ fn a_multiline_field_inserts_a_newline_and_keeps_the_submit_for_one_line() {
     ));
 
     assert_eq!(
-        tree.press_key("Enter"),
+        tree.raw_key("Enter"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("ab\n".to_owned(), 3)
         )]
     );
     assert_eq!(
-        tree.press_key("Z"),
+        tree.raw_key("Z"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("ab\nZ".to_owned(), 4)
@@ -329,18 +329,18 @@ fn vertical_arrows_move_the_caret_between_the_lines() {
         Widget::column(vec![input]).with_layout(fixed(100, 40)),
     ));
 
-    assert_eq!(tree.press_key("ArrowUp"), Vec::new());
+    assert_eq!(tree.raw_key("ArrowUp"), Vec::new());
     assert_eq!(
-        tree.press_key("X"),
+        tree.raw_key("X"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("abX\ncd".to_owned(), 3)
         )]
     );
     relayout(&mut tree);
-    assert_eq!(tree.press_key("ArrowDown"), Vec::new());
+    assert_eq!(tree.raw_key("ArrowDown"), Vec::new());
     assert_eq!(
-        tree.press_key("Y"),
+        tree.raw_key("Y"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("abX\ncdY".to_owned(), 7)
@@ -401,9 +401,9 @@ fn a_click_on_the_second_line_places_the_caret_there() {
     let id = input.id();
     let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
 
-    let _ = tree.pointer_down(60, 18).expect("down");
+    let _ = tree.pointer_raw_down(60, 18).expect("down");
     assert_eq!(
-        tree.press_key("Z"),
+        tree.raw_key("Z"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("ab\ncdZ".to_owned(), 6)
@@ -423,10 +423,10 @@ fn shift_and_arrow_select_text_that_an_arrow_collapses() {
     let input = field("ab");
     let id = input.id();
     let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
-    tree.press_key("Tab");
+    tree.raw_key("Tab");
     tree.set_modifiers(shift());
 
-    assert_eq!(tree.press_key("ArrowLeft"), Vec::new());
+    assert_eq!(tree.raw_key("ArrowLeft"), Vec::new());
     let selection = tree
         .snapshot()
         .expect("snapshot")
@@ -438,7 +438,7 @@ fn shift_and_arrow_select_text_that_an_arrow_collapses() {
     assert!(selection[0].width > 0);
 
     tree.set_modifiers(KeyModifiers::default());
-    assert_eq!(tree.press_key("ArrowLeft"), Vec::new());
+    assert_eq!(tree.raw_key("ArrowLeft"), Vec::new());
     let selection = tree
         .snapshot()
         .expect("snapshot")
@@ -452,16 +452,16 @@ fn shift_and_arrow_select_text_that_an_arrow_collapses() {
 #[test]
 fn control_a_selects_everything_and_typing_replaces_it() {
     let (mut tree, id) = focused_field("abc");
-    assert_eq!(tree.press_key("End"), Vec::new());
+    assert_eq!(tree.raw_key("End"), Vec::new());
     tree.set_modifiers(KeyModifiers {
         control: true,
         ..KeyModifiers::default()
     });
 
-    assert_eq!(tree.press_key("a"), Vec::new());
+    assert_eq!(tree.raw_key("a"), Vec::new());
     tree.set_modifiers(KeyModifiers::default());
     assert_eq!(
-        tree.press_key("Z"),
+        tree.raw_key("Z"),
         vec![DispatchEvent::semantic(id, Event::input("Z".to_owned(), 1))]
     );
 }
@@ -472,10 +472,10 @@ fn dragging_across_the_field_selects_the_text() {
     let id = input.id();
     let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
 
-    let _ = tree.pointer_down(60, 5).expect("down");
-    let _ = tree.pointer_moved(0, 5).expect("move");
+    let _ = tree.pointer_raw_down(60, 5).expect("down");
+    let _ = tree.pointer_raw_moved(0, 5).expect("move");
     assert_eq!(
-        tree.press_key("Backspace"),
+        tree.raw_key("Backspace"),
         vec![DispatchEvent::semantic(id, Event::input(String::new(), 0))]
     );
 }
@@ -488,18 +488,18 @@ fn home_and_end_stay_on_the_current_line() {
         Widget::column(vec![input]).with_layout(fixed(100, 40)),
     ));
 
-    assert_eq!(tree.press_key("Home"), Vec::new());
+    assert_eq!(tree.raw_key("Home"), Vec::new());
     assert_eq!(
-        tree.press_key("X"),
+        tree.raw_key("X"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("ab\nXcd".to_owned(), 4)
         )]
     );
     relayout(&mut tree);
-    assert_eq!(tree.press_key("End"), Vec::new());
+    assert_eq!(tree.raw_key("End"), Vec::new());
     assert_eq!(
-        tree.press_key("Y"),
+        tree.raw_key("Y"),
         vec![DispatchEvent::semantic(
             id,
             Event::input("ab\nXcdY".to_owned(), 7)
@@ -513,12 +513,12 @@ fn shift_tab_moves_the_focus_back() {
     let (first_id, second_id) = (first.id(), second.id());
     let mut tree =
         laid_out(Widget::column(vec![first, second, third]).with_layout(fixed(100, 100)));
-    tree.press_key("Tab");
-    tree.press_key("Tab");
+    tree.raw_key("Tab");
+    tree.raw_key("Tab");
     tree.set_modifiers(shift());
 
     assert_eq!(
-        tree.press_key("Tab"),
+        tree.raw_key("Tab"),
         vec![
             DispatchEvent::semantic(second_id, Event::blur()),
             DispatchEvent::semantic(first_id, Event::focus())
@@ -535,7 +535,7 @@ fn control() -> KeyModifiers {
 
 fn selected(tree: &mut WidgetTree) {
     tree.set_modifiers(shift());
-    tree.press_key("Home");
+    tree.raw_key("Home");
     tree.set_modifiers(control());
 }
 
@@ -545,7 +545,7 @@ fn control_c_copies_the_selection() {
     selected(&mut tree);
 
     assert_eq!(
-        tree.press_key("c"),
+        tree.raw_key("c"),
         vec![DispatchEvent::semantic(id, Event::copy("abc".to_owned()))]
     );
 }
@@ -555,7 +555,7 @@ fn control_c_without_a_selection_copies_nothing() {
     let (mut tree, _) = focused_field("abc");
     tree.set_modifiers(control());
 
-    assert_eq!(tree.press_key("c"), Vec::new());
+    assert_eq!(tree.raw_key("c"), Vec::new());
 }
 
 #[test]
@@ -564,7 +564,7 @@ fn control_x_cuts_the_selection() {
     selected(&mut tree);
 
     assert_eq!(
-        tree.press_key("x"),
+        tree.raw_key("x"),
         vec![
             DispatchEvent::semantic(id, Event::input(String::new(), 0)),
             DispatchEvent::semantic(id, Event::copy("abc".to_owned())),
@@ -578,7 +578,7 @@ fn control_v_asks_for_the_clipboard() {
     tree.set_modifiers(control());
 
     assert_eq!(
-        tree.press_key("v"),
+        tree.raw_key("v"),
         vec![DispatchEvent::raw(id, RawEvent::paste(String::new()))]
     );
 }
@@ -587,11 +587,11 @@ fn control_v_asks_for_the_clipboard() {
 fn pasting_replaces_the_selection_and_strips_newlines() {
     let (mut tree, id) = focused_field("abc");
     tree.set_modifiers(control());
-    tree.press_key("a");
+    tree.raw_key("a");
     tree.set_modifiers(KeyModifiers::default());
 
     assert_eq!(
-        tree.paste_text("x\r\ny"),
+        tree.raw_paste("x\r\ny"),
         vec![
             DispatchEvent::raw(id, RawEvent::paste("xy".to_owned())),
             DispatchEvent::semantic(id, Event::input("xy".to_owned(), 2)),
@@ -609,7 +609,7 @@ fn ctrl_enter_leaves_a_multiline_field_for_the_window() {
     tree.set_modifiers(control());
 
     assert_eq!(
-        tree.press_key("Enter"),
+        tree.raw_key("Enter"),
         vec![DispatchEvent::raw(
             id,
             RawEvent::key(KeyPress::from("Enter"), control()),
@@ -626,7 +626,7 @@ fn a_multiline_paste_keeps_its_lines() {
     ));
 
     assert_eq!(
-        tree.paste_text("b\r\nc"),
+        tree.raw_paste("b\r\nc"),
         vec![
             DispatchEvent::raw(id, RawEvent::paste("b\nc".to_owned())),
             DispatchEvent::semantic(id, Event::input("ab\nc".to_owned(), 4)),
@@ -637,9 +637,11 @@ fn a_multiline_paste_keeps_its_lines() {
 #[test]
 fn a_preedit_is_shown_at_the_caret_and_the_caret_moves_past_it() {
     let (mut tree, id) = focused_field("ab");
-    tree.press_key("Home");
+    tree.raw_key("Home");
 
-    assert!(tree.set_preedit("\u{3042}"));
+    let mut buffer = tree.edit_buffer(id).expect("buffer");
+    buffer.set_preedit("\u{3042}");
+    assert!(tree.commit_edit(id, &buffer));
     relayout(&mut tree);
 
     let node = tree
@@ -656,16 +658,13 @@ fn a_preedit_is_shown_at_the_caret_and_the_caret_moves_past_it() {
 #[test]
 fn a_commit_inserts_the_text_and_clears_the_preedit() {
     let (mut tree, id) = focused_field("ab");
-    tree.press_key("Home");
-    tree.set_preedit("x");
-
-    assert_eq!(
-        tree.commit_text("X"),
-        vec![DispatchEvent::semantic(
-            id,
-            Event::input("Xab".to_owned(), 1)
-        )]
-    );
+    tree.raw_key("Home");
+    let mut buffer = tree.edit_buffer(id).expect("buffer");
+    buffer.set_preedit("x");
+    buffer.set_preedit("");
+    let caret = buffer.caret();
+    buffer.insert_text(caret, "X");
+    assert!(tree.commit_edit(id, &buffer));
     relayout(&mut tree);
     let node = tree
         .snapshot()
@@ -682,7 +681,7 @@ fn the_caret_area_follows_the_focused_field() {
     let mut tree = laid_out(input);
     assert!(tree.caret_area().is_none());
 
-    tree.press_key("Tab");
+    tree.raw_key("Tab");
     let area = tree.caret_area().expect("caret area");
     assert!(area.width >= 1);
     assert!(area.height >= 1);
@@ -692,16 +691,11 @@ fn the_caret_area_follows_the_focused_field() {
 fn delete_surrounding_removes_whole_characters_around_the_caret() {
     let word = "\u{43f}\u{440}\u{438}";
     let (mut tree, id) = focused_field(word);
-    tree.press_key("Home");
-    tree.press_key("ArrowRight");
-
-    assert_eq!(
-        tree.delete_surrounding(2, 2),
-        vec![DispatchEvent::semantic(
-            id,
-            Event::input("\u{438}".to_owned(), 0)
-        )]
-    );
+    let mut buffer = tree.edit_buffer(id).expect("buffer");
+    buffer.set_caret(Position::new(0, 2));
+    buffer.set_anchor(Position::new(0, 2));
+    buffer.remove(Position::new(0, 2)..Position::new(0, 6));
+    assert!(tree.commit_edit(id, &buffer));
 }
 
 #[test]
@@ -712,16 +706,18 @@ fn reusing_children_keeps_input_selection_and_preedit() {
     let parent = root.id();
     let mut tree = laid_out(root);
 
-    tree.press_key("Tab");
-    tree.press_key("Home");
+    tree.raw_key("Tab");
+    tree.raw_key("Home");
     tree.set_modifiers(KeyModifiers {
         shift: true,
         ..KeyModifiers::default()
     });
-    tree.press_key("ArrowRight");
-    tree.press_key("ArrowRight");
+    tree.raw_key("ArrowRight");
+    tree.raw_key("ArrowRight");
     tree.set_modifiers(KeyModifiers::default());
-    assert!(tree.set_preedit("ni"));
+    let mut buffer = tree.edit_buffer(id).expect("buffer");
+    buffer.set_preedit("ni");
+    assert!(tree.commit_edit(id, &buffer));
 
     let children = tree.take_children(parent).expect("children");
     assert!(tree.replace_all_children(parent, children));

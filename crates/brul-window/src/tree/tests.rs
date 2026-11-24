@@ -829,11 +829,11 @@ fn tab_moves_focus_between_a_platform_view_and_the_tree() {
         physical: None,
     };
 
-    let events = app.tree.borrow_mut().press_key(tab());
+    let events = app.tree.borrow_mut().raw_key(tab());
     app.dispatch_events(&surface, events);
     assert!(calls.borrow().contains(&"focus 4".to_owned()));
 
-    let events = app.tree.borrow_mut().press_key(tab());
+    let events = app.tree.borrow_mut().raw_key(tab());
     app.dispatch_events(&surface, events);
     assert!(calls.borrow().contains(&"blur".to_owned()));
 }
@@ -849,7 +849,7 @@ fn a_focused_platform_view_keeps_keyboard_input_to_itself() {
             .extend(events.iter().map(|event| format!("{event:?}")));
         Vec::new()
     });
-    let events = app.tree.borrow_mut().press_key(KeyPress {
+    let events = app.tree.borrow_mut().raw_key(KeyPress {
         code: "Tab".to_owned(),
         physical: None,
     });

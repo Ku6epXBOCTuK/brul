@@ -17,14 +17,6 @@ impl HitScratch {
     }
 }
 
-pub(super) fn boundary_before(value: &str, mut index: usize) -> usize {
-    index = index.min(value.len());
-    while !value.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
-}
-
 pub(super) fn reveal_carets(
     nodes: &mut [Node],
     texts: &HashMap<WidgetId, ShapedText>,

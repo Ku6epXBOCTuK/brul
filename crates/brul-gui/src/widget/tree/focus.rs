@@ -1,38 +1,6 @@
 use super::*;
 
 impl WidgetTree {
-    pub(super) fn focus_next(&mut self) -> Vec<DispatchEvent> {
-        self.enter_modal_scope();
-        let slots = self.focusable_slots();
-        let Some(first) = slots.first().copied() else {
-            return self.focus_events(None);
-        };
-        let target = match self
-            .focused_slot()
-            .and_then(|current| slots.iter().position(|slot| *slot == current))
-        {
-            Some(index) => slots[(index + 1) % slots.len()],
-            None => first,
-        };
-        self.focus_events(Some(target))
-    }
-
-    pub(super) fn focus_previous(&mut self) -> Vec<DispatchEvent> {
-        self.enter_modal_scope();
-        let slots = self.focusable_slots();
-        if slots.is_empty() {
-            return self.focus_events(None);
-        }
-        let target = match self
-            .focused_slot()
-            .and_then(|current| slots.iter().position(|slot| *slot == current))
-        {
-            Some(index) => slots[(index + slots.len() - 1) % slots.len()],
-            None => slots[slots.len() - 1],
-        };
-        self.focus_events(Some(target))
-    }
-
     pub(super) fn path_to(&self, target: Slot) -> Vec<Slot> {
         let mut path = Vec::new();
         self.collect_path(self.root, target, &mut path);
@@ -111,18 +79,6 @@ impl WidgetTree {
         self.set_focused_slot(target);
     }
 
-    fn enter_modal_scope(&mut self) {
-        let Some(scope) = self.modal_scope_slot() else {
-            return;
-        };
-        let outside = !self
-            .focused_slot()
-            .is_some_and(|focused| self.within_scope_slot(scope, focused));
-        if outside && self.modal_focus.is_none() {
-            self.modal_focus = self.focused;
-        }
-    }
-
     fn topmost_modal(&self, slot: Slot) -> Option<Slot> {
         let node = &self.nodes[slot.index()];
         if !node.state.visible {
@@ -177,24 +133,6 @@ impl WidgetTree {
         for child in &node.children {
             self.collect_focusable(*child, slots);
         }
-    }
-
-    pub(super) fn focus_events(&mut self, slot: Option<Slot>) -> Vec<DispatchEvent> {
-        if self.focused_slot() == slot {
-            return Vec::new();
-        }
-        let mut events = Vec::with_capacity(2);
-        if let Some(previous) = self.focused {
-            events.push(DispatchEvent::semantic(previous, Event::blur()));
-        }
-        if let Some(next) = slot {
-            events.push(DispatchEvent::semantic(
-                self.nodes[next.index()].id,
-                Event::focus(),
-            ));
-        }
-        self.set_focused_slot(slot);
-        events
     }
 
     pub(super) fn set_focused_slot(&mut self, slot: Option<Slot>) {

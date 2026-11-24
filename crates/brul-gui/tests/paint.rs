@@ -465,14 +465,14 @@ fn removing_a_hovered_shadow_clears_its_tail() {
     let child_id = child.id();
     let (mut tree, engine, mut frame) = painted(padded_root(child));
 
-    tree.pointer_moved(12, 12).expect("pointer");
+    tree.set_hovered(child_id, true);
     let dirty = tree.take_dirty();
     assert!(dirty.ids.contains(&child_id));
     let snapshot = tree.snapshot().expect("snapshot");
     frame.paint(snapshot, engine.atlas(), &dirty);
     assert_eq!(pixel(&frame, 12, 18), [255, 0, 0, 255]);
 
-    tree.pointer_leave();
+    tree.set_hovered(child_id, false);
     let dirty = tree.take_dirty();
     let snapshot = tree.snapshot().expect("snapshot");
     frame.paint(snapshot, engine.atlas(), &dirty);
