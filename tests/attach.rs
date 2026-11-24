@@ -75,7 +75,7 @@ fn attach_shims_create_update_event_and_cleanup_state() {
         brul::gui::Widget::text("root"),
     )));
     let states: SharedStates = Rc::new(RefCell::new(States::default()));
-    let state_id = StateId::new(42);
+    let state_id = StateId::source("test", "forty_two");
     let mut ctx = Build::new();
     ctx.set_tree(tree);
     ctx.set_states(Rc::clone(&states));

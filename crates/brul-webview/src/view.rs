@@ -12,7 +12,7 @@ pub fn view(
     let source = component.borrow_mut().seed::<String>("source", POSITION)?;
     let visible = component.borrow_mut().seed::<bool>("visible", POSITION)?;
     Ok(Built {
-        widget: Widget::platform_view(PlatformViewId::new(build.state_id().get()), source)
+        widget: Widget::platform_view(PlatformViewId::new(build.state_id()), source)
             .visible(visible),
         bindings: Vec::new(),
         handlers: Vec::new(),

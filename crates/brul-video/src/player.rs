@@ -170,7 +170,12 @@ mod tests {
     fn a_player_advances_its_frame_and_revision() {
         let first = frame(10);
         let decoder = Frames::new(vec![first, frame(20)]).unwrap();
-        let player = Player::new(StateId::new(1), Box::new(decoder), frame(10), None);
+        let player = Player::new(
+            StateId::source("test", "one"),
+            Box::new(decoder),
+            frame(10),
+            None,
+        );
         let revision = player.revision();
         std::thread::sleep(Duration::from_millis(20));
         assert!(player.revision() > revision);
@@ -185,7 +190,12 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink = Arc::new(Recorder(Arc::clone(&events)));
         let decoder = Frames::once(vec![frame(10)]).unwrap();
-        let player = Player::new(StateId::new(2), Box::new(decoder), frame(10), Some(sink));
+        let player = Player::new(
+            StateId::source("test", "two"),
+            Box::new(decoder),
+            frame(10),
+            Some(sink),
+        );
         std::thread::sleep(Duration::from_millis(20));
         assert_eq!(player.revision(), player.revision());
         assert!(!player.is_playing());

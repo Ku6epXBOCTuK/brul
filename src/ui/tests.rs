@@ -1149,7 +1149,7 @@ fn attachment_reruns_vetoes_events_and_cleans_up() {
     let id = widget.id();
     let hooks = Hooks {
         target: EventTarget::Widget(id),
-        state: StateId::new(7),
+        state: StateId::source("test", "seven"),
         component: Rc::clone(&component),
         params: vec![|component: &mut Component| -> Result<Dyn, Error> {
             Ok(Dyn::text(component.state::<ProbeSource>().value.get()))
@@ -1187,7 +1187,7 @@ fn attachment_reruns_vetoes_events_and_cleans_up() {
         false,
     );
     ui.settle();
-    let state = StateId::new(7).for_widget(id);
+    let state = StateId::source("test", "seven").for_widget(id);
     let probe = ui
         .states
         .borrow()
@@ -1306,7 +1306,7 @@ fn a_raw_noop_key_reaches_the_capability_only() {
     };
     let hooks = Hooks {
         target: EventTarget::Widget(id),
-        state: StateId::new(7),
+        state: StateId::source("test", "seven"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
@@ -1358,7 +1358,7 @@ fn a_capability_can_emit_a_raw_event_to_other_capabilities() {
     };
     let emitter = Hooks {
         target: EventTarget::Widget(id),
-        state: StateId::new(7),
+        state: StateId::source("test", "seven"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
@@ -1369,7 +1369,7 @@ fn a_capability_can_emit_a_raw_event_to_other_capabilities() {
     };
     let observer = Hooks {
         target: EventTarget::Widget(id),
-        state: StateId::new(8),
+        state: StateId::source("test", "eight"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
@@ -1440,7 +1440,7 @@ fn a_window_capability_sees_a_raw_key_and_emits_a_semantic_key() {
     };
     let hooks = Hooks {
         target: EventTarget::Window,
-        state: StateId::new(7),
+        state: StateId::source("test", "seven"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
@@ -1489,7 +1489,7 @@ fn a_raw_window_key_stays_with_capabilities() {
     };
     let hooks = Hooks {
         target: EventTarget::Window,
-        state: StateId::new(7),
+        state: StateId::source("test", "seven"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
@@ -1542,7 +1542,7 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
     };
     let stop = Hooks {
         target: EventTarget::Window,
-        state: StateId::new(7),
+        state: StateId::source("test", "seven"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
@@ -1559,7 +1559,7 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
     };
     let later = Hooks {
         target: EventTarget::Window,
-        state: StateId::new(8),
+        state: StateId::source("test", "eight"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
@@ -1687,7 +1687,7 @@ fn one_targeted_event_reaches_the_attachment_and_script_but_not_the_window() {
     };
     let hooks = Hooks {
         target: EventTarget::Widget(id),
-        state: StateId::new(7),
+        state: StateId::source("test", "seven"),
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,

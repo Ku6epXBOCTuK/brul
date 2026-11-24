@@ -1,12 +1,12 @@
 use brul_syntax::error::Error;
 use brul_syntax::markup::Element;
 
-use crate::runtime::StateId;
 use crate::window::AttachArg;
 
 use super::Emit;
 use super::Frame;
 use super::Out;
+use super::StateKey;
 use super::element::{HooksSpec, hooks_binding, widget};
 use super::events::HandlerSpec;
 use super::module::ViewKind;
@@ -16,7 +16,7 @@ pub(super) struct ViewSpec<'a> {
     pub(super) root: &'a Element,
     pub(super) handlers: &'a [HandlerSpec],
     pub(super) attaches: &'a [AttachArg],
-    pub(super) hooks_state: StateId,
+    pub(super) attach_states: &'a [StateKey],
     pub(super) kind: ViewKind,
 }
 
@@ -30,7 +30,7 @@ pub(super) fn view(
         root,
         handlers,
         attaches,
-        hooks_state,
+        attach_states,
         kind,
     } = spec;
     let theme = match kind.typed() {
@@ -50,7 +50,7 @@ pub(super) fn view(
         out.line(format_args!("let mut bindings = Vec::new();"));
         out.line(format_args!("let mut handlers = Vec::new();"));
         out.line(format_args!("let mut props = Vec::new();"));
-        for attach in *attaches {
+        for (attach, state) in attaches.iter().zip(*attach_states) {
             hooks_binding(
                 out,
                 HooksSpec {
@@ -58,7 +58,7 @@ pub(super) fn view(
                     params: &attach.params,
                     position: attach.position,
                     target: "brul::EventTarget::Window",
-                    id: *hooks_state,
+                    id: state,
                     context: emit.context,
                     scopes: &[],
                     scope: None,

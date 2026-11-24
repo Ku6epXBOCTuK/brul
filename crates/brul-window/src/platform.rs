@@ -209,7 +209,9 @@ impl PlatformViews {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use brul_gui::{Dimension, LayoutStyle, Size, TextEngine, Widget, WidgetTree};
+    use brul_gui::{
+        Dimension, LayoutStyle, PlatformViewId, Size, StateId, TextEngine, Widget, WidgetTree,
+    };
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -268,11 +270,12 @@ mod tests {
     fn snapshot(source: &str, width: u32) -> WidgetSnapshot {
         let mut engine = TextEngine::new();
         let mut tree = WidgetTree::new(
-            Widget::platform_view(PlatformViewId::new(1), source).with_layout(LayoutStyle {
-                width: Dimension::Px(width),
-                height: Dimension::Px(8),
-                ..LayoutStyle::default()
-            }),
+            Widget::platform_view(PlatformViewId::new(StateId::source("test", "view")), source)
+                .with_layout(LayoutStyle {
+                    width: Dimension::Px(width),
+                    height: Dimension::Px(8),
+                    ..LayoutStyle::default()
+                }),
         );
         tree.layout(
             &mut engine,
@@ -311,7 +314,7 @@ mod tests {
         assert_eq!(
             calls.borrow().as_slice(),
             &[Call::Create(
-                PlatformViewId::new(1),
+                PlatformViewId::new(StateId::source("test", "view")),
                 "about:blank".to_owned(),
                 PlatformViewBounds {
                     x: 0,
@@ -345,12 +348,15 @@ mod tests {
             calls: Rc::clone(&calls),
         }));
         views.sync(&snapshot("about:blank", 10), 2.0).expect("sync");
-        views.focus(PlatformViewId::new(1));
+        views.focus(PlatformViewId::new(StateId::source("test", "view")));
         calls.borrow_mut().clear();
         views.sync(&empty_snapshot(), 2.0).expect("sync");
         assert_eq!(
             calls.borrow().as_slice(),
-            &[Call::Blur, Call::Remove(PlatformViewId::new(1))]
+            &[
+                Call::Blur,
+                Call::Remove(PlatformViewId::new(StateId::source("test", "view")))
+            ]
         );
     }
 
@@ -360,13 +366,16 @@ mod tests {
         let mut views = PlatformViews::new(Box::new(Recorder {
             calls: Rc::clone(&calls),
         }));
-        views.focus(PlatformViewId::new(1));
-        views.focus(PlatformViewId::new(1));
+        views.focus(PlatformViewId::new(StateId::source("test", "view")));
+        views.focus(PlatformViewId::new(StateId::source("test", "view")));
         views.blur();
         views.blur();
         assert_eq!(
             calls.borrow().as_slice(),
-            &[Call::Focus(PlatformViewId::new(1)), Call::Blur]
+            &[
+                Call::Focus(PlatformViewId::new(StateId::source("test", "view"))),
+                Call::Blur
+            ]
         );
     }
 }

@@ -40,7 +40,7 @@ pub fn web_view_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compo
     let mut props = Vec::new();
     let widget = {
         {
-            let built = build.capability(brul::Capability::view(brul::StateId::new(7451242923022373u64), std::rc::Rc::clone(component), brul::Instance {
+            let built = build.capability(brul::Capability::view(brul::StateId::source("web_view_demo", "WebView/view"), std::rc::Rc::clone(component), brul::Instance {
                 theme,
                 view: ::brul::webview::view,
                 script: None,

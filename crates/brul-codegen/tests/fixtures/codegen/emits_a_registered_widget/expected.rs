@@ -40,7 +40,7 @@ pub fn gauge_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, componen
     let mut props = Vec::new();
     let widget = {
         {
-            let built = build.capability(brul::Capability::view(brul::StateId::new(4743421592828437u64), std::rc::Rc::clone(component), brul::Instance {
+            let built = build.capability(brul::Capability::view(brul::StateId::source("gauge_demo", "Gauge/view"), std::rc::Rc::clone(component), brul::Instance {
                 theme,
                 view: crate::__brul_widget_gauge,
                 script: None,

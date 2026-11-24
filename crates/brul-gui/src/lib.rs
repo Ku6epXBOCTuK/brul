@@ -108,7 +108,7 @@ pub use widget::{
     Anchor, CaretArea, Class, ClipboardData, Dirty, DispatchEvent, EditBuffer, Event, EventKind,
     EventSet, EventTarget, Fragment, FunctionName, ImeKind, KeyModifiers, KeyPress, Layers,
     PlatformViewId, PlatformViewSpec, Position, RawEvent, RawEventSet, RawKind, RawUiEvent,
-    StyleSet, StyleState, TextStylePatch, TextStyleSet, TimerOwner, Transitions, UiEvent, Widget,
-    WidgetError, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode, WidgetState,
+    StateId, StyleSet, StyleState, TextStylePatch, TextStyleSet, TimerOwner, Transitions, UiEvent,
+    Widget, WidgetError, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode, WidgetState,
     WidgetStyle, WidgetStylePatch, WidgetTree,
 };

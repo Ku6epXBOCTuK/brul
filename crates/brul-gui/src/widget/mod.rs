@@ -9,6 +9,7 @@ static NEXT_WIDGET_ID: AtomicU32 = AtomicU32::new(1);
 
 mod event;
 mod snapshot;
+mod state;
 mod style;
 #[cfg(test)]
 mod tests;
@@ -23,6 +24,7 @@ pub use brul_event::{
 pub use brul_ident::{FunctionName, TimerOwner};
 pub use event::{CaretArea, Dirty, DispatchEvent, EventTarget, RawUiEvent, UiEvent, WidgetError};
 pub use snapshot::{WidgetSnapshot, WidgetSnapshotNode};
+pub use state::StateId;
 pub use style::{Class, Layers, StyleSet, StyleState, Transitions, WidgetStyle, WidgetStylePatch};
 pub use text::TextStyleSet;
 pub use tree::WidgetTree;
@@ -41,14 +43,14 @@ impl WidgetId {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct PlatformViewId(u64);
+pub struct PlatformViewId(StateId);
 
 impl PlatformViewId {
-    pub const fn new(value: u64) -> Self {
-        Self(value)
+    pub const fn new(state: StateId) -> Self {
+        Self(state)
     }
 
-    pub const fn get(self) -> u64 {
+    pub const fn state_id(self) -> StateId {
         self.0
     }
 }

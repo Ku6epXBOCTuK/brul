@@ -40,7 +40,7 @@ pub fn video_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, componen
     let mut props = Vec::new();
     let widget = {
         {
-            let built = build.capability(brul::Capability::view(brul::StateId::new(2034772354779141u64), std::rc::Rc::clone(component), brul::Instance {
+            let built = build.capability(brul::Capability::view(brul::StateId::source("video_demo", "Video/view"), std::rc::Rc::clone(component), brul::Instance {
                 theme,
                 view: ::brul::video::view,
                 script: None,

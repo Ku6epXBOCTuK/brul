@@ -289,11 +289,7 @@ impl<T: Theme> Runtime<T> {
         *self.shown.borrow_mut() = theme.map(Theme::name).map(str::to_owned);
         let messages: PlatformMessageHandler = match self.handle.clone() {
             Some(handle) => Arc::new(move |id: PlatformViewId, body: String| {
-                handle.widget(
-                    StateId::new(id.get()),
-                    "message",
-                    vec![Value::String(body.into())],
-                );
+                handle.widget(id.state_id(), "message", vec![Value::String(body.into())]);
             }),
             None => Arc::new(|_, _| {}),
         };
@@ -631,7 +627,7 @@ mod tests {
         }
     }
 
-    const WIDGET_STATE: StateId = StateId::new(7);
+    const WIDGET_STATE: StateId = StateId::source("test", "widget");
 
     thread_local! {
         static SEEN: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };

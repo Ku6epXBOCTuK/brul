@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
@@ -16,7 +17,6 @@ use crate::commands;
 use crate::discovery::Capabilities;
 use crate::error_at;
 use crate::loader::Import;
-use crate::runtime::StateId;
 use crate::source::Script;
 use crate::{Definition, Registry, Resource};
 
@@ -24,6 +24,8 @@ use super::CodegenContext;
 use super::Emit;
 use super::EmitOutputs;
 use super::Out;
+use super::StateIds;
+use super::StateKey;
 use super::StructureNames;
 use super::anchor::{self, AnchorIds};
 use super::classes::ClassNames;
@@ -129,6 +131,7 @@ pub fn split_component_file_with_capabilities(
         .map(|definition| unique(&identifier(&definition.name), &mut used))
         .collect();
     let mut structures = StructureNames::default();
+    let state_ids = RefCell::new(StateIds::default());
     let mut sinks = ComponentSinks {
         structures: &mut structures,
         scripts: None,
@@ -142,6 +145,7 @@ pub fn split_component_file_with_capabilities(
             names: &names,
             capabilities,
             anchor_ids: &anchor_table,
+            state_ids: &state_ids,
         },
         &mut sinks,
     )?;
@@ -208,6 +212,7 @@ fn module_at(
         .map(|definition| unique(&identifier(&definition.name), &mut used))
         .collect();
 
+    let state_ids = RefCell::new(StateIds::default());
     let mut views = vec![WindowView {
         declaration,
         stylesheet: &parsed.stylesheet,
@@ -263,6 +268,17 @@ fn module_at(
         let prefix = format!("{}_", view.base);
         let view_state = state::State::new(view.program, &state_type(&script_name))?
             .with_commands(&capabilities.commands);
+        let attach_states = window_args
+            .attaches
+            .iter()
+            .map(|attach| {
+                let path = format!("attach:{}", attach.name);
+                state_ids
+                    .borrow_mut()
+                    .register(&view.base, &path)
+                    .map_err(|error| error_at(view.declaration.position, error))
+            })
+            .collect::<Result<Vec<StateKey>, Error>>()?;
         let types = prop_types(&view.declaration.members);
         head.push('\n');
         head.push_str(HEADER);
@@ -276,7 +292,7 @@ fn module_at(
                 root,
                 handlers: &window_handlers,
                 attaches: &window_args.attaches,
-                hooks_state: StateId::for_source(&view.declaration.name, view.declaration.position),
+                attach_states: &attach_states,
                 kind: ViewKind::Window,
             },
             &CodegenContext {
@@ -292,6 +308,7 @@ fn module_at(
                 effects: view.effects,
                 names: &names,
                 state: &view_state,
+                state_ids: &state_ids,
                 prop_types: &types,
                 program: view.program,
             },
@@ -350,6 +367,7 @@ fn module_at(
                 names: &names,
                 capabilities,
                 anchor_ids: &anchor_table,
+                state_ids: &state_ids,
             },
             &mut sinks,
         )?;
@@ -461,6 +479,7 @@ struct ComponentSources<'a> {
     names: &'a Names<'a>,
     capabilities: &'a Capabilities,
     anchor_ids: &'a AnchorIds,
+    state_ids: &'a RefCell<StateIds>,
 }
 
 fn emit_component(
@@ -475,6 +494,7 @@ fn emit_component(
         names,
         capabilities,
         anchor_ids,
+        state_ids,
     } = sources;
     let root = definition_root(definition)?;
     let prefix = format!("{base}_");
@@ -497,7 +517,7 @@ fn emit_component(
             root,
             handlers: &[],
             attaches: &[],
-            hooks_state: StateId::new(0),
+            attach_states: &[],
             kind: ViewKind::Component,
         },
         &CodegenContext {
@@ -513,6 +533,7 @@ fn emit_component(
             effects: &definition.effects,
             names,
             state: &component_state,
+            state_ids,
             prop_types: &component_prop_types,
             program: definition.program.as_ref(),
         },

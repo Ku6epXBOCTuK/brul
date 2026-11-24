@@ -141,7 +141,7 @@ pub fn editor_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<EditorScriptState>().draft.get()) })));
             let _ = build.capability(brul::Capability::hooks(brul::Hooks {
                 target: brul::EventTarget::Widget(widget0.id()),
-                state: brul::StateId::new(5705614215138471u64),
+                state: brul::StateId::source("editor", "TextInput/attach:editor"),
                 component: std::rc::Rc::clone(component),
                 params: vec![|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text(component.state::<EditorScriptState>().draft.get()); Ok(value) }],
                 apply: crate::__brul_attach_editor_apply,

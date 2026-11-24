@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use brul_gui::{
     Atlas, Cursor, Dimension, Dirty, Event, KeyModifiers, KeyPress, LayoutStyle, PlatformViewId,
-    RawEvent, RawUiEvent, Size, StyleSet, TextEngine, TimerOwner, UiEvent, Widget, WidgetError,
-    WidgetSnapshot, WidgetStyle, WidgetTree,
+    RawEvent, RawUiEvent, Size, StateId, StyleSet, TextEngine, TimerOwner, UiEvent, Widget,
+    WidgetError, WidgetSnapshot, WidgetStyle, WidgetTree,
 };
 
 use winit::event_loop::ControlFlow;
@@ -733,7 +733,7 @@ impl PlatformViewBackend for RecordingPlatform {
     fn create(&mut self, id: PlatformViewId, source: &str, bounds: PlatformViewBounds, scale: f64) {
         self.push(format!(
             "create {} {} {},{},{}x{} @{}",
-            id.get(),
+            id.state_id().path(),
             source,
             bounds.x,
             bounds.y,
@@ -745,7 +745,7 @@ impl PlatformViewBackend for RecordingPlatform {
     fn set_bounds(&mut self, id: PlatformViewId, bounds: PlatformViewBounds, scale: f64) {
         self.push(format!(
             "bounds {} {},{},{}x{} @{}",
-            id.get(),
+            id.state_id().path(),
             bounds.x,
             bounds.y,
             bounds.width,
@@ -754,19 +754,19 @@ impl PlatformViewBackend for RecordingPlatform {
         ));
     }
     fn set_source(&mut self, id: PlatformViewId, source: &str) {
-        self.push(format!("source {} {}", id.get(), source));
+        self.push(format!("source {} {}", id.state_id().path(), source));
     }
     fn set_visible(&mut self, id: PlatformViewId, visible: bool) {
-        self.push(format!("visible {} {visible}", id.get()));
+        self.push(format!("visible {} {visible}", id.state_id().path()));
     }
     fn focus(&mut self, id: PlatformViewId) {
-        self.push(format!("focus {}", id.get()));
+        self.push(format!("focus {}", id.state_id().path()));
     }
     fn blur(&mut self) {
         self.push("blur".to_owned());
     }
     fn remove(&mut self, id: PlatformViewId) {
-        self.push(format!("remove {}", id.get()));
+        self.push(format!("remove {}", id.state_id().path()));
     }
 }
 
@@ -779,7 +779,11 @@ fn platform_app() -> (TreeApp, FakeSurface, Rc<RefCell<Vec<String>>>) {
     let mut engine = TextEngine::new();
     let tree = Rc::new(RefCell::new(WidgetTree::new(
         Widget::column(vec![
-            Widget::platform_view(PlatformViewId::new(4), "about:blank").with_layout(LayoutStyle {
+            Widget::platform_view(
+                PlatformViewId::new(StateId::source("test", "view")),
+                "about:blank",
+            )
+            .with_layout(LayoutStyle {
                 width: Dimension::Px(4),
                 height: Dimension::Px(2),
                 ..LayoutStyle::default()
@@ -816,7 +820,7 @@ fn platform_views_follow_the_snapshot_geometry() {
     assert!(
         calls
             .borrow()
-            .contains(&"create 4 about:blank 0,0,4x2 @1".to_owned()),
+            .contains(&"create view about:blank 0,0,4x2 @1".to_owned()),
         "{calls:?}"
     );
 }
@@ -831,7 +835,7 @@ fn tab_moves_focus_between_a_platform_view_and_the_tree() {
 
     let events = app.tree.borrow_mut().raw_key(tab());
     app.dispatch_events(&surface, events);
-    assert!(calls.borrow().contains(&"focus 4".to_owned()));
+    assert!(calls.borrow().contains(&"focus view".to_owned()));
 
     let events = app.tree.borrow_mut().raw_key(tab());
     app.dispatch_events(&surface, events);

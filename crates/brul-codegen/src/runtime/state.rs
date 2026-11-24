@@ -3,45 +3,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use brul_gui::{EventTarget, WidgetId};
-use brul_syntax::ast::Position;
+pub use brul_gui::StateId;
 
 use super::ComponentHandle;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct StateId(u64);
-
-impl StateId {
-    pub const fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-
-    pub const fn for_widget(self, widget: WidgetId) -> Self {
-        let id = (widget.get() as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
-        Self((self.0 ^ id) & 0x001f_ffff_ffff_ffff)
-    }
-
-    pub const fn for_target(self, target: &EventTarget) -> Self {
-        match target {
-            EventTarget::Window => self,
-            EventTarget::Widget(widget) => self.for_widget(*widget),
-        }
-    }
-
-    pub fn for_source(name: &str, position: Position) -> Self {
-        let mut id = 0x811c9dc5u64;
-        for byte in name.bytes() {
-            id = (id ^ u64::from(byte)).wrapping_mul(0x01000193);
-        }
-        let line = u64::try_from(position.line).unwrap_or(u64::MAX);
-        let column = u64::try_from(position.column).unwrap_or(u64::MAX);
-        Self((id ^ ((line << 32) ^ column)) & 0x001f_ffff_ffff_ffff)
-    }
-}
 
 #[derive(Default)]
 pub struct States {

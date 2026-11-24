@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use brul_script::Names;
 use brul_syntax::ast::{Expr, ExprKind};
 use brul_syntax::script::Program;
@@ -13,6 +15,7 @@ use super::anchor::AnchorIds;
 use super::classes::ClassNames;
 use super::scopes::ScopeInfo;
 use super::state::State;
+use super::state_ids::StateIds;
 use super::structure::StructureNames;
 
 pub(crate) struct CodegenContext<'a> {
@@ -28,6 +31,7 @@ pub(crate) struct CodegenContext<'a> {
     pub(super) effects: &'a [EffectRule],
     pub(super) names: &'a Names<'a>,
     pub(super) state: &'a State,
+    pub(super) state_ids: &'a RefCell<StateIds>,
     pub(super) prop_types: &'a PropTypes,
     pub(super) program: Option<&'a Program>,
 }

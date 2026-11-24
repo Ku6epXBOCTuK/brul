@@ -25,6 +25,7 @@ mod resources;
 mod scopes;
 mod script;
 mod state;
+mod state_ids;
 mod statement;
 mod structure;
 mod style;
@@ -32,6 +33,7 @@ mod theme;
 mod view;
 
 pub(super) use scopes::ScopeInfo;
+pub(super) use state_ids::{StateIds, StateKey, child};
 pub(super) type PropTypes = HashMap<String, Type>;
 
 pub use state::State;

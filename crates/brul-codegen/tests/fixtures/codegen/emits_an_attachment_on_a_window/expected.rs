@@ -40,7 +40,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut props = Vec::new();
     let _ = build.capability(brul::Capability::hooks(brul::Hooks {
         target: brul::EventTarget::Window,
-        state: brul::StateId::new(1280982952758353u64),
+        state: brul::StateId::source("demo", "attach:keys"),
         component: std::rc::Rc::clone(component),
         params: vec![],
         apply: crate::__brul_attach_keys_apply,

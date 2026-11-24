@@ -612,7 +612,7 @@ fn a_window_target_has_no_element() {
     let mut build = Build::new();
     build.set_target(
         EventTarget::Window,
-        StateId::new(1),
+        StateId::source("test", "one"),
         Rc::new(RefCell::new(Component::new())),
     );
     assert!(build.try_element().is_none());
@@ -631,7 +631,7 @@ fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
     build.set_tree(Rc::clone(&tree));
     build.set_target(
         EventTarget::Widget(id),
-        StateId::new(9),
+        StateId::source("test", "nine"),
         Rc::new(RefCell::new(Component::new())),
     );
 
@@ -729,7 +729,7 @@ fn an_element_maps_pixels_to_a_caret_position() {
     build.set_tree(Rc::clone(&tree));
     build.set_target(
         EventTarget::Widget(id),
-        StateId::new(10),
+        StateId::source("test", "ten"),
         Rc::new(RefCell::new(Component::new())),
     );
 

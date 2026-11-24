@@ -9,7 +9,6 @@ use brul_syntax::types::Type;
 
 use crate::capability::CapabilitySpec;
 use crate::error_at;
-use crate::runtime::StateId;
 use crate::styles;
 use crate::window::AttachParam;
 
@@ -19,7 +18,7 @@ use super::Frame;
 use super::Out;
 use super::anchor;
 use super::classes;
-use super::{ScopeInfo, component, events, expression, structure};
+use super::{ScopeInfo, StateKey, child, component, events, expression, structure};
 
 pub(super) fn widget(
     out: &mut Out<'_>,
@@ -655,7 +654,13 @@ fn registered_widget(
         .iter()
         .map(|(name, ty, value)| (*name, ty, *value))
         .collect();
-    let id = StateId::for_source(&element.name, element.position);
+    let path = child(&element.name, "view");
+    let id = emit
+        .context
+        .state_ids
+        .borrow_mut()
+        .register(emit.context.base, &path)
+        .map_err(|error| error_at(element.position, error))?;
     let element_classes = classes(element);
     let class_indices = element_classes
         .iter()
@@ -666,7 +671,7 @@ fn registered_widget(
     let suffix = anchor::suffix(element, emit)?;
     out.line(format_args!("{{"));
     out.indented(|out| -> Result<(), Error> {
-        out.line(format_args!("let built = build.capability(brul::Capability::view(brul::StateId::new({value}u64), std::rc::Rc::clone(component), brul::Instance {{", value = id.get()));
+        out.line(format_args!("let built = build.capability(brul::Capability::view({}, std::rc::Rc::clone(component), brul::Instance {{", id.literal()));
         out.indented(|out| -> Result<(), Error> {
             out.line(format_args!("theme,"));
             out.line(format_args!("view: {},", spec.view.as_deref().expect("view capability")));
@@ -759,7 +764,6 @@ pub(super) fn attachment_bindings(
     scopes: &[ScopeInfo],
     scope: Option<usize>,
 ) -> Result<(), Error> {
-    let id = StateId::for_source(&element.name, element.position);
     let target = format!("brul::EventTarget::Widget({widget}.id())");
     for arg in &element.args {
         if let Arg::Attach {
@@ -768,6 +772,12 @@ pub(super) fn attachment_bindings(
             position,
         } = arg
         {
+            let path = child(&element.name, &format!("attach:{name}"));
+            let id = context
+                .state_ids
+                .borrow_mut()
+                .register(context.base, &path)
+                .map_err(|error| error_at(*position, error))?;
             let params: Vec<AttachParam> = params
                 .iter()
                 .map(|(name, value)| AttachParam {
@@ -782,7 +792,7 @@ pub(super) fn attachment_bindings(
                     params: &params,
                     position: *position,
                     target: &target,
-                    id,
+                    id: &id,
                     context,
                     scopes,
                     scope,
@@ -798,7 +808,7 @@ pub(super) struct HooksSpec<'a> {
     pub(super) params: &'a [AttachParam],
     pub(super) position: Position,
     pub(super) target: &'a str,
-    pub(super) id: StateId,
+    pub(super) id: &'a StateKey,
     pub(super) context: &'a CodegenContext<'a>,
     pub(super) scopes: &'a [ScopeInfo],
     pub(super) scope: Option<usize>,
@@ -860,10 +870,7 @@ pub(super) fn hooks_binding(out: &mut Out<'_>, spec: HooksSpec<'_>) -> Result<()
     ));
     out.indented(|out| {
         out.line(format_args!("target: {target},"));
-        out.line(format_args!(
-            "state: brul::StateId::new({value}u64),",
-            value = id.get()
-        ));
+        out.line(format_args!("state: {},", id.literal()));
         out.line(format_args!("component: std::rc::Rc::clone(component),"));
         out.line(format_args!("params: vec![{}],", expressions.join(", ")));
         out.line(format_args!("apply: {},", hooks.apply));
