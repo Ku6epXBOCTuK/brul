@@ -101,6 +101,10 @@ impl Element<'_> {
         self.tree.borrow().caret_position(self.id)
     }
 
+    pub fn caret_at_pixel(&self, x: i32, y: i32) -> Option<Position> {
+        self.tree.borrow().caret_at_pixel(self.id, x, y)
+    }
+
     pub fn selection(&self) -> Range<Position> {
         self.tree
             .borrow()

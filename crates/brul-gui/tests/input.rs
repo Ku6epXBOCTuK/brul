@@ -242,6 +242,50 @@ fn a_click_places_the_caret() {
 }
 
 #[test]
+fn caret_at_pixel_clamps_to_the_text_bounds() {
+    let input = field("ab");
+    let id = input.id();
+    let tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+
+    assert_eq!(tree.caret_at_pixel(id, -100, 5), Some(Position::new(0, 0)));
+    assert_eq!(tree.caret_at_pixel(id, 1000, 5), Some(Position::new(0, 2)));
+}
+
+#[test]
+fn caret_at_pixel_finds_the_second_line() {
+    let input = multiline("ab\ncd");
+    let id = input.id();
+    let tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+
+    assert_eq!(tree.caret_at_pixel(id, 1000, 18), Some(Position::new(0, 5)));
+}
+
+#[test]
+fn caret_at_pixel_returns_utf8_boundaries() {
+    let value = "a\u{20ac}b";
+    let input = field(value);
+    let id = input.id();
+    let tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+
+    let caret = tree.caret_at_pixel(id, 1000, 5).expect("caret");
+    assert_eq!(caret, Position::new(0, value.len()));
+    assert!(value.is_char_boundary(caret.offset));
+}
+
+#[test]
+fn caret_at_pixel_inverts_the_caret_area_with_scroll() {
+    let input = field("ab");
+    let id = input.id();
+    let mut tree = laid_out(Widget::column(vec![input]).with_layout(fixed(100, 40)));
+    assert!(tree.set_focused(Some(id)));
+    assert!(tree.scroll_by(id, 3));
+
+    let caret = tree.caret_position(id).expect("caret");
+    let area = tree.caret_area().expect("caret area");
+    assert_eq!(tree.caret_at_pixel(id, area.x, area.y), Some(caret));
+}
+
+#[test]
 fn a_key_press_without_a_focused_field_still_reaches_the_window() {
     let plain = Widget::text("x").with_layout(fixed(40, 20));
     let mut tree = laid_out(Widget::column(vec![plain]).with_layout(fixed(100, 40)));

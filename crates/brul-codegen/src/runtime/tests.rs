@@ -1,7 +1,10 @@
 use super::binding::offset_value;
 use super::event::EventHost;
 use super::*;
-use brul_gui::{Image, KeyModifiers, KeyPress, Texture, Widget, WidgetId, WidgetTree};
+use brul_gui::{
+    Dimension, Image, KeyModifiers, KeyPress, LayoutStyle, Size, TextEngine, Texture, Widget,
+    WidgetId, WidgetTree,
+};
 use brul_script::{
     Component, Dyn, Error as ScriptError, EventCall, Host, Scope, Value, noop_event,
 };
@@ -695,6 +698,45 @@ fn a_capability_can_queue_a_raw_event() {
     assert_eq!(event.target, EventTarget::Widget(id));
     assert!(matches!(event.event, RawEvent::KeyNoop { .. }));
     assert!(take_pending().is_none());
+}
+
+#[test]
+fn an_element_maps_pixels_to_a_caret_position() {
+    let input = Widget::input("ab").with_layout(LayoutStyle {
+        width: Dimension::Px(80),
+        height: Dimension::Px(20),
+        ..LayoutStyle::default()
+    });
+    let id = input.id();
+    let root = Widget::column(vec![input]).with_layout(LayoutStyle {
+        width: Dimension::Px(100),
+        height: Dimension::Px(40),
+        ..LayoutStyle::default()
+    });
+    let tree = Rc::new(RefCell::new(WidgetTree::new(root)));
+    tree.borrow_mut()
+        .layout(
+            &mut TextEngine::new(),
+            Size {
+                width: 100,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("layout");
+
+    let mut build = Build::new();
+    build.set_tree(Rc::clone(&tree));
+    build.set_target(
+        EventTarget::Widget(id),
+        StateId::new(10),
+        Rc::new(RefCell::new(Component::new())),
+    );
+
+    assert_eq!(
+        build.element().caret_at_pixel(1000, 5),
+        Some(Position::new(0, 2))
+    );
 }
 
 #[test]
