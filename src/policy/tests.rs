@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::policy::{
+    __brul_attach_editor_apply, __brul_attach_editor_cleanup, __brul_attach_editor_raw_event,
     __brul_attach_keyboard_apply, __brul_attach_keyboard_cleanup, __brul_attach_keyboard_raw_event,
 };
 use crate::ui::AssemblyParts;
@@ -9,7 +10,7 @@ use crate::{
     Build, Built, Component, ComponentHandle, Dispatch, Dyn, Event, EventKind, EventSet,
     EventTarget, Hooks, RawEvent, RawEventSet, RawKind, RawUiEvent, StateId, TestTheme, Ui,
     UiEvent, ViewError,
-    gui::{KeyModifiers, KeyPress, Widget},
+    gui::{KeyModifiers, KeyPress, Size, TextEngine, Widget, WidgetId},
 };
 
 thread_local! {
@@ -29,6 +30,22 @@ fn record_event(_build: &mut Build, _state: StateId, event: &UiEvent) -> Dispatc
         Event::Focus { .. } => SEEN.with(|seen| seen.borrow_mut().push("focus".into())),
         Event::Blur { .. } => SEEN.with(|seen| seen.borrow_mut().push("blur".into())),
         Event::Dismiss { .. } => SEEN.with(|seen| seen.borrow_mut().push("dismiss".into())),
+        Event::Input { value, caret } => {
+            SEEN.with(|seen| seen.borrow_mut().push(format!("input:{value}@{caret}")))
+        }
+        Event::Copy { text } => SEEN.with(|seen| seen.borrow_mut().push(format!("copy:{text}"))),
+        Event::Submit { .. } => SEEN.with(|seen| seen.borrow_mut().push("submit".into())),
+        _ => {}
+    }
+    Dispatch::CONTINUE
+}
+
+fn record_raw(_build: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+    match &event.event {
+        RawEvent::KeyNoop { key, .. } => {
+            SEEN.with(|seen| seen.borrow_mut().push(format!("noop:{}", key.code)))
+        }
+        RawEvent::Paste { .. } => SEEN.with(|seen| seen.borrow_mut().push("paste_request".into())),
         _ => {}
     }
     Dispatch::CONTINUE
@@ -68,6 +85,9 @@ fn observer(component: &ComponentHandle) -> Hooks {
             EventKind::Focus,
             EventKind::Blur,
             EventKind::Dismiss,
+            EventKind::Input,
+            EventKind::Copy,
+            EventKind::Submit,
         ]),
         raw_events: RawEventSet::empty(),
     }
@@ -85,6 +105,36 @@ fn keyboard(component: &ComponentHandle) -> Hooks {
         cleanup: __brul_attach_keyboard_cleanup,
         events: EventSet::empty(),
         raw_events: RawEventSet::from([RawKind::Key]),
+    }
+}
+
+fn editor(component: &ComponentHandle) -> Hooks {
+    Hooks {
+        target: EventTarget::Window,
+        state: StateId::source("test", "editor"),
+        component: Rc::clone(component),
+        params: Vec::new(),
+        apply: __brul_attach_editor_apply,
+        event: ignore_event,
+        raw_event: __brul_attach_editor_raw_event,
+        cleanup: __brul_attach_editor_cleanup,
+        events: EventSet::empty(),
+        raw_events: RawEventSet::from([RawKind::Key]),
+    }
+}
+
+fn raw_observer(component: &ComponentHandle) -> Hooks {
+    Hooks {
+        target: EventTarget::Window,
+        state: StateId::source("test", "raw_observer"),
+        component: Rc::clone(component),
+        params: Vec::new(),
+        apply: noop_apply,
+        event: ignore_event,
+        raw_event: record_raw,
+        cleanup: noop_cleanup,
+        events: EventSet::empty(),
+        raw_events: RawEventSet::from([RawKind::Key, RawKind::Paste]),
     }
 }
 
@@ -153,6 +203,73 @@ fn key_noop(code: &str) -> RawUiEvent {
         KeyPress::from(code),
         KeyModifiers::default(),
     ))
+}
+
+fn editor_ui(text: &str, wrap: bool) -> (Ui<TestTheme>, WidgetId) {
+    let input = Widget::input(text).focusable(true).wrap(wrap);
+    let id = input.id();
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let ui = assemble(
+        input,
+        vec![
+            editor(&component),
+            keyboard(&component),
+            observer(&component),
+            raw_observer(&component),
+        ],
+    );
+    {
+        let mut tree = ui.tree.borrow_mut();
+        let mut engine = TextEngine::new();
+        tree.layout(
+            &mut engine,
+            Size {
+                width: 200,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("layout");
+        tree.set_focused(Some(id));
+    }
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    (ui, id)
+}
+
+fn key_at(id: WidgetId, code: &str, modifiers: KeyModifiers) -> RawUiEvent {
+    RawUiEvent::widget(id, RawEvent::key(KeyPress::from(code), modifiers))
+}
+
+fn control() -> KeyModifiers {
+    KeyModifiers {
+        control: true,
+        ..KeyModifiers::default()
+    }
+}
+
+fn shift() -> KeyModifiers {
+    KeyModifiers {
+        shift: true,
+        ..KeyModifiers::default()
+    }
+}
+
+fn text_of(ui: &Ui<TestTheme>, id: WidgetId) -> String {
+    ui.tree
+        .borrow()
+        .edit_buffer(id)
+        .expect("input")
+        .text()
+        .to_owned()
+}
+
+fn caret_of(ui: &Ui<TestTheme>, id: WidgetId) -> usize {
+    ui.tree
+        .borrow()
+        .edit_buffer(id)
+        .expect("input")
+        .caret()
+        .offset
 }
 
 #[test]
@@ -254,5 +371,148 @@ fn a_handled_key_is_left_to_the_other_policies() {
 
     SEEN.with(|seen| seen.borrow_mut().clear());
     ui.dispatch_raw(&[key_noop("a")]);
+    assert!(seen().is_empty());
+}
+
+#[test]
+fn typing_inserts_at_the_caret_and_emits_input() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "X", KeyModifiers::default())]);
+
+    assert_eq!(text_of(&ui, id), "abX");
+    assert_eq!(caret_of(&ui, id), 3);
+    assert_eq!(seen(), ["input:abX@3"]);
+}
+
+#[test]
+fn backspace_reports_a_noop_when_the_field_is_empty() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "Backspace", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "a");
+    assert_eq!(seen(), ["input:a@1"]);
+
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[key_at(id, "Backspace", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "");
+    assert_eq!(seen(), ["input:@0"]);
+
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[key_at(id, "Backspace", KeyModifiers::default())]);
+    assert_eq!(seen(), ["noop:Backspace", "key:Backspace"]);
+}
+
+#[test]
+fn control_a_then_typing_replaces_the_selection() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "a", control())]);
+    ui.dispatch_raw(&[key_at(id, "Z", KeyModifiers::default())]);
+
+    assert_eq!(text_of(&ui, id), "Z");
+    assert_eq!(seen(), ["input:Z@1"]);
+}
+
+#[test]
+fn control_c_copies_only_a_selection() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "a", control())]);
+    ui.dispatch_raw(&[key_at(id, "c", control())]);
+    assert_eq!(seen(), ["copy:ab"]);
+
+    ui.dispatch_raw(&[key_at(id, "ArrowRight", KeyModifiers::default())]);
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[key_at(id, "c", control())]);
+    assert!(seen().is_empty());
+}
+
+#[test]
+fn control_x_emits_input_before_copy() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "a", control())]);
+    ui.dispatch_raw(&[key_at(id, "x", control())]);
+
+    assert_eq!(text_of(&ui, id), "");
+    assert_eq!(seen(), ["input:@0", "copy:ab"]);
+}
+
+#[test]
+fn control_v_asks_for_the_clipboard() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "v", control())]);
+
+    assert_eq!(seen(), ["paste_request"]);
+}
+
+#[test]
+fn enter_submits_a_single_line_and_inserts_a_newline_when_wrapped() {
+    let (mut ui, id) = editor_ui("a", false);
+    ui.dispatch_raw(&[key_at(id, "Enter", KeyModifiers::default())]);
+    assert_eq!(seen(), ["submit"]);
+
+    let (mut ui, id) = editor_ui("a", true);
+    ui.dispatch_raw(&[key_at(id, "Enter", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "a\n");
+    assert_eq!(seen(), ["input:a\n@2".to_string()]);
+}
+
+#[test]
+fn arrows_move_the_caret_and_extend_the_selection() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "ArrowLeft", KeyModifiers::default())]);
+    assert_eq!(caret_of(&ui, id), 1);
+    ui.dispatch_raw(&[key_at(id, "ArrowRight", shift())]);
+    let selection = ui.tree.borrow().edit_buffer(id).expect("input").selection();
+    assert_eq!((selection.start.offset, selection.end.offset), (1, 2));
+    assert!(seen().is_empty());
+}
+
+#[test]
+fn unconsumed_keys_reach_the_keyboard_policy() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "ArrowUp", KeyModifiers::default())]);
+
+    assert_eq!(seen(), ["key:ArrowUp"]);
+}
+
+#[test]
+fn a_handled_key_skips_the_editor() {
+    let input = Widget::input("ab").focusable(true);
+    let id = input.id();
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble(
+        input,
+        vec![
+            first_handled(&component),
+            editor(&component),
+            keyboard(&component),
+            observer(&component),
+        ],
+    );
+    {
+        let mut tree = ui.tree.borrow_mut();
+        let mut engine = TextEngine::new();
+        tree.layout(
+            &mut engine,
+            Size {
+                width: 200,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("layout");
+        tree.set_focused(Some(id));
+    }
+    SEEN.with(|seen| seen.borrow_mut().clear());
+
+    ui.dispatch_raw(&[key_at(id, "X", KeyModifiers::default())]);
+
+    assert_eq!(text_of(&ui, id), "ab");
     assert!(seen().is_empty());
 }
