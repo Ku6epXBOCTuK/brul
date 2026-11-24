@@ -115,11 +115,11 @@ fn attach_shims_create_update_event_and_cleanup_state() {
     let key_event = UiEvent::widget(brul::gui::WidgetId::new(1), Event::key(key, modifiers));
     assert_eq!(
         __brul_attach_counter_event(&mut ctx, state_id, &key_event),
-        Dispatch::Stop
+        Dispatch::stop()
     );
     assert_eq!(
         __brul_attach_counter_event(&mut ctx, state_id, &UiEvent::window(Event::submit())),
-        Dispatch::Continue
+        Dispatch::CONTINUE
     );
 
     let raw_key = RawUiEvent::widget(
@@ -131,7 +131,7 @@ fn attach_shims_create_update_event_and_cleanup_state() {
     );
     assert_eq!(
         __brul_attach_counter_raw_event(&mut ctx, state_id, &raw_key),
-        Dispatch::Stop
+        Dispatch::stop()
     );
 
     __brul_attach_counter_cleanup(&mut ctx, state_id);

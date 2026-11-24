@@ -17,7 +17,8 @@ use crate::{
 
 const NAMES: &[&str] = &[
     "shown", "label", "colour", "title", "on", "off", "x", "y", "ran", "seen", "code", "accent",
-    "missing", "icon", "value", "script", "cleaned", "attach", "window",
+    "missing", "icon", "value", "script", "cleaned", "attach", "window", "first", "second",
+    "handled",
 ];
 
 fn unknown_theme() -> ViewError {
@@ -1115,14 +1116,14 @@ fn probe_event(ctx: &mut Build, _state: StateId, event: &UiEvent) -> Dispatch {
             .borrow_mut()
             .assign("ran", Value::Bool(true))
             .expect("ran");
-        Dispatch::Stop
+        Dispatch::stop()
     } else {
-        Dispatch::Continue
+        Dispatch::CONTINUE
     }
 }
 
 fn ignore_raw_event(_ctx: &mut Build, _state: StateId, _event: &RawUiEvent) -> Dispatch {
-    Dispatch::Continue
+    Dispatch::CONTINUE
 }
 
 fn probe_cleanup(ctx: &mut Build, _state: StateId) {
@@ -1418,7 +1419,7 @@ fn window_raw_key(ctx: &mut Build, _state: StateId, _event: &RawUiEvent) -> Disp
         brul_gui::KeyPress::from("Enter"),
         brul_gui::KeyModifiers::default(),
     )));
-    Dispatch::Continue
+    Dispatch::CONTINUE
 }
 
 fn window_semantic_key(ctx: &mut Build, _state: StateId, _event: &UiEvent) -> Dispatch {
@@ -1426,7 +1427,7 @@ fn window_semantic_key(ctx: &mut Build, _state: StateId, _event: &UiEvent) -> Di
         .borrow_mut()
         .assign("seen", Value::Bool(true))
         .expect("seen");
-    Dispatch::Continue
+    Dispatch::CONTINUE
 }
 
 #[test]
@@ -1512,7 +1513,7 @@ fn a_raw_window_key_stays_with_capabilities() {
                 .borrow_mut()
                 .assign("attach", Value::Bool(true))
                 .expect("attach");
-            Dispatch::Continue
+            Dispatch::CONTINUE
         },
         cleanup: |_, _| {},
         events: EventSet::empty(),
@@ -1565,14 +1566,14 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
                 .borrow_mut()
                 .assign("attach", Value::Bool(true))
                 .expect("attach");
-            Dispatch::Stop
+            Dispatch::stop()
         },
         raw_event: |ctx: &mut Build, _: StateId, _: &RawUiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("attach", Value::Bool(true))
                 .expect("attach");
-            Dispatch::Stop
+            Dispatch::stop()
         },
         cleanup: |_, _| {},
         events: EventSet::from([EventKind::Key]),
@@ -1589,14 +1590,14 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
                 .borrow_mut()
                 .assign("off", Value::Bool(true))
                 .expect("off");
-            Dispatch::Continue
+            Dispatch::CONTINUE
         },
         raw_event: |ctx: &mut Build, _: StateId, _: &RawUiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("off", Value::Bool(true))
                 .expect("off");
-            Dispatch::Continue
+            Dispatch::CONTINUE
         },
         cleanup: |_, _| {},
         events: EventSet::from([EventKind::Key]),
@@ -1635,8 +1636,157 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
     assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
+fn mark_first(ctx: &mut Build) {
+    ctx.component()
+        .borrow_mut()
+        .assign("first", Value::Bool(true))
+        .expect("first");
+}
+
+fn first_handled(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch {
+    mark_first(ctx);
+    Dispatch::handled()
+}
+
+fn first_stop_capabilities(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch {
+    mark_first(ctx);
+    Dispatch::stop_capabilities()
+}
+
+fn first_stop_scripts(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch {
+    mark_first(ctx);
+    Dispatch::stop_scripts()
+}
+
+fn raw_stop_scripts(ctx: &mut Build, _: StateId, _: &RawUiEvent) -> Dispatch {
+    mark_first(ctx);
+    Dispatch::stop_scripts()
+}
+
+fn raw_first_continue(ctx: &mut Build, _: StateId, _: &RawUiEvent) -> Dispatch {
+    mark_first(ctx);
+    Dispatch::CONTINUE
+}
+
+fn second_flags(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch {
+    let mut component = ctx.component().borrow_mut();
+    component
+        .assign("second", Value::Bool(true))
+        .expect("second");
+    if ctx.handled() {
+        component
+            .assign("handled", Value::Bool(true))
+            .expect("handled");
+    }
+    Dispatch::CONTINUE
+}
+
+fn second_raw(ctx: &mut Build, _: StateId, _: &RawUiEvent) -> Dispatch {
+    ctx.component()
+        .borrow_mut()
+        .assign("second", Value::Bool(true))
+        .expect("second");
+    Dispatch::CONTINUE
+}
+
+fn flags_ui(
+    first_event: fn(&mut Build, StateId, &UiEvent) -> Dispatch,
+    first_raw: fn(&mut Build, StateId, &RawUiEvent) -> Dispatch,
+) -> (Ui<TestTheme>, ComponentHandle) {
+    let component = component_with(&["first", "second", "handled", "ran"]);
+    let built = Built {
+        widget: Widget::text(""),
+        bindings: Vec::new(),
+        handlers: vec![Handler::new(&component, None, EventKind::Key, set_ran)],
+        props: Vec::new(),
+    };
+    let first = Hooks {
+        target: EventTarget::Window,
+        state: StateId::source("test", "flags-first"),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: first_event,
+        raw_event: first_raw,
+        cleanup: |_, _| {},
+        events: EventSet::from([EventKind::Key]),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+    };
+    let second = Hooks {
+        target: EventTarget::Window,
+        state: StateId::source("test", "flags-second"),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: second_flags,
+        raw_event: second_raw,
+        cleanup: |_, _| {},
+        events: EventSet::from([EventKind::Key]),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+    };
+    let ui = Ui::assemble_with(
+        Rc::clone(&component),
+        built,
+        themed_view,
+        None,
+        AssemblyParts {
+            structures: Vec::new(),
+            capabilities: vec![first, second],
+            nested: Vec::new(),
+            states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
+        },
+        Rc::new(RefCell::new(Vec::new())),
+        false,
+    );
+    (ui, component)
+}
+
+fn key_event() -> DispatchEvent {
+    UiEvent::window(Event::key(
+        brul_gui::KeyPress::from("Enter"),
+        brul_gui::KeyModifiers::default(),
+    ))
+    .into()
+}
+
+#[test]
+fn stop_capabilities_keeps_the_script() {
+    let (mut ui, component) = flags_ui(first_stop_capabilities, raw_first_continue);
+    ui.dispatch(&[key_event()]);
+    let component = component.borrow();
+    assert_eq!(component.read("first"), Ok(Value::Bool(true)));
+    assert_ne!(component.read("second"), Ok(Value::Bool(true)));
+    assert_eq!(component.read("ran"), Ok(Value::Bool(true)));
+}
+
+#[test]
+fn stop_scripts_keeps_other_capabilities_and_raw_policies() {
+    let (mut ui, component) = flags_ui(first_stop_scripts, raw_stop_scripts);
+    ui.dispatch(&[key_event()]);
+    ui.dispatch(&[RawUiEvent::window(brul_gui::RawEvent::key(
+        brul_gui::KeyPress::from("Enter"),
+        brul_gui::KeyModifiers::default(),
+    ))
+    .into()]);
+    let component = component.borrow();
+    assert_eq!(component.read("first"), Ok(Value::Bool(true)));
+    assert_eq!(component.read("second"), Ok(Value::Bool(true)));
+    assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
+}
+
+#[test]
+fn handled_is_visible_to_later_capabilities() {
+    let (mut ui, component) = flags_ui(first_handled, raw_first_continue);
+    ui.dispatch(&[key_event()]);
+    let component = component.borrow();
+    assert_eq!(component.read("handled"), Ok(Value::Bool(true)));
+    assert_eq!(component.read("second"), Ok(Value::Bool(true)));
+    assert_eq!(component.read("ran"), Ok(Value::Bool(true)));
+}
+
 fn ignore_ui_event(_ctx: &mut Build, _state: StateId, _event: &UiEvent) -> Dispatch {
-    Dispatch::Continue
+    Dispatch::CONTINUE
 }
 
 fn emit_raw_on_key(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
@@ -1646,7 +1796,7 @@ fn emit_raw_on_key(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Disp
             brul_gui::RawEvent::paste(String::new()),
         ));
     }
-    Dispatch::Continue
+    Dispatch::CONTINUE
 }
 
 fn record_raw_paste(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
@@ -1656,7 +1806,7 @@ fn record_raw_paste(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dis
             .assign("seen", Value::Bool(true))
             .expect("seen");
     }
-    Dispatch::Continue
+    Dispatch::CONTINUE
 }
 
 fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &UiEvent) -> Dispatch {
@@ -1666,7 +1816,7 @@ fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &UiEvent) -
             .assign("attach", Value::Number(id.get() as f64))
             .expect("attach");
     }
-    Dispatch::Continue
+    Dispatch::CONTINUE
 }
 
 fn record_raw_target(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
@@ -1676,7 +1826,7 @@ fn record_raw_target(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Di
             .assign("attach", Value::Number(id.get() as f64))
             .expect("attach");
     }
-    Dispatch::Continue
+    Dispatch::CONTINUE
 }
 
 fn record_script_target(

@@ -248,12 +248,16 @@ pub(super) fn capability_context(
     target: EventTarget,
     state: StateId,
     component: &ComponentHandle,
+    handled: Option<Rc<Cell<bool>>>,
 ) -> Build {
     let mut build = Build::new();
     build.set_tree(Rc::clone(tree));
     build.set_states(Rc::clone(states));
     build.set_event_sink(sink.clone());
     build.set_target(target, state, Rc::clone(component));
+    if let Some(handled) = handled {
+        build.set_handled_flag(handled);
+    }
     build
 }
 
@@ -335,6 +339,7 @@ fn attach_capability(owner: &CapabilityOwner, scope: &EffectScope, ctx: &Context
             target,
             state,
             &cleanup_component,
+            None,
         );
         cleanup(&mut build, state);
     });
@@ -352,6 +357,7 @@ fn attach_capability(owner: &CapabilityOwner, scope: &EffectScope, ctx: &Context
                 target,
                 state,
                 &apply_component,
+                None,
             );
             if let Err(message) = apply_capability(&mut build, &params, apply) {
                 tracing::error!(%message, "capability failed");

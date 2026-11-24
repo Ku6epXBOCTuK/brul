@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -466,8 +466,10 @@ impl<T: Theme> Ui<T> {
         event: &E,
         accepts: impl Fn(&Hooks) -> bool,
         invoke: impl Fn(&Hooks, &mut Build, StateId, &E) -> Dispatch,
-    ) -> bool {
-        for target in &path.capabilities {
+    ) -> Dispatch {
+        let handled = Rc::new(Cell::new(false));
+        let mut result = Dispatch::CONTINUE;
+        'targets: for target in &path.capabilities {
             for owner in self.owners.capabilities(target) {
                 if !accepts(&owner.hooks) {
                     continue;
@@ -479,24 +481,31 @@ impl<T: Theme> Ui<T> {
                     *target,
                     owner.state,
                     &owner.hooks.component,
+                    Some(Rc::clone(&handled)),
                 );
-                if invoke(&owner.hooks, &mut build, owner.state, event) == Dispatch::Stop {
-                    return true;
+                let dispatch = invoke(&owner.hooks, &mut build, owner.state, event);
+                if dispatch.is_handled() {
+                    handled.set(true);
+                }
+                result = result | dispatch;
+                if dispatch.stops_capabilities() {
+                    break 'targets;
                 }
             }
         }
-        false
+        result
     }
 
     fn dispatch_event(&self, event: &UiEvent) {
         let path = DispatchPath::new(&self.tree.borrow(), event.target);
         let kind = event.event.kind().dispatch_kind();
-        if self.dispatch_capabilities(
+        let dispatch = self.dispatch_capabilities(
             &path,
             event,
             |hooks| hooks.events.contains(kind),
             |hooks, build, state, event| (hooks.event)(build, state, event),
-        ) {
+        );
+        if dispatch.stops_scripts() {
             return;
         }
         for target in &path.handlers {

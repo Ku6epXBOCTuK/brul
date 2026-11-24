@@ -132,28 +132,20 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
     };
     let event_call = match &arguments.event {
         Some(hook) => quote! {
-            if #hook(&mut *state, ctx, event) {
-                ::brul::Dispatch::Stop
-            } else {
-                ::brul::Dispatch::Continue
-            }
+            ::brul::IntoDispatch::into_dispatch(#hook(&mut *state, ctx, event))
         },
         None => quote! {
             let _ = (&mut *state, &*ctx, event);
-            ::brul::Dispatch::Continue
+            ::brul::Dispatch::CONTINUE
         },
     };
     let raw_event_call = match &arguments.raw_event {
         Some(hook) => quote! {
-            if #hook(&mut *state, ctx, event) {
-                ::brul::Dispatch::Stop
-            } else {
-                ::brul::Dispatch::Continue
-            }
+            ::brul::IntoDispatch::into_dispatch(#hook(&mut *state, ctx, event))
         },
         None => quote! {
             let _ = (&mut *state, &*ctx, event);
-            ::brul::Dispatch::Continue
+            ::brul::Dispatch::CONTINUE
         },
     };
     let cleanup_call = match &arguments.cleanup {
@@ -187,10 +179,10 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
             event: &::brul::UiEvent,
         ) -> ::brul::Dispatch {
             let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
-                return ::brul::Dispatch::Continue;
+                return ::brul::Dispatch::CONTINUE;
             };
             let Ok(mut state) = cell.try_borrow_mut() else {
-                return ::brul::Dispatch::Continue;
+                return ::brul::Dispatch::CONTINUE;
             };
             #event_call
         }
@@ -201,10 +193,10 @@ fn expand_attach(arguments: brul_capability::AttachAttr, function: ItemFn) -> Re
             event: &::brul::RawUiEvent,
         ) -> ::brul::Dispatch {
             let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
-                return ::brul::Dispatch::Continue;
+                return ::brul::Dispatch::CONTINUE;
             };
             let Ok(mut state) = cell.try_borrow_mut() else {
-                return ::brul::Dispatch::Continue;
+                return ::brul::Dispatch::CONTINUE;
             };
             #raw_event_call
         }

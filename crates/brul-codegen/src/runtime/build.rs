@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -23,6 +23,7 @@ pub struct Build {
     event_sink: Option<Arc<dyn super::EventSink>>,
     clipboard: Option<Rc<dyn super::Clipboard>>,
     tree: Option<Rc<RefCell<WidgetTree>>>,
+    handled: Option<Rc<Cell<bool>>>,
     target: Option<EventTarget>,
     state: Option<StateId>,
     component: Option<ComponentHandle>,
@@ -74,6 +75,14 @@ impl Build {
 
     pub fn set_tree(&mut self, tree: Rc<RefCell<WidgetTree>>) {
         self.tree = Some(tree);
+    }
+
+    pub fn set_handled_flag(&mut self, handled: Rc<Cell<bool>>) {
+        self.handled = Some(handled);
+    }
+
+    pub fn handled(&self) -> bool {
+        self.handled.as_ref().is_some_and(|flag| flag.get())
     }
 
     pub fn set_target(&mut self, target: EventTarget, state: StateId, component: ComponentHandle) {
