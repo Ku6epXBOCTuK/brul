@@ -314,9 +314,7 @@ fn a_physical_code_reaches_the_window_event() {
 }
 
 fn multiline(value: &str) -> Widget {
-    Widget::input(value)
-        .multiline(true)
-        .with_layout(fixed(80, 20))
+    Widget::input(value).wrap(true).with_layout(fixed(80, 20))
 }
 
 fn focused(tree: WidgetTree) -> WidgetTree {

@@ -145,7 +145,7 @@ fn element_expression(
         out.push(format_args!(".focusable(true)"));
     }
     if events.multiline {
-        out.push(format_args!(".multiline(true)"));
+        out.push(format_args!(".wrap(true)"));
     }
     if events.modal {
         out.push(format_args!(".modal(true)"));

@@ -26,7 +26,7 @@ pub(super) fn reveal_carets(
         let style = node.layout_style();
         let Content::Input {
             caret,
-            multiline: true,
+            wrap: true,
             scroll,
             ..
         } = &mut node.data

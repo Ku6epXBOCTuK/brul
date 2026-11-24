@@ -40,7 +40,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = demo_styled(brul::gui::Widget::input(""), &[0, 1], theme).multiline(true);
+            let widget0 = demo_styled(brul::gui::Widget::input(""), &[0, 1], theme).wrap(true);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).try_into()?) })));
             widget0
         }

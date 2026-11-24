@@ -131,7 +131,7 @@ enum Content {
         styles: Box<TextStyleSet>,
         caret: usize,
         anchor: usize,
-        multiline: bool,
+        wrap: bool,
         scroll: i32,
         preedit: String,
     },
@@ -252,19 +252,16 @@ impl Widget {
             styles: Box::new(styles),
             caret,
             anchor: caret,
-            multiline: false,
+            wrap: false,
             scroll: 0,
             preedit: String::new(),
         })
         .focusable(true)
     }
 
-    pub fn multiline(mut self, multiline: bool) -> Self {
-        if let Content::Input {
-            multiline: current, ..
-        } = &mut self.data
-        {
-            *current = multiline;
+    pub fn wrap(mut self, wrap: bool) -> Self {
+        if let Content::Input { wrap: current, .. } = &mut self.data {
+            *current = wrap;
         }
         self
     }

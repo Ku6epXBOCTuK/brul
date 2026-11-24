@@ -683,6 +683,133 @@ fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
 }
 
 #[test]
+fn build_addresses_any_widget_and_hits_the_active_path() {
+    let disabled = Widget::text("no")
+        .with_layout(LayoutStyle {
+            width: Dimension::Px(40),
+            height: Dimension::Px(20),
+            ..LayoutStyle::default()
+        })
+        .disabled(true);
+    let input = Widget::input("yes").with_layout(LayoutStyle {
+        width: Dimension::Px(40),
+        height: Dimension::Px(20),
+        ..LayoutStyle::default()
+    });
+    let input_id = input.id();
+    let root = Widget::row(vec![disabled, input]).with_layout(LayoutStyle {
+        width: Dimension::Px(100),
+        height: Dimension::Px(100),
+        ..LayoutStyle::default()
+    });
+    let root_id = root.id();
+    let tree = Rc::new(RefCell::new(WidgetTree::new(root)));
+    tree.borrow_mut()
+        .layout(
+            &mut TextEngine::new(),
+            Size {
+                width: 100,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("layout");
+
+    let mut build = Build::new();
+    build.set_tree(Rc::clone(&tree));
+    build.set_target(
+        EventTarget::Window,
+        StateId::source("test", "hits"),
+        Rc::new(RefCell::new(Component::new())),
+    );
+
+    assert!(build.try_element().is_none());
+    assert_eq!(build.element_for(input_id).map(|e| e.id()), Some(input_id));
+    assert_eq!(build.hit(5, 5), Some(root_id));
+    assert_eq!(build.hit(45, 5), Some(input_id));
+}
+
+#[test]
+fn an_element_exposes_text_and_scroll_primitives() {
+    let input = Widget::input("ab\ncd").wrap(true).with_layout(LayoutStyle {
+        width: Dimension::Px(80),
+        height: Dimension::Px(40),
+        ..LayoutStyle::default()
+    });
+    let id = input.id();
+    let root = Widget::column(vec![input]).with_layout(LayoutStyle {
+        width: Dimension::Px(100),
+        height: Dimension::Px(100),
+        ..LayoutStyle::default()
+    });
+    let root_id = root.id();
+    let tree = Rc::new(RefCell::new(WidgetTree::new(root)));
+    tree.borrow_mut()
+        .layout(
+            &mut TextEngine::new(),
+            Size {
+                width: 100,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("layout");
+    tree.borrow_mut().set_root_scroll(true);
+
+    let mut build = Build::new();
+    build.set_tree(Rc::clone(&tree));
+    build.set_target(
+        EventTarget::Widget(id),
+        StateId::source("test", "text"),
+        Rc::new(RefCell::new(Component::new())),
+    );
+
+    let element = build.element();
+    assert!(element.wrap());
+    assert_eq!(element.line_start(3), Some(3));
+    assert_eq!(element.line_end(3), Some(5));
+    assert!(element.caret_above(3).is_some());
+    assert!(element.caret_below(0).is_some());
+    assert!(!element.scrollable());
+    assert_eq!(build.nearest_scrollable(id), Some(root_id));
+    build.enter_modal_scope();
+    assert_eq!(build.focused(), None);
+}
+
+#[test]
+fn clearing_focus_on_another_element_keeps_the_focused_one() {
+    let first = Widget::input("a");
+    let first_id = first.id();
+    let second = Widget::input("b");
+    let second_id = second.id();
+    let root = Widget::row(vec![first, second]);
+    let tree = Rc::new(RefCell::new(WidgetTree::new(root)));
+    let mut build = Build::new();
+    build.set_tree(Rc::clone(&tree));
+    build.set_target(
+        EventTarget::Window,
+        StateId::source("test", "focus"),
+        Rc::new(RefCell::new(Component::new())),
+    );
+
+    assert!(build.focus(Some(first_id)));
+    assert!(
+        !build
+            .element_for(second_id)
+            .expect("second")
+            .set_focused(false)
+    );
+    assert_eq!(build.focused(), Some(first_id));
+    assert!(
+        build
+            .element_for(first_id)
+            .expect("first")
+            .set_focused(false)
+    );
+    assert_eq!(build.focused(), None);
+}
+
+#[test]
 fn a_capability_can_queue_a_raw_event() {
     let widget = Widget::text("");
     let id = widget.id();

@@ -86,13 +86,13 @@ pub(super) fn measure_text(
         Content::Input {
             value,
             styles,
-            multiline,
+            wrap,
             preedit,
             ..
         } => (
             value.as_str(),
             styles,
-            if *multiline { width } else { None },
+            if *wrap { width } else { None },
             preedit.as_str(),
         ),
         Content::Image(image) => {

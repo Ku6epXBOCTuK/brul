@@ -193,6 +193,51 @@ impl EditBuffer {
         }
     }
 
+    pub fn selected_text(&self) -> Option<&str> {
+        let range = self.selection();
+        if range.start == range.end || range.start.fragment != range.end.fragment {
+            return None;
+        }
+        let Some(Fragment::Text(text)) = self.fragments.get(range.start.fragment) else {
+            return None;
+        };
+        Some(&text[range.start.offset..range.end.offset])
+    }
+
+    pub fn delete_surrounding(&mut self, before_bytes: usize, after_bytes: usize) {
+        let caret = self.caret;
+        let fragment = caret.fragment;
+        let (start, end) = match self.fragments.get_mut(fragment) {
+            Some(Fragment::Text(text)) => {
+                let mut start = caret.offset.saturating_sub(before_bytes);
+                while start > 0 && !text.is_char_boundary(start) {
+                    start -= 1;
+                }
+                let mut end = caret.offset.saturating_add(after_bytes).min(text.len());
+                while end < text.len() && !text.is_char_boundary(end) {
+                    end += 1;
+                }
+                if start == end {
+                    return;
+                }
+                text.replace_range(start..end, "");
+                (start, end)
+            }
+            _ => return,
+        };
+        for position in [&mut self.caret, &mut self.anchor] {
+            if position.fragment != fragment {
+                continue;
+            }
+            if position.offset >= end {
+                position.offset -= end - start;
+            } else if position.offset > start {
+                position.offset = start;
+            }
+        }
+        self.normalize();
+    }
+
     fn clamp(&self, mut position: Position) -> Position {
         let index = position
             .fragment
@@ -278,6 +323,31 @@ mod tests {
 
         assert_eq!(buffer.fragments().len(), 1);
         assert_eq!(buffer.text(), "abcd");
+    }
+
+    #[test]
+    fn selected_text_returns_only_a_single_text_selection() {
+        let mut buffer = EditBuffer::from_text("hello");
+        assert_eq!(buffer.selected_text(), None);
+        buffer.set_anchor(Position::new(0, 1));
+        buffer.set_caret(Position::new(0, 4));
+        assert_eq!(buffer.selected_text(), Some("ell"));
+
+        buffer.insert_fragment(Position::new(0, 2), Fragment::Text(String::from("XY")));
+        assert_eq!(buffer.selected_text(), None);
+    }
+
+    #[test]
+    fn delete_surrounding_clamps_to_character_boundaries_and_moves_the_anchor() {
+        let mut buffer = EditBuffer::from_text("a\u{20ac}b");
+        buffer.set_caret(Position::new(0, 4));
+        buffer.set_anchor(Position::new(0, 5));
+        buffer.delete_surrounding(1, 2);
+
+        assert_eq!(buffer.text(), "a");
+        assert_eq!(buffer.caret(), Position::new(0, 1));
+        assert_eq!(buffer.anchor(), Position::new(0, 1));
+        assert_eq!(buffer.selected_text(), None);
     }
 
     #[test]

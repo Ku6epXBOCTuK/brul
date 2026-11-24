@@ -105,6 +105,30 @@ impl Element<'_> {
         self.tree.borrow().caret_at_pixel(self.id, x, y)
     }
 
+    pub fn wrap(&self) -> bool {
+        self.tree.borrow().wrap(self.id)
+    }
+
+    pub fn line_start(&self, byte: usize) -> Option<usize> {
+        self.tree.borrow().line_start(self.id, byte)
+    }
+
+    pub fn line_end(&self, byte: usize) -> Option<usize> {
+        self.tree.borrow().line_end(self.id, byte)
+    }
+
+    pub fn caret_above(&self, byte: usize) -> Option<usize> {
+        self.tree.borrow().caret_above(self.id, byte)
+    }
+
+    pub fn caret_below(&self, byte: usize) -> Option<usize> {
+        self.tree.borrow().caret_below(self.id, byte)
+    }
+
+    pub fn scrollable(&self) -> bool {
+        self.tree.borrow().scrollable(self.id)
+    }
+
     pub fn selection(&self) -> Range<Position> {
         self.tree
             .borrow()
@@ -133,9 +157,14 @@ impl Element<'_> {
     }
 
     pub fn set_focused(&self, focused: bool) -> bool {
-        self.tree
-            .borrow_mut()
-            .set_focused(focused.then_some(self.id))
+        let clear = self.tree.borrow().focused_id() == Some(self.id);
+        if focused {
+            self.tree.borrow_mut().set_focused(Some(self.id))
+        } else if clear {
+            self.tree.borrow_mut().set_focused(None)
+        } else {
+            false
+        }
     }
 
     pub fn scroll_by(&self, dy: i32) -> bool {

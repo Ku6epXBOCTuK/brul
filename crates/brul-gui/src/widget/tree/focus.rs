@@ -79,6 +79,18 @@ impl WidgetTree {
         self.set_focused_slot(target);
     }
 
+    pub fn enter_modal_scope(&mut self) {
+        let Some(scope) = self.modal_scope_slot() else {
+            return;
+        };
+        let outside = !self
+            .focused_slot()
+            .is_some_and(|focused| self.within_scope_slot(scope, focused));
+        if outside && self.modal_focus.is_none() {
+            self.modal_focus = self.focused;
+        }
+    }
+
     fn topmost_modal(&self, slot: Slot) -> Option<Slot> {
         let node = &self.nodes[slot.index()];
         if !node.state.visible {

@@ -67,6 +67,20 @@ impl WidgetTree {
         self.update_state(id, |state| state.pressed = pressed)
     }
 
+    pub fn wrap(&self, id: WidgetId) -> bool {
+        self.node(id)
+            .is_some_and(|node| matches!(&node.data, Content::Input { wrap: true, .. }))
+    }
+
+    pub fn scrollable(&self, id: WidgetId) -> bool {
+        let Some(slot) = self.index.get(&id).copied() else {
+            return false;
+        };
+        let node = &self.nodes[slot.index()];
+        matches!(node.data, Content::View)
+            && (node.style().scroll || (self.root_scroll && slot == self.root))
+    }
+
     pub fn scroll_by(&mut self, id: WidgetId, dy: i32) -> bool {
         if dy == 0 {
             return false;
@@ -110,6 +124,22 @@ impl WidgetTree {
             return None;
         };
         Some(Position::new(0, *caret))
+    }
+
+    pub fn line_start(&self, id: WidgetId, byte: usize) -> Option<usize> {
+        Some(self.texts.get(&id)?.variants.base.line_start(byte))
+    }
+
+    pub fn line_end(&self, id: WidgetId, byte: usize) -> Option<usize> {
+        Some(self.texts.get(&id)?.variants.base.line_end(byte))
+    }
+
+    pub fn caret_above(&self, id: WidgetId, byte: usize) -> Option<usize> {
+        self.texts.get(&id)?.variants.base.caret_above(byte)
+    }
+
+    pub fn caret_below(&self, id: WidgetId, byte: usize) -> Option<usize> {
+        self.texts.get(&id)?.variants.base.caret_below(byte)
     }
 
     pub fn set_caret_position(&mut self, id: WidgetId, position: Position) -> bool {

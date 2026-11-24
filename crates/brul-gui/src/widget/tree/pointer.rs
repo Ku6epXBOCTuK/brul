@@ -18,6 +18,21 @@ impl WidgetTree {
         ))]
     }
 
+    pub fn hit_active(&self, x: i32, y: i32) -> Result<Option<WidgetId>, WidgetError> {
+        let geometry = self.geometry.as_ref().ok_or(WidgetError::NoLayout)?;
+        let mut scratch = HitScratch::default();
+        collect_hit(&self.nodes, self.root, &geometry.boxes, &mut scratch, x, y);
+        let mut active = None;
+        for &slot in &scratch.path {
+            let node = &self.nodes[slot.index()];
+            if node.state.disabled || !node.state.visible {
+                break;
+            }
+            active = Some(node.id);
+        }
+        Ok(active)
+    }
+
     pub fn cursor(&self) -> Cursor {
         self.hovered
             .iter()

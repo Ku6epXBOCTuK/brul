@@ -99,6 +99,14 @@ impl Build {
         Some(Element::new(id, self.tree.as_ref()?))
     }
 
+    pub fn element_for(&self, id: WidgetId) -> Option<Element<'_>> {
+        Some(Element::new(id, self.tree.as_ref()?))
+    }
+
+    pub fn hit(&self, x: i32, y: i32) -> Option<WidgetId> {
+        self.tree.as_ref()?.borrow().hit_active(x, y).ok().flatten()
+    }
+
     pub fn focused(&self) -> Option<WidgetId> {
         self.tree
             .as_ref()
@@ -109,6 +117,12 @@ impl Build {
         self.tree
             .as_ref()
             .is_some_and(|tree| tree.borrow_mut().set_focused(id))
+    }
+
+    pub fn enter_modal_scope(&self) {
+        if let Some(tree) = &self.tree {
+            tree.borrow_mut().enter_modal_scope();
+        }
     }
 
     pub fn focusables(&self) -> Vec<WidgetId> {
@@ -139,6 +153,16 @@ impl Build {
         self.tree
             .as_ref()
             .is_some_and(|tree| tree.borrow().within_scope(scope, id))
+    }
+
+    pub fn nearest_scrollable(&self, id: WidgetId) -> Option<WidgetId> {
+        let path = self.path_to(id);
+        let tree = self.tree.as_ref()?.borrow();
+        let scope = tree.modal_scope();
+        path.into_iter().rev().find(|candidate| {
+            tree.scrollable(*candidate)
+                && scope.is_none_or(|scope| tree.within_scope(scope, *candidate))
+        })
     }
 
     pub fn get_state<T: 'static>(&self) -> Option<Rc<RefCell<T>>> {
