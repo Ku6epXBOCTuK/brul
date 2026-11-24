@@ -47,7 +47,7 @@ impl WidgetTree {
         let code = key.code.as_str();
         let physical = key.physical.as_deref();
         if code == "Escape"
-            && let Some(scope) = self.modal_scope()
+            && let Some(scope) = self.modal_scope_slot()
         {
             return vec![DispatchEvent::semantic(
                 self.nodes[scope.index()].id,

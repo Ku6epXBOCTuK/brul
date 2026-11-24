@@ -13,6 +13,7 @@ mod edit;
 mod focus;
 mod frame;
 mod input;
+mod mechanism;
 mod pass;
 mod pointer;
 mod render;

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use brul_gui::{UiEvent, WidgetId, WidgetTree};
+use brul_gui::{ClipboardData, UiEvent, WidgetId, WidgetTree};
 use brul_script::Value;
 
 use super::component::ComponentHandle;
@@ -21,6 +21,7 @@ pub struct Build {
     capabilities: Vec<Hooks>,
     states: SharedStates,
     event_sink: Option<Arc<dyn super::EventSink>>,
+    clipboard: Option<Rc<dyn super::Clipboard>>,
     tree: Option<Rc<RefCell<WidgetTree>>>,
     widget: Option<WidgetId>,
     state: Option<StateId>,
@@ -55,6 +56,22 @@ impl Build {
         self.event_sink.clone()
     }
 
+    pub fn set_clipboard_bridge(&mut self, clipboard: Option<Rc<dyn super::Clipboard>>) {
+        self.clipboard = clipboard;
+    }
+
+    pub fn clipboard(&self) -> Option<ClipboardData> {
+        self.clipboard
+            .as_ref()
+            .and_then(|clipboard| clipboard.read())
+    }
+
+    pub fn set_clipboard(&self, data: &ClipboardData) {
+        if let Some(clipboard) = &self.clipboard {
+            clipboard.write(data);
+        }
+    }
+
     pub fn set_tree(&mut self, tree: Rc<RefCell<WidgetTree>>) {
         self.tree = Some(tree);
     }
@@ -78,6 +95,48 @@ impl Build {
             self.widget.expect("capability widget"),
             self.tree.as_ref().expect("capability widget tree"),
         )
+    }
+
+    pub fn focused(&self) -> Option<WidgetId> {
+        self.tree
+            .as_ref()
+            .and_then(|tree| tree.borrow().focused_id())
+    }
+
+    pub fn focus(&self, id: Option<WidgetId>) -> bool {
+        self.tree
+            .as_ref()
+            .is_some_and(|tree| tree.borrow_mut().set_focused(id))
+    }
+
+    pub fn focusables(&self) -> Vec<WidgetId> {
+        self.tree
+            .as_ref()
+            .map_or_else(Vec::new, |tree| tree.borrow().focusables())
+    }
+
+    pub fn path_to(&self, id: WidgetId) -> Vec<WidgetId> {
+        self.tree
+            .as_ref()
+            .map_or_else(Vec::new, |tree| tree.borrow().path_to_id(id))
+    }
+
+    pub fn ancestors(&self, id: WidgetId) -> Vec<WidgetId> {
+        let mut path = self.path_to(id);
+        path.pop();
+        path
+    }
+
+    pub fn modal_scope(&self) -> Option<WidgetId> {
+        self.tree
+            .as_ref()
+            .and_then(|tree| tree.borrow().modal_scope())
+    }
+
+    pub fn within_scope(&self, scope: WidgetId, id: WidgetId) -> bool {
+        self.tree
+            .as_ref()
+            .is_some_and(|tree| tree.borrow().within_scope(scope, id))
     }
 
     pub fn get_state<T: 'static>(&self) -> Option<Rc<RefCell<T>>> {

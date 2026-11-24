@@ -1,7 +1,7 @@
 use super::binding::offset_value;
 use super::event::EventHost;
 use super::*;
-use brul_gui::{Texture, Widget, WidgetId, WidgetTree};
+use brul_gui::{Image, Texture, Widget, WidgetId, WidgetTree};
 use brul_script::{
     Component, Dyn, Error as ScriptError, EventCall, Host, Scope, Value, noop_event,
 };
@@ -602,4 +602,87 @@ fn an_image_binding_shows_an_empty_texture_for_null() {
     };
 
     assert_eq!((texture.width(), texture.height()), (1, 1));
+}
+
+#[test]
+fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
+    while take_pending().is_some() {}
+
+    let input = Widget::input("abc");
+    let id = input.id();
+    let root = Widget::row(vec![input, Widget::text("label")]);
+    let root_id = root.id();
+    let tree = Rc::new(RefCell::new(WidgetTree::new(root)));
+    let mut build = Build::new();
+    build.set_tree(Rc::clone(&tree));
+    build.set_target(id, StateId::new(9), Rc::new(RefCell::new(Component::new())));
+
+    let element = build.element();
+    assert_eq!(element.edit_buffer().expect("input").text(), "abc");
+    let edited = element.with_edit(|buffer| {
+        buffer.insert_text(Position::new(0, 0), "x");
+        buffer.text().to_owned()
+    });
+    assert_eq!(edited.as_deref(), Some("xabc"));
+    assert_eq!(tree.borrow().edit_buffer(id).expect("input").text(), "xabc");
+
+    let rejected = element.with_edit(|buffer| {
+        buffer.insert_fragment(
+            Position::new(0, 1),
+            Fragment::Image(Image::from(Texture::empty())),
+        );
+    });
+    assert!(rejected.is_none());
+    assert_eq!(tree.borrow().edit_buffer(id).expect("input").text(), "xabc");
+    assert_eq!(element.caret(), Some(Position::new(0, 4)));
+    assert_eq!(
+        element.selection(),
+        Position::new(0, 4)..Position::new(0, 4)
+    );
+
+    assert_eq!(build.focused(), None);
+    assert!(build.focus(Some(id)));
+    assert_eq!(build.focused(), Some(id));
+    assert!(element.focused());
+    assert!(build.focusables().contains(&id));
+    assert_eq!(build.path_to(id), vec![root_id, id]);
+    assert_eq!(build.ancestors(id), vec![root_id]);
+    assert_eq!(build.modal_scope(), None);
+    assert!(build.within_scope(root_id, id));
+
+    assert!(element.set_hovered(true));
+    assert!(element.hovered());
+    assert!(element.set_pressed(true));
+    assert!(element.pressed());
+    assert!(element.scroll_by(5));
+
+    build.emit_event(UiEvent::widget(id, Event::click()));
+    let Pending::Ui(event) = take_pending().expect("ui event") else {
+        panic!("a semantic event was expected");
+    };
+    assert_eq!(event.target, EventTarget::Widget(id));
+    assert!(take_pending().is_none());
+}
+
+#[test]
+fn the_clipboard_port_is_typed_and_optional() {
+    struct MemoryClipboard(RefCell<Option<ClipboardData>>);
+
+    impl Clipboard for MemoryClipboard {
+        fn read(&self) -> Option<ClipboardData> {
+            self.0.borrow().clone()
+        }
+
+        fn write(&self, data: &ClipboardData) {
+            *self.0.borrow_mut() = Some(data.clone());
+        }
+    }
+
+    let mut build = Build::new();
+    build.set_clipboard(&ClipboardData::from(String::from("copied")));
+    assert!(build.clipboard().is_none());
+
+    build.set_clipboard_bridge(Some(Rc::new(MemoryClipboard(RefCell::new(None)))));
+    build.set_clipboard(&ClipboardData::from(String::from("copied")));
+    assert!(matches!(build.clipboard(), Some(ClipboardData::Text(text)) if text == "copied"));
 }

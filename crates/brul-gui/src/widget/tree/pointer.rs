@@ -17,8 +17,8 @@ impl WidgetTree {
                 && (node.style().scroll || (self.root_scroll && *slot == self.root))
         });
         let Some(target) = target.filter(|target| {
-            self.modal_scope()
-                .is_none_or(|scope| self.within_scope(scope, *target))
+            self.modal_scope_slot()
+                .is_none_or(|scope| self.within_scope_slot(scope, *target))
         }) else {
             return false;
         };
@@ -97,7 +97,7 @@ impl WidgetTree {
         self.hit_path(x, y)?;
         self.collect_active_path();
         let path = std::mem::take(&mut self.hit_scratch.active);
-        self.set_pressed(false);
+        self.set_all_pressed(false);
 
         let focus = path
             .iter()
@@ -223,7 +223,7 @@ impl WidgetTree {
         }
     }
 
-    pub(super) fn set_pressed(&mut self, pressed: bool) {
+    pub(super) fn set_all_pressed(&mut self, pressed: bool) {
         let slots = std::mem::take(&mut self.pressed);
         for &slot in &slots {
             let node = &mut self.nodes[slot.index()];

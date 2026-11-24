@@ -1,6 +1,7 @@
 mod binding;
 mod build;
 mod capability;
+mod clipboard;
 mod component;
 mod error;
 mod event;
@@ -19,9 +20,12 @@ pub use binding::{
     PropBinding, PropExpression, TextExpression, Write, boolean, evaluate, offset, text, write,
 };
 pub use brul_event::{Event, EventKind, EventSet, RawEvent, RawEventSet, RawKind};
-pub use brul_gui::{DispatchEvent, EventTarget, RawUiEvent, UiEvent};
+pub use brul_gui::{
+    ClipboardData, DispatchEvent, EditBuffer, EventTarget, Fragment, Position, RawUiEvent, UiEvent,
+};
 pub use build::Build;
 pub use capability::Capability;
+pub use clipboard::Clipboard;
 pub use component::{ComponentHandle, Context, Instance, PropArgument, accepts_prop, instance};
 pub use error::ViewError;
 pub use event::{ComponentEvent, Handler, Pending, PendingEvent, push_ui_event, take_pending};

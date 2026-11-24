@@ -73,19 +73,19 @@ impl WidgetTree {
                 node.focusable && node.state.visible && !node.state.disabled
             })
             .collect();
-        if let Some(scope) = self.modal_scope() {
-            slots.retain(|slot| self.within_scope(scope, *slot));
+        if let Some(scope) = self.modal_scope_slot() {
+            slots.retain(|slot| self.within_scope_slot(scope, *slot));
         }
         slots.sort_by_key(|slot| slot.index());
         slots
     }
 
-    pub(super) fn modal_scope(&self) -> Option<Slot> {
+    pub(super) fn modal_scope_slot(&self) -> Option<Slot> {
         self.topmost_modal(self.root)
     }
 
     pub(super) fn sync_modal_focus(&mut self) {
-        let Some(scope) = self.modal_scope() else {
+        let Some(scope) = self.modal_scope_slot() else {
             let Some(previous) = self.modal_focus.take() else {
                 return;
             };
@@ -95,12 +95,12 @@ impl WidgetTree {
             let node = &self.nodes[slot.index()];
             let restore = node.focusable && node.state.visible && !node.state.disabled;
             let target = restore.then_some(slot);
-            self.set_focused(target);
+            self.set_focused_slot(target);
             return;
         };
         if self
             .focused_slot()
-            .is_some_and(|focused| self.within_scope(scope, focused))
+            .is_some_and(|focused| self.within_scope_slot(scope, focused))
         {
             return;
         }
@@ -108,16 +108,16 @@ impl WidgetTree {
             self.modal_focus = self.focused;
         }
         let target = self.scope_focusable(scope).first().copied();
-        self.set_focused(target);
+        self.set_focused_slot(target);
     }
 
     fn enter_modal_scope(&mut self) {
-        let Some(scope) = self.modal_scope() else {
+        let Some(scope) = self.modal_scope_slot() else {
             return;
         };
         let outside = !self
             .focused_slot()
-            .is_some_and(|focused| self.within_scope(scope, focused));
+            .is_some_and(|focused| self.within_scope_slot(scope, focused));
         if outside && self.modal_focus.is_none() {
             self.modal_focus = self.focused;
         }
@@ -150,14 +150,14 @@ impl WidgetTree {
         }
     }
 
-    pub(super) fn within_scope(&self, scope: Slot, slot: Slot) -> bool {
+    pub(super) fn within_scope_slot(&self, scope: Slot, slot: Slot) -> bool {
         if scope == slot {
             return true;
         }
         self.nodes[scope.index()]
             .children
             .iter()
-            .any(|child| self.within_scope(*child, slot))
+            .any(|child| self.within_scope_slot(*child, slot))
     }
 
     fn scope_focusable(&self, scope: Slot) -> Vec<Slot> {
@@ -193,11 +193,11 @@ impl WidgetTree {
                 Event::focus(),
             ));
         }
-        self.set_focused(slot);
+        self.set_focused_slot(slot);
         events
     }
 
-    fn set_focused(&mut self, slot: Option<Slot>) {
+    pub(super) fn set_focused_slot(&mut self, slot: Option<Slot>) {
         if self.focused_slot() == slot {
             return;
         }

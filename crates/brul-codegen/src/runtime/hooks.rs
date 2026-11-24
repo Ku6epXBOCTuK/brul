@@ -1,8 +1,9 @@
 use std::cell::RefCell;
+use std::ops::Range;
 use std::rc::Rc;
 
 use brul_event::{EventSet, RawEventSet};
-use brul_gui::{DispatchEvent, WidgetId, WidgetTree};
+use brul_gui::{DispatchEvent, EditBuffer, Position, WidgetId, WidgetTree};
 use brul_script::{Component, Dyn, Error as ScriptError};
 
 use super::{Build, ComponentHandle, StateId, ViewError};
@@ -83,6 +84,58 @@ impl Element<'_> {
 
     pub fn set_offset(&self, x: i32, y: i32) -> bool {
         self.tree.borrow_mut().set_offset(self.id, x, y)
+    }
+
+    pub fn edit_buffer(&self) -> Option<EditBuffer> {
+        self.tree.borrow().edit_buffer(self.id)
+    }
+
+    pub fn with_edit<R>(&self, edit: impl FnOnce(&mut EditBuffer) -> R) -> Option<R> {
+        let mut tree = self.tree.borrow_mut();
+        let mut buffer = tree.edit_buffer(self.id)?;
+        let result = edit(&mut buffer);
+        tree.commit_edit(self.id, &buffer).then_some(result)
+    }
+
+    pub fn caret(&self) -> Option<Position> {
+        self.tree.borrow().caret_position(self.id)
+    }
+
+    pub fn selection(&self) -> Range<Position> {
+        self.tree
+            .borrow()
+            .selection_range(self.id)
+            .unwrap_or(Position::new(0, 0)..Position::new(0, 0))
+    }
+
+    pub fn hovered(&self) -> bool {
+        self.tree.borrow().hovered(self.id)
+    }
+
+    pub fn pressed(&self) -> bool {
+        self.tree.borrow().pressed(self.id)
+    }
+
+    pub fn focused(&self) -> bool {
+        self.tree.borrow().focused_id() == Some(self.id)
+    }
+
+    pub fn set_hovered(&self, hovered: bool) -> bool {
+        self.tree.borrow_mut().set_hovered(self.id, hovered)
+    }
+
+    pub fn set_pressed(&self, pressed: bool) -> bool {
+        self.tree.borrow_mut().set_pressed(self.id, pressed)
+    }
+
+    pub fn set_focused(&self, focused: bool) -> bool {
+        self.tree
+            .borrow_mut()
+            .set_focused(focused.then_some(self.id))
+    }
+
+    pub fn scroll_by(&self, dy: i32) -> bool {
+        self.tree.borrow_mut().scroll_by(self.id, dy)
     }
 
     pub fn caret_area(&self) -> Option<brul_gui::CaretArea> {

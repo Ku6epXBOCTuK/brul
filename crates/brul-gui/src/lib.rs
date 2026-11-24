@@ -67,6 +67,7 @@ mod border;
 mod color;
 mod cursor;
 mod draw;
+mod edit;
 mod effect;
 mod gradient;
 mod image;
@@ -104,9 +105,10 @@ pub use text::{
 pub use texture::{ExternalTexture, Revision, Texture, TextureError, TextureFrame};
 pub use theme::{Theme, UnknownTheme};
 pub use widget::{
-    Anchor, CaretArea, Class, Dirty, DispatchEvent, Event, EventKind, EventSet, EventTarget,
-    FunctionName, ImeKind, KeyModifiers, KeyPress, Layers, PlatformViewId, PlatformViewSpec,
-    RawEvent, RawEventSet, RawKind, RawUiEvent, StyleSet, StyleState, TextStylePatch, TextStyleSet,
-    TimerOwner, Transitions, UiEvent, Widget, WidgetError, WidgetId, WidgetKind, WidgetSnapshot,
-    WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Anchor, CaretArea, Class, ClipboardData, Dirty, DispatchEvent, EditBuffer, Event, EventKind,
+    EventSet, EventTarget, Fragment, FunctionName, ImeKind, KeyModifiers, KeyPress, Layers,
+    PlatformViewId, PlatformViewSpec, Position, RawEvent, RawEventSet, RawKind, RawUiEvent,
+    StyleSet, StyleState, TextStylePatch, TextStyleSet, TimerOwner, Transitions, UiEvent, Widget,
+    WidgetError, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode, WidgetState,
+    WidgetStyle, WidgetStylePatch, WidgetTree,
 };

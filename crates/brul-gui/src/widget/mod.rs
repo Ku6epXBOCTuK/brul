@@ -15,6 +15,7 @@ mod tests;
 mod text;
 mod tree;
 
+pub use crate::edit::{ClipboardData, EditBuffer, Fragment, Position};
 pub use crate::text::TextStylePatch;
 pub use brul_event::{
     Event, EventKind, EventSet, ImeKind, KeyModifiers, KeyPress, RawEvent, RawEventSet, RawKind,
