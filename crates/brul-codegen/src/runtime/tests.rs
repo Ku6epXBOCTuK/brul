@@ -1,7 +1,7 @@
 use super::binding::offset_value;
 use super::event::EventHost;
 use super::*;
-use brul_gui::{Image, Texture, Widget, WidgetId, WidgetTree};
+use brul_gui::{Image, KeyModifiers, KeyPress, Texture, Widget, WidgetId, WidgetTree};
 use brul_script::{
     Component, Dyn, Error as ScriptError, EventCall, Host, Scope, Value, noop_event,
 };
@@ -13,7 +13,7 @@ use std::rc::Rc;
 fn take_component() -> PendingEvent {
     match take_pending().expect("queued") {
         Pending::Component(event) => event,
-        Pending::Ui(_) => panic!("a component event was expected"),
+        Pending::Ui(_) | Pending::Raw(_) => panic!("a component event was expected"),
     }
 }
 
@@ -676,6 +676,24 @@ fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
         panic!("a semantic event was expected");
     };
     assert_eq!(event.target, EventTarget::Widget(id));
+    assert!(take_pending().is_none());
+}
+
+#[test]
+fn a_capability_can_queue_a_raw_event() {
+    let widget = Widget::text("");
+    let id = widget.id();
+    let build = Build::new();
+    build.emit_raw_event(RawUiEvent::widget(
+        id,
+        RawEvent::key_noop(KeyPress::from("Backspace"), KeyModifiers::default()),
+    ));
+
+    let Pending::Raw(event) = take_pending().expect("raw event") else {
+        panic!("a raw event was expected");
+    };
+    assert_eq!(event.target, EventTarget::Widget(id));
+    assert!(matches!(event.event, RawEvent::KeyNoop { .. }));
     assert!(take_pending().is_none());
 }
 

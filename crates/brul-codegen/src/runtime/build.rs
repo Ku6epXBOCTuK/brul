@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use brul_gui::{ClipboardData, EventTarget, UiEvent, WidgetId, WidgetTree};
+use brul_gui::{ClipboardData, EventTarget, RawUiEvent, UiEvent, WidgetId, WidgetTree};
 use brul_script::Value;
 
 use super::component::ComponentHandle;
@@ -166,6 +166,10 @@ impl Build {
 
     pub fn emit_event(&self, event: UiEvent) {
         super::event::push_ui_event(event);
+    }
+
+    pub fn emit_raw_event(&self, event: RawUiEvent) {
+        super::event::push_raw_event(event);
     }
 
     pub fn capability(&mut self, capability: Capability<'_>) -> Result<Option<Built>, ViewError> {

@@ -196,7 +196,7 @@ macro_rules! event_family {
 
 event_family! {
     RawEvent, RawKind, RawEventSet,
-    [KeyUnchanged => Key],
+    [KeyNoop => Key],
     (PointerEnter, "enter", "PointerEnter", pointer_enter, (), 0),
     (PointerLeave, "leave", "PointerLeave", pointer_leave, (), 0),
     (Press, "press", "Press", press, (), 0),
@@ -204,10 +204,10 @@ event_family! {
     (Drag, "drag", "Drag", drag, (), 0),
     (Key, "key", "Key", key, (key: KeyPress, modifiers: KeyModifiers), 0),
     (
-        KeyUnchanged,
-        "key_unchanged",
-        "KeyUnchanged",
-        key_unchanged,
+        KeyNoop,
+        "key_noop",
+        "KeyNoop",
+        key_noop,
         (key: KeyPress, modifiers: KeyModifiers),
         0
     ),
@@ -271,9 +271,9 @@ mod tests {
     }
 
     #[test]
-    fn an_unchanged_raw_key_uses_the_key_subscription() {
+    fn a_noop_raw_key_uses_the_key_subscription() {
         let set = RawEventSet::from([RawKind::Key]);
-        assert!(set.contains(RawKind::KeyUnchanged));
-        assert_eq!(RawKind::KeyUnchanged.dispatch_kind(), RawKind::Key);
+        assert!(set.contains(RawKind::KeyNoop));
+        assert_eq!(RawKind::KeyNoop.dispatch_kind(), RawKind::Key);
     }
 }

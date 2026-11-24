@@ -28,7 +28,9 @@ pub use capability::Capability;
 pub use clipboard::Clipboard;
 pub use component::{ComponentHandle, Context, Instance, PropArgument, accepts_prop, instance};
 pub use error::ViewError;
-pub use event::{ComponentEvent, Handler, Pending, PendingEvent, push_ui_event, take_pending};
+pub use event::{
+    ComponentEvent, Handler, Pending, PendingEvent, push_raw_event, push_ui_event, take_pending,
+};
 pub use event_sink::{EventSink, emit as emit_widget_event};
 pub use hooks::{
     CleanupHook, Dispatch, Element, EventHook, Hooks, Param, apply as apply_capability,

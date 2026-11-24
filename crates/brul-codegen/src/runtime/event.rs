@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use brul_event::EventKind;
-use brul_gui::{UiEvent, WidgetId};
+use brul_gui::{RawUiEvent, UiEvent, WidgetId};
 use brul_script::{Dyn, Error as ScriptError, EventCall, Host, Value};
 use brul_syntax::markup::PropType;
 
@@ -50,6 +50,7 @@ pub struct PendingEvent {
 pub enum Pending {
     Component(PendingEvent),
     Ui(UiEvent),
+    Raw(RawUiEvent),
 }
 
 thread_local! {
@@ -58,6 +59,10 @@ thread_local! {
 
 pub fn push_ui_event(event: UiEvent) {
     PENDING.with(|pending| pending.borrow_mut().push_back(Pending::Ui(event)));
+}
+
+pub fn push_raw_event(event: RawUiEvent) {
+    PENDING.with(|pending| pending.borrow_mut().push_back(Pending::Raw(event)));
 }
 
 pub fn take_pending() -> Option<Pending> {

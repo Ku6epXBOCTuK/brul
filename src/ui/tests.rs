@@ -1291,7 +1291,7 @@ fn dispatch_passes_a_key_to_the_widget_target_only() {
 }
 
 #[test]
-fn a_raw_unchanged_key_reaches_the_capability_only() {
+fn a_raw_noop_key_reaches_the_capability_only() {
     let component = component_with(&["attach", "seen", "ran", "cleaned"]);
     let widget = Widget::text("");
     let id = widget.id();
@@ -1332,7 +1332,7 @@ fn a_raw_unchanged_key_reaches_the_capability_only() {
     );
     ui.dispatch(&[RawUiEvent::widget(
         id,
-        brul_gui::RawEvent::key_unchanged(
+        brul_gui::RawEvent::key_noop(
             brul_gui::KeyPress::from("Backspace"),
             brul_gui::KeyModifiers::default(),
         ),
@@ -1342,6 +1342,68 @@ fn a_raw_unchanged_key_reaches_the_capability_only() {
     let component = ui.component.borrow();
     assert_eq!(component.read("attach"), Ok(Value::Number(id.get() as f64)));
     assert!(!matches!(component.read("seen"), Ok(Value::Object(_))));
+    assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
+}
+
+#[test]
+fn a_capability_can_emit_a_raw_event_to_other_capabilities() {
+    let component = component_with(&["seen", "ran", "cleaned"]);
+    let widget = Widget::text("");
+    let id = widget.id();
+    let built = Built {
+        widget,
+        bindings: Vec::new(),
+        handlers: vec![Handler::new(&component, Some(id), EventKind::Key, set_ran)],
+        props: Vec::new(),
+    };
+    let emitter = Hooks {
+        target: EventTarget::Widget(id),
+        state: StateId::new(7),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: emit_raw_on_key,
+        cleanup: probe_cleanup,
+        events: EventSet::empty(),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+    };
+    let observer = Hooks {
+        target: EventTarget::Widget(id),
+        state: StateId::new(8),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: record_raw_paste,
+        cleanup: probe_cleanup,
+        events: EventSet::empty(),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Paste]),
+    };
+    let mut ui = Ui::assemble_with(
+        Rc::clone(&component),
+        built,
+        themed_view,
+        None,
+        AssemblyParts {
+            structures: Vec::new(),
+            capabilities: vec![emitter, observer],
+            nested: Vec::new(),
+            states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
+        },
+        Rc::new(RefCell::new(Vec::new())),
+        false,
+    );
+    ui.dispatch(&[RawUiEvent::widget(
+        id,
+        brul_gui::RawEvent::key_noop(
+            brul_gui::KeyPress::from("Backspace"),
+            brul_gui::KeyModifiers::default(),
+        ),
+    )
+    .into()]);
+
+    let component = ui.component.borrow();
+    assert_eq!(component.read("seen"), Ok(Value::Bool(true)));
     assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
@@ -1543,6 +1605,32 @@ fn a_window_capability_can_stop_the_dispatch_chain() {
     assert_eq!(component.read("attach"), Ok(Value::Bool(true)));
     assert_ne!(component.read("off"), Ok(Value::Bool(true)));
     assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
+}
+
+fn emit_raw_on_key(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
+    if let Some(id) = event.target().widget() {
+        ctx.emit_raw_event(RawUiEvent::widget(
+            id,
+            brul_gui::RawEvent::paste(String::new()),
+        ));
+    }
+    Dispatch::Continue
+}
+
+fn record_raw_paste(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
+    if matches!(
+        event,
+        DispatchEvent::Raw(RawUiEvent {
+            event: brul_gui::RawEvent::Paste { .. },
+            ..
+        })
+    ) {
+        ctx.component()
+            .borrow_mut()
+            .assign("seen", Value::Bool(true))
+            .expect("seen");
+    }
+    Dispatch::Continue
 }
 
 fn record_attachment_target(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {

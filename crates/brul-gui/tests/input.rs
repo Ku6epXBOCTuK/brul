@@ -85,7 +85,7 @@ fn backspace_and_delete_remove_whole_characters() {
 }
 
 #[test]
-fn backspace_on_an_empty_field_reports_an_unchanged_key() {
+fn backspace_on_an_empty_field_reports_an_noop_key() {
     let (mut tree, id) = focused_field("");
     let key = KeyPress {
         code: "Backspace".to_owned(),
@@ -96,13 +96,13 @@ fn backspace_on_an_empty_field_reports_an_unchanged_key() {
         tree.raw_key(key.clone()),
         vec![DispatchEvent::raw(
             id,
-            RawEvent::key_unchanged(key, KeyModifiers::default())
+            RawEvent::key_noop(key, KeyModifiers::default())
         )]
     );
 }
 
 #[test]
-fn delete_at_the_end_of_the_field_reports_an_unchanged_key() {
+fn delete_at_the_end_of_the_field_reports_an_noop_key() {
     let (mut tree, id) = focused_field("ab");
     tree.raw_key("End");
     let modifiers = KeyModifiers {
@@ -117,10 +117,7 @@ fn delete_at_the_end_of_the_field_reports_an_unchanged_key() {
 
     assert_eq!(
         tree.raw_key(key.clone()),
-        vec![DispatchEvent::raw(
-            id,
-            RawEvent::key_unchanged(key, modifiers)
-        )]
+        vec![DispatchEvent::raw(id, RawEvent::key_noop(key, modifiers))]
     );
 }
 

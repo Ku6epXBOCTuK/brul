@@ -449,6 +449,7 @@ impl<T: Theme> Ui<T> {
                     call(&event.component, event.call, event.arguments);
                 }
                 runtime::Pending::Ui(event) => self.dispatch_event(&event),
+                runtime::Pending::Raw(event) => self.dispatch_raw_event(&event),
             }
             brul_reactive::flush();
         }
