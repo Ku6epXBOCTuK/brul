@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use brul_gui::{
-    Class, Color, Cursor, Dimension, Direction, DispatchEvent, Event, Layers, LayoutPatch,
-    LayoutStyle, Padding, Paint, RawEvent, Size, StyleSet, StyleState, TextAlign, TextEngine,
-    TextStyle, TextStylePatch, TextStyleSet, Texture, Transitions, Widget, WidgetError, WidgetId,
-    WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Class, Color, Cursor, Dimension, Direction, DispatchEvent, Event, KeyModifiers, Layers,
+    LayoutPatch, LayoutStyle, Padding, Paint, RawEvent, Size, StyleSet, StyleState, TextAlign,
+    TextEngine, TextStyle, TextStylePatch, TextStyleSet, Texture, Transitions, Widget, WidgetError,
+    WidgetId, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -71,7 +71,50 @@ fn draggable_widget_reports_a_drag_on_press() {
     .expect("layout");
 
     let events = tree.pointer_raw_down(5, 5).expect("down");
-    assert!(events.contains(&DispatchEvent::raw(text_id, RawEvent::drag())));
+    assert!(events.contains(&DispatchEvent::raw(text_id, RawEvent::drag(5, 5))));
+}
+
+#[test]
+fn pointer_move_reaches_the_pressed_path_with_modifiers() {
+    let text = Widget::text("ok").with_layout(fixed(80, 80));
+    let text_id = text.id();
+    let child = Widget::column(vec![text]).with_layout(fixed(80, 80));
+    let child_id = child.id();
+    let root = Widget::column(vec![child]).with_layout(fixed(100, 100));
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 100,
+            height: 100,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    let modifiers = KeyModifiers {
+        shift: true,
+        ..KeyModifiers::default()
+    };
+    tree.set_modifiers(modifiers);
+    tree.pointer_raw_down(5, 5).expect("down");
+
+    let moved = tree.pointer_raw_moved(7, 9).expect("move");
+    for id in [text_id, child_id, root_id] {
+        assert!(moved.contains(&DispatchEvent::raw(
+            id,
+            RawEvent::pointer_move(7, 9, modifiers)
+        )));
+    }
+
+    tree.pointer_raw_up(5, 5).expect("up");
+    let moved = tree.pointer_raw_moved(7, 9).expect("move");
+    assert!(!moved.iter().any(|event| matches!(
+        event,
+        DispatchEvent::Raw(raw) if raw.event.kind() == brul_gui::RawKind::PointerMove
+    )));
 }
 
 #[test]
@@ -842,9 +885,9 @@ fn click_bubbles_from_leaf_to_root() {
     assert_eq!(
         tree.pointer_raw_down(5, 5).expect("down"),
         vec![
-            DispatchEvent::raw(text_id, RawEvent::press()),
-            DispatchEvent::raw(child_id, RawEvent::press()),
-            DispatchEvent::raw(root_id, RawEvent::press()),
+            DispatchEvent::raw(text_id, RawEvent::press(5, 5, KeyModifiers::default())),
+            DispatchEvent::raw(child_id, RawEvent::press(5, 5, KeyModifiers::default())),
+            DispatchEvent::raw(root_id, RawEvent::press(5, 5, KeyModifiers::default())),
         ]
     );
     assert_eq!(
@@ -892,7 +935,13 @@ fn disabled_subtree_does_not_receive_clicks() {
     let down = tree.pointer_raw_down(5, 5).expect("down");
     let up = tree.pointer_raw_up(5, 5).expect("up");
 
-    assert_eq!(down, vec![DispatchEvent::raw(root_id, RawEvent::press())]);
+    assert_eq!(
+        down,
+        vec![DispatchEvent::raw(
+            root_id,
+            RawEvent::press(5, 5, KeyModifiers::default())
+        )]
+    );
     assert!(!up.contains(&DispatchEvent::semantic(child_id, Event::click())));
     assert!(up.contains(&DispatchEvent::semantic(root_id, Event::click())));
 }

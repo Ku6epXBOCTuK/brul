@@ -199,9 +199,24 @@ event_family! {
     [KeyNoop => Key],
     (PointerEnter, "enter", "PointerEnter", pointer_enter, (), 0),
     (PointerLeave, "leave", "PointerLeave", pointer_leave, (), 0),
-    (Press, "press", "Press", press, (), 0),
+    (
+        PointerMove,
+        "pointer_move",
+        "PointerMove",
+        pointer_move,
+        (x: i32, y: i32, modifiers: KeyModifiers),
+        0
+    ),
+    (
+        Press,
+        "press",
+        "Press",
+        press,
+        (x: i32, y: i32, modifiers: KeyModifiers),
+        0
+    ),
     (Release, "release", "Release", release, (), 0),
-    (Drag, "drag", "Drag", drag, (), 0),
+    (Drag, "drag", "Drag", drag, (x: i32, y: i32), 0),
     (Key, "key", "Key", key, (key: KeyPress, modifiers: KeyModifiers), 0),
     (
         KeyNoop,

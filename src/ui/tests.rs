@@ -1918,7 +1918,7 @@ fn dispatch_ignores_events_without_a_handler() {
     let other = Widget::text("other").id();
     assert!(
         ui.dispatch(&[
-            RawUiEvent::widget(id, brul_gui::RawEvent::drag()).into(),
+            RawUiEvent::widget(id, brul_gui::RawEvent::drag(0, 0)).into(),
             DispatchEvent::semantic(other, Event::click()),
         ])
         .is_empty()

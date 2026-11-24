@@ -3,8 +3,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{
-    Atlas, Cursor, Dimension, Dirty, Event, KeyPress, LayoutStyle, PlatformViewId, RawEvent,
-    RawUiEvent, Size, StyleSet, TextEngine, TimerOwner, UiEvent, Widget, WidgetError,
+    Atlas, Cursor, Dimension, Dirty, Event, KeyModifiers, KeyPress, LayoutStyle, PlatformViewId,
+    RawEvent, RawUiEvent, Size, StyleSet, TextEngine, TimerOwner, UiEvent, Widget, WidgetError,
     WidgetSnapshot, WidgetStyle, WidgetTree,
 };
 
@@ -312,7 +312,7 @@ fn a_drag_event_drags_the_window() {
 
     let step = app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::drag()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::drag(0, 0)).into()],
     );
     assert_eq!(step, Step::Continue);
     assert_eq!(surface.drags.get(), 1);
@@ -342,7 +342,7 @@ fn the_exit_command_finishes_the_loop() {
 
     let step = app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(step, Step::Exit);
 }
@@ -355,7 +355,7 @@ fn the_close_command_closes_the_window() {
 
     let step = app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(step, Step::Close);
 }
@@ -369,7 +369,7 @@ fn the_open_command_names_the_window() {
 
     let step = app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(step, Step::Open(key));
 }
@@ -382,7 +382,7 @@ fn a_drag_command_drags_the_window() {
 
     app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(surface.drags.get(), 1);
 }
@@ -395,7 +395,7 @@ fn a_hide_command_hides_the_window() {
 
     let step = app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(step, Step::Continue);
     assert_eq!(surface.visible.get(), Some(false));
@@ -409,7 +409,7 @@ fn a_show_command_shows_the_window() {
 
     app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(surface.visible.get(), Some(true));
 }
@@ -422,7 +422,7 @@ fn an_always_on_top_command_raises_the_window() {
 
     app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(surface.on_top.get(), Some(true));
 }
@@ -435,7 +435,7 @@ fn a_focus_command_takes_the_focus() {
 
     app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(surface.focus.get(), 1);
 }
@@ -454,7 +454,7 @@ fn a_timer_command_is_kept() {
 
     app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert_eq!(app.timers.len(), 1);
 }
@@ -479,7 +479,7 @@ fn a_timer_cancel_removes_the_started_timer() {
 
     app.dispatch_events(
         &surface,
-        vec![RawUiEvent::widget(widget, RawEvent::press()).into()],
+        vec![RawUiEvent::widget(widget, RawEvent::press(0, 0, KeyModifiers::default())).into()],
     );
     assert!(app.timers.is_empty());
 }

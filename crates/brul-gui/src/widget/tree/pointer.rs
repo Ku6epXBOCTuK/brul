@@ -35,25 +35,33 @@ impl WidgetTree {
         let old = std::mem::take(&mut self.hovered);
         let new = std::mem::take(&mut self.hit_scratch.active);
         let common = common_prefix(&old, &new);
-        if common == old.len() && common == new.len() {
-            self.hovered = new;
-            self.hit_scratch.active = old;
-            return Ok(Vec::new());
-        }
 
         let mut events = Vec::new();
-        for &slot in old[common..].iter().rev() {
-            let id = self.nodes[slot.index()].id;
-            self.retarget(slot);
-            events.push(DispatchEvent::raw(id, RawEvent::pointer_leave()));
-        }
-        for &slot in &new[common..] {
-            let id = self.nodes[slot.index()].id;
-            self.retarget(slot);
-            events.push(DispatchEvent::raw(id, RawEvent::pointer_enter()));
+        if common != old.len() || common != new.len() {
+            for &slot in old[common..].iter().rev() {
+                let id = self.nodes[slot.index()].id;
+                self.retarget(slot);
+                events.push(DispatchEvent::raw(id, RawEvent::pointer_leave()));
+            }
+            for &slot in &new[common..] {
+                let id = self.nodes[slot.index()].id;
+                self.retarget(slot);
+                events.push(DispatchEvent::raw(id, RawEvent::pointer_enter()));
+            }
         }
         self.hovered = new;
         self.hit_scratch.active = old;
+
+        if !self.pressed.is_empty() {
+            let modifiers = self.modifiers;
+            for &slot in self.pressed.iter().rev() {
+                let id = self.nodes[slot.index()].id;
+                events.push(DispatchEvent::raw(
+                    id,
+                    RawEvent::pointer_move(x, y, modifiers),
+                ));
+            }
+        }
         Ok(events)
     }
 
@@ -62,6 +70,7 @@ impl WidgetTree {
         self.collect_active_path();
         let path = std::mem::take(&mut self.hit_scratch.active);
         self.pressed.clear();
+        let modifiers = self.modifiers;
 
         let mut events = Vec::new();
         for &slot in path.iter().rev() {
@@ -69,9 +78,9 @@ impl WidgetTree {
             let id = node.id;
             let draggable = node.draggable;
             self.retarget(slot);
-            events.push(DispatchEvent::raw(id, RawEvent::press()));
+            events.push(DispatchEvent::raw(id, RawEvent::press(x, y, modifiers)));
             if draggable {
-                events.push(DispatchEvent::raw(id, RawEvent::drag()));
+                events.push(DispatchEvent::raw(id, RawEvent::drag(x, y)));
             }
         }
         self.pressed = path;
