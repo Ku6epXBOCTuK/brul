@@ -1,9 +1,12 @@
 //! BRUL facade: app startup, window roots and the shared `Handle` context.
 
+extern crate self as brul;
+
 pub mod builtins;
 mod each;
 mod event;
 mod handle;
+pub mod policy;
 
 pub use handle::Message;
 pub mod logging;

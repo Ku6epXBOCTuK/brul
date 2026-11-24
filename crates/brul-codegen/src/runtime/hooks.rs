@@ -189,6 +189,10 @@ impl Element<'_> {
         self.tree.borrow().edit_buffer(self.id)
     }
 
+    pub fn is_input(&self) -> bool {
+        self.edit_buffer().is_some()
+    }
+
     pub fn with_edit<R>(&self, edit: impl FnOnce(&mut EditBuffer) -> R) -> Option<R> {
         let mut tree = self.tree.borrow_mut();
         let mut buffer = tree.edit_buffer(self.id)?;

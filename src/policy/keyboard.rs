@@ -1,0 +1,80 @@
+use crate::{Build, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError, gui::WidgetId};
+
+pub struct KeyboardPolicy;
+
+#[brul::attach(name = "keyboard", raw_events(Key), raw_event = keyboard_raw)]
+pub fn keyboard(_ctx: &mut Build) -> Result<KeyboardPolicy, ViewError> {
+    Ok(KeyboardPolicy)
+}
+
+fn keyboard_raw(_state: &mut KeyboardPolicy, build: &mut Build, event: &RawUiEvent) -> Dispatch {
+    if build.handled() {
+        return Dispatch::CONTINUE;
+    }
+    let (key, modifiers) = match &event.event {
+        RawEvent::Key { key, modifiers } | RawEvent::KeyNoop { key, modifiers } => {
+            (key, *modifiers)
+        }
+        _ => return Dispatch::CONTINUE,
+    };
+
+    if key.code == "Escape"
+        && let Some(scope) = build.modal_scope()
+    {
+        build.emit_event(UiEvent::widget(scope, Event::dismiss()));
+        return Dispatch::stop();
+    }
+
+    if key.code == "Tab" {
+        build.enter_modal_scope();
+        let focusables = build.focusables();
+        let current = build.focused();
+        let Some(next) = next_focus(&focusables, current, modifiers.shift) else {
+            return Dispatch::stop();
+        };
+        if Some(next) == current {
+            return Dispatch::stop();
+        }
+        if let Some(id) = current {
+            build.emit_event(UiEvent::widget(id, Event::blur()));
+        }
+        build.emit_event(UiEvent::widget(next, Event::focus()));
+        build.focus(Some(next));
+        return Dispatch::stop();
+    }
+
+    if (key.code == "Enter" || key.code == " ")
+        && let Some(focused) = build.focused()
+        && build.focusables().contains(&focused)
+        && build
+            .element_for(focused)
+            .is_some_and(|element| !element.is_input())
+    {
+        for id in build.path_to(focused).into_iter().rev() {
+            build.emit_event(UiEvent::widget(id, Event::click()));
+        }
+        return Dispatch::stop();
+    }
+
+    build.emit_event(UiEvent::at(
+        event.target,
+        Event::key(key.clone(), modifiers),
+    ));
+    Dispatch::CONTINUE
+}
+
+fn next_focus(
+    focusables: &[WidgetId],
+    current: Option<WidgetId>,
+    backwards: bool,
+) -> Option<WidgetId> {
+    if focusables.is_empty() {
+        return None;
+    }
+    let step = if backwards { focusables.len() - 1 } else { 1 };
+    match current.and_then(|id| focusables.iter().position(|candidate| *candidate == id)) {
+        Some(index) => Some(focusables[(index + step) % focusables.len()]),
+        None if backwards => focusables.last().copied(),
+        None => focusables.first().copied(),
+    }
+}

@@ -765,6 +765,7 @@ fn an_element_exposes_text_and_scroll_primitives() {
     );
 
     let element = build.element();
+    assert!(element.is_input());
     assert!(element.wrap());
     assert_eq!(element.line_start(3), Some(3));
     assert_eq!(element.line_end(3), Some(5));
