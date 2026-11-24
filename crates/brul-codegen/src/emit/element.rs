@@ -1,7 +1,7 @@
 use brul_case::constant;
 use brul_event::{EventKind, RawKind};
 use brul_gui::Direction;
-use brul_syntax::ast::{Expr, ExprKind};
+use brul_syntax::ast::{Expr, ExprKind, Position};
 use brul_syntax::error::Error;
 use brul_syntax::markup::{Arg, Block, BlockItem, Element, Slot, Widget};
 use brul_syntax::style::EffectRule;
@@ -9,7 +9,9 @@ use brul_syntax::types::Type;
 
 use crate::capability::CapabilitySpec;
 use crate::error_at;
+use crate::runtime::StateId;
 use crate::styles;
+use crate::window::AttachParam;
 
 use super::CodegenContext;
 use super::Emit;
@@ -367,11 +369,12 @@ fn effect_binding(
     Ok(())
 }
 
-fn handler_bindings(out: &mut Out<'_>, handlers: &[(EventKind, String)], name: &str, script: &str) {
-    for (event, handler) in handlers {
-        let call = super::script::event_call(script, handler);
+fn handler_bindings(out: &mut Out<'_>, handlers: &[events::HandlerSpec], name: &str, script: &str) {
+    for handler in handlers {
+        let call = super::script::event_call(script, &handler.function);
         out.line(format_args!(
-            "handlers.push(brul::Handler::new(component, Some({name}.id()), brul::EventKind::{event:?}, {call}));"
+            "handlers.push(brul::Handler::new(component, Some({name}.id()), brul::EventKind::{:?}, {call}));",
+            handler.event
         ));
     }
 }
@@ -590,17 +593,6 @@ fn image_widget(
     Ok(Some(expression.clone()))
 }
 
-fn state_id(element: &Element) -> u64 {
-    let mut id = 0x811c9dc5u64;
-    for byte in element.name.bytes() {
-        id = (id ^ u64::from(byte)).wrapping_mul(0x01000193);
-    }
-    let line = u64::try_from(element.position.line).unwrap_or(u64::MAX);
-    let column = u64::try_from(element.position.column).unwrap_or(u64::MAX);
-    let position = (line << 32) ^ column;
-    (id ^ position) & 0x001f_ffff_ffff_ffff
-}
-
 fn registered_widget(
     out: &mut Out<'_>,
     element: &Element,
@@ -663,7 +655,7 @@ fn registered_widget(
         .iter()
         .map(|(name, ty, value)| (*name, ty, *value))
         .collect();
-    let id = state_id(element);
+    let id = StateId::for_source(&element.name, element.position);
     let element_classes = classes(element);
     let class_indices = element_classes
         .iter()
@@ -674,7 +666,7 @@ fn registered_widget(
     let suffix = anchor::suffix(element, emit)?;
     out.line(format_args!("{{"));
     out.indented(|out| -> Result<(), Error> {
-        out.line(format_args!("let built = build.capability(brul::Capability::view(brul::StateId::new({id}u64), std::rc::Rc::clone(component), brul::Instance {{"));
+        out.line(format_args!("let built = build.capability(brul::Capability::view(brul::StateId::new({value}u64), std::rc::Rc::clone(component), brul::Instance {{", value = id.get()));
         out.indented(|out| -> Result<(), Error> {
             out.line(format_args!("theme,"));
             out.line(format_args!("view: {},", spec.view.as_deref().expect("view capability")));
@@ -767,91 +759,140 @@ pub(super) fn attachment_bindings(
     scopes: &[ScopeInfo],
     scope: Option<usize>,
 ) -> Result<(), Error> {
-    let specs = &context.capabilities.specs;
-    let names = context.names;
-    let state = context.state;
-    let prop_types = context.prop_types;
-    let id = state_id(element);
+    let id = StateId::for_source(&element.name, element.position);
+    let target = format!("brul::EventTarget::Widget({widget}.id())");
     for arg in &element.args {
-        let Arg::Attach {
+        if let Arg::Attach {
             name,
             params,
             position,
         } = arg
-        else {
-            continue;
-        };
-        let Some(spec) = specs.get(name).cloned() else {
-            return Err(error_at(*position, format!("unknown attachment '{name}'")));
-        };
-        let Some(hooks) = spec.hooks else {
-            return Err(error_at(
-                *position,
-                format!("capability '{name}' has no hooks"),
-            ));
-        };
-        let mut expressions = Vec::with_capacity(hooks.params.len());
-        for expected in &hooks.params {
-            let Some((_, value)) = params
+        {
+            let params: Vec<AttachParam> = params
                 .iter()
-                .find(|(given, _)| *given == expected.name.as_str())
-            else {
-                return Err(error_at(
-                    *position,
-                    format!("attachment '{name}' needs a '{}' parameter", expected.name),
-                ));
-            };
-            expressions.push(expression::closure(
-                value, names, state, prop_types, scopes, scope,
-            )?);
-        }
-        if params.len() != hooks.params.len() {
-            return Err(error_at(
-                *position,
-                format!(
-                    "attachment '{name}' takes {} parameters",
-                    hooks.params.len()
-                ),
-            ));
-        }
-        let events = &hooks.events.semantic;
-        let raw_events = &hooks.events.raw;
-        out.start(format_args!(
-            "let _ = build.capability(brul::Capability::hooks(brul::Hooks {{\n"
-        ));
-        out.indented(|out| {
-            out.line(format_args!("widget: {widget}.id(),"));
-            out.line(format_args!("state: brul::StateId::new({id}u64),"));
-            out.line(format_args!("component: std::rc::Rc::clone(component),"));
-            out.line(format_args!("params: vec![{}],", expressions.join(", ")));
-            out.line(format_args!("apply: {},", hooks.apply));
-            out.line(format_args!("event: {},", hooks.event));
-            out.line(format_args!("cleanup: {},", hooks.cleanup));
-            let kinds = EventKind::ALL
-                .iter()
-                .copied()
-                .filter(|kind| {
-                    kind.dispatch_kind() == *kind
-                        && (events.contains(kind) || events.contains(&kind.dispatch_kind()))
+                .map(|(name, value)| AttachParam {
+                    name: name.clone(),
+                    value: value.clone(),
                 })
-                .map(|kind| format!("brul::EventKind::{}", kind.field()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            out.line(format_args!("events: brul::EventSet::from([{kinds}]),"));
-            let raw_kinds = RawKind::ALL
-                .iter()
-                .copied()
-                .filter(|kind| kind.dispatch_kind() == *kind && raw_events.contains(kind))
-                .map(|kind| format!("brul::RawKind::{}", kind.field()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            out.line(format_args!(
-                "raw_events: brul::RawEventSet::from([{raw_kinds}]),"
-            ));
-            Ok::<(), Error>(())
-        })?;
-        out.line(format_args!("}}));"));
+                .collect();
+            hooks_binding(
+                out,
+                HooksSpec {
+                    name,
+                    params: &params,
+                    position: *position,
+                    target: &target,
+                    id,
+                    context,
+                    scopes,
+                    scope,
+                },
+            )?;
+        }
     }
+    Ok(())
+}
+
+pub(super) struct HooksSpec<'a> {
+    pub(super) name: &'a str,
+    pub(super) params: &'a [AttachParam],
+    pub(super) position: Position,
+    pub(super) target: &'a str,
+    pub(super) id: StateId,
+    pub(super) context: &'a CodegenContext<'a>,
+    pub(super) scopes: &'a [ScopeInfo],
+    pub(super) scope: Option<usize>,
+}
+
+pub(super) fn hooks_binding(out: &mut Out<'_>, spec: HooksSpec<'_>) -> Result<(), Error> {
+    let HooksSpec {
+        name,
+        params,
+        position,
+        target,
+        id,
+        context,
+        scopes,
+        scope,
+    } = spec;
+    let Some(spec) = context.capabilities.specs.get(name).cloned() else {
+        return Err(error_at(position, format!("unknown attachment '{name}'")));
+    };
+    let Some(hooks) = spec.hooks else {
+        return Err(error_at(
+            position,
+            format!("capability '{name}' has no hooks"),
+        ));
+    };
+    let mut expressions = Vec::with_capacity(hooks.params.len());
+    for expected in &hooks.params {
+        let Some(given) = params
+            .iter()
+            .find(|given| given.name == expected.name.as_str())
+        else {
+            return Err(error_at(
+                position,
+                format!("attachment '{name}' needs a '{}' parameter", expected.name),
+            ));
+        };
+        expressions.push(expression::closure(
+            &given.value,
+            context.names,
+            context.state,
+            context.prop_types,
+            scopes,
+            scope,
+        )?);
+    }
+    if params.len() != hooks.params.len() {
+        return Err(error_at(
+            position,
+            format!(
+                "attachment '{name}' takes {} parameters",
+                hooks.params.len()
+            ),
+        ));
+    }
+    let events = &hooks.events.semantic;
+    let raw_events = &hooks.events.raw;
+    out.start(format_args!(
+        "let _ = build.capability(brul::Capability::hooks(brul::Hooks {{\n"
+    ));
+    out.indented(|out| {
+        out.line(format_args!("target: {target},"));
+        out.line(format_args!(
+            "state: brul::StateId::new({value}u64),",
+            value = id.get()
+        ));
+        out.line(format_args!("component: std::rc::Rc::clone(component),"));
+        out.line(format_args!("params: vec![{}],", expressions.join(", ")));
+        out.line(format_args!("apply: {},", hooks.apply));
+        out.line(format_args!("event: {},", hooks.event));
+        out.line(format_args!("cleanup: {},", hooks.cleanup));
+        let kinds = EventKind::ALL
+            .iter()
+            .copied()
+            .filter(|kind| {
+                kind.dispatch_kind() == *kind
+                    && (events.contains(kind) || events.contains(&kind.dispatch_kind()))
+            })
+            .map(|kind| format!("brul::EventKind::{}", kind.field()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.line(format_args!("events: brul::EventSet::from([{kinds}]),"));
+        let raw_kinds = RawKind::ALL
+            .iter()
+            .copied()
+            .filter(|kind| kind.dispatch_kind() == *kind && raw_events.contains(kind))
+            .map(|kind| format!("brul::RawKind::{}", kind.field()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.line(format_args!(
+            "raw_events: brul::RawEventSet::from([{raw_kinds}]),"
+        ));
+        Ok::<(), Error>(())
+    })?;
+    out.line(format_args!("}}));"));
     Ok(())
 }
 

@@ -140,7 +140,7 @@ pub fn editor_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
             let widget0 = editor_styled(brul::gui::Widget::input(""), &[0], theme);
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<EditorScriptState>().draft.get()) })));
             let _ = build.capability(brul::Capability::hooks(brul::Hooks {
-                widget: widget0.id(),
+                target: brul::EventTarget::Widget(widget0.id()),
                 state: brul::StateId::new(5705614215138471u64),
                 component: std::rc::Rc::clone(component),
                 params: vec![|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text(component.state::<EditorScriptState>().draft.get()); Ok(value) }],

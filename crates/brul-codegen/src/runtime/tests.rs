@@ -605,6 +605,17 @@ fn an_image_binding_shows_an_empty_texture_for_null() {
 }
 
 #[test]
+fn a_window_target_has_no_element() {
+    let mut build = Build::new();
+    build.set_target(
+        EventTarget::Window,
+        StateId::new(1),
+        Rc::new(RefCell::new(Component::new())),
+    );
+    assert!(build.try_element().is_none());
+}
+
+#[test]
 fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
     while take_pending().is_some() {}
 
@@ -615,7 +626,11 @@ fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
     let tree = Rc::new(RefCell::new(WidgetTree::new(root)));
     let mut build = Build::new();
     build.set_tree(Rc::clone(&tree));
-    build.set_target(id, StateId::new(9), Rc::new(RefCell::new(Component::new())));
+    build.set_target(
+        EventTarget::Widget(id),
+        StateId::new(9),
+        Rc::new(RefCell::new(Component::new())),
+    );
 
     let element = build.element();
     assert_eq!(element.edit_buffer().expect("input").text(), "abc");

@@ -8,12 +8,17 @@ use brul_syntax::script::Program;
 use crate::error_at;
 use crate::window::HandlerArg;
 
+pub(crate) struct HandlerSpec {
+    pub event: EventKind,
+    pub function: String,
+}
+
 pub(super) struct Events {
     pub drag: bool,
     pub focusable: bool,
     pub multiline: bool,
     pub modal: bool,
-    pub handlers: Vec<(EventKind, String)>,
+    pub handlers: Vec<HandlerSpec>,
 }
 
 pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Events, Error> {
@@ -21,7 +26,7 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
     let mut focusable = false;
     let mut multiline = false;
     let mut modal = false;
-    let mut handlers = Vec::new();
+    let mut handlers: Vec<HandlerSpec> = Vec::new();
     for arg in &element.args {
         if let Some(enabled) = literal_flag(arg, "focusable")? {
             focusable = enabled;
@@ -66,17 +71,17 @@ pub(super) fn widget(element: &Element, program: Option<&Program>) -> Result<Eve
                 "close events are only supported on the window",
             ));
         }
-        if handlers
-            .iter()
-            .any(|item: &(EventKind, String)| item.0 == event)
-        {
+        if handlers.iter().any(|item| item.event == event) {
             return Err(error_at(
                 element.position,
                 format!("event '{}' is handled twice", event.name()),
             ));
         }
         define(handler, program, params(event), element.position)?;
-        handlers.push((event, handler.clone()));
+        handlers.push(HandlerSpec {
+            event,
+            function: handler.clone(),
+        });
     }
     Ok(Events {
         drag,
@@ -118,8 +123,8 @@ fn literal_flag(arg: &Arg, name: &str) -> Result<Option<bool>, Error> {
 pub(super) fn window(
     args: &[HandlerArg],
     program: Option<&Program>,
-) -> Result<Vec<(EventKind, String)>, Error> {
-    let mut handlers = Vec::new();
+) -> Result<Vec<HandlerSpec>, Error> {
+    let mut handlers: Vec<HandlerSpec> = Vec::new();
     for item in args {
         let Ok(event) = item.event.parse::<EventKind>() else {
             return Err(error_at(
@@ -133,17 +138,17 @@ pub(super) fn window(
                 format!("window event '{}' is not supported yet", event.name()),
             ));
         }
-        if handlers
-            .iter()
-            .any(|other: &(EventKind, String)| other.0 == event)
-        {
+        if handlers.iter().any(|other| other.event == event) {
             return Err(error_at(
                 item.position,
                 format!("event '{}' is handled twice", event.name()),
             ));
         }
         define(&item.function, program, params(event), item.position)?;
-        handlers.push((event, item.function.clone()));
+        handlers.push(HandlerSpec {
+            event,
+            function: item.function.clone(),
+        });
     }
     Ok(handlers)
 }

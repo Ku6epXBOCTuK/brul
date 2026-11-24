@@ -3,7 +3,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use brul_event::{EventSet, RawEventSet};
-use brul_gui::{DispatchEvent, EditBuffer, Position, WidgetId, WidgetTree};
+use brul_gui::{DispatchEvent, EditBuffer, EventTarget, Position, WidgetId, WidgetTree};
 use brul_script::{Component, Dyn, Error as ScriptError};
 
 use super::{Build, ComponentHandle, StateId, ViewError};
@@ -21,7 +21,7 @@ pub enum Dispatch {
 
 #[derive(Clone)]
 pub struct Hooks {
-    pub widget: WidgetId,
+    pub target: EventTarget,
     pub state: StateId,
     pub component: ComponentHandle,
     pub params: Vec<Param>,

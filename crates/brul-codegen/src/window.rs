@@ -11,13 +11,31 @@ pub struct HandlerArg {
     pub position: Position,
 }
 
-pub fn arguments(declaration: &Declaration) -> Result<(WindowConfig, Vec<HandlerArg>), Error> {
+pub struct AttachParam {
+    pub name: String,
+    pub value: Expr,
+}
+
+pub struct AttachArg {
+    pub name: String,
+    pub params: Vec<AttachParam>,
+    pub position: Position,
+}
+
+pub struct WindowArgs {
+    pub config: WindowConfig,
+    pub handlers: Vec<HandlerArg>,
+    pub attaches: Vec<AttachArg>,
+}
+
+pub fn arguments(declaration: &Declaration) -> Result<WindowArgs, Error> {
     let mut config = WindowConfig {
         frameless: false,
         transparent: false,
         ..WindowConfig::default()
     };
     let mut handlers = Vec::new();
+    let mut attaches = Vec::new();
     let mut x = None;
     let mut y = None;
     for arg in declaration.args() {
@@ -32,7 +50,22 @@ pub fn arguments(declaration: &Declaration) -> Result<(WindowConfig, Vec<Handler
                 function: handler.clone(),
                 position: declaration.position,
             }),
-            Arg::Class(_) | Arg::Anchor(_) | Arg::Name(_) | Arg::Attach { .. } => {
+            Arg::Attach {
+                name,
+                params,
+                position,
+            } => attaches.push(AttachArg {
+                name: name.clone(),
+                params: params
+                    .iter()
+                    .map(|(name, value)| AttachParam {
+                        name: name.clone(),
+                        value: value.clone(),
+                    })
+                    .collect(),
+                position: *position,
+            }),
+            Arg::Class(_) | Arg::Anchor(_) | Arg::Name(_) => {
                 return Err(error_at(
                     declaration.position,
                     "window arguments must be named",
@@ -62,7 +95,11 @@ pub fn arguments(declaration: &Declaration) -> Result<(WindowConfig, Vec<Handler
             format!("window arguments are invalid: {error}"),
         )
     })?;
-    Ok((config, handlers))
+    Ok(WindowArgs {
+        config,
+        handlers,
+        attaches,
+    })
 }
 
 fn coordinate(value: &Expr, name: &str) -> Result<f64, Error> {
@@ -203,12 +240,26 @@ mod tests {
     #[test]
     fn a_window_can_be_placed_or_centered() {
         let args = vec![number_arg("x", -40.0), number_arg("y", 120.0)];
-        let (config, _) = arguments(&window(args)).expect("arguments");
+        let config = arguments(&window(args)).expect("arguments").config;
         assert_eq!(config.position, Some(WindowPosition { x: -40.0, y: 120.0 }));
 
-        let (config, _) = arguments(&window(vec![flag_arg("centered", true)])).expect("arguments");
+        let config = arguments(&window(vec![flag_arg("centered", true)]))
+            .expect("arguments")
+            .config;
         assert!(config.centered);
         assert!(config.position.is_none());
+    }
+
+    #[test]
+    fn a_window_accepts_an_attachment() {
+        let args = vec![Arg::Attach {
+            name: "keys".to_owned(),
+            params: Vec::new(),
+            position: Position::default(),
+        }];
+        let args = arguments(&window(args)).expect("arguments");
+        assert_eq!(args.attaches.len(), 1);
+        assert_eq!(args.attaches[0].name, "keys");
     }
 
     #[test]
@@ -232,7 +283,7 @@ mod tests {
 
     #[test]
     fn a_plain_window_is_decorated_and_opaque() {
-        let (config, _) = arguments(&window(Vec::new())).expect("arguments");
+        let config = arguments(&window(Vec::new())).expect("arguments").config;
 
         assert!(!config.frameless);
         assert!(!config.transparent);
@@ -241,7 +292,7 @@ mod tests {
     #[test]
     fn a_window_can_start_hidden() {
         let args = vec![flag_arg("visible", false)];
-        let (config, _) = arguments(&window(args)).expect("arguments");
+        let config = arguments(&window(args)).expect("arguments").config;
 
         assert!(!config.visible);
         assert!(WindowConfig::default().visible);
@@ -249,18 +300,18 @@ mod tests {
 
     #[test]
     fn a_window_scrolls_its_root_unless_it_says_otherwise() {
-        let (config, _) = arguments(&window(Vec::new())).expect("arguments");
+        let config = arguments(&window(Vec::new())).expect("arguments").config;
         assert!(config.scroll);
 
         let args = vec![flag_arg("scroll", false)];
-        let (config, _) = arguments(&window(args)).expect("arguments");
+        let config = arguments(&window(args)).expect("arguments").config;
         assert!(!config.scroll);
     }
 
     #[test]
     fn explicit_false_flags_are_accepted() {
         let args = vec![flag_arg("frameless", false), flag_arg("transparent", false)];
-        let (config, _) = arguments(&window(args)).expect("arguments");
+        let config = arguments(&window(args)).expect("arguments").config;
 
         assert!(!config.frameless);
         assert!(!config.transparent);

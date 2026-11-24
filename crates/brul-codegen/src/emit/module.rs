@@ -16,7 +16,7 @@ use crate::commands;
 use crate::discovery::Capabilities;
 use crate::error_at;
 use crate::loader::Import;
-use crate::runtime::EventKind;
+use crate::runtime::StateId;
 use crate::source::Script;
 use crate::{Definition, Registry, Resource};
 
@@ -27,6 +27,7 @@ use super::Out;
 use super::StructureNames;
 use super::anchor::{self, AnchorIds};
 use super::classes::ClassNames;
+use super::view::ViewSpec;
 use super::{alloc, classes, events, names, resources, script, state, style, theme, view};
 
 const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
@@ -253,9 +254,10 @@ fn module_at(
     theme::id(&mut head, &parsed.stylesheet)?;
 
     for (index, view) in views.iter().enumerate() {
-        let (config, window_handlers) = crate::arguments(view.declaration)?;
+        let window_args = crate::arguments(view.declaration)?;
+        let config = window_args.config;
         icons.push(icon_resource(view.declaration, view.resources)?);
-        let window_handlers = events::window(&window_handlers, view.program)?;
+        let window_handlers = events::window(&window_args.handlers, view.program)?;
         let root = crate::root(view.declaration)?;
         let script_name = format!("{}_script", view.base);
         let prefix = format!("{}_", view.base);
@@ -269,9 +271,14 @@ fn module_at(
         let mut class_names = ClassNames::default();
         emit_view(
             &mut head,
-            &format!("{}_view", view.base),
-            root,
-            &window_handlers,
+            ViewSpec {
+                name: &format!("{}_view", view.base),
+                root,
+                handlers: &window_handlers,
+                attaches: &window_args.attaches,
+                hooks_state: StateId::for_source(&view.declaration.name, view.declaration.position),
+                kind: ViewKind::Window,
+            },
             &CodegenContext {
                 capabilities,
                 registry: &registry,
@@ -295,7 +302,6 @@ fn module_at(
                 dynamic_classes: &mut dynamic_classes,
                 classes: &mut class_names,
             },
-            ViewKind::Window,
         )?;
         append_functions(&mut head_functions, &functions);
         emit_tail(
@@ -486,9 +492,14 @@ fn emit_component(
     body.push_str(HEADER);
     emit_view(
         &mut body,
-        &format!("{prefix}view"),
-        root,
-        &[],
+        ViewSpec {
+            name: &format!("{prefix}view"),
+            root,
+            handlers: &[],
+            attaches: &[],
+            hooks_state: StateId::new(0),
+            kind: ViewKind::Component,
+        },
         &CodegenContext {
             capabilities,
             registry,
@@ -512,7 +523,6 @@ fn emit_component(
             dynamic_classes: &mut dynamic_classes,
             classes: &mut class_names,
         },
-        ViewKind::Component,
     )?;
     emit_tail(
         &mut body,
@@ -556,29 +566,26 @@ fn append_functions(out: &mut String, functions: &[String]) {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum ViewKind {
+pub(super) enum ViewKind {
     Window,
     Component,
 }
 
 impl ViewKind {
-    fn typed(self) -> bool {
+    pub(super) fn typed(self) -> bool {
         matches!(self, Self::Window)
     }
 }
 
 fn emit_view<'a>(
     out: &mut String,
-    name: &str,
-    root: &Element,
-    handlers: &[(EventKind, String)],
+    spec: ViewSpec<'a>,
     context: &'a CodegenContext<'a>,
     outputs: EmitOutputs<'a>,
-    kind: ViewKind,
 ) -> Result<(), Error> {
-    let slots = matches!(kind, ViewKind::Component);
+    let slots = matches!(spec.kind, ViewKind::Component);
     let mut emit = Emit::new(context, outputs, slots);
-    view::view(out, name, root, handlers, &mut emit, kind.typed())
+    view::view(out, &spec, &mut emit)
 }
 
 fn emit_tail(

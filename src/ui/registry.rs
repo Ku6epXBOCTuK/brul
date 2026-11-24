@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use brul_codegen::runtime::{self, Build, apply_capability};
-use brul_gui::{WidgetId, WidgetTree};
+use brul_gui::{EventTarget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 
 use super::apply_prop;
@@ -61,7 +61,7 @@ impl Owner for ElementOwner {
             Self::Binding(binding) => Some(binding.widget),
             Self::Prop(owner) => Some(owner.binding.widget),
             Self::Structure(owner) => Some(owner.structure.parent),
-            Self::Capability(owner) => Some(owner.hooks.widget),
+            Self::Capability(owner) => owner.hooks.target.widget(),
             Self::Handler(handler) => handler.widget,
         }
     }
@@ -169,9 +169,12 @@ impl<O: Owner> Registry<O> {
 }
 
 impl Registry<ElementOwner> {
-    pub(super) fn capabilities(&self, widget: WidgetId) -> impl Iterator<Item = &CapabilityOwner> {
+    pub(super) fn capabilities(
+        &self,
+        target: &EventTarget,
+    ) -> impl Iterator<Item = &CapabilityOwner> {
         self.by_widget
-            .get(&Some(widget))
+            .get(&target.widget())
             .into_iter()
             .flatten()
             .filter_map(|at| match &self.entries[*at].owner {
@@ -229,9 +232,8 @@ pub(super) fn owners(
         })
     }));
     owners.extend(capabilities.into_iter().map(|hooks| {
-        let widget = hooks.widget;
         ElementOwner::Capability(CapabilityOwner {
-            state: hooks.state.for_widget(widget),
+            state: hooks.state.for_target(&hooks.target),
             hooks,
         })
     }));
@@ -243,7 +245,7 @@ pub(super) fn capability_context(
     tree: &Rc<RefCell<WidgetTree>>,
     states: &SharedStates,
     sink: &Option<Arc<dyn EventSink>>,
-    widget: WidgetId,
+    target: EventTarget,
     state: StateId,
     component: &ComponentHandle,
 ) -> Build {
@@ -251,7 +253,7 @@ pub(super) fn capability_context(
     build.set_tree(Rc::clone(tree));
     build.set_states(Rc::clone(states));
     build.set_event_sink(sink.clone());
-    build.set_target(widget, state, Rc::clone(component));
+    build.set_target(target, state, Rc::clone(component));
     build
 }
 
@@ -311,7 +313,7 @@ fn attach_structure(owner: &StructureOwner, scope: &EffectScope, ctx: &Context) 
 }
 
 fn attach_capability(owner: &CapabilityOwner, scope: &EffectScope, ctx: &Context) {
-    let widget = owner.hooks.widget;
+    let target = owner.hooks.target;
     let state = owner.state;
     let component = Rc::clone(&owner.hooks.component);
     let cleanup = owner.hooks.cleanup;
@@ -330,7 +332,7 @@ fn attach_capability(owner: &CapabilityOwner, scope: &EffectScope, ctx: &Context
             &cleanup_tree,
             &cleanup_states,
             &cleanup_sink,
-            widget,
+            target,
             state,
             &cleanup_component,
         );
@@ -347,7 +349,7 @@ fn attach_capability(owner: &CapabilityOwner, scope: &EffectScope, ctx: &Context
                 &apply_tree,
                 &apply_states,
                 &apply_sink,
-                widget,
+                target,
                 state,
                 &apply_component,
             );

@@ -79,7 +79,11 @@ fn attach_shims_create_update_event_and_cleanup_state() {
     let mut ctx = Build::new();
     ctx.set_tree(tree);
     ctx.set_states(Rc::clone(&states));
-    ctx.set_target(brul::gui::WidgetId::new(1), state_id, Rc::clone(&component));
+    ctx.set_target(
+        brul::EventTarget::Widget(brul::gui::WidgetId::new(1)),
+        state_id,
+        Rc::clone(&component),
+    );
 
     let first = [Dyn::num(1.0), Dyn::flag(false), Dyn::text("first")];
     __brul_attach_counter_apply(&mut ctx, state_id, &first).expect("first apply");

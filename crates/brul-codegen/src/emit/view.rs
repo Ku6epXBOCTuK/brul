@@ -1,22 +1,39 @@
 use brul_syntax::error::Error;
 use brul_syntax::markup::Element;
 
-use crate::runtime::EventKind;
+use crate::runtime::StateId;
+use crate::window::AttachArg;
 
 use super::Emit;
 use super::Frame;
 use super::Out;
-use super::element::widget;
+use super::element::{HooksSpec, hooks_binding, widget};
+use super::events::HandlerSpec;
+use super::module::ViewKind;
+
+pub(super) struct ViewSpec<'a> {
+    pub(super) name: &'a str,
+    pub(super) root: &'a Element,
+    pub(super) handlers: &'a [HandlerSpec],
+    pub(super) attaches: &'a [AttachArg],
+    pub(super) hooks_state: StateId,
+    pub(super) kind: ViewKind,
+}
 
 pub(super) fn view(
     out: &mut String,
-    name: &str,
-    root: &Element,
-    handlers: &[(EventKind, String)],
+    spec: &ViewSpec<'_>,
     emit: &mut Emit<'_>,
-    typed: bool,
 ) -> Result<(), Error> {
-    let theme = match typed {
+    let ViewSpec {
+        name,
+        root,
+        handlers,
+        attaches,
+        hooks_state,
+        kind,
+    } = spec;
+    let theme = match kind.typed() {
         true => "Option<ThemeId>",
         false => "Option<&str>",
     };
@@ -26,22 +43,38 @@ pub(super) fn view(
         "pub fn {name}(theme: {theme}, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {{"
     ));
     out.indented(|out| -> Result<(), Error> {
-        if typed {
+        if kind.typed() {
             out.line(format_args!("let theme = theme.map(brul::Theme::name);"));
         }
         out.line(format_args!("component.borrow_mut().set_names(names());"));
         out.line(format_args!("let mut bindings = Vec::new();"));
         out.line(format_args!("let mut handlers = Vec::new();"));
         out.line(format_args!("let mut props = Vec::new();"));
+        for attach in *attaches {
+            hooks_binding(
+                out,
+                HooksSpec {
+                    name: &attach.name,
+                    params: &attach.params,
+                    position: attach.position,
+                    target: "brul::EventTarget::Window",
+                    id: *hooks_state,
+                    context: emit.context,
+                    scopes: &[],
+                    scope: None,
+                },
+            )?;
+        }
         out.line(format_args!("let widget = {{"));
         let mut counter = 0;
         out.indented(|out| widget(out, root, emit, frame, &mut counter))?;
         out.end();
         out.line(format_args!("}};"));
-        for (event, handler) in handlers {
+        for handler in *handlers {
             out.line(format_args!(
-                "handlers.push(brul::Handler::new(component, None, brul::EventKind::{event:?}, {}));",
-                super::script::event_call(emit.context.script_name, handler)
+                "handlers.push(brul::Handler::new(component, None, brul::EventKind::{:?}, {}));",
+                handler.event,
+                super::script::event_call(emit.context.script_name, &handler.function)
             ));
         }
         out.line(format_args!("Ok(brul::Built {{"));

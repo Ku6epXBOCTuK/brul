@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use brul_gui::{ClipboardData, UiEvent, WidgetId, WidgetTree};
+use brul_gui::{ClipboardData, EventTarget, UiEvent, WidgetId, WidgetTree};
 use brul_script::Value;
 
 use super::component::ComponentHandle;
@@ -23,7 +23,7 @@ pub struct Build {
     event_sink: Option<Arc<dyn super::EventSink>>,
     clipboard: Option<Rc<dyn super::Clipboard>>,
     tree: Option<Rc<RefCell<WidgetTree>>>,
-    widget: Option<WidgetId>,
+    target: Option<EventTarget>,
     state: Option<StateId>,
     component: Option<ComponentHandle>,
 }
@@ -76,8 +76,8 @@ impl Build {
         self.tree = Some(tree);
     }
 
-    pub fn set_target(&mut self, widget: WidgetId, state: StateId, component: ComponentHandle) {
-        self.widget = Some(widget);
+    pub fn set_target(&mut self, target: EventTarget, state: StateId, component: ComponentHandle) {
+        self.target = Some(target);
         self.state = Some(state);
         self.component = Some(component);
     }
@@ -91,10 +91,12 @@ impl Build {
     }
 
     pub fn element(&self) -> Element<'_> {
-        Element::new(
-            self.widget.expect("capability widget"),
-            self.tree.as_ref().expect("capability widget tree"),
-        )
+        self.try_element().expect("capability widget")
+    }
+
+    pub fn try_element(&self) -> Option<Element<'_>> {
+        let id = self.target?.widget()?;
+        Some(Element::new(id, self.tree.as_ref()?))
     }
 
     pub fn focused(&self) -> Option<WidgetId> {

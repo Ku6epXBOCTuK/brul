@@ -3,9 +3,9 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{
-    Atlas, Cursor, Dimension, Dirty, DispatchEvent, Event, KeyPress, LayoutStyle, PlatformViewId,
-    RawEvent, RawUiEvent, Size, StyleSet, TextEngine, TimerOwner, UiEvent, Widget, WidgetError,
-    WidgetId, WidgetSnapshot, WidgetStyle, WidgetTree,
+    Atlas, Cursor, Dimension, Dirty, Event, KeyPress, LayoutStyle, PlatformViewId, RawEvent,
+    RawUiEvent, Size, StyleSet, TextEngine, TimerOwner, UiEvent, Widget, WidgetError,
+    WidgetSnapshot, WidgetStyle, WidgetTree,
 };
 
 use winit::event_loop::ControlFlow;

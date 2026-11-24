@@ -1148,7 +1148,7 @@ fn attachment_reruns_vetoes_events_and_cleans_up() {
     let widget = Widget::text("");
     let id = widget.id();
     let hooks = Hooks {
-        widget: id,
+        target: EventTarget::Widget(id),
         state: StateId::new(7),
         component: Rc::clone(&component),
         params: vec![|component: &mut Component| -> Result<Dyn, Error> {
@@ -1305,7 +1305,7 @@ fn a_raw_unchanged_key_reaches_the_capability_only() {
         props: Vec::new(),
     };
     let hooks = Hooks {
-        widget: id,
+        target: EventTarget::Widget(id),
         state: StateId::new(7),
         component: Rc::clone(&component),
         params: Vec::new(),
@@ -1342,6 +1342,206 @@ fn a_raw_unchanged_key_reaches_the_capability_only() {
     let component = ui.component.borrow();
     assert_eq!(component.read("attach"), Ok(Value::Number(id.get() as f64)));
     assert!(!matches!(component.read("seen"), Ok(Value::Object(_))));
+    assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
+}
+
+fn window_key_capability(ctx: &mut Build, _state: StateId, event: &DispatchEvent) -> Dispatch {
+    match event {
+        DispatchEvent::Raw(_) => {
+            ctx.component()
+                .borrow_mut()
+                .assign("attach", Value::Bool(true))
+                .expect("attach");
+            ctx.emit_event(UiEvent::window(Event::key(
+                brul_gui::KeyPress::from("Enter"),
+                brul_gui::KeyModifiers::default(),
+            )));
+        }
+        DispatchEvent::Semantic(_) => {
+            ctx.component()
+                .borrow_mut()
+                .assign("seen", Value::Bool(true))
+                .expect("seen");
+        }
+    }
+    Dispatch::Continue
+}
+
+#[test]
+fn a_window_capability_sees_a_raw_key_and_emits_a_semantic_key() {
+    let component = component_with(&["attach", "seen", "ran", "off"]);
+    let built = Built {
+        widget: Widget::text(""),
+        bindings: Vec::new(),
+        handlers: vec![Handler::new(&component, None, EventKind::Key, set_ran)],
+        props: Vec::new(),
+    };
+    let hooks = Hooks {
+        target: EventTarget::Window,
+        state: StateId::new(7),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: window_key_capability,
+        cleanup: |_, _| {},
+        events: EventSet::from([EventKind::Key]),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+    };
+    let mut ui = Ui::assemble_with(
+        Rc::clone(&component),
+        built,
+        themed_view,
+        None,
+        AssemblyParts {
+            structures: Vec::new(),
+            capabilities: vec![hooks],
+            nested: Vec::new(),
+            states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
+        },
+        Rc::new(RefCell::new(Vec::new())),
+        false,
+    );
+
+    ui.dispatch(&[RawUiEvent::window(brul_gui::RawEvent::key(
+        brul_gui::KeyPress::from("Enter"),
+        brul_gui::KeyModifiers::default(),
+    ))
+    .into()]);
+
+    let component = ui.component.borrow();
+    assert_eq!(component.read("attach"), Ok(Value::Bool(true)));
+    assert_eq!(component.read("seen"), Ok(Value::Bool(true)));
+    assert_eq!(component.read("ran"), Ok(Value::Bool(true)));
+    assert_ne!(component.read("off"), Ok(Value::Bool(true)));
+}
+
+#[test]
+fn a_raw_window_key_stays_with_capabilities() {
+    let component = component_with(&["attach", "ran"]);
+    let built = Built {
+        widget: Widget::text(""),
+        bindings: Vec::new(),
+        handlers: vec![Handler::new(&component, None, EventKind::Key, set_ran)],
+        props: Vec::new(),
+    };
+    let hooks = Hooks {
+        target: EventTarget::Window,
+        state: StateId::new(7),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: |ctx: &mut Build, _: StateId, _: &DispatchEvent| {
+            ctx.component()
+                .borrow_mut()
+                .assign("attach", Value::Bool(true))
+                .expect("attach");
+            Dispatch::Continue
+        },
+        cleanup: |_, _| {},
+        events: EventSet::empty(),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+    };
+    let mut ui = Ui::assemble_with(
+        Rc::clone(&component),
+        built,
+        themed_view,
+        None,
+        AssemblyParts {
+            structures: Vec::new(),
+            capabilities: vec![hooks],
+            nested: Vec::new(),
+            states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
+        },
+        Rc::new(RefCell::new(Vec::new())),
+        false,
+    );
+
+    ui.dispatch(&[RawUiEvent::window(brul_gui::RawEvent::key(
+        brul_gui::KeyPress::from("Enter"),
+        brul_gui::KeyModifiers::default(),
+    ))
+    .into()]);
+
+    let component = ui.component.borrow();
+    assert_eq!(component.read("attach"), Ok(Value::Bool(true)));
+    assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
+}
+
+#[test]
+fn a_window_capability_can_stop_the_dispatch_chain() {
+    let component = component_with(&["attach", "off", "ran"]);
+    let built = Built {
+        widget: Widget::text(""),
+        bindings: Vec::new(),
+        handlers: vec![Handler::new(&component, None, EventKind::Key, set_ran)],
+        props: Vec::new(),
+    };
+    let stop = Hooks {
+        target: EventTarget::Window,
+        state: StateId::new(7),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: |ctx: &mut Build, _: StateId, _: &DispatchEvent| {
+            ctx.component()
+                .borrow_mut()
+                .assign("attach", Value::Bool(true))
+                .expect("attach");
+            Dispatch::Stop
+        },
+        cleanup: |_, _| {},
+        events: EventSet::from([EventKind::Key]),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+    };
+    let later = Hooks {
+        target: EventTarget::Window,
+        state: StateId::new(8),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: probe_apply,
+        event: |ctx: &mut Build, _: StateId, _: &DispatchEvent| {
+            ctx.component()
+                .borrow_mut()
+                .assign("off", Value::Bool(true))
+                .expect("off");
+            Dispatch::Continue
+        },
+        cleanup: |_, _| {},
+        events: EventSet::from([EventKind::Key]),
+        raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
+    };
+    let mut ui = Ui::assemble_with(
+        Rc::clone(&component),
+        built,
+        themed_view,
+        None,
+        AssemblyParts {
+            structures: Vec::new(),
+            capabilities: vec![stop, later],
+            nested: Vec::new(),
+            states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
+        },
+        Rc::new(RefCell::new(Vec::new())),
+        false,
+    );
+
+    ui.dispatch(&[UiEvent::window(Event::key(
+        brul_gui::KeyPress::from("Enter"),
+        brul_gui::KeyModifiers::default(),
+    ))
+    .into()]);
+    ui.dispatch(&[RawUiEvent::window(brul_gui::RawEvent::key(
+        brul_gui::KeyPress::from("Enter"),
+        brul_gui::KeyModifiers::default(),
+    ))
+    .into()]);
+
+    let component = ui.component.borrow();
+    assert_eq!(component.read("attach"), Ok(Value::Bool(true)));
+    assert_ne!(component.read("off"), Ok(Value::Bool(true)));
     assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
@@ -1398,7 +1598,7 @@ fn one_targeted_event_reaches_the_attachment_and_script_but_not_the_window() {
         props: Vec::new(),
     };
     let hooks = Hooks {
-        widget: id,
+        target: EventTarget::Widget(id),
         state: StateId::new(7),
         component: Rc::clone(&component),
         params: Vec::new(),

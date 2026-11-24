@@ -462,10 +462,7 @@ impl<T: Theme> Ui<T> {
         accepts: impl Fn(&Hooks) -> bool,
     ) -> bool {
         for target in &path.capabilities {
-            let Some(widget) = target.widget() else {
-                continue;
-            };
-            for owner in self.owners.capabilities(widget) {
+            for owner in self.owners.capabilities(target) {
                 if !accepts(&owner.hooks) {
                     continue;
                 }
@@ -473,7 +470,7 @@ impl<T: Theme> Ui<T> {
                     &self.tree,
                     &self.states,
                     &self.event_sink,
-                    widget,
+                    *target,
                     owner.state,
                     &owner.hooks.component,
                 );

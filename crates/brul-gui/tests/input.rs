@@ -1,6 +1,6 @@
 use brul_gui::{
-    Dimension, DispatchEvent, Event, EventTarget, KeyModifiers, KeyPress, LayoutStyle, RawEvent,
-    RawUiEvent, Size, TextEngine, UiEvent, Widget, WidgetId, WidgetTree,
+    Dimension, DispatchEvent, Event, KeyModifiers, KeyPress, LayoutStyle, RawEvent, RawUiEvent,
+    Size, TextEngine, Widget, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {

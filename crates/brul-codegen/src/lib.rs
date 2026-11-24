@@ -23,4 +23,4 @@ pub use discovery::Capabilities;
 pub use generate::{generate, generate_with};
 pub use loader::{Definition, Import, Registry, Resource, apply_overrides, load_entry, resolve};
 pub use source::{Source, parse as parse_source};
-pub use window::{HandlerArg, arguments, root};
+pub use window::{AttachArg, AttachParam, HandlerArg, WindowArgs, arguments, root};

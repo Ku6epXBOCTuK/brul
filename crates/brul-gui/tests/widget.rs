@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use brul_gui::{
-    Class, Color, Cursor, Dimension, Direction, DispatchEvent, Event, EventTarget, Layers,
-    LayoutPatch, LayoutStyle, Padding, Paint, RawEvent, Size, StyleSet, StyleState, TextAlign,
-    TextEngine, TextStyle, TextStylePatch, TextStyleSet, Texture, Transitions, Widget, WidgetError,
-    WidgetId, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
+    Class, Color, Cursor, Dimension, Direction, DispatchEvent, Event, Layers, LayoutPatch,
+    LayoutStyle, Padding, Paint, RawEvent, Size, StyleSet, StyleState, TextAlign, TextEngine,
+    TextStyle, TextStylePatch, TextStyleSet, Texture, Transitions, Widget, WidgetError, WidgetId,
+    WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {

@@ -72,6 +72,7 @@ goldens! {
     emits_a_cursor_property,
     emits_an_attachment_on_an_element,
     emits_an_attachment_on_a_component,
+    emits_an_attachment_on_a_window,
     emits_an_effect_binding,
     a_palette_without_themes_emits_an_empty_theme_id,
     a_window_icon_resource_reaches_the_window_config,
