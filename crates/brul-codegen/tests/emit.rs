@@ -31,7 +31,11 @@ fn discovers_capabilities_for_explicit_generation() {
     let capabilities = Capabilities::discover(&dir, &input).expect("capabilities");
     assert!(capabilities.commands.is_empty());
     assert!(capabilities.specs.contains_key("editor"));
+    assert!(capabilities.specs.contains_key("keyboard"));
+    assert!(capabilities.specs.contains_key("pointer"));
+    assert!(capabilities.specs.contains_key("scroll"));
     assert!(capabilities.specs.contains_key("Video"));
+    assert!(capabilities.specs.contains_key("WebView"));
     let module = generate_with(&input, &capabilities).expect("generated module");
     let expected = include_str!("fixtures/codegen/emits_an_attachment_on_an_element/expected.rs");
     assert_eq!(module.flat(), expected);
@@ -73,6 +77,8 @@ goldens! {
     emits_an_attachment_on_an_element,
     emits_an_attachment_on_a_component,
     emits_an_attachment_on_a_window,
+    emits_builtin_window_policies,
+    emits_a_window_that_overrides_a_builtin_policy,
     emits_an_effect_binding,
     a_palette_without_themes_emits_an_empty_theme_id,
     a_window_icon_resource_reaches_the_window_config,

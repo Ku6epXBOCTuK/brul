@@ -38,6 +38,54 @@ pub fn editor_host_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
+    let _ = build.capability(brul::Capability::hooks(brul::Hooks {
+        target: brul::EventTarget::Window,
+        state: brul::StateId::source("editor_host", "attach:editor"),
+        component: std::rc::Rc::clone(component),
+        params: vec![],
+        apply: ::brul::policy::__brul_attach_editor_apply,
+        event: ::brul::policy::__brul_attach_editor_event,
+        raw_event: ::brul::policy::__brul_attach_editor_raw_event,
+        cleanup: ::brul::policy::__brul_attach_editor_cleanup,
+        events: brul::EventSet::from([]),
+        raw_events: brul::RawEventSet::from([brul::RawKind::Key, brul::RawKind::Ime, brul::RawKind::Paste]),
+    }));
+    let _ = build.capability(brul::Capability::hooks(brul::Hooks {
+        target: brul::EventTarget::Window,
+        state: brul::StateId::source("editor_host", "attach:keyboard"),
+        component: std::rc::Rc::clone(component),
+        params: vec![],
+        apply: ::brul::policy::__brul_attach_keyboard_apply,
+        event: ::brul::policy::__brul_attach_keyboard_event,
+        raw_event: ::brul::policy::__brul_attach_keyboard_raw_event,
+        cleanup: ::brul::policy::__brul_attach_keyboard_cleanup,
+        events: brul::EventSet::from([]),
+        raw_events: brul::RawEventSet::from([brul::RawKind::Key]),
+    }));
+    let _ = build.capability(brul::Capability::hooks(brul::Hooks {
+        target: brul::EventTarget::Window,
+        state: brul::StateId::source("editor_host", "attach:pointer"),
+        component: std::rc::Rc::clone(component),
+        params: vec![],
+        apply: ::brul::policy::__brul_attach_pointer_apply,
+        event: ::brul::policy::__brul_attach_pointer_event,
+        raw_event: ::brul::policy::__brul_attach_pointer_raw_event,
+        cleanup: ::brul::policy::__brul_attach_pointer_cleanup,
+        events: brul::EventSet::from([]),
+        raw_events: brul::RawEventSet::from([brul::RawKind::PointerEnter, brul::RawKind::PointerLeave, brul::RawKind::PointerCancel, brul::RawKind::PointerMove, brul::RawKind::Press, brul::RawKind::Release, brul::RawKind::Drag]),
+    }));
+    let _ = build.capability(brul::Capability::hooks(brul::Hooks {
+        target: brul::EventTarget::Window,
+        state: brul::StateId::source("editor_host", "attach:scroll"),
+        component: std::rc::Rc::clone(component),
+        params: vec![],
+        apply: ::brul::policy::__brul_attach_scroll_apply,
+        event: ::brul::policy::__brul_attach_scroll_event,
+        raw_event: ::brul::policy::__brul_attach_scroll_raw_event,
+        cleanup: ::brul::policy::__brul_attach_scroll_cleanup,
+        events: brul::EventSet::from([]),
+        raw_events: brul::RawEventSet::from([brul::RawKind::Wheel]),
+    }));
     let widget = {
         {
             let built = brul::instance(build, component, brul::Instance {
@@ -141,13 +189,13 @@ pub fn editor_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<EditorScriptState>().draft.get()) })));
             let _ = build.capability(brul::Capability::hooks(brul::Hooks {
                 target: brul::EventTarget::Widget(widget0.id()),
-                state: brul::StateId::source("editor", "TextInput/attach:editor"),
+                state: brul::StateId::source("editor", "TextInput/attach:custom_editor"),
                 component: std::rc::Rc::clone(component),
                 params: vec![|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text(component.state::<EditorScriptState>().draft.get()); Ok(value) }],
-                apply: crate::__brul_attach_editor_apply,
-                event: crate::__brul_attach_editor_event,
-                raw_event: crate::__brul_attach_editor_raw_event,
-                cleanup: crate::__brul_attach_editor_cleanup,
+                apply: crate::__brul_attach_custom_editor_apply,
+                event: crate::__brul_attach_custom_editor_event,
+                raw_event: crate::__brul_attach_custom_editor_raw_event,
+                cleanup: crate::__brul_attach_custom_editor_cleanup,
                 events: brul::EventSet::from([brul::EventKind::Key]),
                 raw_events: brul::RawEventSet::from([]),
             }));

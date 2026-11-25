@@ -9,10 +9,19 @@ use crate::capability::CapabilityTable;
 use crate::commands::Commands;
 use crate::error_at;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Capabilities {
     pub commands: Commands,
     pub specs: CapabilityTable,
+}
+
+impl Default for Capabilities {
+    fn default() -> Self {
+        Self {
+            commands: Commands::new(),
+            specs: crate::capability::builtins(),
+        }
+    }
 }
 
 impl Capabilities {

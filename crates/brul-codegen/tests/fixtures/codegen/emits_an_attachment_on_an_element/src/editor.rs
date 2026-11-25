@@ -1,12 +1,12 @@
 #[brul::attach(
-    name = "editor",
+    name = "custom_editor",
     events(Key, Input, Submit, Focus, Blur, Click),
     raw_events(Ime),
     update = editor_update,
     event = editor_event,
     cleanup = editor_cleanup
 )]
-pub fn editor(
+pub fn custom_editor(
     ctx: &brul::Build,
     value: String,
     multiline: bool,

@@ -1,0 +1,5 @@
+<markup>
+window Demo (use: keyboard()) {
+    Container { }
+}
+</markup>

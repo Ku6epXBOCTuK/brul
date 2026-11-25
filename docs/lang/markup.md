@@ -144,16 +144,20 @@ Space вставляет пробел, клик не посылается.
 
 `use: name(a: expr, ...)` прикрепляет к элементу Rust-функцию. Параметры —
 выражения скрипта, как у пропсов; функция может быть на Element или компоненте.
-Имя ищется в реестре `#[brul::attach]` исходников приложения.
+Имя ищется в реестре `#[brul::attach]` исходников приложения и среди встроенных
+политик `editor`, `keyboard`, `pointer`, `scroll`. Все четыре подключаются к
+каждому окну невидимо в этом порядке; `use:` с таким же именем заменяет только
+одноимённую встроенную политику. Window идёт последним в цепочке событий,
+поэтому пользовательский attach на элементе срабатывает раньше.
 
 ```brul
-TextInput (use: editor(value: draft, multiline: true)) { draft }
+TextInput (use: custom_editor(value: draft, multiline: true)) { draft }
 ```
 
 ```rust,ignore
-#[brul::attach(name = "editor", events(Key, Ime), update = editor_update,
-               event = editor_event, cleanup = editor_cleanup)]
-fn editor(ctx: &mut brul::Build, value: String, multiline: bool)
+#[brul::attach(name = "custom_editor", raw_events(Key, Ime, Paste),
+               raw_event = editor_raw)]
+fn custom_editor(ctx: &mut brul::Build, value: String, multiline: bool)
     -> Result<EditorState, brul::ViewError> { /* состояние */ }
 ```
 

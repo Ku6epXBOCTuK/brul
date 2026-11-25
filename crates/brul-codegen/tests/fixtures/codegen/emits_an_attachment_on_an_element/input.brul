@@ -4,6 +4,6 @@
 
 <markup>
 window EditorDemo (title: "editor") {
-    TextInput (use: editor(value: draft, multiline: true)) { draft }
+    TextInput (use: custom_editor(value: draft, multiline: true)) { draft }
 }
 </markup>

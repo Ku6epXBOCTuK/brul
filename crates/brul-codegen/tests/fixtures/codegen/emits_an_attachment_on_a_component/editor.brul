@@ -4,6 +4,6 @@
 
 <markup>
 component Editor {
-    TextInput (use: editor(value: draft)) { draft }
+    TextInput (use: custom_editor(value: draft)) { draft }
 }
 </markup>
