@@ -4,7 +4,10 @@
 	"description": "",
 	"main": "index.js",
 	"scripts": {
-		"format": "biome format --write ."
+		"format": "biome format --write .",
+		"format:check": "biome format .",
+		"check": "just check",
+		"post-check": "goh comments && pnpm run format && pnpm run check"
 	},
 	"keywords": [],
 	"author": "",
@@ -18,7 +21,7 @@
 	},
 	"packageManager": "pnpm@12.18.0",
 	"type": "module",
-	"dependencies": {
+	"devDependencies": {
 		"@biomejs/biome": "^2.6.5"
 	}
 }

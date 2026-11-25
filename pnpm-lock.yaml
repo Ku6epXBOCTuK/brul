@@ -165,7 +165,7 @@ settings:
 importers:
 
   .:
-    dependencies:
+    devDependencies:
       '@biomejs/biome':
         specifier: ^2.6.5
         version: 2.6.5

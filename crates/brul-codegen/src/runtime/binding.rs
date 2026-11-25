@@ -257,7 +257,7 @@ pub fn text(
             &PropType::String,
             component
                 .read(name)
-                .map_or_else(|_| "unknown", |value| value.type_name()),
+                .map_or("unknown", |value| value.type_name()),
         )
     })
 }
@@ -273,7 +273,7 @@ pub fn boolean(
             &PropType::Bool,
             component
                 .read(name)
-                .map_or_else(|_| "unknown", |value| value.type_name()),
+                .map_or("unknown", |value| value.type_name()),
         )
     })
 }
