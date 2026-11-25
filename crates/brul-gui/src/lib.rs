@@ -64,6 +64,7 @@
 mod animation;
 mod atlas;
 mod border;
+mod canvas;
 mod color;
 mod cursor;
 mod draw;
@@ -84,6 +85,10 @@ use brul_layout as layout;
 pub use animation::{Track, Tween, ease_out};
 pub use atlas::{Atlas, AtlasFormat, AtlasSlot};
 pub use border::{Border, BorderArrays};
+pub use canvas::{
+    CanvasPainter, CanvasSpec, PaintCommand, PaintCtx, PaintGlyph, PaintImage, PaintRect,
+    PaintShape,
+};
 pub use color::Color;
 pub use cursor::Cursor;
 pub type BorderColors = Sides<Color>;

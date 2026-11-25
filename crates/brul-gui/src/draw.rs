@@ -1,8 +1,9 @@
 use std::rc::Rc;
 
 use crate::{
-    AtlasFormat, AtlasSlot, CaretPosition, Color, Dirty, Gradient, Image, Paint, Rect, Shadow,
-    TextLayout, Texture, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode, WidgetStyle,
+    AtlasFormat, AtlasSlot, CanvasPainter, CaretPosition, Color, Dirty, Gradient, Image, Paint,
+    PaintCommand, PaintCtx, Rect, Shadow, TextLayout, Texture, WidgetId, WidgetKind,
+    WidgetSnapshot, WidgetSnapshotNode, WidgetStyle,
 };
 
 #[derive(Clone, Debug)]
@@ -73,6 +74,11 @@ pub fn draw_commands(snapshot: &WidgetSnapshot, dirty: &Dirty, out: &mut Vec<Dra
                     push_underline(index, node, preedit, caret, shift, opacity, out);
                 }
                 push_caret(index, node, opacity, out);
+            }
+            WidgetKind::Canvas => {
+                if let Some(painter) = &node.canvas {
+                    push_canvas(index, node, painter.as_ref(), opacity, out);
+                }
             }
             WidgetKind::View | WidgetKind::Structure | WidgetKind::PlatformView => {}
         }
@@ -206,6 +212,56 @@ fn push_caret(index: usize, node: &WidgetSnapshotNode, opacity: f32, out: &mut V
         color: node.style.text,
         opacity,
     }));
+}
+
+fn push_canvas(
+    index: usize,
+    node: &WidgetSnapshotNode,
+    painter: &dyn CanvasPainter,
+    opacity: f32,
+    out: &mut Vec<DrawCommand>,
+) {
+    let ctx = PaintCtx {
+        rect: Rect::new(
+            node.content_x,
+            node.content_y,
+            node.content_width,
+            node.content_height,
+        ),
+        style: &node.style,
+    };
+    for command in painter.paint(&ctx) {
+        match command {
+            PaintCommand::Shape(shape) => out.push(DrawCommand::Shape(ShapeCommand {
+                node: index,
+                rect: shape.rect,
+                shadow: shape.shadow,
+                draw_fill: shape.draw_fill,
+                opacity,
+            })),
+            PaintCommand::Glyph(glyph) => out.push(DrawCommand::Glyph(GlyphCommand {
+                node: index,
+                x: glyph.x,
+                y: glyph.y,
+                slot: glyph.slot,
+                tint: glyph.tint,
+                opacity,
+            })),
+            PaintCommand::Rect(rect) => out.push(DrawCommand::Rect(RectCommand {
+                node: index,
+                rect: rect.rect,
+                color: rect.color,
+                opacity,
+            })),
+            PaintCommand::Image(image) => out.push(DrawCommand::Image(ImageCommand {
+                node: index,
+                texture: image.texture,
+                tint: image.tint,
+                rect: image.rect,
+                opacity,
+            })),
+        }
+    }
 }
 
 fn push_image(index: usize, node: &WidgetSnapshotNode, opacity: f32, out: &mut Vec<DrawCommand>) {

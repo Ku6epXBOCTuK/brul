@@ -125,6 +125,7 @@ impl WidgetTree {
                 self.root,
                 geometry,
                 &self.texts,
+                &self.painters,
                 self.focused_slot(),
             );
             self.snapshot = Some(snapshot);
@@ -159,6 +160,7 @@ impl WidgetTree {
                 slot,
                 &geometry.boxes[slot.index()],
                 &self.texts,
+                &self.painters,
                 &clips,
                 focused,
             );
@@ -198,6 +200,7 @@ impl WidgetTree {
                 return true;
             }
             matches!(&node.data, Content::Image(image) if image.is_external())
+                || matches!(&node.data, Content::Canvas(spec) if spec.animated)
         })
     }
 
@@ -212,6 +215,7 @@ impl WidgetTree {
             .filter(|node| {
                 node.effect.as_ref().is_some_and(|effect| effect.animated)
                     || matches!(&node.data, Content::Image(image) if image.is_external())
+                    || matches!(&node.data, Content::Canvas(spec) if spec.animated)
             })
             .map(|node| node.id)
             .collect();

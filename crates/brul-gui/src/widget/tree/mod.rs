@@ -1,5 +1,6 @@
 use super::style::Transition;
 use super::*;
+use crate::canvas::CanvasPainter;
 use crate::effect::EffectSpec;
 use crate::layout::{Dimension, LayoutBox, Layouter, Offset, ScrollOffset, Size};
 use crate::text::TextLayout;
@@ -90,6 +91,7 @@ pub struct WidgetTree {
     modal_focus: Option<WidgetId>,
     modifiers: KeyModifiers,
     dirty: HashSet<WidgetId>,
+    painters: HashMap<WidgetId, Rc<dyn CanvasPainter>>,
     stale: HashSet<Slot>,
     full_dirty: bool,
     layout_dirty: bool,
@@ -192,6 +194,7 @@ impl WidgetTree {
             modal_focus: None,
             modifiers: KeyModifiers::default(),
             dirty: HashSet::new(),
+            painters: HashMap::new(),
             stale: HashSet::new(),
             full_dirty: true,
             layout_dirty: true,
@@ -356,6 +359,7 @@ impl WidgetTree {
     pub fn replace_root(&mut self, root: Widget) {
         self.nodes.clear();
         self.index.clear();
+        self.painters.clear();
         self.free.clear();
         self.stale.clear();
         self.active_transitions = 0;
@@ -431,6 +435,20 @@ impl WidgetTree {
 
     pub fn contains(&self, id: WidgetId) -> bool {
         self.index.contains_key(&id)
+    }
+
+    pub fn set_painter(&mut self, id: WidgetId, painter: Rc<dyn CanvasPainter>) {
+        if !self.index.contains_key(&id) {
+            return;
+        }
+        self.painters.insert(id, painter);
+        self.mark_dirty(id);
+    }
+
+    pub fn remove_painter(&mut self, id: WidgetId) {
+        if self.painters.remove(&id).is_some() {
+            self.mark_dirty(id);
+        }
     }
 
     fn invalidate(&mut self) {

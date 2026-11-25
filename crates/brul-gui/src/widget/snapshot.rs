@@ -1,4 +1,5 @@
 use super::*;
+use crate::canvas::CanvasPainter;
 use crate::effect::EffectSpec;
 use crate::image::Image;
 use crate::layout::Size;
@@ -41,6 +42,7 @@ pub struct WidgetSnapshotNode {
     pub selection: Vec<SelectionRect>,
     pub scroll: i32,
     pub image: Option<Image>,
+    pub canvas: Option<Rc<dyn CanvasPainter>>,
     pub platform_view: Option<PlatformViewSpec>,
     pub effect: Option<EffectSpec>,
     pub clips: Vec<ClipRect>,

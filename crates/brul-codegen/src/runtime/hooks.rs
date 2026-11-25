@@ -3,7 +3,9 @@ use std::ops::{BitOr, Range};
 use std::rc::Rc;
 
 use brul_event::{EventSet, RawEventSet};
-use brul_gui::{EditBuffer, EventTarget, Position, RawUiEvent, UiEvent, WidgetId, WidgetTree};
+use brul_gui::{
+    CanvasPainter, EditBuffer, EventTarget, Position, RawUiEvent, UiEvent, WidgetId, WidgetTree,
+};
 use brul_script::{Component, Dyn, Error as ScriptError};
 
 use super::{Build, ComponentHandle, StateId, ViewError};
@@ -139,6 +141,17 @@ pub fn apply(build: &mut Build, params: &[Param], apply: Apply) -> Result<(), Vi
     apply(build, build.state_id(), &values)
 }
 
+pub struct PainterGuard {
+    tree: Rc<RefCell<WidgetTree>>,
+    id: WidgetId,
+}
+
+impl Drop for PainterGuard {
+    fn drop(&mut self) {
+        self.tree.borrow_mut().remove_painter(self.id);
+    }
+}
+
 pub struct Element<'a> {
     id: WidgetId,
     tree: &'a Rc<RefCell<WidgetTree>>,
@@ -183,6 +196,22 @@ impl Element<'_> {
 
     pub fn set_offset(&self, x: i32, y: i32) -> bool {
         self.tree.borrow_mut().set_offset(self.id, x, y)
+    }
+
+    pub fn invalidate(&self) -> bool {
+        if !self.alive() {
+            return false;
+        }
+        self.tree.borrow_mut().mark_dirty(self.id);
+        true
+    }
+
+    pub fn set_painter(&self, painter: Rc<dyn CanvasPainter>) -> PainterGuard {
+        self.tree.borrow_mut().set_painter(self.id, painter);
+        PainterGuard {
+            tree: Rc::clone(self.tree),
+            id: self.id,
+        }
     }
 
     pub fn edit_buffer(&self) -> Option<EditBuffer> {
@@ -282,6 +311,55 @@ impl Element<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use brul_gui::{CanvasPainter, CanvasSpec, PaintCommand, PaintCtx, Widget};
+
+    struct Probe;
+
+    impl CanvasPainter for Probe {
+        fn paint(&self, _ctx: &PaintCtx<'_>) -> Vec<PaintCommand> {
+            Vec::new()
+        }
+    }
+
+    #[test]
+    fn element_invalidate_marks_widget_dirty() {
+        let widget = Widget::canvas(CanvasSpec::new());
+        let id = widget.id();
+        let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
+        let mut build = Build::new();
+        build.set_tree(Rc::clone(&tree));
+        build.set_target(
+            EventTarget::Widget(id),
+            StateId::source("test", "canvas"),
+            Rc::new(RefCell::new(Component::new())),
+        );
+        assert!(tree.borrow_mut().take_dirty().full);
+
+        assert!(build.element().invalidate());
+        let dirty = tree.borrow_mut().take_dirty();
+        assert!(!dirty.full);
+        assert!(dirty.ids.contains(&id));
+    }
+
+    #[test]
+    fn painter_guard_releases_painter_on_drop() {
+        let widget = Widget::canvas(CanvasSpec::new());
+        let id = widget.id();
+        let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
+        let mut build = Build::new();
+        build.set_tree(Rc::clone(&tree));
+        build.set_target(
+            EventTarget::Widget(id),
+            StateId::source("test", "canvas"),
+            Rc::new(RefCell::new(Component::new())),
+        );
+        assert!(tree.borrow_mut().take_dirty().full);
+        let guard = build.element().set_painter(Rc::new(Probe));
+        assert!(tree.borrow_mut().take_dirty().ids.contains(&id));
+
+        drop(guard);
+        assert!(tree.borrow_mut().take_dirty().ids.contains(&id));
+    }
 
     #[test]
     fn dispatch_flags_are_independent() {

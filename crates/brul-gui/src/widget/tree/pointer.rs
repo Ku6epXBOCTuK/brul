@@ -160,7 +160,7 @@ impl WidgetTree {
         true
     }
 
-    pub(super) fn mark_dirty(&mut self, id: WidgetId) {
+    pub fn mark_dirty(&mut self, id: WidgetId) {
         if !self.full_dirty {
             self.dirty.insert(id);
         }

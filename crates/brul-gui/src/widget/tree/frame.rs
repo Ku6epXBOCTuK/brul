@@ -1,4 +1,5 @@
 use super::*;
+use crate::canvas::CanvasPainter;
 use crate::layout::{self, LayoutBox, Size};
 use crate::rect::ClipRect;
 use std::collections::HashMap;
@@ -57,15 +58,31 @@ pub(super) fn reveal_carets(
     }
 }
 
+struct SnapshotCtx<'a> {
+    texts: &'a HashMap<WidgetId, ShapedText>,
+    painters: &'a HashMap<WidgetId, Rc<dyn CanvasPainter>>,
+    clips: Vec<ClipRect>,
+    focused: Option<Slot>,
+    nodes: &'a mut Vec<WidgetSnapshotNode>,
+}
+
 pub(super) fn build_snapshot(
     tree: &[Node],
     root: Slot,
     geometry: &Geometry,
     texts: &HashMap<WidgetId, ShapedText>,
+    painters: &HashMap<WidgetId, Rc<dyn CanvasPainter>>,
     focused: Option<Slot>,
 ) -> WidgetSnapshot {
     let mut nodes = Vec::new();
-    snapshot_widget(tree, root, &geometry.boxes, texts, &[], focused, &mut nodes);
+    let mut ctx = SnapshotCtx {
+        texts,
+        painters,
+        clips: Vec::new(),
+        focused,
+        nodes: &mut nodes,
+    };
+    snapshot_widget(tree, root, &geometry.boxes, &mut ctx);
     let index = nodes
         .iter()
         .enumerate()
@@ -82,15 +99,7 @@ pub(super) fn build_snapshot(
     }
 }
 
-pub(super) fn snapshot_widget(
-    tree: &[Node],
-    slot: Slot,
-    boxes: &[LayoutBox],
-    texts: &HashMap<WidgetId, ShapedText>,
-    clips: &[ClipRect],
-    focused: Option<Slot>,
-    nodes: &mut Vec<WidgetSnapshotNode>,
-) {
+fn snapshot_widget(tree: &[Node], slot: Slot, boxes: &[LayoutBox], ctx: &mut SnapshotCtx<'_>) {
     let node = &tree[slot.index()];
     if !node.state.visible {
         return;
@@ -101,23 +110,31 @@ pub(super) fn snapshot_widget(
             .iter()
             .filter(|child| !tree[child.index()].layer)
         {
-            snapshot_widget(tree, child, boxes, texts, clips, focused, nodes);
+            snapshot_widget(tree, child, boxes, ctx);
         }
         for &child in node
             .children
             .iter()
             .filter(|child| tree[child.index()].layer)
         {
-            snapshot_widget(tree, child, boxes, texts, clips, focused, nodes);
+            snapshot_widget(tree, child, boxes, ctx);
         }
         return;
     }
 
     let layout_box = &boxes[slot.index()];
     let style = node.style();
-    nodes.push(snapshot_node(node, slot, layout_box, texts, clips, focused));
+    ctx.nodes.push(snapshot_node(
+        node,
+        slot,
+        layout_box,
+        ctx.texts,
+        ctx.painters,
+        &ctx.clips,
+        ctx.focused,
+    ));
 
-    let mut child_clips = clips.to_vec();
+    let mut child_clips = ctx.clips.clone();
     if style.clip {
         child_clips.push(ClipRect::new(
             layout_box.x,
@@ -127,20 +144,22 @@ pub(super) fn snapshot_widget(
             style.border_radius,
         ));
     }
+    let clips = std::mem::replace(&mut ctx.clips, child_clips);
     for &child in node
         .children
         .iter()
         .filter(|child| !tree[child.index()].layer)
     {
-        snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
+        snapshot_widget(tree, child, boxes, ctx);
     }
     for &child in node
         .children
         .iter()
         .filter(|child| tree[child.index()].layer)
     {
-        snapshot_widget(tree, child, boxes, texts, &child_clips, focused, nodes);
+        snapshot_widget(tree, child, boxes, ctx);
     }
+    ctx.clips = clips;
 }
 
 pub(super) fn snapshot_node(
@@ -148,6 +167,7 @@ pub(super) fn snapshot_node(
     slot: Slot,
     layout_box: &LayoutBox,
     texts: &HashMap<WidgetId, ShapedText>,
+    painters: &HashMap<WidgetId, Rc<dyn CanvasPainter>>,
     clips: &[ClipRect],
     focused: Option<Slot>,
 ) -> WidgetSnapshotNode {
@@ -172,7 +192,10 @@ pub(super) fn snapshot_node(
         .height
         .saturating_sub(layout::inset_y(&layout_style));
     let mut node_clips = clips.to_vec();
-    if matches!(node.data, Content::Input { .. }) && content_width > 0 && content_height > 0 {
+    if matches!(node.data, Content::Input { .. } | Content::Canvas(_))
+        && content_width > 0
+        && content_height > 0
+    {
         node_clips.push(ClipRect::new(
             content_x,
             content_y,
@@ -225,6 +248,11 @@ pub(super) fn snapshot_node(
         Content::PlatformView(spec) => Some(spec.clone()),
         _ => None,
     };
+    let canvas = if matches!(node.data, Content::Canvas(_)) {
+        painters.get(&node.id).cloned()
+    } else {
+        None
+    };
 
     WidgetSnapshotNode {
         id: node.id,
@@ -246,6 +274,7 @@ pub(super) fn snapshot_node(
         selection,
         scroll,
         image,
+        canvas,
         platform_view,
         effect: node.effect.clone(),
         clips: node_clips,

@@ -46,6 +46,7 @@ impl Pass<'_> {
             Content::Text { .. }
             | Content::Input { .. }
             | Content::Image(_)
+            | Content::Canvas(_)
             | Content::PlatformView(_) => (Direction::Row, ScrollOffset::ZERO, false),
         };
 

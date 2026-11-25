@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::canvas::CanvasSpec;
 use crate::effect::EffectSpec;
 use crate::image::Image;
 use crate::layout::{Direction, LayoutPatch, LayoutStyle, Offset};
@@ -79,6 +80,7 @@ pub enum WidgetKind {
     Text,
     Image,
     Input,
+    Canvas,
     PlatformView,
 }
 
@@ -136,6 +138,7 @@ enum Content {
         preedit: String,
     },
     Image(Image),
+    Canvas(CanvasSpec),
     PlatformView(PlatformViewSpec),
 }
 
@@ -147,6 +150,7 @@ impl Content {
             Self::Text { .. } => WidgetKind::Text,
             Self::Input { .. } => WidgetKind::Input,
             Self::Image(_) => WidgetKind::Image,
+            Self::Canvas(_) => WidgetKind::Canvas,
             Self::PlatformView(_) => WidgetKind::PlatformView,
         }
     }
@@ -232,6 +236,10 @@ impl Widget {
         Self::new(Content::Image(image.into()))
     }
 
+    pub fn canvas(spec: CanvasSpec) -> Self {
+        Self::new(Content::Canvas(spec))
+    }
+
     pub fn platform_view(id: PlatformViewId, source: impl Into<String>) -> Self {
         Self::new(Content::PlatformView(PlatformViewSpec {
             id,
@@ -310,7 +318,11 @@ impl Widget {
             | Content::Input {
                 styles: current, ..
             } => **current = styles,
-            Content::View | Content::Structure | Content::Image(_) | Content::PlatformView(_) => {}
+            Content::View
+            | Content::Structure
+            | Content::Image(_)
+            | Content::Canvas(_)
+            | Content::PlatformView(_) => {}
         }
         self
     }
@@ -325,7 +337,11 @@ impl Widget {
             | Content::Input {
                 styles: current, ..
             } => current.apply_layers(&class.text),
-            Content::View | Content::Structure | Content::Image(_) | Content::PlatformView(_) => {}
+            Content::View
+            | Content::Structure
+            | Content::Image(_)
+            | Content::Canvas(_)
+            | Content::PlatformView(_) => {}
         }
         self
     }
