@@ -25,18 +25,18 @@ impl Default for Capabilities {
 }
 
 impl Capabilities {
-    pub fn discover(root: &Path, entry: &Path) -> Result<Self, Error> {
+    pub fn discover(root: &Path) -> Result<Self, Error> {
         let dir = root.join("src");
         let commands = if dir.is_dir() {
             crate::commands::collect(&dir)?
         } else {
             Commands::new()
         };
-        Self::discover_with_commands(entry, commands)
+        Self::discover_with_commands(root, commands)
     }
 
-    pub fn discover_with_commands(entry: &Path, commands: Commands) -> Result<Self, Error> {
-        let dir = entry.parent().unwrap_or(Path::new(".")).join("src");
+    pub fn discover_with_commands(root: &Path, commands: Commands) -> Result<Self, Error> {
+        let dir = root.join("src");
         let mut specs = crate::capability::builtins();
         if dir.is_dir() {
             let sources = crate::commands::rust_sources(&dir)

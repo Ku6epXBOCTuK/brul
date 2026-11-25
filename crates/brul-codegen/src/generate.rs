@@ -11,7 +11,7 @@ use crate::emit::{self, Module};
 use crate::{error_at, parse_source};
 
 pub fn generate(entry: &Path, root: &Path) -> Result<Module, Error> {
-    generate_with(entry, &Capabilities::discover(root, entry)?)
+    generate_with(entry, &Capabilities::discover(root)?)
 }
 
 pub fn generate_with(entry: &Path, capabilities: &Capabilities) -> Result<Module, Error> {

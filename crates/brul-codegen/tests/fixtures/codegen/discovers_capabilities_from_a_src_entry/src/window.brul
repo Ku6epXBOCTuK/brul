@@ -1,0 +1,9 @@
+<script>
+    let draft: String = "";
+</script>
+
+<markup>
+window EditorDemo (title: "editor") {
+    TextInput (use: custom_editor(value: draft)) { draft }
+}
+</markup>

@@ -16,7 +16,7 @@ fn generate(name: &str) -> Result<String, brul_syntax::error::Error> {
     let commands_path = dir.join("commands.txt");
     let module = if commands_path.is_file() {
         let capabilities =
-            Capabilities::discover_with_commands(&input, commands::read(&commands_path)?)?;
+            Capabilities::discover_with_commands(&dir, commands::read(&commands_path)?)?;
         generate_with(&input, &capabilities)?
     } else {
         generate_module(&input, &dir)?
@@ -28,7 +28,7 @@ fn generate(name: &str) -> Result<String, brul_syntax::error::Error> {
 fn discovers_capabilities_for_explicit_generation() {
     let dir = fixture("emits_an_attachment_on_an_element");
     let input = dir.join("input.brul");
-    let capabilities = Capabilities::discover(&dir, &input).expect("capabilities");
+    let capabilities = Capabilities::discover(&dir).expect("capabilities");
     assert!(capabilities.commands.is_empty());
     assert!(capabilities.specs.contains_key("editor"));
     assert!(capabilities.specs.contains_key("keyboard"));
@@ -39,6 +39,16 @@ fn discovers_capabilities_for_explicit_generation() {
     let module = generate_with(&input, &capabilities).expect("generated module");
     let expected = include_str!("fixtures/codegen/emits_an_attachment_on_an_element/expected.rs");
     assert_eq!(module.flat(), expected);
+}
+
+#[test]
+fn discovers_capabilities_for_an_entry_inside_src() {
+    let dir = fixture("discovers_capabilities_from_a_src_entry");
+    let input = dir.join("src/window.brul");
+    let capabilities = Capabilities::discover(&dir).expect("capabilities");
+    assert!(capabilities.specs.contains_key("custom_editor"));
+    let module = generate_module(&input, &dir).expect("generated module");
+    assert!(module.flat().contains("__brul_attach_custom_editor_apply"));
 }
 
 macro_rules! goldens {
