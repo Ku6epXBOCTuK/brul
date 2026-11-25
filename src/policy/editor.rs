@@ -1,13 +1,13 @@
 use crate::{
     Build, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError,
-    gui::{EventTarget, KeyModifiers, Position},
+    gui::{EventTarget, ImeKind, KeyModifiers, Position},
 };
 
 pub struct PlainEditor;
 
 #[brul::attach(
     name = "editor",
-    raw_events(Key, KeyNoop),
+    raw_events(Key, Ime, Paste),
     raw_event = editor_raw
 )]
 pub fn editor(_build: &mut Build) -> Result<PlainEditor, ViewError> {
@@ -38,16 +38,24 @@ fn editor_raw(_state: &mut PlainEditor, build: &mut Build, event: &RawUiEvent) -
     if build.handled() {
         return Dispatch::CONTINUE;
     }
-    let (key, modifiers) = match &event.event {
-        RawEvent::Key { key, modifiers } => (key, *modifiers),
-        RawEvent::KeyNoop { .. } => return Dispatch::CONTINUE,
-        _ => return Dispatch::CONTINUE,
-    };
+    match &event.event {
+        RawEvent::Key { key, modifiers } => editor_key(build, event.target, key, *modifiers),
+        RawEvent::KeyNoop { .. } => Dispatch::CONTINUE,
+        RawEvent::Paste { text } => editor_paste(build, event.target, text),
+        RawEvent::Ime { kind } => editor_ime(build, event.target, kind),
+        _ => Dispatch::CONTINUE,
+    }
+}
+
+fn editor_key(
+    build: &mut Build,
+    target: EventTarget,
+    key: &crate::gui::KeyPress,
+    modifiers: KeyModifiers,
+) -> Dispatch {
     let Some(id) = build.focused() else {
         return Dispatch::CONTINUE;
     };
-    let target = event.target;
-
     let action = {
         let Some(element) = build.element_for(id) else {
             return Dispatch::CONTINUE;
@@ -69,6 +77,137 @@ fn editor_raw(_state: &mut PlainEditor, build: &mut Build, event: &RawUiEvent) -
     };
 
     dispatch(build, id, target, key.code.clone(), modifiers, action)
+}
+
+fn focused_input(build: &Build) -> Option<(crate::gui::WidgetId, bool)> {
+    let id = build.focused()?;
+    let element = build.element_for(id)?;
+    element.is_input().then_some((id, element.wrap()))
+}
+
+fn normalize_paste(text: &str, single_line: bool) -> String {
+    if single_line {
+        text.chars()
+            .filter(|character| !character.is_control())
+            .collect()
+    } else {
+        text.replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .chars()
+            .filter(|character| *character == '\n' || !character.is_control())
+            .collect()
+    }
+}
+
+enum ImeAction {
+    Preedit(String),
+    Commit(String),
+    DeleteSurrounding { before: usize, after: usize },
+    Pass,
+}
+
+fn ime_action(kind: &ImeKind, single_line: bool) -> ImeAction {
+    match kind {
+        ImeKind::Enabled | ImeKind::Disabled => ImeAction::Pass,
+        ImeKind::Preedit(text) => ImeAction::Preedit(text.clone()),
+        ImeKind::Commit(text) => ImeAction::Commit(normalize_paste(text, single_line)),
+        ImeKind::DeleteSurrounding {
+            before_bytes,
+            after_bytes,
+        } => ImeAction::DeleteSurrounding {
+            before: *before_bytes,
+            after: *after_bytes,
+        },
+    }
+}
+
+fn editor_paste(build: &mut Build, target: EventTarget, text: &str) -> Dispatch {
+    if text.is_empty() {
+        return Dispatch::CONTINUE;
+    }
+    let Some((id, wrap)) = focused_input(build) else {
+        return Dispatch::CONTINUE;
+    };
+    let text = normalize_paste(text, !wrap);
+    if text.is_empty() {
+        return Dispatch::CONTINUE;
+    }
+
+    let edited = with_build(build, id, |edit| {
+        let (start, _) = replace_selection(edit);
+        edit.insert_text(Position::new(0, start), &text);
+        Some((edit.text().to_owned(), edit.caret().offset))
+    });
+    if let Some(Some((value, caret))) = edited {
+        build.emit_event(UiEvent::at(target, Event::input(value, caret)));
+        Dispatch::handled()
+    } else {
+        Dispatch::CONTINUE
+    }
+}
+
+fn editor_ime(build: &mut Build, target: EventTarget, kind: &ImeKind) -> Dispatch {
+    let Some((id, wrap)) = focused_input(build) else {
+        return Dispatch::CONTINUE;
+    };
+    match ime_action(kind, !wrap) {
+        ImeAction::Pass => Dispatch::CONTINUE,
+        ImeAction::Preedit(text) => {
+            let edited = with_build(build, id, |edit| {
+                let changed = edit.preedit() != text;
+                edit.set_preedit(text);
+                changed
+            });
+            if matches!(edited, Some(true)) {
+                Dispatch::handled()
+            } else {
+                Dispatch::CONTINUE
+            }
+        }
+        ImeAction::Commit(text) => {
+            let edited = with_build(build, id, |edit| {
+                let had_preedit = !edit.preedit().is_empty();
+                edit.set_preedit("");
+                let before = edit.text().to_owned();
+                if !text.is_empty() {
+                    let (start, _) = replace_selection(edit);
+                    edit.insert_text(Position::new(0, start), &text);
+                }
+                let after = edit.text().to_owned();
+                let caret = edit.caret().offset;
+                let changed = after != before;
+                (changed || had_preedit, (changed).then_some((after, caret)))
+            });
+            let Some((changed, value)) = edited else {
+                return Dispatch::CONTINUE;
+            };
+            if let Some((value, caret)) = value {
+                build.emit_event(UiEvent::at(target, Event::input(value, caret)));
+            }
+            if changed {
+                Dispatch::handled()
+            } else {
+                Dispatch::CONTINUE
+            }
+        }
+        ImeAction::DeleteSurrounding { before, after } => {
+            let edited = with_build(build, id, |edit| {
+                let before_text = edit.text().to_owned();
+                let (_, removed) = replace_selection(edit);
+                if !removed {
+                    edit.delete_surrounding(before, after);
+                }
+                let value = edit.text().to_owned();
+                let caret = edit.caret().offset;
+                (removed || value != before_text, value, caret)
+            });
+            let Some((true, value, caret)) = edited else {
+                return Dispatch::CONTINUE;
+            };
+            build.emit_event(UiEvent::at(target, Event::input(value, caret)));
+            Dispatch::handled()
+        }
+    }
 }
 
 fn classify(

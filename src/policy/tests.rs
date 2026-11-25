@@ -13,8 +13,8 @@ use crate::{
     EventTarget, Hooks, RawEvent, RawEventSet, RawKind, RawUiEvent, StateId, TestTheme, Ui,
     UiEvent, ViewError,
     gui::{
-        Dimension, KeyModifiers, KeyPress, LayoutStyle, Size, StyleSet, TextEngine, Widget,
-        WidgetId, WidgetStyle,
+        Dimension, ImeKind, KeyModifiers, KeyPress, LayoutStyle, Size, StyleSet, TextEngine,
+        Widget, WidgetId, WidgetStyle,
     },
 };
 
@@ -46,14 +46,75 @@ fn record_event(_build: &mut Build, _state: StateId, event: &UiEvent) -> Dispatc
 }
 
 fn record_raw(_build: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
-    match &event.event {
-        RawEvent::KeyNoop { key, .. } => {
-            SEEN.with(|seen| seen.borrow_mut().push(format!("noop:{}", key.code)))
-        }
-        RawEvent::Paste { .. } => SEEN.with(|seen| seen.borrow_mut().push("paste_request".into())),
-        _ => {}
+    let label = match &event.event {
+        RawEvent::KeyNoop { key, .. } => Some(format!("noop:{}", key.code)),
+        RawEvent::Paste { text } if text.is_empty() => Some("paste_request".to_owned()),
+        RawEvent::Paste { text } => Some(format!("paste:{text}")),
+        RawEvent::Ime { kind } => Some(format!("ime:{}", ime_label(kind))),
+        _ => None,
+    };
+    if let Some(label) = label {
+        SEEN.with(|seen| seen.borrow_mut().push(label));
     }
     Dispatch::CONTINUE
+}
+
+fn ime_label(kind: &ImeKind) -> &'static str {
+    match kind {
+        ImeKind::Enabled => "enabled",
+        ImeKind::Preedit(_) => "preedit",
+        ImeKind::Commit(_) => "commit",
+        ImeKind::DeleteSurrounding { .. } => "delete_surrounding",
+        ImeKind::Disabled => "disabled",
+    }
+}
+
+#[derive(Default)]
+struct ClipboardBridge {
+    text: Option<String>,
+}
+
+fn clipboard_state(build: &mut Build) -> Rc<RefCell<ClipboardBridge>> {
+    if build.get_state::<ClipboardBridge>().is_none() {
+        build.set_state(ClipboardBridge::default());
+    }
+    build.get_state().expect("clipboard state")
+}
+
+fn record_copy(build: &mut Build, _state: StateId, event: &UiEvent) -> Dispatch {
+    if let Event::Copy { text } = &event.event {
+        clipboard_state(build).borrow_mut().text = Some(text.clone());
+    }
+    Dispatch::CONTINUE
+}
+
+fn answer_paste(build: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+    let RawEvent::Paste { text } = &event.event else {
+        return Dispatch::CONTINUE;
+    };
+    if !text.is_empty() {
+        return Dispatch::CONTINUE;
+    }
+    let Some(text) = clipboard_state(build).borrow().text.clone() else {
+        return Dispatch::CONTINUE;
+    };
+    build.emit_raw_event(RawUiEvent::at(event.target, RawEvent::paste(text)));
+    Dispatch::handled()
+}
+
+fn clipboard(component: &ComponentHandle) -> Hooks {
+    Hooks {
+        target: EventTarget::Window,
+        state: StateId::source("test", "clipboard"),
+        component: Rc::clone(component),
+        params: Vec::new(),
+        apply: noop_apply,
+        event: record_copy,
+        raw_event: answer_paste,
+        cleanup: noop_cleanup,
+        events: EventSet::from([EventKind::Copy]),
+        raw_events: RawEventSet::from([RawKind::Paste]),
+    }
 }
 
 fn ignore_event(_build: &mut Build, _state: StateId, _event: &UiEvent) -> Dispatch {
@@ -124,7 +185,7 @@ fn editor(component: &ComponentHandle) -> Hooks {
         raw_event: __brul_attach_editor_raw_event,
         cleanup: __brul_attach_editor_cleanup,
         events: EventSet::empty(),
-        raw_events: RawEventSet::from([RawKind::Key]),
+        raw_events: RawEventSet::from([RawKind::Key, RawKind::Ime, RawKind::Paste]),
     }
 }
 
@@ -177,7 +238,7 @@ fn raw_observer(component: &ComponentHandle) -> Hooks {
         raw_event: record_raw,
         cleanup: noop_cleanup,
         events: EventSet::empty(),
-        raw_events: RawEventSet::from([RawKind::Key, RawKind::Paste]),
+        raw_events: RawEventSet::from([RawKind::Key, RawKind::Ime, RawKind::Paste]),
     }
 }
 
@@ -270,6 +331,23 @@ fn key_noop(code: &str) -> RawUiEvent {
     ))
 }
 
+fn paste(id: WidgetId, text: &str) -> RawUiEvent {
+    raw(id, RawEvent::paste(text.to_owned()))
+}
+
+fn ime(id: WidgetId, kind: ImeKind) -> RawUiEvent {
+    raw(id, RawEvent::ime(kind))
+}
+
+fn seed_clipboard(ui: &Ui<TestTheme>, text: &str) {
+    let state = ui.states.borrow_mut().get::<RefCell<ClipboardBridge>>(
+        StateId::source("test", "clipboard"),
+        &ui.component,
+        || RefCell::new(ClipboardBridge::default()),
+    );
+    state.borrow_mut().text = Some(text.to_owned());
+}
+
 fn editor_ui(text: &str, wrap: bool) -> (Ui<TestTheme>, WidgetId) {
     let input = Widget::input(text).focusable(true).wrap(wrap);
     let id = input.id();
@@ -278,6 +356,7 @@ fn editor_ui(text: &str, wrap: bool) -> (Ui<TestTheme>, WidgetId) {
         input,
         vec![
             editor(&component),
+            clipboard(&component),
             keyboard(&component),
             observer(&component),
             raw_observer(&component),
@@ -335,6 +414,15 @@ fn caret_of(ui: &Ui<TestTheme>, id: WidgetId) -> usize {
         .expect("input")
         .caret()
         .offset
+}
+
+fn preedit_of(ui: &Ui<TestTheme>, id: WidgetId) -> String {
+    ui.tree
+        .borrow()
+        .edit_buffer(id)
+        .expect("input")
+        .preedit()
+        .to_owned()
 }
 
 #[test]
@@ -511,6 +599,109 @@ fn control_v_asks_for_the_clipboard() {
     ui.dispatch_raw(&[key_at(id, "v", control())]);
 
     assert_eq!(seen(), ["paste_request"]);
+}
+
+#[test]
+fn control_v_pastes_text_from_the_clipboard_once() {
+    let (mut ui, id) = editor_ui("ab", false);
+    seed_clipboard(&ui, "xy");
+
+    ui.dispatch_raw(&[key_at(id, "v", control())]);
+
+    assert_eq!(text_of(&ui, id), "abxy");
+    assert_eq!(caret_of(&ui, id), 4);
+    assert_eq!(seen(), ["paste_request", "paste:xy", "input:abxy@4"]);
+}
+
+#[test]
+fn a_paste_replaces_the_selection() {
+    let (mut ui, id) = editor_ui("ab", false);
+    seed_clipboard(&ui, "Z");
+
+    ui.dispatch_raw(&[key_at(id, "a", control())]);
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[key_at(id, "v", control())]);
+
+    assert_eq!(text_of(&ui, id), "Z");
+    assert_eq!(seen(), ["paste_request", "paste:Z", "input:Z@1"]);
+}
+
+#[test]
+fn pasting_normalizes_newlines_by_wrap() {
+    let (mut ui, id) = editor_ui("a", true);
+    seed_clipboard(&ui, "b\r\nc");
+    ui.dispatch_raw(&[key_at(id, "v", control())]);
+    assert_eq!(text_of(&ui, id), "ab\nc");
+    assert_eq!(seen(), ["paste_request", "paste:b\r\nc", "input:ab\nc@4"]);
+
+    let (mut ui, id) = editor_ui("a", false);
+    seed_clipboard(&ui, "b\r\nc");
+    ui.dispatch_raw(&[key_at(id, "v", control())]);
+    assert_eq!(text_of(&ui, id), "abc");
+    assert_eq!(seen(), ["paste_request", "paste:b\r\nc", "input:abc@3"]);
+}
+
+#[test]
+fn a_nonempty_paste_is_inserted_without_a_second_answer() {
+    let (mut ui, id) = editor_ui("a", false);
+
+    ui.dispatch_raw(&[paste(id, "q")]);
+
+    assert_eq!(text_of(&ui, id), "aq");
+    assert_eq!(seen(), ["paste:q", "input:aq@2"]);
+}
+
+#[test]
+fn ime_preedit_commit_and_delete_surrounding_change_the_buffer() {
+    let (mut ui, id) = editor_ui("a", false);
+
+    ui.dispatch_raw(&[ime(id, ImeKind::Preedit("\u{3042}".into()))]);
+    assert_eq!(preedit_of(&ui, id), "\u{3042}");
+    assert_eq!(text_of(&ui, id), "a");
+    assert_eq!(seen(), ["ime:preedit"]);
+
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[ime(id, ImeKind::Commit("X".into()))]);
+    assert_eq!(preedit_of(&ui, id), "");
+    assert_eq!(text_of(&ui, id), "aX");
+    assert_eq!(seen(), ["ime:commit", "input:aX@2"]);
+
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[ime(
+        id,
+        ImeKind::DeleteSurrounding {
+            before_bytes: 1,
+            after_bytes: 0,
+        },
+    )]);
+    assert_eq!(text_of(&ui, id), "a");
+    assert_eq!(seen(), ["ime:delete_surrounding", "input:a@1"]);
+}
+
+#[test]
+fn ime_enabled_and_disabled_pass_through() {
+    let (mut ui, id) = editor_ui("a", false);
+
+    ui.dispatch_raw(&[ime(id, ImeKind::Enabled), ime(id, ImeKind::Disabled)]);
+
+    assert_eq!(text_of(&ui, id), "a");
+    assert_eq!(seen(), ["ime:enabled", "ime:disabled"]);
+}
+
+#[test]
+fn ime_delete_surrounding_respects_utf8_boundaries() {
+    let (mut ui, id) = editor_ui("a\u{20ac}b", false);
+
+    ui.dispatch_raw(&[ime(
+        id,
+        ImeKind::DeleteSurrounding {
+            before_bytes: 3,
+            after_bytes: 0,
+        },
+    )]);
+
+    assert_eq!(text_of(&ui, id), "a");
+    assert_eq!(seen(), ["ime:delete_surrounding", "input:a@1"]);
 }
 
 #[test]
