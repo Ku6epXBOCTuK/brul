@@ -168,8 +168,7 @@ mod tests {
 
     #[test]
     fn a_player_advances_its_frame_and_revision() {
-        let first = frame(10);
-        let decoder = Frames::new(vec![first, frame(20)]).unwrap();
+        let decoder = Frames::once(vec![frame(10), frame(20)]).unwrap();
         let player = Player::new(
             StateId::source("test", "one"),
             Box::new(decoder),
@@ -179,6 +178,7 @@ mod tests {
         let revision = player.revision();
         std::thread::sleep(Duration::from_millis(20));
         assert!(player.revision() > revision);
+        assert!(!player.is_playing());
         let TextureFrame::Rgba(pixels) = player.frame() else {
             panic!("expected rgba frame");
         };
