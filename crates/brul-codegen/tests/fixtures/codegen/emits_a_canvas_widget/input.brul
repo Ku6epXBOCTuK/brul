@@ -1,0 +1,5 @@
+<markup>
+window CanvasDemo (title: "canvas") {
+    Canvas (use: waveform)
+}
+</markup>

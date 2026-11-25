@@ -4,7 +4,7 @@ use brul_capability::AttachEvents;
 use brul_case::pascal;
 use brul_command::Kind;
 use brul_event::RawKind;
-use brul_syntax::ast::Position;
+use brul_syntax::ast::{ExprKind, Position};
 use brul_syntax::error::Error;
 use brul_syntax::types::Type;
 use syn::{FnArg, ItemFn, Pat};
@@ -15,6 +15,7 @@ use crate::error_at;
 pub struct CapabilityProp {
     pub name: String,
     pub ty: Type,
+    pub default: Option<ExprKind>,
 }
 
 #[derive(Clone, Debug)]
@@ -82,10 +83,12 @@ pub(crate) fn builtins() -> CapabilityTable {
             CapabilityProp {
                 name: "source".to_owned(),
                 ty: Type::String,
+                default: None,
             },
             CapabilityProp {
                 name: "playing".to_owned(),
                 ty: Type::Bool,
+                default: None,
             },
         ],
         events: vec![
@@ -108,10 +111,12 @@ pub(crate) fn builtins() -> CapabilityTable {
             CapabilityProp {
                 name: "source".to_owned(),
                 ty: Type::String,
+                default: None,
             },
             CapabilityProp {
                 name: "visible".to_owned(),
                 ty: Type::Bool,
+                default: None,
             },
         ],
         events: vec![CapabilityEvent {
@@ -121,8 +126,23 @@ pub(crate) fn builtins() -> CapabilityTable {
         hooks: None,
         builtin: true,
     };
-    let mut table =
-        CapabilityTable::from([(video.name.clone(), video), (webview.name.clone(), webview)]);
+    let canvas = CapabilitySpec {
+        name: "Canvas".to_owned(),
+        view: Some("::brul::canvas::view".to_owned()),
+        props: vec![CapabilityProp {
+            name: "animated".to_owned(),
+            ty: Type::Bool,
+            default: Some(ExprKind::Bool(false)),
+        }],
+        events: Vec::new(),
+        hooks: None,
+        builtin: true,
+    };
+    let mut table = CapabilityTable::from([
+        (video.name.clone(), video),
+        (webview.name.clone(), webview),
+        (canvas.name.clone(), canvas),
+    ]);
     for name in POLICY_NAMES {
         let shims = format!("::brul::policy::__brul_attach_{name}");
         let spec = CapabilitySpec {
@@ -197,6 +217,7 @@ fn parse_view(function: &ItemFn) -> Result<CapabilitySpec, Error> {
         props.push(CapabilityProp {
             name: pattern.ident.to_string(),
             ty,
+            default: None,
         });
     }
     let events = arguments
@@ -317,6 +338,12 @@ mod tests {
         assert!(specs["Video"].view.is_some());
         assert!(specs["WebView"].builtin);
         assert!(specs["WebView"].view.is_some());
+        assert!(specs["Canvas"].builtin);
+        assert!(specs["Canvas"].view.is_some());
+        assert_eq!(
+            specs["Canvas"].props[0].default,
+            Some(ExprKind::Bool(false))
+        );
     }
 
     #[test]

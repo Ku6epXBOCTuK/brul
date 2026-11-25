@@ -3,6 +3,7 @@
 extern crate self as brul;
 
 pub mod builtins;
+pub mod canvas;
 mod each;
 mod event;
 mod handle;

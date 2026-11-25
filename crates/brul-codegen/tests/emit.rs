@@ -36,6 +36,7 @@ fn discovers_capabilities_for_explicit_generation() {
     assert!(capabilities.specs.contains_key("scroll"));
     assert!(capabilities.specs.contains_key("Video"));
     assert!(capabilities.specs.contains_key("WebView"));
+    assert!(capabilities.specs.contains_key("Canvas"));
     let module = generate_with(&input, &capabilities).expect("generated module");
     let expected = include_str!("fixtures/codegen/emits_an_attachment_on_an_element/expected.rs");
     assert_eq!(module.flat(), expected);
@@ -87,6 +88,7 @@ goldens! {
     emits_an_attachment_on_an_element,
     emits_an_attachment_on_a_component,
     emits_an_attachment_on_a_window,
+    emits_a_canvas_widget,
     emits_builtin_window_policies,
     emits_a_window_that_overrides_a_builtin_policy,
     emits_an_effect_binding,

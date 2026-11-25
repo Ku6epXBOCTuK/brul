@@ -470,6 +470,7 @@ window Demo (title: "demo") {
 | `Image`     | выражение | картинка (источник — ресурс или `Image`; tint — из CSS) |
 | `Video`     | выражение | кадры из Rust-декодера как внешняя текстура             |
 | `WebView`   | выражение | нативный WebView как дочернее окно (только Windows)     |
+| `Canvas`    | выражение | область рисования с painter-ом на Rust                  |
 
 `Container` собирает панели, кнопки, карточки и лейаут-строки/столбцы:
 направление потока задаётся свойством `flex-direction` из стиля (по умолчанию
@@ -600,6 +601,23 @@ WebView (source: "https://example.com", visible: true, on message: received)
 всегда лежит над пикселями BRUL: его нельзя обрезать, закрыть другим виджетом,
 наложить эффект или нарисовать поверх него. software/layered-бэкенд и Wayland не
 поддерживаются.
+
+## Canvas
+
+`Canvas` — листовой элемент, который рисует painter из Rust в своём
+прямоугольнике. Пропс `animated` (по умолчанию `false`) включает перерисовку
+каждого кадра; геометрия, стиль, классы и clip задаются в разметке и CSS.
+
+```brul
+Canvas (plot, animated: true, use: waveform)
+```
+
+`waveform` — `#[brul::attach]`-функция, которая через
+`ctx.element().set_painter(..)` регистрирует `brul::gui::CanvasPainter` и хранит
+возвращённый `brul::PainterGuard`. Painter получает `PaintCtx` с прямоугольником
+содержимого и стилем элемента, а возвращает `Vec<PaintCommand>`: команды
+преобразуются в обычные команды отрисовки с clip и прозрачностью узла. Когда
+данные изменились, attach вызывает `element.invalidate()`.
 
 ## Свои виджеты на Rust
 
@@ -773,3 +791,14 @@ window Picker (title: "picker", width: 488, height: 800,
 `function launch(i: Number): Void { ... }`.
 
 Свойства `checkSvg`, `currentUrl` и т.п. — входные данные примера.
+
+### 5. Canvas (свой painter)
+
+```brul
+window CanvasDemo (title: "canvas") {
+    Canvas (plot, animated: true, use: waveform)
+}
+```
+
+`plot` — класс с размерами, `waveform` — attach на Rust, который регистрирует
+`CanvasPainter` и обновляет его данные через `invalidate()`.

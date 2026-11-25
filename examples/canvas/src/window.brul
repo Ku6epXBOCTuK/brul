@@ -1,0 +1,20 @@
+<markup>
+window CanvasDemo (title: "canvas", width: 480, height: 320, centered: true) {
+    Container (root) {
+        Canvas (plot, animated: true, use: waveform)
+    }
+}
+</markup>
+
+<style>
+    .root {
+        width: 100%;
+        height: 100%;
+        padding: 12px;
+        background: #12141c;
+    }
+    .plot {
+        width: 100%;
+        height: 100%;
+    }
+</style>
