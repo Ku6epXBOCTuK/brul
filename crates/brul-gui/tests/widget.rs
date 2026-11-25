@@ -118,6 +118,66 @@ fn pointer_move_reaches_the_pressed_path_with_modifiers() {
 }
 
 #[test]
+fn a_release_carries_the_up_point_and_modifiers() {
+    let child = Widget::column(vec![]).with_layout(fixed(80, 80));
+    let child_id = child.id();
+    let root = Widget::column(vec![child]).with_layout(fixed(100, 100));
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 100,
+            height: 100,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    let modifiers = KeyModifiers {
+        shift: true,
+        ..KeyModifiers::default()
+    };
+    tree.set_modifiers(modifiers);
+    tree.pointer_raw_down(5, 5).expect("down");
+
+    let up = tree.pointer_raw_up(7, 9).expect("up");
+    for id in [child_id, root_id] {
+        assert!(up.contains(&DispatchEvent::raw(id, RawEvent::release(7, 9, modifiers))));
+    }
+}
+
+#[test]
+fn leaving_the_window_cancels_a_press_instead_of_releasing_it() {
+    let child = Widget::column(vec![]).with_layout(fixed(80, 80));
+    let child_id = child.id();
+    let root = Widget::column(vec![child]).with_layout(fixed(100, 100));
+    let root_id = root.id();
+    let mut tree = WidgetTree::new(root);
+    let mut engine = TextEngine::new();
+    tree.layout(
+        &mut engine,
+        Size {
+            width: 100,
+            height: 100,
+        },
+        1.0,
+    )
+    .expect("layout");
+
+    tree.pointer_raw_down(5, 5).expect("down");
+    let left = tree.pointer_raw_leave();
+    for id in [child_id, root_id] {
+        assert!(left.contains(&DispatchEvent::raw(id, RawEvent::pointer_cancel())));
+    }
+    assert!(!left.iter().any(|event| matches!(
+        event,
+        DispatchEvent::Raw(raw) if raw.event.kind() == brul_gui::RawKind::Release
+    )));
+}
+
+#[test]
 fn children_are_placed_inside_padding_and_gap() {
     let first = Widget::column(vec![]).with_layout(fixed(40, 20));
     let first_id = first.id();
@@ -893,9 +953,9 @@ fn click_bubbles_from_leaf_to_root() {
     assert_eq!(
         tree.pointer_raw_up(5, 5).expect("up"),
         vec![
-            DispatchEvent::raw(text_id, RawEvent::release()),
-            DispatchEvent::raw(child_id, RawEvent::release()),
-            DispatchEvent::raw(root_id, RawEvent::release()),
+            DispatchEvent::raw(text_id, RawEvent::release(5, 5, KeyModifiers::default())),
+            DispatchEvent::raw(child_id, RawEvent::release(5, 5, KeyModifiers::default())),
+            DispatchEvent::raw(root_id, RawEvent::release(5, 5, KeyModifiers::default())),
             DispatchEvent::semantic(text_id, Event::click()),
             DispatchEvent::semantic(child_id, Event::click()),
             DispatchEvent::semantic(root_id, Event::click()),

@@ -109,10 +109,11 @@ impl WidgetTree {
         let path = std::mem::take(&mut self.hit_scratch.active);
 
         let mut events = Vec::new();
+        let modifiers = self.modifiers;
         for &slot in pressed.iter().rev() {
             let id = self.nodes[slot.index()].id;
             self.retarget(slot);
-            events.push(DispatchEvent::raw(id, RawEvent::release()));
+            events.push(DispatchEvent::raw(id, RawEvent::release(x, y, modifiers)));
         }
         self.hit_scratch.active = path;
         Ok(events)
@@ -131,7 +132,7 @@ impl WidgetTree {
         for &slot in pressed.iter().rev() {
             let id = self.nodes[slot.index()].id;
             self.retarget(slot);
-            events.push(DispatchEvent::raw(id, RawEvent::release()));
+            events.push(DispatchEvent::raw(id, RawEvent::pointer_cancel()));
         }
         events
     }

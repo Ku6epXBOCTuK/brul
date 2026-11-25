@@ -200,6 +200,14 @@ event_family! {
     (PointerEnter, "enter", "PointerEnter", pointer_enter, (), 0),
     (PointerLeave, "leave", "PointerLeave", pointer_leave, (), 0),
     (
+        PointerCancel,
+        "pointer_cancel",
+        "PointerCancel",
+        pointer_cancel,
+        (),
+        0
+    ),
+    (
         PointerMove,
         "pointer_move",
         "PointerMove",
@@ -215,7 +223,14 @@ event_family! {
         (x: i32, y: i32, modifiers: KeyModifiers),
         0
     ),
-    (Release, "release", "Release", release, (), 0),
+    (
+        Release,
+        "release",
+        "Release",
+        release,
+        (x: i32, y: i32, modifiers: KeyModifiers),
+        0
+    ),
     (Drag, "drag", "Drag", drag, (x: i32, y: i32), 0),
     (Key, "key", "Key", key, (key: KeyPress, modifiers: KeyModifiers), 0),
     (
