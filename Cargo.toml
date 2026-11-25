@@ -58,10 +58,15 @@ members = ["crates/*", "examples/*"]
 non_ascii_literal = "deny"
 
 [profile.dev]
+incremental = false
 debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
+
+[profile.test]
+incremental = false
+debug = "line-tables-only"
 
 [workspace.dependencies]
 brul-case = { path = 'crates\brul-case' }
