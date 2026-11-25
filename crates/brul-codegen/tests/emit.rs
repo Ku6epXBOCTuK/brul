@@ -88,6 +88,7 @@ goldens! {
     a_user_class_overrides_the_builtin_cursor,
     emits_a_dynamic_class_binding_and_its_table,
     emits_a_key_handler_on_an_element,
+    emits_a_kit_input_with_props_and_events,
     emits_a_layer,
     emits_a_forward_anchor_target,
     emits_an_anchor_inside_each,

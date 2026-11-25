@@ -1,1 +1,1 @@
-unknown kit component 'buton': the kit has button, card, checkbox, dialog, tooltip
+unknown kit component 'buton': the kit has button, card, checkbox, dialog, input, tooltip

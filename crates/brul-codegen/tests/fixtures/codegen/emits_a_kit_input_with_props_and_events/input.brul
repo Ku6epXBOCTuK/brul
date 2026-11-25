@@ -1,0 +1,23 @@
+<script>
+    let draft: String = "";
+
+    function edited(ev: Object): Void {
+        draft = ev.value;
+    }
+
+    function pressed(ev: Object): Void {
+    }
+</script>
+
+<use>
+    import Input from "brul:input";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Container {
+        Input (value: draft, on input: edited, on key: pressed) { }
+        Input { }
+    }
+}
+</markup>

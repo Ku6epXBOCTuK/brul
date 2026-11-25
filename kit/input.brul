@@ -1,0 +1,19 @@
+<script>
+    function changed(ev: Object): Void {
+        input(ev);
+    }
+
+    function typed(ev: Object): Void {
+        key(ev);
+    }
+</script>
+
+<markup>
+    component Input {
+        prop value: String = "";
+        event input(ev: Object);
+        event key(ev: Object);
+
+        TextInput (input-field, on input: changed, on key: typed) { value }
+    }
+</markup>
