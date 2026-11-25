@@ -3,9 +3,9 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use brul_gui::{
-    Atlas, Cursor, Dimension, Dirty, Event, KeyModifiers, KeyPress, LayoutStyle, PlatformViewId,
-    RawEvent, RawUiEvent, Size, StateId, StyleSet, TextEngine, TimerOwner, UiEvent, Widget,
-    WidgetError, WidgetSnapshot, WidgetStyle, WidgetTree,
+    Atlas, Cursor, Dimension, Dirty, DispatchEvent, Event, KeyModifiers, KeyPress, LayoutStyle,
+    PlatformViewId, RawEvent, RawUiEvent, Size, StateId, StyleSet, TextEngine, TimerOwner, UiEvent,
+    Widget, WidgetError, WidgetSnapshot, WidgetStyle, WidgetTree,
 };
 
 use winit::event_loop::ControlFlow;
@@ -783,6 +783,7 @@ fn platform_app() -> (TreeApp, FakeSurface, Rc<RefCell<Vec<String>>>) {
                 PlatformViewId::new(StateId::source("test", "view")),
                 "about:blank",
             )
+            .focusable(true)
             .with_layout(LayoutStyle {
                 width: Dimension::Px(4),
                 height: Dimension::Px(2),
@@ -826,25 +827,43 @@ fn platform_views_follow_the_snapshot_geometry() {
 }
 
 #[test]
-fn tab_moves_focus_between_a_platform_view_and_the_tree() {
+fn a_focus_event_focuses_and_blurs_a_platform_view() {
     let (mut app, surface, calls) = platform_app();
-    let tab = || KeyPress {
-        code: "Tab".to_owned(),
-        physical: None,
-    };
-
-    let events = app.tree.borrow_mut().raw_key(tab());
-    app.dispatch_events(&surface, events);
+    let view = app
+        .tree
+        .borrow()
+        .focusables()
+        .into_iter()
+        .find(|id| app.tree.borrow().platform_view(*id).is_some())
+        .expect("platform view");
+    assert!(app.tree.borrow_mut().set_focused(Some(view)));
+    app.dispatch_events(
+        &surface,
+        vec![DispatchEvent::semantic(view, Event::focus())],
+    );
     assert!(calls.borrow().contains(&"focus view".to_owned()));
 
-    let events = app.tree.borrow_mut().raw_key(tab());
-    app.dispatch_events(&surface, events);
+    assert!(app.tree.borrow_mut().set_focused(None));
+    app.dispatch_events(&surface, vec![DispatchEvent::semantic(view, Event::blur())]);
     assert!(calls.borrow().contains(&"blur".to_owned()));
 }
 
 #[test]
-fn a_focused_platform_view_keeps_keyboard_input_to_itself() {
+fn a_focused_platform_view_swallows_keyboard_input() {
     let (mut app, surface, calls) = platform_app();
+    let view = app
+        .tree
+        .borrow()
+        .focusables()
+        .into_iter()
+        .find(|id| app.tree.borrow().platform_view(*id).is_some())
+        .expect("platform view");
+    assert!(app.tree.borrow_mut().set_focused(Some(view)));
+    app.dispatch_events(
+        &surface,
+        vec![DispatchEvent::semantic(view, Event::focus())],
+    );
+
     let seen = Rc::new(RefCell::new(Vec::new()));
     let record = Rc::clone(&seen);
     app.handler = Box::new(move |events| {
@@ -853,11 +872,6 @@ fn a_focused_platform_view_keeps_keyboard_input_to_itself() {
             .extend(events.iter().map(|event| format!("{event:?}")));
         Vec::new()
     });
-    let events = app.tree.borrow_mut().raw_key(KeyPress {
-        code: "Tab".to_owned(),
-        physical: None,
-    });
-    app.dispatch_events(&surface, events);
     seen.borrow_mut().clear();
 
     app.handle(
@@ -869,13 +883,4 @@ fn a_focused_platform_view_keeps_keyboard_input_to_itself() {
     );
     assert!(seen.borrow().is_empty());
     assert!(!calls.borrow().contains(&"blur".to_owned()));
-
-    app.handle(
-        &surface,
-        Input::Key(KeyPress {
-            code: "Tab".to_owned(),
-            physical: None,
-        }),
-    );
-    assert!(calls.borrow().contains(&"blur".to_owned()));
 }

@@ -50,9 +50,9 @@ pub struct CapabilitySpec {
 
 pub type CapabilityTable = HashMap<String, CapabilitySpec>;
 
-pub(crate) const POLICY_NAMES: [&str; 4] = ["editor", "keyboard", "pointer", "scroll"];
+pub const POLICY_NAMES: [&str; 4] = ["editor", "keyboard", "pointer", "scroll"];
 
-fn policy_events(name: &str) -> AttachEvents {
+pub fn policy_events(name: &str) -> AttachEvents {
     let raw = match name {
         "editor" => vec![RawKind::Key, RawKind::Ime, RawKind::Paste],
         "keyboard" => vec![RawKind::Key],

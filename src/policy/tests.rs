@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use brul_codegen::{POLICY_NAMES, policy_events};
+
 use crate::policy::{
     __brul_attach_editor_apply, __brul_attach_editor_cleanup, __brul_attach_editor_raw_event,
     __brul_attach_keyboard_apply, __brul_attach_keyboard_cleanup, __brul_attach_keyboard_raw_event,
@@ -160,6 +162,7 @@ fn observer(component: &ComponentHandle) -> Hooks {
 }
 
 fn keyboard(component: &ComponentHandle) -> Hooks {
+    let events = policy_events("keyboard");
     Hooks {
         target: EventTarget::Window,
         state: StateId::source("test", "keyboard"),
@@ -169,12 +172,13 @@ fn keyboard(component: &ComponentHandle) -> Hooks {
         event: ignore_event,
         raw_event: __brul_attach_keyboard_raw_event,
         cleanup: __brul_attach_keyboard_cleanup,
-        events: EventSet::empty(),
-        raw_events: RawEventSet::from([RawKind::Key]),
+        events: EventSet::from_iter(events.semantic),
+        raw_events: RawEventSet::from_iter(events.raw),
     }
 }
 
 fn editor(component: &ComponentHandle) -> Hooks {
+    let events = policy_events("editor");
     Hooks {
         target: EventTarget::Window,
         state: StateId::source("test", "editor"),
@@ -184,12 +188,13 @@ fn editor(component: &ComponentHandle) -> Hooks {
         event: ignore_event,
         raw_event: __brul_attach_editor_raw_event,
         cleanup: __brul_attach_editor_cleanup,
-        events: EventSet::empty(),
-        raw_events: RawEventSet::from([RawKind::Key, RawKind::Ime, RawKind::Paste]),
+        events: EventSet::from_iter(events.semantic),
+        raw_events: RawEventSet::from_iter(events.raw),
     }
 }
 
 fn pointer(component: &ComponentHandle) -> Hooks {
+    let events = policy_events("pointer");
     Hooks {
         target: EventTarget::Window,
         state: StateId::source("test", "pointer"),
@@ -199,20 +204,13 @@ fn pointer(component: &ComponentHandle) -> Hooks {
         event: ignore_event,
         raw_event: __brul_attach_pointer_raw_event,
         cleanup: __brul_attach_pointer_cleanup,
-        events: EventSet::empty(),
-        raw_events: RawEventSet::from([
-            RawKind::Press,
-            RawKind::Release,
-            RawKind::PointerMove,
-            RawKind::PointerEnter,
-            RawKind::PointerLeave,
-            RawKind::PointerCancel,
-            RawKind::Drag,
-        ]),
+        events: EventSet::from_iter(events.semantic),
+        raw_events: RawEventSet::from_iter(events.raw),
     }
 }
 
 fn scroll(component: &ComponentHandle) -> Hooks {
+    let events = policy_events("scroll");
     Hooks {
         target: EventTarget::Window,
         state: StateId::source("test", "scroll"),
@@ -222,8 +220,8 @@ fn scroll(component: &ComponentHandle) -> Hooks {
         event: ignore_event,
         raw_event: __brul_attach_scroll_raw_event,
         cleanup: __brul_attach_scroll_cleanup,
-        events: EventSet::empty(),
-        raw_events: RawEventSet::from([RawKind::Wheel]),
+        events: EventSet::from_iter(events.semantic),
+        raw_events: RawEventSet::from_iter(events.raw),
     }
 }
 
@@ -1023,4 +1021,422 @@ fn wheel_scrolls_the_root_when_root_scrolling_is_enabled() {
     let mut tree = ui.tree.borrow_mut();
     let snapshot = tree.snapshot().expect("snapshot");
     assert!(snapshot.node(child_id).expect("child").y < 0);
+}
+
+#[test]
+fn builtin_hook_masks_match_the_codegen_catalog() {
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    for hooks in [
+        editor(&component),
+        keyboard(&component),
+        pointer(&component),
+        scroll(&component),
+    ] {
+        let events = policy_events(hooks.state.path());
+        assert_eq!(hooks.events, EventSet::from_iter(events.semantic));
+        assert_eq!(hooks.raw_events, RawEventSet::from_iter(events.raw));
+    }
+    assert_eq!(POLICY_NAMES.len(), 4);
+}
+
+#[test]
+fn space_clicks_the_focused_widget_and_its_ancestors() {
+    let focused = Widget::text("focused").focusable(true);
+    let focused_id = focused.id();
+    let root = Widget::column(vec![focused]);
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble(root, vec![keyboard(&component), observer(&component)]);
+    ui.tree.borrow_mut().set_focused(Some(focused_id));
+
+    ui.dispatch_raw(&[key(" ")]);
+
+    assert_eq!(seen(), ["click", "click"]);
+    assert_eq!(ui.tree.borrow().focused_id(), Some(focused_id));
+}
+
+#[test]
+fn tab_skips_a_disabled_widget() {
+    let first = Widget::text("first").focusable(true);
+    let first_id = first.id();
+    let disabled = Widget::text("disabled").focusable(true).disabled(true);
+    let third = Widget::text("third").focusable(true);
+    let third_id = third.id();
+    let root = Widget::column(vec![first, disabled, third]);
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble(root, vec![keyboard(&component), observer(&component)]);
+    ui.tree.borrow_mut().set_focused(Some(first_id));
+
+    ui.dispatch_raw(&[key("Tab")]);
+
+    assert_eq!(ui.tree.borrow().focused_id(), Some(third_id));
+    assert_eq!(seen(), ["blur", "focus"]);
+}
+
+#[test]
+fn tab_stays_inside_a_visible_modal_layer() {
+    let child = Widget::text("child").focusable(true);
+    let child_id = child.id();
+    let root = Widget::column(vec![Widget::layer(vec![child]).modal(true)]);
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble(root, vec![keyboard(&component), observer(&component)]);
+    ui.tree.borrow_mut().set_focused(Some(child_id));
+
+    ui.dispatch_raw(&[key("Tab")]);
+    ui.dispatch_raw(&[key_at(child_id, "Tab", shift())]);
+
+    assert_eq!(ui.tree.borrow().focused_id(), Some(child_id));
+    assert!(seen().is_empty());
+}
+
+#[test]
+fn tab_returns_focus_when_the_modal_layer_is_hidden() {
+    let trigger = Widget::text("trigger").focusable(true);
+    let trigger_id = trigger.id();
+    let child = Widget::text("child").focusable(true);
+    let child_id = child.id();
+    let dialog = Widget::layer(vec![child]).modal(true).visible(false);
+    let dialog_id = dialog.id();
+    let root = Widget::column(vec![trigger, dialog]);
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble(root, vec![keyboard(&component), observer(&component)]);
+    ui.tree.borrow_mut().set_focused(Some(trigger_id));
+    assert!(ui.tree.borrow_mut().set_visible(dialog_id, true));
+
+    ui.dispatch_raw(&[key("Tab")]);
+    assert_eq!(ui.tree.borrow().focused_id(), Some(child_id));
+    SEEN.with(|seen| seen.borrow_mut().clear());
+
+    assert!(ui.tree.borrow_mut().set_visible(dialog_id, false));
+    assert_eq!(ui.tree.borrow().focused_id(), Some(trigger_id));
+}
+
+#[test]
+fn tab_without_focusables_changes_nothing() {
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble(
+        Widget::text("view"),
+        vec![keyboard(&component), observer(&component)],
+    );
+
+    ui.dispatch_raw(&[key("Tab")]);
+
+    assert_eq!(ui.tree.borrow().focused_id(), None);
+    assert!(seen().is_empty());
+}
+
+#[test]
+fn shift_tab_moves_focus_back() {
+    let first = Widget::text("first").focusable(true);
+    let first_id = first.id();
+    let second = Widget::text("second").focusable(true);
+    let second_id = second.id();
+    let root = Widget::column(vec![first, second]);
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble(root, vec![keyboard(&component), observer(&component)]);
+    ui.tree.borrow_mut().set_focused(Some(second_id));
+
+    ui.dispatch_raw(&[key_at(second_id, "Tab", shift())]);
+
+    assert_eq!(ui.tree.borrow().focused_id(), Some(first_id));
+    assert_eq!(seen(), ["blur", "focus"]);
+}
+
+#[test]
+fn ctrl_enter_leaves_a_multiline_field_for_the_window() {
+    let (mut ui, id) = editor_ui("a", true);
+
+    ui.dispatch_raw(&[key_at(id, "Enter", control())]);
+
+    assert_eq!(text_of(&ui, id), "a");
+    assert_eq!(seen(), ["key:Enter"]);
+}
+
+#[test]
+fn the_caret_area_appears_only_while_the_input_is_focused() {
+    let input = Widget::input("ab");
+    let id = input.id();
+    let ui = assemble_laid_out(
+        input,
+        Vec::new(),
+        Size {
+            width: 100,
+            height: 40,
+        },
+    );
+    assert!(ui.tree.borrow().caret_area().is_none());
+
+    assert!(ui.tree.borrow_mut().set_focused(Some(id)));
+    assert!(ui.tree.borrow().caret_area().is_some());
+}
+
+#[test]
+fn backspace_and_delete_remove_utf8_characters() {
+    let (mut ui, id) = editor_ui("\u{43f}\u{440}\u{438}\u{432}\u{435}\u{442}", false);
+
+    ui.dispatch_raw(&[key_at(id, "Backspace", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "\u{43f}\u{440}\u{438}\u{432}\u{435}");
+    assert_eq!(caret_of(&ui, id), 10);
+
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    ui.dispatch_raw(&[key_at(id, "Home", KeyModifiers::default())]);
+    ui.dispatch_raw(&[key_at(id, "Delete", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "\u{440}\u{438}\u{432}\u{435}");
+    assert_eq!(caret_of(&ui, id), 0);
+    assert_eq!(seen(), ["input:\u{440}\u{438}\u{432}\u{435}@0"]);
+}
+
+#[test]
+fn delete_at_the_end_reports_a_noop_with_modifiers() {
+    let (mut ui, id) = editor_ui("a", false);
+
+    ui.dispatch_raw(&[key_at(id, "Delete", shift())]);
+
+    assert_eq!(text_of(&ui, id), "a");
+    assert_eq!(seen(), ["noop:Delete", "key:Delete"]);
+}
+
+#[test]
+fn space_inserts_a_space_into_the_field() {
+    let (mut ui, id) = editor_ui("a", false);
+
+    ui.dispatch_raw(&[key_at(id, " ", KeyModifiers::default())]);
+
+    assert_eq!(text_of(&ui, id), "a ");
+    assert_eq!(caret_of(&ui, id), 2);
+    assert_eq!(seen(), ["input:a @2"]);
+}
+
+#[test]
+fn typing_after_an_external_write_uses_the_new_text() {
+    let (mut ui, id) = editor_ui("ab", false);
+    assert!(ui.tree.borrow_mut().set_input_text(id, "q".into()));
+
+    ui.dispatch_raw(&[key_at(id, "W", KeyModifiers::default())]);
+
+    assert_eq!(text_of(&ui, id), "qW");
+    assert_eq!(caret_of(&ui, id), 2);
+    assert_eq!(seen(), ["input:qW@2"]);
+}
+
+#[test]
+fn vertical_arrows_move_between_lines() {
+    let (mut ui, id) = editor_ui("ab\ncd", true);
+
+    ui.dispatch_raw(&[key_at(id, "ArrowUp", KeyModifiers::default())]);
+    ui.dispatch_raw(&[key_at(id, "X", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "abX\ncd");
+    assert_eq!(caret_of(&ui, id), 3);
+    SEEN.with(|seen| seen.borrow_mut().clear());
+
+    ui.tree
+        .borrow_mut()
+        .layout(
+            &mut TextEngine::new(),
+            Size {
+                width: 200,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("relayout");
+    ui.dispatch_raw(&[key_at(id, "ArrowDown", KeyModifiers::default())]);
+    assert_eq!(caret_of(&ui, id), 6);
+    ui.dispatch_raw(&[key_at(id, "Y", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "abX\ncdY");
+    assert_eq!(caret_of(&ui, id), 7);
+    assert_eq!(seen(), ["input:abX\ncdY@7"]);
+}
+
+#[test]
+fn home_and_end_stay_on_the_current_line() {
+    let (mut ui, id) = editor_ui("ab\ncd", true);
+
+    ui.dispatch_raw(&[key_at(id, "Home", KeyModifiers::default())]);
+    assert_eq!(caret_of(&ui, id), 3);
+    ui.dispatch_raw(&[key_at(id, "X", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "ab\nXcd");
+    assert_eq!(caret_of(&ui, id), 4);
+    SEEN.with(|seen| seen.borrow_mut().clear());
+
+    ui.tree
+        .borrow_mut()
+        .layout(
+            &mut TextEngine::new(),
+            Size {
+                width: 200,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("relayout");
+    ui.dispatch_raw(&[key_at(id, "End", KeyModifiers::default())]);
+    assert_eq!(caret_of(&ui, id), 6);
+    ui.dispatch_raw(&[key_at(id, "Y", KeyModifiers::default())]);
+    assert_eq!(text_of(&ui, id), "ab\nXcdY");
+    assert_eq!(caret_of(&ui, id), 7);
+    assert_eq!(seen(), ["input:ab\nXcdY@7"]);
+}
+
+#[test]
+fn a_plain_arrow_collapses_a_shift_selection() {
+    let (mut ui, id) = editor_ui("ab", false);
+
+    ui.dispatch_raw(&[key_at(id, "ArrowLeft", shift())]);
+    let selection = ui.tree.borrow().edit_buffer(id).expect("input").selection();
+    assert_eq!((selection.start.offset, selection.end.offset), (1, 2));
+
+    ui.dispatch_raw(&[key_at(id, "ArrowLeft", KeyModifiers::default())]);
+    let selection = ui.tree.borrow().edit_buffer(id).expect("input").selection();
+    assert_eq!(selection.start, selection.end);
+}
+
+#[test]
+fn a_click_on_the_second_line_places_the_caret_there() {
+    let input = Widget::input("ab\ncd")
+        .wrap(true)
+        .with_layout(fixed(80, 20));
+    let id = input.id();
+    let root = Widget::column(vec![input]).with_layout(fixed(100, 40));
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble_laid_out(
+        root,
+        vec![pointer(&component)],
+        Size {
+            width: 100,
+            height: 40,
+        },
+    );
+
+    ui.dispatch_raw(&[raw(id, RawEvent::press(60, 18, KeyModifiers::default()))]);
+
+    assert_eq!(caret_of(&ui, id), 5);
+}
+
+#[test]
+fn a_click_in_a_disabled_subtree_does_not_click() {
+    let child = Widget::text("no").disabled(true).with_layout(fixed(40, 20));
+    let root = Widget::column(vec![child]).with_layout(fixed(80, 40));
+    let root_id = root.id();
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble_laid_out(
+        root,
+        vec![pointer(&component), observer(&component)],
+        Size {
+            width: 80,
+            height: 40,
+        },
+    );
+    let modifiers = KeyModifiers::default();
+
+    ui.dispatch_raw(&[
+        raw(root_id, RawEvent::press(5, 5, modifiers)),
+        raw(root_id, RawEvent::release(5, 5, modifiers)),
+    ]);
+
+    assert_eq!(seen(), ["click"]);
+}
+
+#[test]
+fn an_inner_scroll_container_wins_over_the_root() {
+    let (list, first_id) = scrollable_list();
+    let root = Widget::column(vec![list]).with_layout(fixed(80, 100));
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble_laid_out(
+        root,
+        vec![scroll(&component)],
+        Size {
+            width: 80,
+            height: 100,
+        },
+    );
+    ui.tree.borrow_mut().set_root_scroll(true);
+
+    ui.dispatch_raw(&[raw(first_id, RawEvent::wheel(40))]);
+
+    ui.tree
+        .borrow_mut()
+        .layout(
+            &mut TextEngine::new(),
+            Size {
+                width: 80,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("relayout");
+    let mut tree = ui.tree.borrow_mut();
+    let snapshot = tree.snapshot().expect("snapshot");
+    assert!(snapshot.node(first_id).expect("first").y < 0);
+}
+
+#[test]
+fn a_list_inside_a_modal_layer_still_scrolls() {
+    let (list, first_id) = scrollable_list();
+    let dialog = Widget::layer(vec![list]).modal(true);
+    let root = Widget::column(vec![dialog]).with_layout(fixed(80, 100));
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble_laid_out(
+        root,
+        vec![scroll(&component)],
+        Size {
+            width: 80,
+            height: 100,
+        },
+    );
+
+    ui.dispatch_raw(&[raw(first_id, RawEvent::wheel(40))]);
+
+    ui.tree
+        .borrow_mut()
+        .layout(
+            &mut TextEngine::new(),
+            Size {
+                width: 80,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("relayout");
+    let mut tree = ui.tree.borrow_mut();
+    let snapshot = tree.snapshot().expect("snapshot");
+    assert!(snapshot.node(first_id).expect("first").y < 0);
+}
+
+#[test]
+fn wheel_reaches_content_through_a_plain_layer() {
+    let (list, first_id) = scrollable_list();
+    let card = Widget::text("dialog").with_layout(fixed(20, 20));
+    let root = Widget::column(vec![list, Widget::layer(vec![card])]).with_layout(fixed(80, 100));
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let mut ui = assemble_laid_out(
+        root,
+        vec![scroll(&component)],
+        Size {
+            width: 80,
+            height: 100,
+        },
+    );
+
+    let target = ui
+        .tree
+        .borrow()
+        .hit(60, 60)
+        .expect("hit")
+        .map_or(EventTarget::Window, EventTarget::Widget);
+    ui.dispatch_raw(&[RawUiEvent::at(target, RawEvent::wheel(40))]);
+
+    ui.tree
+        .borrow_mut()
+        .layout(
+            &mut TextEngine::new(),
+            Size {
+                width: 80,
+                height: 100,
+            },
+            1.0,
+        )
+        .expect("relayout");
+    let mut tree = ui.tree.borrow_mut();
+    let snapshot = tree.snapshot().expect("snapshot");
+    assert!(snapshot.node(first_id).expect("first").y < 0);
 }

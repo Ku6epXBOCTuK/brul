@@ -17,6 +17,7 @@ mod source;
 pub mod styles;
 mod window;
 
+pub use capability::{POLICY_NAMES, policy_events};
 pub use commands::{Command, Commands};
 pub use diagnostics::{arg_mismatch, error_at, padded, sfc_error};
 pub use discovery::Capabilities;
