@@ -170,6 +170,11 @@ fn custom_editor(ctx: &mut brul::Build, value: String, multiline: bool)
     -> Result<EditorState, brul::ViewError> { /* состояние */ }
 ```
 
+Полный пример подмены политики ввода — `examples/custom_text_input`: сырой текст
+живёт в состоянии capability, в буфер виджета попадает только display, каретка
+переводится между ними в символах, а `Tab`/`Escape` перехватывает отдельная
+use-функция на фокусируемом элементе.
+
 `#[brul::attach]` и `#[brul::widget]` регистрируют capability: первая приносит
 хуки, вторая — view. Обе проходят через `Build::capability(...)`, поэтому
 `Build` — единственный контекст Rust-кода на элементе: он даёт

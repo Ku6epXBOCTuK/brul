@@ -1,0 +1,116 @@
+<script>
+    let secret: String;
+    let mode: String;
+    let caret: String;
+    let status: String;
+
+    function changed(ev: Object): Void {
+        secret = String(ev.value);
+        caret = String(ev.caret);
+    }
+
+    function escaped(): Void {
+        status = "escape";
+    }
+
+    function useMask(): Void {
+        mode = "mask";
+        status = "mask";
+    }
+
+    function useReverse(): Void {
+        mode = "reverse";
+        status = "reverse";
+    }
+
+    function useDigest(): Void {
+        mode = "digest";
+        status = "digest";
+    }
+</script>
+
+<use>
+    import Button from "brul:button";
+    import CustomTextInput from "./custom_input.brul";
+</use>
+
+<markup>
+    window CustomInput (title: "custom text input", width: 480, height: 280, centered: true) {
+        Container (root) {
+            Text (title) { "CustomTextInput" }
+            Container (modes) {
+                Button (label: "mask", on clicked: useMask) { }
+                Button (label: "reverse", on clicked: useReverse) { }
+                Button (label: "digest", on clicked: useDigest) { }
+            }
+            CustomTextInput (
+                field,
+                value: secret,
+                mode: mode,
+                on input: changed,
+                on escape: escaped
+            ) { }
+            TextInput (other) { "" }
+            Text (raw) { secret }
+            Text (position) { caret }
+            Text (hint) { status }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        background: #12141c;
+        surface: #1c2028;
+        surface-hover: #232936;
+        border: #334155;
+        text: #ffffff;
+        muted: #8c94a8;
+        accent: #4c8dff;
+        accent-hover: #6ba0ff;
+    }
+    theme light {
+        background: #f4f6f9;
+        surface: #ffffff;
+        surface-hover: #eef2f7;
+        border: #e2e8f0;
+        text: #0f172a;
+        muted: #64748b;
+        accent: #2563eb;
+        accent-hover: #1d4ed8;
+    }
+    .root {
+        width: 100%;
+        height: 100%;
+        padding: 18px;
+        gap: 10px;
+        background: theme.background;
+    }
+    .title { color: theme.text; font-size: 20px; }
+    .modes { gap: 8px; align-items: center; }
+    .field {
+        width: 100%;
+        height: 32px;
+        padding-left: 10px;
+        padding-right: 10px;
+        background: theme.surface;
+        border: 1px theme.border;
+        border-radius: 10px;
+        color: theme.text;
+        font-size: 14px;
+    }
+    .other {
+        width: 100%;
+        height: 32px;
+        padding-left: 10px;
+        padding-right: 10px;
+        background: theme.surface;
+        border: 1px theme.border;
+        border-radius: 10px;
+        color: theme.muted;
+        font-size: 14px;
+    }
+    .raw { color: theme.text; font-size: 14px; }
+    .position { color: theme.muted; font-size: 12px; }
+    .hint { color: theme.muted; font-size: 12px; }
+</style>

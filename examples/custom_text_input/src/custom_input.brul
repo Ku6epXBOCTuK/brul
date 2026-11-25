@@ -1,0 +1,19 @@
+<script>
+    function changed(ev: Object): Void { input(ev); }
+</script>
+
+<markup>
+    component CustomTextInput {
+        prop value: String = "";
+        prop mode: String = "mask";
+        event input(ev: Object);
+        event escape();
+
+        TextInput (
+            field,
+            use: masked_editor(value: value, mode: mode),
+            use: custom_keys(),
+            on input: changed
+        ) { "" }
+    }
+</markup>
