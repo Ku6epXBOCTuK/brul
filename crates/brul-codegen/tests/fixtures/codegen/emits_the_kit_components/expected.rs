@@ -699,7 +699,7 @@ fn button_script_init(component: &mut brul::Component) -> Result<(), brul::Error
 }
 #[allow(unused_mut, unused_variables)]
 fn button_script_fn_press(component: &mut brul::Component) -> Result<(), brul::Error> {
-    { let arguments = vec![]; brul::Dyn::call(component, "clicked", arguments)? };
+    { let arguments = vec![]; component.call_dynamic("clicked", arguments)? };
     Ok(())
 }
 #[allow(unused_variables)]
@@ -1486,7 +1486,7 @@ fn checkbox_script_fn_toggle(component: &mut brul::Component) -> Result<(), brul
 component.assign_id(brul::VariableId::from_index(6), (value.clone()).into())?;
 
 value };
-    { let arguments = vec![]; brul::Dyn::call(component, "toggled", arguments)? };
+    { let arguments = vec![]; component.call_dynamic("toggled", arguments)? };
     }
     Ok(())
 }
@@ -1861,17 +1861,17 @@ fn dialog_script_init(component: &mut brul::Component) -> Result<(), brul::Error
 }
 #[allow(unused_mut, unused_variables)]
 fn dialog_script_fn_accept(component: &mut brul::Component) -> Result<(), brul::Error> {
-    { let arguments = vec![brul::Dyn::flag(true)]; brul::Dyn::call(component, "closed", arguments)? };
+    { let arguments = vec![brul::Dyn::flag(true)]; component.call_dynamic("closed", arguments)? };
     Ok(())
 }
 #[allow(unused_mut, unused_variables)]
 fn dialog_script_fn_reject(component: &mut brul::Component) -> Result<(), brul::Error> {
-    { let arguments = vec![brul::Dyn::flag(false)]; brul::Dyn::call(component, "closed", arguments)? };
+    { let arguments = vec![brul::Dyn::flag(false)]; component.call_dynamic("closed", arguments)? };
     Ok(())
 }
 #[allow(unused_mut, unused_variables)]
 fn dialog_script_fn_dismiss_dialog(component: &mut brul::Component) -> Result<(), brul::Error> {
-    { let arguments = vec![brul::Dyn::flag(false)]; brul::Dyn::call(component, "closed", arguments)? };
+    { let arguments = vec![brul::Dyn::flag(false)]; component.call_dynamic("closed", arguments)? };
     Ok(())
 }
 #[allow(unused_variables)]

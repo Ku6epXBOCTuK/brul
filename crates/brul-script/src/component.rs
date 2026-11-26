@@ -137,6 +137,15 @@ impl Component {
         }
     }
 
+    pub fn call_dynamic(&mut self, name: &str, arguments: Vec<Dyn>) -> Result<Dyn, Error> {
+        crate::eval::call(
+            self,
+            name,
+            arguments.into_iter().map(Dyn::into_value).collect(),
+        )
+        .map(Dyn::from)
+    }
+
     pub fn has_dispatch(&self) -> bool {
         self.dispatch.is_some()
     }

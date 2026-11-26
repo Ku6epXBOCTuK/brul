@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul_script::eval::call;
-use brul_script::{Component, Error, Host, TimerId, TimerKind, Value};
+use brul_script::{Component, Dyn, Error, Host, TimerId, TimerKind, Value};
 
 type Calls = Rc<RefCell<Vec<(String, Vec<Value>)>>>;
 
@@ -148,6 +148,15 @@ fn builtins_check_arity() {
             name: "len".to_owned(),
             expected: "one",
         })
+    );
+}
+
+#[test]
+fn component_calls_dynamic_with_dyn_arguments() {
+    let mut component = Component::new();
+    assert_eq!(
+        component.call_dynamic("String", vec![Dyn::num(42.0)]),
+        Ok(Dyn::text("42"))
     );
 }
 

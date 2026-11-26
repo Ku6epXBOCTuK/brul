@@ -406,12 +406,12 @@ fn input_script_init(component: &mut brul::Component) -> Result<(), brul::Error>
 }
 #[allow(unused_mut, unused_variables)]
 fn input_script_fn_changed(component: &mut brul::Component, mut ev: brul::Dyn) -> Result<(), brul::Error> {
-    { let arguments = vec![ev.clone()]; brul::Dyn::call(component, "input", arguments)? };
+    { let arguments = vec![ev.clone()]; component.call_dynamic("input", arguments)? };
     Ok(())
 }
 #[allow(unused_mut, unused_variables)]
 fn input_script_fn_typed(component: &mut brul::Component, mut ev: brul::Dyn) -> Result<(), brul::Error> {
-    { let arguments = vec![ev.clone()]; brul::Dyn::call(component, "key", arguments)? };
+    { let arguments = vec![ev.clone()]; component.call_dynamic("key", arguments)? };
     Ok(())
 }
 #[allow(unused_variables)]

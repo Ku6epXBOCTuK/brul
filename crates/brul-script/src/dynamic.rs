@@ -4,7 +4,6 @@ use brul_ident::TimerId;
 use brul_syntax::TypeName;
 use brul_syntax::ast::{BinaryOp, UnaryOp};
 
-use crate::component::Component;
 use crate::{Error, Items, Value, eval};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -94,18 +93,6 @@ impl Dyn {
 
     pub fn assign_index(&mut self, position: &Self, value: &Self) -> Result<(), Error> {
         eval::assign_index(&mut self.0, &position.0, value.0.clone())
-    }
-
-    pub fn call(
-        component: &mut Component,
-        name: &str,
-        arguments: Vec<Self>,
-    ) -> Result<Self, Error> {
-        Ok(Self(eval::call(
-            component,
-            name,
-            arguments.into_iter().map(Self::into_value).collect(),
-        )?))
     }
 
     pub fn into_value(self) -> Value {

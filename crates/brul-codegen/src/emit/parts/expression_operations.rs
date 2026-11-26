@@ -104,7 +104,7 @@ fn call(target: &Expr, arguments: &[Expr], context: &ExprContext<'_>) -> Result<
         return Ok("{ return Err(brul::Error::Unsupported(\"method call\")) }".to_owned());
     };
     Ok(format!(
-        "{{ let arguments = vec![{}]; brul::Dyn::call(component, {name:?}, arguments)? }}",
+        "{{ let arguments = vec![{}]; component.call_dynamic({name:?}, arguments)? }}",
         operations(arguments, context)?
     ))
 }

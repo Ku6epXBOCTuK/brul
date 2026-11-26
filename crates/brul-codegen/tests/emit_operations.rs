@@ -115,7 +115,7 @@ fn emits_value_operations() {
 fn emits_value_calls() {
     assert_eq!(
         operated("f(1)"),
-        "{ let arguments = vec![brul::Dyn::num(1.0_f64)]; brul::Dyn::call(component, \"f\", arguments)? }"
+        "{ let arguments = vec![brul::Dyn::num(1.0_f64)]; component.call_dynamic(\"f\", arguments)? }"
     );
     assert!(
         operated_error("every(100, tick)")
