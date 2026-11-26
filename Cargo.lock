@@ -330,6 +330,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "brul-display-test"
+version = "0.1.0"
+dependencies = [
+ "brul-gui",
+ "fontdb",
+ "image",
+]
+
+[[package]]
 name = "brul-event"
 version = "0.1.0"
 dependencies = [
@@ -350,6 +359,7 @@ dependencies = [
 name = "brul-gui"
 version = "0.1.0"
 dependencies = [
+ "brul-display-test",
  "brul-event",
  "brul-ident",
  "brul-layout",
@@ -357,6 +367,7 @@ dependencies = [
  "brul-style",
  "brul-style-gen",
  "cosmic-text",
+ "fontdb",
  "image",
  "resvg",
  "thiserror 2.0.21",

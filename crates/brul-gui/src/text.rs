@@ -235,8 +235,12 @@ pub struct TextEngine {
 
 impl TextEngine {
     pub fn new() -> Self {
+        Self::with_fonts(core::iter::empty())
+    }
+
+    pub fn with_fonts(fonts: impl IntoIterator<Item = fontdb::Source>) -> Self {
         Self {
-            font_system: FontSystem::new(),
+            font_system: FontSystem::new_with_fonts(fonts),
             swash: SwashCache::new(),
             atlas: Atlas::new(),
             buffer: None,

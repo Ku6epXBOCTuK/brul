@@ -12,6 +12,7 @@ brul-ident = { workspace = true }
 brul-layout = { workspace = true }
 brul-style = { workspace = true }
 cosmic-text = { workspace = true }
+fontdb = { workspace = true }
 image = { workspace = true, features = ["png"] }
 resvg = { workspace = true }
 thiserror = { workspace = true }
@@ -20,4 +21,5 @@ thiserror = { workspace = true }
 brul-style-gen = { workspace = true }
 
 [dev-dependencies]
+brul-display-test = { workspace = true }
 brul-reactive = { workspace = true }

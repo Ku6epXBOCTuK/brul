@@ -73,6 +73,7 @@ brul-case = { path = 'crates\brul-case' }
 brul-capability = { path = 'crates\brul-capability' }
 brul-command = { path = 'crates\brul-command' }
 brul-codegen = { path = 'crates\brul-codegen' }
+brul-display-test = { path = 'crates\brul-display-test' }
 brul-event = { path = 'crates\brul-event' }
 brul-gpu = { path = 'crates\brul-gpu' }
 brul-gui = { path = 'crates\brul-gui' }
@@ -94,6 +95,7 @@ brul-widget-gen = { path = 'crates\brul-widget-gen' }
 brul-widget-schema = { path = 'crates\brul-widget-schema' }
 cosmic-text = "0.19.0"
 criterion = { version = "0.8.2", default-features = false }
+fontdb = "0.23.0"
 heck = "0.5.0"
 image = { version = "0.25.10", default-features = false }
 material-colors = "0.5.0"

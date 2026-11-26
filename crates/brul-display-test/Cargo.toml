@@ -1,0 +1,12 @@
+[package]
+name = "brul-display-test"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+brul-gui = { workspace = true }
+fontdb = { workspace = true }
+image = { workspace = true, features = ["png"] }

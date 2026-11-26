@@ -1,0 +1,14 @@
+size 120x48
+shot base
+hover 30 12
+shot hover
+press 30 12
+shot pressed
+release 30 12
+shot released
+focus 7
+shot focused
+checked 7 true
+shot checked
+leave
+shot left

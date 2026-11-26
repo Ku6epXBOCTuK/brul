@@ -1,0 +1,6 @@
+size 120x48
+shot base
+focus 7
+shot focused
+caret 7 0 1
+shot moved
