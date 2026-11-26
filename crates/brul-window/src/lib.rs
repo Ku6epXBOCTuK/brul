@@ -18,16 +18,23 @@
 //! ```
 
 mod gpu;
+#[path = "internal/gpu_frame.rs"]
 mod gpu_frame;
+#[path = "internal/input.rs"]
 mod input;
 #[cfg(windows)]
+#[path = "internal/layered.rs"]
 mod layered;
 pub mod perf;
+#[path = "internal/platform.rs"]
 mod platform;
+#[path = "internal/software.rs"]
 mod software;
+#[path = "internal/surface.rs"]
 mod surface;
 mod tree;
 mod window;
+#[path = "internal/windows.rs"]
 mod windows;
 
 pub use platform::{

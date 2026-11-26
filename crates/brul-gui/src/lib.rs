@@ -61,15 +61,23 @@
 //! assert_eq!(snapshot.nodes.len(), 2);
 //! ```
 
+#[path = "primitives/animation.rs"]
 mod animation;
+#[path = "primitives/atlas.rs"]
 mod atlas;
+#[path = "primitives/border.rs"]
 mod border;
+#[path = "primitives/canvas.rs"]
 mod canvas;
+#[path = "primitives/color.rs"]
 mod color;
+#[path = "primitives/cursor.rs"]
 mod cursor;
 mod draw;
 mod edit;
+#[path = "primitives/effect.rs"]
 mod effect;
+#[path = "primitives/gradient.rs"]
 mod gradient;
 mod image;
 mod paint;
@@ -77,6 +85,7 @@ mod rect;
 pub mod style;
 mod text;
 mod texture;
+#[path = "primitives/theme.rs"]
 mod theme;
 mod widget;
 
