@@ -1260,7 +1260,7 @@ fn dispatch_passes_the_key_code() {
 }
 
 #[test]
-fn dispatch_passes_a_key_to_the_widget_target_only() {
+fn dispatch_passes_a_key_to_the_widget_then_the_window() {
     let component = component_with(&["seen", "ran"]);
     let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
         vec![
@@ -1287,7 +1287,26 @@ fn dispatch_passes_a_key_to_the_widget_target_only() {
         Some(&Value::Number(id.get() as f64)),
         "widget target is preserved"
     );
-    assert_ne!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+    assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
+}
+
+#[test]
+fn dispatch_reaches_the_window_when_the_widget_is_gone() {
+    let component = component_with(&["ran"]);
+    let (_, mut ui) = dispatching(&component, Widget::text(""), |_| {
+        vec![Handler::new(&component, None, EventKind::Key, set_ran)]
+    });
+    let gone = Widget::text("").id();
+
+    ui.dispatch(&[DispatchEvent::semantic(
+        gone,
+        Event::key(
+            brul_gui::KeyPress::from("Escape"),
+            brul_gui::KeyModifiers::default(),
+        ),
+    )]);
+
+    assert_eq!(ui.component.borrow().read("ran"), Ok(Value::Bool(true)));
 }
 
 #[test]
@@ -1848,7 +1867,7 @@ fn record_window_script_target(component: &mut Component, arguments: &[Dyn]) -> 
 }
 
 #[test]
-fn one_targeted_event_reaches_the_attachment_and_script_but_not_the_window() {
+fn one_targeted_event_reaches_the_attachment_and_both_scripts() {
     let component = component_with(&["attach", "script", "window"]);
     let widget = Widget::text("");
     let id = widget.id();
@@ -1909,7 +1928,7 @@ fn one_targeted_event_reaches_the_attachment_and_script_but_not_the_window() {
     let component = ui.component.borrow();
     assert_eq!(component.read("attach"), Ok(expected.clone()));
     assert_eq!(component.read("script"), Ok(expected));
-    assert_ne!(component.read("window"), Ok(Value::Number(id.get() as f64)));
+    assert_eq!(component.read("window"), Ok(Value::Number(id.get() as f64)));
 }
 
 #[test]

@@ -48,9 +48,13 @@ impl DispatchPath {
                 .chain(std::iter::once(EventTarget::Window))
                 .collect(),
         };
+        let handlers = match target {
+            EventTarget::Window => vec![target],
+            EventTarget::Widget(_) => vec![target, EventTarget::Window],
+        };
         Self {
             capabilities,
-            handlers: vec![target],
+            handlers,
         }
     }
 }
