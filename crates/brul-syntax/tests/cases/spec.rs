@@ -1,10 +1,10 @@
 use brul_syntax::ebnf::{self, Target};
 use std::collections::BTreeMap;
 
-const MARKUP: &str = include_str!("../../../docs/lang/markup.ebnf");
-const STYLE: &str = include_str!("../../../docs/lang/style.ebnf");
-const SCRIPT: &str = include_str!("../../../docs/lang/script.ebnf");
-const USES: &str = include_str!("../../../docs/lang/use.ebnf");
+const MARKUP: &str = include_str!("../../../../docs/lang/markup.ebnf");
+const STYLE: &str = include_str!("../../../../docs/lang/style.ebnf");
+const SCRIPT: &str = include_str!("../../../../docs/lang/script.ebnf");
+const USES: &str = include_str!("../../../../docs/lang/use.ebnf");
 
 fn files() -> [(&'static str, &'static str); 4] {
     [

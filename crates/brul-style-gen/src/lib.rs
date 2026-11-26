@@ -1,4 +1,5 @@
 mod codegen;
+#[path = "internal/docs.rs"]
 mod docs;
 mod layout;
 mod snapshot;
@@ -6,6 +7,7 @@ mod style;
 mod syntax;
 mod text;
 mod tokens;
+#[path = "internal/util.rs"]
 mod util;
 mod widget;
 

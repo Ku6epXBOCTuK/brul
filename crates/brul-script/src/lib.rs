@@ -3,11 +3,14 @@
 pub mod builtins;
 pub mod component;
 pub mod dynamic;
+#[path = "internal/environment.rs"]
 pub mod environment;
 pub mod error;
 pub mod eval;
 pub mod host;
+#[path = "internal/names.rs"]
 pub mod names;
+#[path = "internal/scope.rs"]
 pub mod scope;
 pub mod value;
 

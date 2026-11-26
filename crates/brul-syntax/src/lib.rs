@@ -19,8 +19,10 @@ macro_rules! rule {
 }
 
 pub mod ast;
+#[path = "internal/cursor.rs"]
 pub mod cursor;
 pub mod ebnf;
+#[path = "internal/error.rs"]
 pub mod error;
 pub mod lexer;
 pub mod markup;
@@ -28,6 +30,7 @@ pub mod parser;
 pub mod script;
 pub mod sfc;
 pub mod style;
+#[path = "internal/types.rs"]
 pub mod types;
 pub mod uses;
 
