@@ -7,16 +7,13 @@ use brul_syntax::markup::{Block, EachBlock, IfBlock};
 use brul_syntax::types::Type;
 
 use super::Emit;
+use super::ExprContext;
 use super::Frame;
 use super::Out;
-use super::PropTypes;
 
-use super::expression::{operation, typed};
+use super::expression::{operation_in, typed};
 use super::scopes::{ScopeField, ScopeInfo, Scopes};
-use super::state::State;
 use super::{contains_slot, items, items_spliced};
-
-use brul_script::Names;
 
 use super::structure_each::{arm_frame, arm_header, each_arm, widget};
 
@@ -50,20 +47,13 @@ pub(super) fn structure_if(
 ) -> Result<(), Error> {
     let name = emit.structures.next(emit.context.base, "if");
     for (index, branch) in block.branches.iter().enumerate() {
-        check_condition(
-            &branch.condition,
-            emit.context.names,
-            emit.context.state,
-            emit.context.prop_types,
-        )?;
+        check_condition(&branch.condition, &emit.expr_context())?;
         let function = format!("{name}_value{index}");
         emit.functions.push(value_function(
             &function,
             &branch.condition,
             ValueKind::Bool,
-            emit.context.names,
-            emit.context.state,
-            emit.context.prop_types,
+            &emit.expr_context(),
         )?);
     }
     let arm = rebuild_arm(&name, block, emit, frame)?;
@@ -80,28 +70,19 @@ pub(super) fn structure_each(
     counter: &mut usize,
 ) -> Result<(), Error> {
     let name = emit.structures.next(emit.context.base, "each");
-    check_collection(
-        &block.collection,
-        emit.context.names,
-        emit.context.state,
-        emit.context.prop_types,
-    )?;
+    check_collection(&block.collection, &emit.expr_context())?;
     emit.functions.push(value_function(
         &format!("{name}_value"),
         &block.collection,
         ValueKind::Items,
-        emit.context.names,
-        emit.context.state,
-        emit.context.prop_types,
+        &emit.expr_context(),
     )?);
     if let Some(key) = &block.key {
         emit.functions.push(value_function(
             &format!("{name}_key"),
             key,
             ValueKind::Inferred,
-            emit.context.names,
-            emit.context.state,
-            emit.context.prop_types,
+            &emit.expr_context(),
         )?);
     }
     let mut fields = vec![ScopeField {
@@ -142,11 +123,9 @@ pub(super) fn structure_each(
 
 fn check_condition(
     condition: &brul_syntax::ast::Expr,
-    names: &Names<'_>,
-    state: &State,
-    props: &PropTypes,
+    context: &ExprContext<'_>,
 ) -> Result<(), Error> {
-    if let Some((_, ty)) = typed(condition, names, state, props, &Scopes::new())?
+    if let Some((_, ty)) = typed(condition, &context.with_scopes(Scopes::new()))?
         && ty != Type::Bool
     {
         return Err(crate::error_at(
@@ -159,11 +138,9 @@ fn check_condition(
 
 fn check_collection(
     collection: &brul_syntax::ast::Expr,
-    names: &Names<'_>,
-    state: &State,
-    props: &PropTypes,
+    context: &ExprContext<'_>,
 ) -> Result<(), Error> {
-    if let Some((_, ty)) = typed(collection, names, state, props, &Scopes::new())?
+    if let Some((_, ty)) = typed(collection, &context.with_scopes(Scopes::new()))?
         && !matches!(ty, Type::Array(_) | Type::Object)
     {
         return Err(crate::error_at(
@@ -178,17 +155,16 @@ fn value_function(
     name: &str,
     value: &brul_syntax::ast::Expr,
     kind: ValueKind,
-    names: &Names<'_>,
-    state: &super::state::State,
-    props: &super::PropTypes,
+    context: &ExprContext<'_>,
 ) -> Result<String, Error> {
-    let inferred = typed(value, names, state, props, &Scopes::new())?;
+    let scoped = context.with_scopes(Scopes::new());
+    let inferred = typed(value, &scoped)?;
     let (return_type, body) = match kind {
         ValueKind::Bool => match inferred {
             Some((code, Type::Bool)) => ("bool", code),
             _ => (
                 "bool",
-                format!("(&{}).try_into()?", operation(value, names, state, props)?),
+                format!("(&{}).try_into()?", operation_in(value, &scoped)?),
             ),
         },
         ValueKind::Items => (
@@ -197,13 +173,13 @@ fn value_function(
                 "brul::items(&({}))",
                 match inferred {
                     Some((code, _)) => code,
-                    None => operation(value, names, state, props)?,
+                    None => operation_in(value, &scoped)?,
                 }
             ),
         ),
         ValueKind::Inferred => match inferred {
             Some((code, ty)) => (Scopes::local_type(&ty), code),
-            None => ("brul::Dyn", operation(value, names, state, props)?),
+            None => ("brul::Dyn", operation_in(value, &scoped)?),
         },
     };
     let mut text = String::new();

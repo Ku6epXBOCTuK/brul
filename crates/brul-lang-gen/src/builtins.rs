@@ -74,10 +74,10 @@ pub fn dispatch() -> TokenStream {
         let result = type_ident(spec.result);
         let call = match spec.emit {
             EmitSpec::Function(path) => quote! {
-                call_value_function(#path, Type::#result, arguments, &context)
+                call_value_function(#path, Type::#result, arguments, context)
             },
             EmitSpec::Host(_) => quote! {
-                call_host(builtin, arguments, &context)
+                call_host(builtin, arguments, position, context)
             },
             EmitSpec::Method(method) => {
                 let index = spec
@@ -95,7 +95,7 @@ pub fn dispatch() -> TokenStream {
                         Type::#result,
                         builtin,
                         arguments,
-                        &context,
+                        context,
                     )
                 }
             }
@@ -108,18 +108,8 @@ pub fn dispatch() -> TokenStream {
             builtin: &Builtin,
             arguments: &[Expr],
             position: Position,
-            names: &Names<'_>,
-            state: &State,
-            props: &HashMap<String, Type>,
-            scopes: &Scopes,
+            context: &ExprContext<'_>,
         ) -> Result<Option<(String, Type)>, Error> {
-            let context = Context {
-                position,
-                names,
-                state,
-                props,
-                scopes,
-            };
             match builtin.name {
                 #(#arms)*
                 _ => Ok(None),

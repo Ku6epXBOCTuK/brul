@@ -2,24 +2,21 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use brul_case::{ident, pascal, snake};
-use brul_script::Names;
 use brul_syntax::error::Error;
 use brul_syntax::script::Program;
 use brul_syntax::types::Type;
 
+use super::ExprContext;
 use super::expression::{convert, wrap_typed};
 use super::scopes::{FunctionSig, Scopes};
-use super::state::State;
 use super::statement::{block_with_scopes, top_level};
 
 pub(super) fn module(
     name: &str,
     program: Option<&Program>,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
+    context: &ExprContext<'_>,
 ) -> Result<String, Error> {
-    let mut out = state.definition(&format!("{name}_state_init"));
+    let mut out = context.state.definition(&format!("{name}_state_init"));
     let _ = writeln!(out, "\npub fn {name}() -> Option<brul::Script> {{");
     let Some(program) = program else {
         out.push_str("    None\n}\n");
@@ -59,8 +56,12 @@ pub(super) fn module(
             event_call(name, &function.name)
         );
     }
-    top_level(&program.statements, names, state, props, &mut out)?;
-    out.push_str(&state.init_call(&format!("{name}_state_init")));
+    top_level(
+        &program.statements,
+        &mut out,
+        &mut context.with_scopes(Scopes::new()),
+    )?;
+    out.push_str(&context.state.init_call(&format!("{name}_state_init")));
     out.push_str("    Ok(())\n}\n");
     for function in &program.functions {
         let function_name = format!("{name}_fn_{}", ident(&snake(&function.name)));
@@ -93,7 +94,7 @@ pub(super) fn module(
         for parameter in &function.params {
             let _ = scopes.declare(&parameter.name, &parameter.ty, false)?;
         }
-        block_with_scopes(&function.body, names, state, props, &mut out, &mut scopes)?;
+        block_with_scopes(&function.body, &mut out, &mut context.with_scopes(scopes))?;
         if returns_unit {
             out.push_str("    Ok(())\n}\n");
         } else {

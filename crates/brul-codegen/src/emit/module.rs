@@ -15,6 +15,7 @@ use crate::discovery::Capabilities;
 use crate::error_at;
 
 use super::CodegenContext;
+use super::ExprContext;
 
 use super::EmitOutputs;
 
@@ -343,9 +344,7 @@ fn module_at(
         head.push_str(&script::module(
             &script_name,
             view.program,
-            &names,
-            &view_state,
-            &types,
+            &ExprContext::new(&names, &view_state, &types),
         )?);
         head.push_str(&script::handle(&script_name, view.program));
         if index == 0 && view.program.is_some() {

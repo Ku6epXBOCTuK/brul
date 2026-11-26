@@ -210,18 +210,7 @@ pub(super) fn registered_widget(
             out.line(format_args!("script: None,"));
             out.line(format_args!("name: {:?},", spec.name));
             out.line(format_args!("names: names(),"));
-            component::arguments(
-                out,
-                "props",
-                &props,
-                emit.context.names,
-                emit.context.state,
-                emit.context.prop_types,
-                emit.context.resources,
-                emit.context.resource_prefix,
-                &emit.scope_defs,
-                frame.scope,
-            )?;
+            component::arguments(out, "props", &props, emit.context, &emit.scope_defs, frame.scope)?;
             if default_args.is_empty() {
                 out.line(format_args!("defaults: &[],"));
             } else {
@@ -229,11 +218,7 @@ pub(super) fn registered_widget(
                     out,
                     "defaults",
                     &default_args,
-                    emit.context.names,
-                    emit.context.state,
-                    emit.context.prop_types,
-                    emit.context.resources,
-                    emit.context.resource_prefix,
+                    emit.context,
                     &emit.scope_defs,
                     frame.scope,
                 )?;
@@ -278,14 +263,7 @@ pub(super) fn registered_widget(
             out.line(format_args!(
                 "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {}, expression: {} }}));",
                 classes::table(emit.context.resource_prefix),
-                expression::closure(
-                    value,
-                    emit.context.names,
-                    emit.context.state,
-                    emit.context.prop_types,
-                    &emit.scope_defs,
-                    frame.scope
-                )?
+                expression::closure(value, &emit.expr_context(), &emit.scope_defs, frame.scope)?
             ));
         }
         attachment_bindings(

@@ -1,16 +1,12 @@
-use brul_script::Names;
-use std::collections::HashMap;
-
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
 use brul_syntax::markup::PropType;
-use brul_syntax::types::Type;
 
-use crate::Resource;
-
+use super::CodegenContext;
 use super::Emit;
 use super::Frame;
 use super::Out;
+use super::ScopeInfo;
 
 use super::{element, expression};
 
@@ -25,14 +21,9 @@ pub(super) fn write(
     frame: Frame<'_>,
 ) -> Result<(), Error> {
     let bases = emit.bases;
-    let names = emit.context.names;
-    let state = emit.context.state;
     let prefix = emit.context.resource_prefix;
-    let resources = emit.context.resources;
     let scopes = &emit.scope_defs;
     let scope = frame.scope;
-    let prop_types = emit.context.prop_types;
-    let dynamic_classes = &mut *emit.dynamic_classes;
     let base = bases[index].as_str();
     let Call {
         element,
@@ -58,30 +49,8 @@ pub(super) fn write(
             out.line(format_args!("script: {base}_script(),"));
             out.line(format_args!("name: {name:?},"));
             out.line(format_args!("names: names(),"));
-            arguments(
-                out,
-                "props",
-                &props,
-                names,
-                emit.context.state,
-                emit.context.prop_types,
-                resources,
-                prefix,
-                scopes,
-                scope,
-            )?;
-            arguments(
-                out,
-                "defaults",
-                &defaults,
-                names,
-                emit.context.state,
-                emit.context.prop_types,
-                resources,
-                prefix,
-                scopes,
-                scope,
-            )?;
+            arguments(out, "props", &props, emit.context, scopes, scope)?;
+            arguments(out, "defaults", &defaults, emit.context, scopes, scope)?;
             out.line(format_args!("events: &["));
             out.indented(|out| {
                 for (event, handler, params) in &events {
@@ -134,10 +103,12 @@ pub(super) fn write(
             ));
         }
         if let Some(value) = class {
+            let expression =
+                expression::closure(value, &emit.context.expr_context(), scopes, scope)?;
+            let dynamic_classes = &mut *emit.dynamic_classes;
             *dynamic_classes = true;
             out.line(format_args!(
-                "bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {} }}));",
-                expression::closure(value, names, state, prop_types, scopes, scope)?
+                "bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {expression} }}));"
             ));
         }
         element::attachment_bindings(out, element, &widget, emit.context, scopes, scope)?;
@@ -148,19 +119,17 @@ pub(super) fn write(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn arguments(
     out: &mut Out<'_>,
     field: &str,
     arguments: &[(&str, &PropType, &Expr)],
-    names: &Names<'_>,
-    state: &super::state::State,
-    props: &HashMap<String, Type>,
-    resources: &[Resource],
-    prefix: &str,
-    scopes: &[super::scopes::ScopeInfo],
+    codegen: &CodegenContext<'_>,
+    scopes: &[ScopeInfo],
     scope: Option<usize>,
 ) -> Result<(), Error> {
+    let context = codegen.expr_context();
+    let resources = codegen.resources;
+    let prefix = codegen.resource_prefix;
     out.line(format_args!("{field}: &["));
     out.indented(|out| -> Result<(), Error> {
         for (name, ty, value) in arguments {
@@ -170,9 +139,8 @@ pub(super) fn arguments(
                 ),
                 _ => {
                     let variant = ty.prop_expression();
-                    let closure = expression::typed_closure(
-                        value, names, state, props, scopes, scope, ty,
-                    )?;
+                    let closure =
+                        expression::typed_closure(value, &context, scopes, scope, ty)?;
                     format!("brul::PropExpression::{variant}({closure})")
                 }
             };

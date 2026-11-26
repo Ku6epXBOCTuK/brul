@@ -71,7 +71,7 @@ pub(super) type PropTypes = HashMap<String, Type>;
 pub use state::State;
 
 pub use alloc::allocations;
-pub(super) use context::{CodegenContext, Emit, EmitOutputs};
+pub(super) use context::{CodegenContext, Emit, EmitOutputs, ExprContext};
 pub use expression::operation;
 pub use module::{
     GeneratedFile, Module, ResourceFile, component_file, component_file_with_capabilities, module,

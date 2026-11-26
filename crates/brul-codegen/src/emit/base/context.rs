@@ -13,7 +13,7 @@ use crate::{Registry, Resource};
 use super::PropTypes;
 use super::anchor::AnchorIds;
 use super::classes::ClassNames;
-use super::scopes::ScopeInfo;
+use super::scopes::{ScopeInfo, Scopes};
 use super::state::State;
 use super::state_ids::StateIds;
 use super::structure::StructureNames;
@@ -34,6 +34,39 @@ pub(crate) struct CodegenContext<'a> {
     pub(super) state_ids: &'a RefCell<StateIds>,
     pub(super) prop_types: &'a PropTypes,
     pub(super) program: Option<&'a Program>,
+}
+
+impl<'a> CodegenContext<'a> {
+    pub(super) fn expr_context(&self) -> ExprContext<'a> {
+        ExprContext::new(self.names, self.state, self.prop_types)
+    }
+}
+
+pub(crate) struct ExprContext<'a> {
+    pub(super) names: &'a Names<'a>,
+    pub(super) state: &'a State,
+    pub(super) props: &'a PropTypes,
+    pub(super) scopes: Scopes,
+}
+
+impl<'a> ExprContext<'a> {
+    pub(super) fn new(names: &'a Names<'a>, state: &'a State, props: &'a PropTypes) -> Self {
+        Self {
+            names,
+            state,
+            props,
+            scopes: Scopes::new(),
+        }
+    }
+
+    pub(super) fn with_scopes(&self, scopes: Scopes) -> ExprContext<'a> {
+        ExprContext {
+            names: self.names,
+            state: self.state,
+            props: self.props,
+            scopes,
+        }
+    }
 }
 
 pub(crate) struct EmitOutputs<'a> {
@@ -71,6 +104,10 @@ impl<'a> Emit<'a> {
             classes: outputs.classes,
             slots,
         }
+    }
+
+    pub(super) fn expr_context(&self) -> ExprContext<'a> {
+        self.context.expr_context()
     }
 
     pub(super) fn prop_type(&self, name: &str) -> Option<&Type> {

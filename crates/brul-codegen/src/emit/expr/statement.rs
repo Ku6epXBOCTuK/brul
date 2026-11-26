@@ -1,67 +1,46 @@
-use std::collections::HashMap;
 use std::fmt::Write;
 
-use brul_script::Names;
 use brul_syntax::TypeName;
 use brul_syntax::error::Error;
 use brul_syntax::script::Statement;
 use brul_syntax::types::Type;
 
+use super::ExprContext;
 use super::expression::{convert, operation_in, operation_statement, typed};
 use super::scopes::Scopes;
-use super::state::State;
 
 pub(super) fn top_level(
     statements: &[Statement],
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
     out: &mut String,
+    context: &mut ExprContext<'_>,
 ) -> Result<(), Error> {
-    block_in(
-        statements,
-        names,
-        state,
-        props,
-        out,
-        &mut Scopes::new(),
-        true,
-    )
+    block_in(statements, out, context, true)
 }
 
 pub(super) fn block_with_scopes(
     statements: &[Statement],
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
     out: &mut String,
-    scopes: &mut Scopes,
+    context: &mut ExprContext<'_>,
 ) -> Result<(), Error> {
-    block_in(statements, names, state, props, out, scopes, false)
+    block_in(statements, out, context, false)
 }
 
 fn block_in(
     statements: &[Statement],
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
     out: &mut String,
-    scopes: &mut Scopes,
+    context: &mut ExprContext<'_>,
     top_level: bool,
 ) -> Result<(), Error> {
     for statement in statements {
-        emit_statement(statement, names, state, props, out, scopes, top_level)?;
+        emit_statement(statement, out, context, top_level)?;
     }
     Ok(())
 }
 
 fn emit_statement(
     statement: &Statement,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
     out: &mut String,
-    scopes: &mut Scopes,
+    context: &mut ExprContext<'_>,
     top_level: bool,
 ) -> Result<(), Error> {
     match statement {
@@ -76,10 +55,7 @@ fn emit_statement(
                 let (method, value) = match value {
                     Some(value) => (
                         "declare",
-                        format!(
-                            "({}).into()",
-                            operation_in(value, names, state, props, scopes)?
-                        ),
+                        format!("({}).into()", operation_in(value, context)?),
                     ),
                     None => ("declare_if_absent", null),
                 };
@@ -89,19 +65,19 @@ fn emit_statement(
                 );
                 return Ok(());
             }
-            let ident = scopes.declare(name, ty, *constant)?;
+            let ident = context.scopes.declare(name, ty, *constant)?;
             let mutable = if *constant { "" } else { "mut " };
             let local_ty = Scopes::local_type(ty);
             let local = if matches!(ty, brul_syntax::types::Type::Null) {
                 "()".to_owned()
             } else if ty.is_value() {
                 match value {
-                    Some(value) => operation_in(value, names, state, props, scopes)?,
+                    Some(value) => operation_in(value, context)?,
                     None => "brul::Dyn::null()".to_owned(),
                 }
             } else {
                 let value = match value {
-                    Some(value) => operation_in(value, names, state, props, scopes)?,
+                    Some(value) => operation_in(value, context)?,
                     None => "brul::Dyn::null()".to_owned(),
                 };
                 format!("(&{value}).try_into()?")
@@ -109,17 +85,13 @@ fn emit_statement(
             let _ = writeln!(out, "    let {mutable}{ident}: {local_ty} = {local};");
         }
         Statement::Expr(expression) => {
-            let _ = writeln!(
-                out,
-                "    {};",
-                operation_statement(expression, names, state, props, scopes)?
-            );
+            let _ = writeln!(out, "    {};", operation_statement(expression, context)?);
         }
         Statement::Block(statements) => {
             out.push_str("    {\n");
-            scopes.push();
-            block_in(statements, names, state, props, out, scopes, false)?;
-            scopes.pop();
+            context.scopes.push();
+            block_in(statements, out, context, false)?;
+            context.scopes.pop();
             out.push_str("    }\n");
         }
         Statement::If {
@@ -127,7 +99,7 @@ fn emit_statement(
             then_branch,
             else_branch,
         } => {
-            match typed(condition, names, state, props, scopes)? {
+            match typed(condition, context)? {
                 Some((code, ty)) => {
                     if ty != Type::Bool {
                         return Err(crate::error_at(
@@ -138,23 +110,23 @@ fn emit_statement(
                     let _ = writeln!(out, "    if {code} {{");
                 }
                 None => {
-                    let code = operation_in(condition, names, state, props, scopes)?;
+                    let code = operation_in(condition, context)?;
                     let _ = writeln!(out, "    if ({code}).boolean()? {{");
                 }
             }
-            scopes.push();
-            block_in(then_branch, names, state, props, out, scopes, false)?;
-            scopes.pop();
+            context.scopes.push();
+            block_in(then_branch, out, context, false)?;
+            context.scopes.pop();
             if let Some(branch) = else_branch {
                 out.push_str("    } else {\n");
-                scopes.push();
-                emit_statement(branch, names, state, props, out, scopes, false)?;
-                scopes.pop();
+                context.scopes.push();
+                emit_statement(branch, out, context, false)?;
+                context.scopes.pop();
             }
             out.push_str("    }\n");
         }
         Statement::Return { value, position } => {
-            let return_type = scopes.return_type().clone();
+            let return_type = context.scopes.return_type().clone();
             let Some(value) = value else {
                 if !matches!(return_type, Type::Void | Type::Null) {
                     return Err(crate::error_at(
@@ -174,7 +146,7 @@ fn emit_statement(
                     "a Void function cannot return a value",
                 ));
             }
-            let code = if let Some((code, ty)) = typed(value, names, state, props, scopes)? {
+            let code = if let Some((code, ty)) = typed(value, context)? {
                 if ty != return_type {
                     return Err(crate::error_at(
                         value.position,
@@ -187,7 +159,7 @@ fn emit_statement(
                 }
                 code
             } else {
-                let code = operation_in(value, names, state, props, scopes)?;
+                let code = operation_in(value, context)?;
                 if return_type == Type::Null {
                     format!("({code}).unit()?")
                 } else {

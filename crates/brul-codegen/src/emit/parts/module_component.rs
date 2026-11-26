@@ -13,6 +13,7 @@ use crate::{Definition, Registry, Resource};
 
 use super::CodegenContext;
 use super::EmitOutputs;
+use super::ExprContext;
 use super::StateIds;
 use super::StructureNames;
 use super::anchor::AnchorIds;
@@ -146,9 +147,7 @@ pub(super) fn emit_component(
     body.push_str(&script::module(
         &format!("{prefix}script"),
         definition.program.as_ref(),
-        names,
-        &component_state,
-        &component_prop_types,
+        &ExprContext::new(names, &component_state, &component_prop_types),
     )?);
     body.push_str(&resources::functions(&prefix, &definition.resources));
     let mut functions_block = String::new();

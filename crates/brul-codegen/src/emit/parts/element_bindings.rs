@@ -38,18 +38,14 @@ pub(super) fn content_binding(
     let closure = if ty == brul_syntax::types::Type::Image {
         expression::closure(
             &expression,
-            emit.context.names,
-            emit.context.state,
-            emit.context.prop_types,
+            &emit.expr_context(),
             &emit.scope_defs,
             frame.scope,
         )?
     } else {
         expression::typed_closure(
             &expression,
-            emit.context.names,
-            emit.context.state,
-            emit.context.prop_types,
+            &emit.expr_context(),
             &emit.scope_defs,
             frame.scope,
             &ty,
@@ -72,9 +68,7 @@ pub(super) fn effect_binding(
     for expression in &rule.args {
         args.push(expression::typed_closure(
             expression,
-            emit.context.names,
-            emit.context.state,
-            emit.context.prop_types,
+            &emit.expr_context(),
             &emit.scope_defs,
             frame.scope,
             &brul_syntax::types::Type::Number,
@@ -194,9 +188,7 @@ pub(super) fn hooks_binding(out: &mut Out<'_>, spec: HooksSpec<'_>) -> Result<()
         };
         expressions.push(expression::closure(
             &given.value,
-            context.names,
-            context.state,
-            context.prop_types,
+            &context.expr_context(),
             scopes,
             scope,
         )?);
@@ -298,9 +290,7 @@ pub(super) fn parameters(
         };
         let closure = expression::typed_closure(
             value,
-            emit.context.names,
-            emit.context.state,
-            emit.context.prop_types,
+            &emit.expr_context(),
             &emit.scope_defs,
             frame.scope,
             &brul_syntax::types::Type::Bool,
@@ -321,7 +311,7 @@ pub(super) fn parameters(
         let table = classes::table(emit.context.resource_prefix);
         out.line(format_args!(
             "bindings.push(brul::Binding::new(component, {name}.id(), brul::BindingTarget::Class {{ table: {table}, expression: {} }}));",
-            expression::closure(value, emit.context.names, emit.context.state, emit.context.prop_types, &emit.scope_defs, frame.scope)?
+            expression::closure(value, &emit.expr_context(), &emit.scope_defs, frame.scope)?
         ));
     }
     Ok(())
@@ -337,9 +327,7 @@ fn optional_expression(
             "Some({})",
             expression::typed_closure(
                 item,
-                emit.context.names,
-                emit.context.state,
-                emit.context.prop_types,
+                &emit.expr_context(),
                 &emit.scope_defs,
                 frame.scope,
                 &brul_syntax::types::Type::Number,

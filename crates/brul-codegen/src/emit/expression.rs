@@ -8,6 +8,7 @@ use brul_syntax::script::builtins as syntax_builtins;
 use brul_syntax::script::builtins::Builtin;
 use brul_syntax::types::Type;
 
+use super::ExprContext;
 use super::names;
 use super::rust_string;
 use super::scopes::{ScopeInfo, Scopes};
@@ -50,36 +51,31 @@ fn scope_locals(definitions: &[ScopeInfo], current: Option<usize>) -> (String, S
 
 pub fn closure(
     value: &Expr,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
+    context: &ExprContext<'_>,
     definitions: &[ScopeInfo],
     current: Option<usize>,
 ) -> Result<String, Error> {
     let (locals, scopes) = scope_locals(definitions, current);
+    let context = context.with_scopes(scopes);
     Ok(format!(
         "|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> {{ {locals}let value = {}; Ok(value) }}",
-        operation_in(value, names, state, props, &scopes)?
+        operation_in(value, &context)?
     ))
 }
 
 pub fn typed_closure(
     value: &Expr,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
+    context: &ExprContext<'_>,
     definitions: &[ScopeInfo],
     current: Option<usize>,
     ty: &Type,
 ) -> Result<String, Error> {
     let (locals, scopes) = scope_locals(definitions, current);
+    let context = context.with_scopes(scopes);
     let rust = ty.rust_type();
-    let body = match typed(value, names, state, props, &scopes)? {
+    let body = match typed(value, &context)? {
         Some((code, found)) if &found == ty => code,
-        _ => format!(
-            "(&{}).try_into()?",
-            operation_in(value, names, state, props, &scopes)?
-        ),
+        _ => format!("(&{}).try_into()?", operation_in(value, &context)?),
     };
     Ok(format!(
         "|component: &mut brul::Component| -> Result<{rust}, brul::Error> {{ {locals}Ok({body}) }}"
@@ -92,7 +88,7 @@ pub fn operation(
     state: &State,
     props: &HashMap<String, Type>,
 ) -> Result<String, Error> {
-    operation_in(expression, names, state, props, &Scopes::default())
+    operation_in(expression, &ExprContext::new(names, state, props))
 }
 
 pub(super) fn wrap_typed(code: String, ty: &Type) -> String {
@@ -124,10 +120,7 @@ fn prop_typed(
 
 pub(super) fn typed(
     expression: &Expr,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    scopes: &Scopes,
+    context: &ExprContext<'_>,
 ) -> Result<Option<(String, Type)>, Error> {
     Ok(match &expression.kind {
         ExprKind::Number(value) => Some((format!("{value:?}_f64"), Type::Number)),
@@ -135,18 +128,18 @@ pub(super) fn typed(
         ExprKind::Bool(value) => Some((value.to_string(), Type::Bool)),
         ExprKind::Null => Some(("()".to_owned(), Type::Null)),
         ExprKind::Ident(name) => {
-            if let Some(value) = scopes.read_typed(name) {
+            if let Some(value) = context.scopes.read_typed(name) {
                 Some(value)
-            } else if let Some(value) = state.read_typed(name) {
+            } else if let Some(value) = context.state.read_typed(name) {
                 Some(value)
-            } else if let Some(ty) = props.get(name) {
-                prop_typed(name, ty, expression.position, names)?
+            } else if let Some(ty) = context.props.get(name) {
+                prop_typed(name, ty, expression.position, context.names)?
             } else {
                 None
             }
         }
         ExprKind::Unary { op, operand } => {
-            let Some((code, ty)) = typed(operand, names, state, props, scopes)? else {
+            let Some((code, ty)) = typed(operand, context)? else {
                 return Ok(None);
             };
             match (op, &ty) {
@@ -161,10 +154,10 @@ pub(super) fn typed(
             }
         }
         ExprKind::Binary { op, left, right } => {
-            let Some((lhs, left_ty)) = typed(left, names, state, props, scopes)? else {
+            let Some((lhs, left_ty)) = typed(left, context)? else {
                 return Ok(None);
             };
-            let Some((rhs, right_ty)) = typed(right, names, state, props, scopes)? else {
+            let Some((rhs, right_ty)) = typed(right, context)? else {
                 return Ok(None);
             };
             if left_ty != right_ty {
@@ -216,8 +209,7 @@ pub(super) fn typed(
             then_branch,
             else_branch,
         } => {
-            let Some((condition, condition_ty)) = typed(condition, names, state, props, scopes)?
-            else {
+            let Some((condition, condition_ty)) = typed(condition, context)? else {
                 return Ok(None);
             };
             if condition_ty != Type::Bool {
@@ -229,12 +221,10 @@ pub(super) fn typed(
                     ),
                 ));
             }
-            let Some((then_code, then_ty)) = typed(then_branch, names, state, props, scopes)?
-            else {
+            let Some((then_code, then_ty)) = typed(then_branch, context)? else {
                 return Ok(None);
             };
-            let Some((else_code, else_ty)) = typed(else_branch, names, state, props, scopes)?
-            else {
+            let Some((else_code, else_ty)) = typed(else_branch, context)? else {
                 return Ok(None);
             };
             if then_ty != else_ty {
@@ -257,28 +247,12 @@ pub(super) fn typed(
                 return Ok(None);
             };
             if let Some(builtin) = syntax_builtins::builtin(name) {
-                return builtin_call(
-                    builtin,
-                    args,
-                    expression.position,
-                    names,
-                    state,
-                    props,
-                    scopes,
-                );
+                return builtin_call(builtin, args, expression.position, context);
             }
-            if let Some(command) = state.command(name) {
-                return host_call(
-                    command,
-                    args,
-                    expression.position,
-                    names,
-                    state,
-                    props,
-                    scopes,
-                );
+            if let Some(command) = context.state.command(name) {
+                return host_call(command, args, expression.position, context);
             }
-            let Some(signature) = scopes.function(name) else {
+            let Some(signature) = context.scopes.function(name) else {
                 return Ok(None);
             };
             if args.len() != signature.params.len() {
@@ -293,18 +267,14 @@ pub(super) fn typed(
             }
             let mut arguments = Vec::new();
             for (argument, expected) in args.iter().zip(&signature.params) {
-                let code =
-                    if let Some((code, found)) = typed(argument, names, state, props, scopes)? {
-                        if &found != expected {
-                            return Err(crate::arg_mismatch(argument.position, expected, &found));
-                        }
-                        code
-                    } else {
-                        convert(
-                            &operation_in(argument, names, state, props, scopes)?,
-                            expected,
-                        )
-                    };
+                let code = if let Some((code, found)) = typed(argument, context)? {
+                    if &found != expected {
+                        return Err(crate::arg_mismatch(argument.position, expected, &found));
+                    }
+                    code
+                } else {
+                    convert(&operation_in(argument, context)?, expected)
+                };
                 arguments.push(code);
             }
             Some((
@@ -324,10 +294,7 @@ fn builtin_call(
     builtin: &Builtin,
     arguments: &[Expr],
     position: Position,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    scopes: &Scopes,
+    context: &ExprContext<'_>,
 ) -> Result<Option<(String, Type)>, Error> {
     if arguments.len() != builtin.arguments.len() {
         return Err(crate::error_at(
@@ -340,17 +307,14 @@ fn builtin_call(
             ),
         ));
     }
-    super::builtins::emit_builtin(builtin, arguments, position, names, state, props, scopes)
+    super::builtins::emit_builtin(builtin, arguments, position, context)
 }
 
 pub(super) fn host_call(
     command: &Command,
     arguments: &[Expr],
     position: Position,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    scopes: &Scopes,
+    context: &ExprContext<'_>,
 ) -> Result<Option<(String, Type)>, Error> {
     if arguments.len() != command.params.len() {
         return Err(crate::error_at(
@@ -365,16 +329,13 @@ pub(super) fn host_call(
     }
     let mut values = Vec::new();
     for (argument, expected) in arguments.iter().zip(&command.params) {
-        let code = if let Some((code, found)) = typed(argument, names, state, props, scopes)? {
+        let code = if let Some((code, found)) = typed(argument, context)? {
             if &found != expected {
                 return Err(crate::arg_mismatch(argument.position, expected, &found));
             }
             code
         } else {
-            convert(
-                &operation_in(argument, names, state, props, scopes)?,
-                expected,
-            )
+            convert(&operation_in(argument, context)?, expected)
         };
         values.push(code);
     }
@@ -405,15 +366,12 @@ pub(super) fn host_call(
 
 pub(super) fn operation_statement(
     expression: &Expr,
-    names: &Names<'_>,
-    state: &State,
-    props: &HashMap<String, Type>,
-    scopes: &Scopes,
+    context: &ExprContext<'_>,
 ) -> Result<String, Error> {
-    if let Some((code, ty)) = typed(expression, names, state, props, scopes)?
+    if let Some((code, ty)) = typed(expression, context)?
         && matches!(ty, Type::Null | Type::Void)
     {
         return Ok(code);
     }
-    operation_in(expression, names, state, props, scopes)
+    operation_in(expression, context)
 }
