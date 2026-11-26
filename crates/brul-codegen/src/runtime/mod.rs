@@ -1,13 +1,18 @@
 mod binding;
 mod build;
+#[path = "internal/capability.rs"]
 mod capability;
+#[path = "internal/clipboard.rs"]
 mod clipboard;
 mod component;
+#[path = "internal/error.rs"]
 mod error;
 mod event;
+#[path = "internal/event_sink.rs"]
 mod event_sink;
 mod hooks;
 mod paint;
+#[path = "internal/slot.rs"]
 mod slot;
 mod state;
 mod structure;

@@ -8,7 +8,7 @@ use brul_widget_schema::{ELEMENTS, find};
 use crate::capability::{CapabilityTable, POLICY_NAMES};
 use crate::{Registry, Source};
 
-const SOURCE: &str = include_str!("../../../builtin/widgets.brul");
+const SOURCE: &str = include_str!("../../../../builtin/widgets.brul");
 
 pub fn load(
     palette: &[Theme],

@@ -1,38 +1,42 @@
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::fmt::Write;
+use std::collections::{BTreeSet, HashSet};
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use brul_case::{constant, identifier, pascal};
-use brul_script::Names;
+
 use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Declaration, Element, Member};
-use brul_syntax::script::{Program, validate_build};
-use brul_syntax::style::{EffectRule, Stylesheet};
-use brul_syntax::types::Type;
+use brul_syntax::script::validate_build;
 
 use crate::commands;
 use crate::discovery::Capabilities;
 use crate::error_at;
-use crate::loader::Import;
-use crate::source::Script;
-use crate::{Definition, Registry, Resource};
 
 use super::CodegenContext;
-use super::Emit;
+
 use super::EmitOutputs;
-use super::Out;
+
 use super::StateIds;
 use super::StateKey;
 use super::StructureNames;
-use super::anchor::{self, AnchorIds};
+use super::anchor;
 use super::classes::ClassNames;
 use super::view::ViewSpec;
-use super::{alloc, classes, events, names, resources, script, state, style, theme, view};
+use super::{alloc, events, names, resources, script, state, theme};
 
-const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
+pub(super) use super::module_component::ViewKind;
+use super::module_component::{
+    ComponentSinks, ComponentSources, WindowView, append_functions, emit_component,
+    validate_components,
+};
+use super::module_windows::{
+    effects_registry, emit_tail, emit_view, icon_resource, module_sources, module_table,
+    prop_types, push_script, state_type, unique, window_config, window_table,
+};
+
+pub(super) const HEADER: &str = "#[allow(unused_mut, unused_variables, clippy::let_and_return)]\n";
 
 pub struct GeneratedFile {
     pub name: String,
@@ -444,374 +448,4 @@ fn module_at(
         resources: resource_files,
         flat,
     })
-}
-
-struct WindowView<'a> {
-    declaration: &'a Declaration,
-    stylesheet: &'a Stylesheet,
-    effects: &'a [EffectRule],
-    program: Option<&'a Program>,
-    script: Option<&'a Script>,
-    imports: &'a [Import],
-    resources: &'a [Resource],
-    base: String,
-    source: String,
-}
-
-struct ComponentOutput {
-    file: GeneratedFile,
-    body: String,
-    functions: String,
-}
-
-fn validate_components(definitions: &[Definition], commands: &[&str]) -> Result<(), Error> {
-    for definition in definitions {
-        let Some(program) = &definition.program else {
-            continue;
-        };
-        let mut external = names::declared(&definition.declaration.members);
-        external.extend(names::declared_events(&definition.declaration.members));
-        validate_build(program, &external, commands)?;
-    }
-    Ok(())
-}
-
-struct ComponentSinks<'a> {
-    structures: &'a mut StructureNames,
-    scripts: Option<&'a mut Vec<GeneratedFile>>,
-}
-
-struct ComponentSources<'a> {
-    registry: &'a Registry,
-    bases: &'a [String],
-    names: &'a Names<'a>,
-    capabilities: &'a Capabilities,
-    anchor_ids: &'a AnchorIds,
-    state_ids: &'a RefCell<StateIds>,
-}
-
-fn emit_component(
-    definition: &Definition,
-    base: &str,
-    sources: &ComponentSources<'_>,
-    sinks: &mut ComponentSinks<'_>,
-) -> Result<ComponentOutput, Error> {
-    let ComponentSources {
-        registry,
-        bases,
-        names,
-        capabilities,
-        anchor_ids,
-        state_ids,
-    } = sources;
-    let root = definition_root(definition)?;
-    let prefix = format!("{base}_");
-    let name = format!("bc_{base}");
-    let mut body = String::new();
-    let mut functions = Vec::new();
-    let mut dynamic_classes = false;
-    let mut class_names = ClassNames::default();
-    let component_state = state::State::new(
-        definition.program.as_ref(),
-        &state_type(&format!("{prefix}script")),
-    )?
-    .with_commands(&capabilities.commands);
-    let component_prop_types = prop_types(&definition.declaration.members);
-    body.push_str(HEADER);
-    emit_view(
-        &mut body,
-        ViewSpec {
-            name: &format!("{prefix}view"),
-            source: &definition.file,
-            root,
-            handlers: &[],
-            attaches: &[],
-            attach_states: &[],
-            kind: ViewKind::Component,
-        },
-        &CodegenContext {
-            capabilities,
-            registry,
-            anchor_ids,
-            script_name: &format!("{prefix}script"),
-            imports: &definition.imports,
-            resources: &definition.resources,
-            base,
-            resource_prefix: &prefix,
-            stylesheet: &definition.stylesheet,
-            effects: &definition.effects,
-            names,
-            state: &component_state,
-            state_ids,
-            prop_types: &component_prop_types,
-            program: definition.program.as_ref(),
-        },
-        EmitOutputs {
-            functions: &mut functions,
-            bases,
-            structures: &mut *sinks.structures,
-            dynamic_classes: &mut dynamic_classes,
-            classes: &mut class_names,
-        },
-    )?;
-    emit_tail(
-        &mut body,
-        &prefix,
-        &definition.stylesheet,
-        &class_names,
-        dynamic_classes,
-    )?;
-    body.push_str(&script::module(
-        &format!("{prefix}script"),
-        definition.program.as_ref(),
-        names,
-        &component_state,
-        &component_prop_types,
-    )?);
-    body.push_str(&resources::functions(&prefix, &definition.resources));
-    let mut functions_block = String::new();
-    append_functions(&mut functions_block, &functions);
-    if let Some(scripts) = &mut sinks.scripts {
-        push_script(
-            scripts,
-            format!("{name}.script"),
-            definition.script.as_ref(),
-        );
-    }
-    let mut file = String::from("use super::*;\n");
-    file.push_str(&body);
-    file.push_str(&functions_block);
-    Ok(ComponentOutput {
-        file: GeneratedFile { name, source: file },
-        body,
-        functions: functions_block,
-    })
-}
-
-fn append_functions(out: &mut String, functions: &[String]) {
-    for function in functions {
-        out.push('\n');
-        out.push_str(function);
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum ViewKind {
-    Window,
-    Component,
-}
-
-impl ViewKind {
-    pub(super) fn typed(self) -> bool {
-        matches!(self, Self::Window)
-    }
-}
-
-fn emit_view<'a>(
-    out: &mut String,
-    spec: ViewSpec<'a>,
-    context: &'a CodegenContext<'a>,
-    outputs: EmitOutputs<'a>,
-) -> Result<(), Error> {
-    let slots = matches!(spec.kind, ViewKind::Component);
-    let mut emit = Emit::new(context, outputs, slots);
-    view::view(out, &spec, &mut emit)
-}
-
-fn emit_tail(
-    out: &mut String,
-    prefix: &str,
-    stylesheet: &Stylesheet,
-    class_names: &ClassNames,
-    dynamic: bool,
-) -> Result<(), Error> {
-    let mut out = Out::new(out);
-    classes::statics(&mut out, prefix, stylesheet, class_names)?;
-    if dynamic {
-        classes::tables(&mut out, prefix, stylesheet);
-    }
-    style::stylesheet(&mut out, prefix, stylesheet);
-    Ok(())
-}
-
-fn push_script(
-    scripts: &mut Vec<GeneratedFile>,
-    name: String,
-    script: Option<&crate::source::Script>,
-) {
-    if let Some(script) = script {
-        scripts.push(GeneratedFile {
-            name,
-            source: script.text.clone(),
-        });
-    }
-}
-
-fn module_sources(registry: &crate::Registry, entry: Option<&Path>) -> Vec<PathBuf> {
-    let mut sources: Vec<PathBuf> = registry
-        .definitions
-        .iter()
-        .filter_map(|definition| definition.origin.path().map(Path::to_path_buf))
-        .collect();
-    if let Some(entry) = entry {
-        sources.push(fs::canonicalize(entry).unwrap_or_else(|_| entry.to_path_buf()));
-    }
-    sources
-}
-
-fn module_table(root: &mut String, files: &[GeneratedFile]) {
-    for file in files {
-        let _ = write!(
-            root,
-            "pub mod {name} {{
-    include!(concat!(env!(\"OUT_DIR\"), \"/{name}.rs\"));
-}}
-pub use self::{name}::*;
-",
-            name = file.name
-        );
-    }
-}
-
-fn state_type(name: &str) -> String {
-    format!("{}State", pascal(name))
-}
-
-fn prop_types(members: &[Member]) -> HashMap<String, Type> {
-    members
-        .iter()
-        .filter_map(|member| match member {
-            Member::Prop(prop) => Some((prop.name.clone(), prop.ty.clone())),
-            _ => None,
-        })
-        .collect()
-}
-
-fn unique(name: &str, used: &mut HashSet<String>) -> String {
-    let mut candidate = name.to_owned();
-    let mut index = 1;
-    while !used.insert(candidate.clone()) {
-        candidate = format!("{name}{index}");
-        index += 1;
-    }
-    candidate
-}
-
-fn definition_root(definition: &Definition) -> Result<&Element, Error> {
-    let position = Position { line: 1, column: 1 };
-    let mut roots = definition
-        .declaration
-        .members
-        .iter()
-        .filter_map(|member| match member {
-            Member::Element(element) => Some(element),
-            Member::Prop(_) | Member::Event(_) => None,
-        });
-    let Some(root) = roots.next() else {
-        return Err(error_at(
-            position,
-            format!("component '{}' has no root element", definition.name),
-        ));
-    };
-    if roots.next().is_some() {
-        return Err(error_at(
-            position,
-            format!(
-                "component '{}' has more than one root element",
-                definition.name
-            ),
-        ));
-    }
-    Ok(root)
-}
-
-fn icon_resource<'a>(
-    declaration: &'a Declaration,
-    resources: &[Resource],
-) -> Result<Option<&'a str>, Error> {
-    let Some(value) = declaration.args().iter().find_map(|arg| match arg {
-        Arg::Named { name, value } if name == "icon" => Some(value),
-        _ => None,
-    }) else {
-        return Ok(None);
-    };
-    super::resource(value, resources).map(Some).ok_or_else(|| {
-        error_at(
-            value.position,
-            "window 'icon' must name a declared resource",
-        )
-    })
-}
-
-fn effects_registry(out: &mut String, names: &BTreeSet<String>) {
-    out.push_str(
-        "pub fn __brul_effects() -> brul::effect::Effects {\n    brul::effect::Effects::new(&[\n",
-    );
-    for name in names {
-        let _ = writeln!(out, "        crate::BRUL_EFFECT_{name},");
-    }
-    out.push_str("    ])\n}\n\n");
-}
-
-fn window_config(
-    out: &mut String,
-    base: &str,
-    prefix: &str,
-    config: &brul_window::WindowConfig,
-    icon: Option<&str>,
-) {
-    let position = match config.position {
-        Some(position) => format!(
-            "Some(brul::WindowPosition {{ x: {:?}, y: {:?} }})",
-            position.x, position.y
-        ),
-        None => String::from("None"),
-    };
-    let icon = match icon {
-        Some(name) => format!("Some({prefix}resource_{name}().into())"),
-        None => String::from("None"),
-    };
-    let _ = write!(
-        out,
-        "pub fn {base}_window() -> brul::WindowConfig {{
-    brul::WindowConfig {{
-        title: {:?}.to_owned(),
-        width: {},
-        height: {},
-        frameless: {},
-        transparent: {},
-        visible: {},
-        centered: {},
-        scroll: {},
-        position: {position},
-        icon: {icon},
-        effects: __brul_effects(),
-        ..brul::WindowConfig::default()
-    }}
-}}
-",
-        config.title,
-        config.width,
-        config.height,
-        config.frameless,
-        config.transparent,
-        config.visible,
-        config.centered,
-        config.scroll
-    );
-}
-
-fn window_table(out: &mut String, views: &[WindowView<'_>]) {
-    out.push_str("pub fn windows() -> Vec<brul::WindowDef<ThemeId>> {\n");
-    alloc::registration(out);
-    out.push_str("    vec![\n");
-    for view in views {
-        let base = &view.base;
-        let _ = writeln!(
-            out,
-            "        brul::WindowDef {{ name: {:?}, config: {base}_window(), view: {base}_view }},",
-            view.declaration.name
-        );
-    }
-    out.push_str("    ]\n}\n");
 }

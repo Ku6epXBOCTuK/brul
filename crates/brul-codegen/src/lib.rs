@@ -1,16 +1,22 @@
 //! Loading `.brul` files: SFC parsing, component registry, window arguments.
 
+#[path = "internal/bindings.rs"]
 mod bindings;
 pub mod build;
+#[path = "internal/builtin.rs"]
 mod builtin;
 mod capability;
 pub mod cli;
 pub mod commands;
+#[path = "internal/diagnostics.rs"]
 mod diagnostics;
+#[path = "internal/discovery.rs"]
 mod discovery;
 pub mod emit;
+#[path = "internal/gallery.rs"]
 mod gallery;
 mod generate;
+#[path = "internal/kit.rs"]
 mod kit;
 mod loader;
 pub mod runtime;

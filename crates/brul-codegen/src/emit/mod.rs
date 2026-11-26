@@ -8,28 +8,60 @@ use crate::Resource;
 
 pub(super) use structure::StructureNames;
 
+#[path = "base/alloc.rs"]
 mod alloc;
+#[path = "base/anchor.rs"]
 mod anchor;
+#[path = "base/builtins.rs"]
 mod builtins;
+#[path = "base/class.rs"]
 mod class;
+#[path = "base/classes.rs"]
 mod classes;
 mod component;
+#[path = "parts/component_write.rs"]
+mod component_write;
+#[path = "base/context.rs"]
 mod context;
 mod element;
+#[path = "parts/element_bindings.rs"]
+mod element_bindings;
+#[path = "parts/element_widgets.rs"]
+mod element_widgets;
+#[path = "expr/events.rs"]
 mod events;
 mod expression;
+#[path = "parts/expression_operations.rs"]
+mod expression_operations;
 mod module;
+#[path = "parts/module_component.rs"]
+mod module_component;
+#[path = "parts/module_windows.rs"]
+mod module_windows;
+#[path = "expr/names.rs"]
 mod names;
+#[path = "base/out.rs"]
 mod out;
+#[path = "base/resources.rs"]
 mod resources;
+#[path = "expr/scopes.rs"]
 mod scopes;
+#[path = "expr/script.rs"]
 mod script;
+#[path = "expr/state.rs"]
 mod state;
+#[path = "expr/state_ids.rs"]
 mod state_ids;
+#[path = "expr/statement.rs"]
 mod statement;
 mod structure;
+#[path = "parts/structure_each.rs"]
+mod structure_each;
+#[path = "expr/style.rs"]
 mod style;
+#[path = "base/theme.rs"]
 mod theme;
+#[path = "expr/view.rs"]
 mod view;
 
 pub(super) use scopes::ScopeInfo;
