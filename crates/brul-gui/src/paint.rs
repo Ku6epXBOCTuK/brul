@@ -34,8 +34,16 @@ impl Frame {
         &self.pixels
     }
 
-    pub fn pixels_mut(&mut self) -> &mut [u8] {
-        &mut self.pixels
+    pub fn composite(&mut self, background: Color) {
+        let background = [background.r, background.g, background.b];
+        for pixel in self.pixels.as_chunks_mut::<4>().0 {
+            let inverse = 255 - u32::from(pixel[3]);
+            for (channel, value) in pixel[..3].iter_mut().zip(background) {
+                *channel =
+                    ((u32::from(*channel) * 255 + u32::from(value) * inverse) / 255).min(255) as u8;
+            }
+            pixel[3] = 255;
+        }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -419,7 +427,15 @@ fn pixel_len(width: u32, height: u32) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::Frame;
+    use super::{Color, Frame};
+
+    fn frame(pixel: [u8; 4]) -> Frame {
+        Frame {
+            width: 1,
+            height: 1,
+            pixels: pixel.to_vec(),
+        }
+    }
 
     #[test]
     fn resize_keeps_the_buffer_of_the_same_size() {
@@ -443,5 +459,23 @@ mod tests {
         assert_eq!((frame.width(), frame.height()), (4, 1));
         assert_eq!(frame.pixels().len(), 16);
         assert!(frame.pixels().iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn an_opaque_pixel_keeps_its_channels() {
+        let mut frame = frame([0x12, 0x34, 0x56, 255]);
+
+        frame.composite(Color::rgb(20, 23, 28));
+
+        assert_eq!(frame.pixels(), &[0x12, 0x34, 0x56, 255]);
+    }
+
+    #[test]
+    fn a_premultiplied_pixel_is_not_multiplied_again() {
+        let mut frame = frame([0x40, 0, 0, 64]);
+
+        frame.composite(Color::rgb(20, 23, 28));
+
+        assert_eq!(frame.pixels()[0], 0x4e);
     }
 }

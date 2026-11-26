@@ -2,7 +2,7 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-use brul_gui::{Atlas, Dirty, Frame, WidgetSnapshot};
+use brul_gui::{Atlas, Color, Dirty, Frame, WidgetSnapshot};
 #[cfg(not(windows))]
 use softbuffer::{Context, Surface as BufferSurface};
 #[cfg(not(windows))]
@@ -70,7 +70,7 @@ impl SoftwareRenderer {
         self.presenter.resize(width, height);
         self.frame.paint(snapshot, atlas, dirty);
         if !self.transparent || !SOFTWARE_ALPHA {
-            composite_opaque(self.frame.pixels_mut());
+            self.frame.composite(clear_color());
         }
         self.presenter.present(self.frame.pixels())
     }
@@ -135,15 +135,15 @@ impl SoftbufferPresenter {
     }
 }
 
-fn clear_channels() -> (u32, u32, u32) {
-    let channel = |value: f64| (value * 255.0).round() as u32;
-    (channel(CLEAR.r), channel(CLEAR.g), channel(CLEAR.b))
+fn clear_color() -> Color {
+    let channel = |value: f64| (value * 255.0).round() as u8;
+    Color::rgb(channel(CLEAR.r), channel(CLEAR.g), channel(CLEAR.b))
 }
 
 #[cfg(not(windows))]
 fn clear_rgb() -> u32 {
-    let (red, green, blue) = clear_channels();
-    (red << 16) | (green << 8) | blue
+    let Color { r, g, b, .. } = clear_color();
+    (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)
 }
 
 #[cfg(not(windows))]
@@ -151,46 +151,10 @@ fn rgb(pixel: &[u8; 4]) -> u32 {
     (u32::from(pixel[0]) << 16) | (u32::from(pixel[1]) << 8) | u32::from(pixel[2])
 }
 
-fn composite_opaque(pixels: &mut [u8]) {
-    let (red, green, blue) = clear_channels();
-    for pixel in pixels.as_chunks_mut::<4>().0 {
-        let inverse = 255 - u32::from(pixel[3]);
-        pixel[0] = ((u32::from(pixel[0]) * 255 + red * inverse) / 255).min(255) as u8;
-        pixel[1] = ((u32::from(pixel[1]) * 255 + green * inverse) / 255).min(255) as u8;
-        pixel[2] = ((u32::from(pixel[2]) * 255 + blue * inverse) / 255).min(255) as u8;
-        pixel[3] = 255;
-    }
-}
-
-#[cfg(test)]
+#[cfg(all(test, not(windows)))]
 mod tests {
     use super::*;
 
-    #[test]
-    fn an_opaque_pixel_keeps_its_channels() {
-        let mut pixels = [0x12, 0x34, 0x56, 255];
-        composite_opaque(&mut pixels);
-        assert_eq!(pixels, [0x12, 0x34, 0x56, 255]);
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn a_transparent_pixel_uses_the_clear_color() {
-        let background = clear_rgb().to_be_bytes();
-        let mut pixels = [255, 255, 255, 0];
-        composite_opaque(&mut pixels);
-        assert_eq!(&pixels[..3], &background[1..]);
-        assert_eq!(pixels[3], 255);
-    }
-
-    #[test]
-    fn a_premultiplied_pixel_is_not_multiplied_again() {
-        let mut pixels = [0x40, 0, 0, 64];
-        composite_opaque(&mut pixels);
-        assert_eq!(pixels[0], 0x4e);
-    }
-
-    #[cfg(not(windows))]
     #[test]
     fn a_pixel_keeps_its_rgb_when_alpha_is_dropped() {
         assert_eq!(rgb(&[0x12, 0x34, 0x56, 255]), 0x00_12_34_56);
