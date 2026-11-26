@@ -105,9 +105,9 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
-            let widget0 = built.widget;
+            let widget0 = built.widget.debug_named("Badge");
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -184,7 +184,7 @@ pub fn badge_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        badge_styled(brul::gui::Widget::image(brul::gui::Image::from_bytes(badge_resource_check()).expect("resource 'check' cannot be decoded")), &[0], theme)
+        badge_styled(brul::gui::Widget::image(brul::gui::Image::from_bytes(badge_resource_check()).expect("resource 'check' cannot be decoded")), &[0], theme).debug_named("Image").debug_source("badge.brul")
     };
     Ok(brul::Built {
         widget,

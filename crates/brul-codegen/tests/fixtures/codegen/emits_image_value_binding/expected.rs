@@ -88,10 +88,10 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     }));
     let widget = {
         {
-            let widget0 = demo_styled(brul::gui::Widget::image(brul::gui::Texture::empty()), &[0], theme);
+            let widget0 = demo_styled(brul::gui::Widget::image(brul::gui::Texture::empty()), &[0], theme).debug_named("Image");
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Image(|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?); Ok(value) })));
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

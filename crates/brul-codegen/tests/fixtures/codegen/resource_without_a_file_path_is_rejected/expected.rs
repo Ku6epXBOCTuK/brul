@@ -87,7 +87,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
         raw_events: brul::RawEventSet::from([brul::RawKind::Wheel]),
     }));
     let widget = {
-        brul::gui::Widget::image(brul::gui::Image::from_bytes(demo_resource_check()).expect("resource 'check' cannot be decoded"))
+        brul::gui::Widget::image(brul::gui::Image::from_bytes(demo_resource_check()).expect("resource 'check' cannot be decoded")).debug_named("Image").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

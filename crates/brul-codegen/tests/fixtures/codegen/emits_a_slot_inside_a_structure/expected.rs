@@ -109,10 +109,10 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 bindings.extend(built.bindings);
                 handlers.extend(built.handlers);
                 props.extend(built.props);
-                let widget0 = built.widget;
+                let widget0 = built.widget.debug_named("Badge");
                 widget0
             },
-        ])
+        ]).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -201,7 +201,7 @@ pub fn badge_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
                 widget0
             });
             children
-        })
+        }).debug_named("Container").debug_source("badge.brul")
     };
     Ok(brul::Built {
         widget,
@@ -277,7 +277,7 @@ fn demo_slot1(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let children = vec![
-        brul::gui::Widget::text("x"),
+        brul::gui::Widget::text("x").debug_named("Text"),
     ];
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
     Ok(brul::Built { widget, bindings, handlers, props })

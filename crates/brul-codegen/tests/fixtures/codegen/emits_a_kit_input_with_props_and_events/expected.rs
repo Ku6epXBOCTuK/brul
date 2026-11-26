@@ -109,7 +109,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 bindings.extend(built.bindings);
                 handlers.extend(built.handlers);
                 props.extend(built.props);
-                let widget0 = built.widget;
+                let widget0 = built.widget.debug_named("Input");
                 widget0
             },
             {
@@ -131,10 +131,10 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 bindings.extend(built.bindings);
                 handlers.extend(built.handlers);
                 props.extend(built.props);
-                let widget1 = built.widget;
+                let widget1 = built.widget.debug_named("Input");
                 widget1
             },
-        ])
+        ]).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -312,12 +312,12 @@ pub fn input_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = input_styled(brul::gui::Widget::input(""), &[0, 1], theme);
+            let widget0 = input_styled(brul::gui::Widget::input(""), &[0, 1], theme).debug_named("TextInput");
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 17, column: 69 }))? }) })));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Input, input_script_event_changed));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Key, input_script_event_typed));
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

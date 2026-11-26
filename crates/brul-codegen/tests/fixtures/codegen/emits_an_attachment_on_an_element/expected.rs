@@ -88,7 +88,7 @@ pub fn editor_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
     }));
     let widget = {
         {
-            let widget0 = editor_demo_styled(brul::gui::Widget::input(""), &[0], theme);
+            let widget0 = editor_demo_styled(brul::gui::Widget::input(""), &[0], theme).debug_named("TextInput");
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<EditorDemoScriptState>().draft.get()) })));
             let _ = build.capability(brul::Capability::hooks(brul::Hooks {
                 target: brul::EventTarget::Widget(widget0.id()),
@@ -103,7 +103,7 @@ pub fn editor_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
                 raw_events: brul::RawEventSet::from([brul::RawKind::Ime]),
             }));
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

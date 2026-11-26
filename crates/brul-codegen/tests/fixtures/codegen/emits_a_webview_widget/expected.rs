@@ -107,9 +107,9 @@ pub fn web_view_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compo
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
-            let widget0 = built.widget;
+            let widget0 = built.widget.debug_named("WebView");
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

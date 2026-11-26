@@ -88,11 +88,11 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     }));
     let widget = {
         {
-            let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]).focusable(true);
+            let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]).focusable(true).debug_named("Container");
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Focus, demo_script_event_gained));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Blur, demo_script_event_lost));
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

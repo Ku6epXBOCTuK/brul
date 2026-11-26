@@ -88,10 +88,10 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     }));
     let widget = {
         {
-            let widget0 = demo_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[0], theme).effect(brul::gui::EffectSpec { name: "cover", params: [[0.0; 4]; 16], animated: false });
+            let widget0 = demo_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[0], theme).effect(brul::gui::EffectSpec { name: "cover", params: [[0.0; 4]; 16], animated: false }).debug_named("Container");
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Effect { def: crate::BRUL_EFFECT_COVER, args: vec![|component: &mut brul::Component| -> Result<f64, brul::Error> { Ok(1.0_f64) }] }));
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

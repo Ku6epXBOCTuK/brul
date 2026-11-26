@@ -76,6 +76,8 @@ pub(super) fn component(
         Arg::Named { name, value } if name == "class" => Some(value),
         _ => None,
     });
+    let mut suffix = anchor::suffix(element, emit)?;
+    suffix.push_str(&element::debug_named(element));
     let (props, events) = collect(element, definition, name, emit)?;
     let defaults = defaults(element, definition, name, &props)?;
     let mut slots = Vec::new();
@@ -96,7 +98,7 @@ pub(super) fn component(
             slots,
             classes,
             class,
-            suffix: anchor::suffix(element, emit)?,
+            suffix,
         },
         counter,
         emit,

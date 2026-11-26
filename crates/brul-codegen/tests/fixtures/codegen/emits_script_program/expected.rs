@@ -89,11 +89,11 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let widget = {
         brul::gui::Widget::view(brul::gui::Direction::Row, vec![
             {
-                let widget0 = brul::gui::Widget::text("");
+                let widget0 = brul::gui::Widget::text("").debug_named("Text");
                 bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&brul::Dyn::num(component.state::<DemoScriptState>().count.get())).try_into()?) })));
                 widget0
             },
-        ])
+        ]).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

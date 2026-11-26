@@ -21,6 +21,10 @@ use super::classes;
 use super::rust_string;
 use super::{ScopeInfo, StateKey, child, component, events, expression, structure};
 
+pub(super) fn debug_named(element: &Element) -> String {
+    format!(".debug_named({:?})", element.name)
+}
+
 pub(super) fn widget(
     out: &mut Out<'_>,
     element: &Element,
@@ -157,6 +161,7 @@ fn element_expression(
             rule.name
         ));
     }
+    out.push(format_args!("{}", debug_named(element)));
     let suffix = anchor::suffix(element, emit)?;
     if !suffix.is_empty() {
         out.push(format_args!("{suffix}"));
@@ -693,7 +698,8 @@ fn registered_widget(
         .collect::<Vec<_>>();
     let name = format!("widget{}", *counter);
     *counter += 1;
-    let suffix = anchor::suffix(element, emit)?;
+    let mut suffix = anchor::suffix(element, emit)?;
+    suffix.push_str(&debug_named(element));
     out.line(format_args!("{{"));
     out.indented(|out| -> Result<(), Error> {
         out.line(format_args!("let built = build.capability(brul::Capability::view({}, std::rc::Rc::clone(component), brul::Instance {{", id.literal()));

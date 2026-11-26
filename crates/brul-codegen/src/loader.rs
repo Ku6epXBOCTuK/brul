@@ -16,6 +16,7 @@ use crate::{error_at, kit, padded, sfc_error};
 
 pub struct Definition {
     pub name: String,
+    pub file: String,
     pub declaration: Declaration,
     pub origin: Origin,
     pub imports: Vec<Import>,
@@ -266,6 +267,10 @@ impl Loader<'_> {
         base: Option<&Path>,
         origin: Origin,
     ) -> Result<usize, Error> {
+        let file = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "unknown.brul".to_owned());
         self.stack.push(path.clone());
         let parsed = parse(&source, &path, self.palette)?;
         let imports = self.imports(&parsed.uses.uses, base, Some(&path))?;
@@ -274,6 +279,7 @@ impl Loader<'_> {
         let index = self.definitions.len();
         self.definitions.push(Definition {
             name: parsed.declaration.name.clone(),
+            file,
             declaration: parsed.declaration,
             origin,
             imports,

@@ -89,11 +89,11 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let widget = {
         {
             let widget0 = brul::gui::Widget::layer(vec![
-                brul::gui::Widget::text("x"),
-            ]).modal(true);
+                brul::gui::Widget::text("x").debug_named("Text"),
+            ]).modal(true).debug_named("Layer");
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Dismiss, demo_script_event_dismiss));
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

@@ -106,11 +106,11 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 bindings.extend(built.bindings);
                 handlers.extend(built.handlers);
                 props.extend(built.props);
-                let widget0 = demo_styled(built.widget, &[0], theme);
+                let widget0 = demo_styled(built.widget.debug_named("Badge"), &[0], theme);
                 bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: demo_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text("tone".to_owned()); Ok(value) } }));
                 widget0
             },
-        ])
+        ]).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -218,7 +218,7 @@ pub fn badge_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        brul::gui::Widget::text("badge")
+        brul::gui::Widget::text("badge").debug_named("Text").debug_source("badge.brul")
     };
     Ok(brul::Built {
         widget,

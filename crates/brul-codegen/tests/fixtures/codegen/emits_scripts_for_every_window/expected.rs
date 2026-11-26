@@ -88,8 +88,8 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     }));
     let widget = {
         brul::gui::Widget::view(brul::gui::Direction::Row, vec![
-            brul::gui::Widget::text("demo"),
-        ])
+            brul::gui::Widget::text("demo").debug_named("Text"),
+        ]).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -276,7 +276,7 @@ pub fn settings_view(theme: Option<ThemeId>, build: &mut brul::Build, component:
         raw_events: brul::RawEventSet::from([brul::RawKind::Wheel]),
     }));
     let widget = {
-        brul::gui::Widget::text("settings")
+        brul::gui::Widget::text("settings").debug_named("Text").debug_source("settings.brul")
     };
     Ok(brul::Built {
         widget,

@@ -89,12 +89,12 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     let widget = {
         demo_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
             demo_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
-                brul::gui::Widget::text("tip"),
-            ]), &[1], theme).anchored(brul::gui::Anchor::new(brul::gui::WidgetId::new(2147483648))),
+                brul::gui::Widget::text("tip").debug_named("Text"),
+            ]), &[1], theme).debug_named("Container").anchored(brul::gui::Anchor::new(brul::gui::WidgetId::new(2147483648))),
             demo_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
-                brul::gui::Widget::text("target"),
-            ]), &[2], theme).with_id(brul::gui::WidgetId::new(2147483648)),
-        ]), &[0], theme)
+                brul::gui::Widget::text("target").debug_named("Text"),
+            ]), &[2], theme).debug_named("Container").with_id(brul::gui::WidgetId::new(2147483648)),
+        ]), &[0], theme).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

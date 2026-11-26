@@ -112,9 +112,9 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
-            let widget0 = built.widget;
+            let widget0 = built.widget.debug_named("Chip");
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -206,7 +206,7 @@ pub fn chip_view(theme: Option<&str>, build: &mut brul::Build, component: &brul:
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        chip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[0], theme)
+        chip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[0], theme).debug_named("Container").debug_source("chip.brul")
     };
     Ok(brul::Built {
         widget,

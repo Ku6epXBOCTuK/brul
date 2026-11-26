@@ -119,6 +119,10 @@ pub struct Widget {
     layer: bool,
     modal: bool,
     effect: Option<EffectSpec>,
+    #[cfg(debug_assertions)]
+    name: Option<&'static str>,
+    #[cfg(debug_assertions)]
+    source: Option<&'static str>,
 }
 
 enum Content {
@@ -289,7 +293,37 @@ impl Widget {
             layer: false,
             modal: false,
             effect: None,
+            #[cfg(debug_assertions)]
+            name: None,
+            #[cfg(debug_assertions)]
+            source: None,
         }
+    }
+
+    #[cfg(debug_assertions)]
+    #[inline]
+    pub fn debug_named(mut self, name: &'static str) -> Self {
+        self.name = Some(name);
+        self
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[inline]
+    pub fn debug_named(self, _name: &'static str) -> Self {
+        self
+    }
+
+    #[cfg(debug_assertions)]
+    #[inline]
+    pub fn debug_source(mut self, source: &'static str) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[inline]
+    pub fn debug_source(self, _source: &'static str) -> Self {
+        self
     }
 
     pub fn id(&self) -> WidgetId {

@@ -106,9 +106,9 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
-            let widget0 = built.widget;
+            let widget0 = built.widget.debug_named("Icon");
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -190,10 +190,10 @@ pub fn icon_view(theme: Option<&str>, build: &mut brul::Build, component: &brul:
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = brul::gui::Widget::image(brul::gui::Texture::empty());
+            let widget0 = brul::gui::Widget::image(brul::gui::Texture::empty()).debug_named("Image");
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Image(|component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::from(component.read_id(brul::VariableId::from_index(1))?); Ok(value) })));
             widget0
-        }
+        }.debug_source("icon.brul")
     };
     Ok(brul::Built {
         widget,

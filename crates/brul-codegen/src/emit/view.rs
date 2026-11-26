@@ -13,6 +13,7 @@ use super::module::ViewKind;
 
 pub(super) struct ViewSpec<'a> {
     pub(super) name: &'a str,
+    pub(super) source: &'a str,
     pub(super) root: &'a Element,
     pub(super) handlers: &'a [HandlerSpec],
     pub(super) attaches: &'a [AttachArg],
@@ -27,6 +28,7 @@ pub(super) fn view(
 ) -> Result<(), Error> {
     let ViewSpec {
         name,
+        source,
         root,
         handlers,
         attaches,
@@ -68,6 +70,7 @@ pub(super) fn view(
         out.line(format_args!("let widget = {{"));
         let mut counter = 0;
         out.indented(|out| widget(out, root, emit, frame, &mut counter))?;
+        out.push(format_args!(".debug_source({source:?})"));
         out.end();
         out.line(format_args!("}};"));
         for handler in *handlers {

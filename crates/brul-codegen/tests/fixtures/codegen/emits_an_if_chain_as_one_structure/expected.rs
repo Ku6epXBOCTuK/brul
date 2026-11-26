@@ -97,7 +97,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 brul::register_structure(build, component, widget0.id(), false, demo_if1_value0, demo_if1_rebuild);
                 widget0
             },
-        ])
+        ]).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -186,18 +186,18 @@ fn demo_if1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &br
             .map_err(brul::ViewError::from)?;
         if condition {
             vec![
-                brul::gui::Widget::text("a"),
+                brul::gui::Widget::text("a").debug_named("Text"),
             ]
         } else {
             let condition = demo_if1_value1(&mut component.borrow_mut())
                 .map_err(brul::ViewError::from)?;
             if condition {
                 vec![
-                    brul::gui::Widget::text("b"),
+                    brul::gui::Widget::text("b").debug_named("Text"),
                 ]
             } else {
                 vec![
-                    brul::gui::Widget::text("c"),
+                    brul::gui::Widget::text("c").debug_named("Text"),
                 ]
             }
         }

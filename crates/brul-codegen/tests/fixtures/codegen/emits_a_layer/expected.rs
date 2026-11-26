@@ -88,8 +88,8 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     }));
     let widget = {
         brul::gui::Widget::layer(vec![
-            brul::gui::Widget::text("x"),
-        ])
+            brul::gui::Widget::text("x").debug_named("Text"),
+        ]).debug_named("Layer").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

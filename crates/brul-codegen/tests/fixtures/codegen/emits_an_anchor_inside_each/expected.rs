@@ -97,7 +97,7 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 brul::register_structure(build, component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);
                 widget0
             },
-        ]), &[0], theme)
+        ]), &[0], theme).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -228,20 +228,20 @@ fn demo_each1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &
         children.extend([
             demo_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                 {
-                    let widget0 = brul::gui::Widget::text("");
+                    let widget0 = brul::gui::Widget::text("").debug_named("Text");
                     bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { let data = component.scope().get::<demo_each1_scope>().expect("each scope");
 let item = data.item.clone();
 let index = data.index.clone();
 Ok((&(item.clone()).field("name")?).try_into()?) })));
                     widget0
                 },
-            ]), &[1], theme).with_id(brul::gui::WidgetId::new(2147483648)),
+            ]), &[1], theme).debug_named("Container").with_id(brul::gui::WidgetId::new(2147483648)),
             {
                 let widget1 = brul::gui::Widget::layer(vec![
                     demo_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
-                        brul::gui::Widget::text("tip"),
-                    ]), &[2], theme).anchored(brul::gui::Anchor::new(brul::gui::WidgetId::new(2147483648))),
-                ]);
+                        brul::gui::Widget::text("tip").debug_named("Text"),
+                    ]), &[2], theme).debug_named("Container").anchored(brul::gui::Anchor::new(brul::gui::WidgetId::new(2147483648))),
+                ]).debug_named("Layer");
                 bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { let data = component.scope().get::<demo_each1_scope>().expect("each scope");
 let item = data.item.clone();
 let index = data.index.clone();

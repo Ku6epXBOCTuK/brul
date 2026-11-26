@@ -24,9 +24,9 @@ pub fn badge_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
-            let widget0 = built.widget;
+            let widget0 = built.widget.debug_named("Label");
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

@@ -107,10 +107,10 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 bindings.extend(built.bindings);
                 handlers.extend(built.handlers);
                 props.extend(built.props);
-                let widget0 = built.widget;
+                let widget0 = built.widget.debug_named("Other");
                 widget0
             },
-        ])
+        ]).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -187,7 +187,7 @@ pub fn label_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        brul::gui::Widget::text("label")
+        brul::gui::Widget::text("label").debug_named("Text").debug_source("label.brul")
     };
     Ok(brul::Built {
         widget,
@@ -282,9 +282,9 @@ pub fn badge_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
-            let widget0 = built.widget;
+            let widget0 = built.widget.debug_named("Label");
             widget0
-        }
+        }.debug_source("badge.brul")
     };
     Ok(brul::Built {
         widget,
@@ -362,10 +362,10 @@ pub fn other_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
     let mut props = Vec::new();
     let widget = {
         {
-            let widget0 = brul::gui::Widget::text("");
+            let widget0 = brul::gui::Widget::text("").debug_named("Text");
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).map_err(|error| error.at(brul::ast::Position { line: 4, column: 12 }))? }) })));
             widget0
-        }
+        }.debug_source("other.brul")
     };
     Ok(brul::Built {
         widget,

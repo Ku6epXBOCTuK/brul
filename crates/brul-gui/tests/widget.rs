@@ -23,6 +23,65 @@ fn style(background: Color) -> WidgetStyle {
 }
 
 #[test]
+#[cfg(debug_assertions)]
+fn debug_path_uses_element_names_and_ordinals() {
+    use brul_gui::EventTarget;
+
+    let first = Widget::text("a").debug_named("Text");
+    let second = Widget::text("b").debug_named("Text");
+    let second_id = second.id();
+    let root = Widget::column(vec![first, second])
+        .debug_named("Container")
+        .debug_source("demo.brul");
+    let tree = WidgetTree::new(root);
+
+    assert_eq!(
+        tree.debug_path(second_id),
+        format!(
+            "Widget({}) demo.brul > Container:1st > Text:2nd",
+            second_id.get()
+        )
+    );
+    assert_eq!(tree.debug_target(EventTarget::Window), "Window");
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn debug_path_uses_the_nearest_view_source() {
+    let label = Widget::text("x").debug_named("Text");
+    let label_id = label.id();
+    let button = Widget::row(vec![label])
+        .debug_named("Button")
+        .debug_source("button.brul");
+    let root = Widget::column(vec![button])
+        .debug_named("Container")
+        .debug_source("gallery.brul");
+    let tree = WidgetTree::new(root);
+
+    assert!(
+        tree.debug_path(label_id)
+            .starts_with(&format!("Widget({}) button.brul", label_id.get()))
+    );
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn debug_path_counts_every_sibling() {
+    let children = (0..21)
+        .map(|_| Widget::text("x").debug_named("Text"))
+        .collect::<Vec<_>>();
+    let eleventh = children[10].id();
+    let twenty_first = children[20].id();
+    let root = Widget::column(children)
+        .debug_named("Container")
+        .debug_source("demo.brul");
+    let tree = WidgetTree::new(root);
+
+    assert!(tree.debug_path(eleventh).ends_with("Text:11th"));
+    assert!(tree.debug_path(twenty_first).ends_with("Text:21st"));
+}
+
+#[test]
 fn replacing_children_keeps_the_other_widgets() {
     let first = Widget::text("a").with_layout(fixed(40, 20));
     let first_id = first.id();

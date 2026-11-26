@@ -171,6 +171,10 @@ fn module_at(
     let mut registry = crate::resolve(&parsed.uses, base, &parsed.stylesheet.themes)?;
     crate::apply_overrides(&mut registry, &parsed.overrides, source)?;
     crate::builtin::compose(&mut parsed, &mut registry, &capabilities.specs)?;
+    let entry_source = entry
+        .and_then(|path| path.file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "entry.brul".to_owned());
     let declaration = parsed
         .declaration
         .as_ref()
@@ -222,6 +226,7 @@ fn module_at(
         imports: &registry.imports,
         resources: &registry.resources,
         base: entry_base.clone(),
+        source: entry_source,
     }];
     for (index, definition) in registry.definitions.iter().enumerate() {
         if definition.is_window() {
@@ -234,6 +239,7 @@ fn module_at(
                 imports: &definition.imports,
                 resources: &definition.resources,
                 base: definition_bases[index].clone(),
+                source: definition.file.clone(),
             });
         }
     }
@@ -289,6 +295,7 @@ fn module_at(
             &mut head,
             ViewSpec {
                 name: &format!("{}_view", view.base),
+                source: &view.source,
                 root,
                 handlers: &window_handlers,
                 attaches: &window_args.attaches,
@@ -448,6 +455,7 @@ struct WindowView<'a> {
     imports: &'a [Import],
     resources: &'a [Resource],
     base: String,
+    source: String,
 }
 
 struct ComponentOutput {
@@ -514,6 +522,7 @@ fn emit_component(
         &mut body,
         ViewSpec {
             name: &format!("{prefix}view"),
+            source: &definition.file,
             root,
             handlers: &[],
             attaches: &[],

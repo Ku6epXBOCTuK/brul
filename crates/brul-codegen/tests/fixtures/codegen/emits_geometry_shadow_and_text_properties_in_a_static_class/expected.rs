@@ -87,7 +87,7 @@ pub fn styled_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &
         raw_events: brul::RawEventSet::from([brul::RawKind::Wheel]),
     }));
     let widget = {
-        styled_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[0], theme)
+        styled_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[0], theme).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

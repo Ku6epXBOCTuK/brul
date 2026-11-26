@@ -98,11 +98,11 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                 widget0
             },
             {
-                let widget1 = brul::gui::Widget::text("");
+                let widget1 = brul::gui::Widget::text("").debug_named("Text");
                 bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok((&brul::Dyn::num(component.state::<DemoScriptState>().selected.get())).try_into()?) })));
                 widget1
             },
-        ])
+        ]).debug_named("Container").debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,
@@ -293,7 +293,7 @@ fn demo_each1_rebuild(theme: Option<&str>, build: &mut brul::Build, component: &
         }
         children.extend([
             {
-                let widget0 = brul::gui::Widget::text("");
+                let widget0 = brul::gui::Widget::text("").debug_named("Text");
                 bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { let data = component.scope().get::<demo_each1_scope>().expect("each scope");
 let item = data.item.clone();
 let index = data.index.clone();

@@ -28,6 +28,20 @@ impl Slot {
     }
 }
 
+#[cfg(debug_assertions)]
+fn debug_ordinal(number: usize) -> String {
+    let suffix = match number % 100 {
+        11..=13 => "th",
+        _ => match number % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
+    };
+    format!("{number}{suffix}")
+}
+
 struct Node {
     id: WidgetId,
     data: Content,
@@ -42,6 +56,10 @@ struct Node {
     layer: bool,
     modal: bool,
     effect: Option<EffectSpec>,
+    #[cfg(debug_assertions)]
+    name: Option<&'static str>,
+    #[cfg(debug_assertions)]
+    source: Option<&'static str>,
     scroll_offset: ScrollOffset,
     children: Vec<Slot>,
     transition: Option<Transition>,
@@ -205,7 +223,56 @@ impl WidgetTree {
         tree
     }
 
+    #[cfg(debug_assertions)]
+    pub fn debug_path(&self, id: WidgetId) -> String {
+        let Some(slot) = self.index.get(&id).copied() else {
+            return format!("Widget({})", id.get());
+        };
+        let path = self.path_to(slot);
+        let source = self.nodes[slot.index()].source.unwrap_or("unknown.brul");
+        let segments = path
+            .iter()
+            .enumerate()
+            .map(|(index, &current)| {
+                let node = &self.nodes[current.index()];
+                let name = node.name.unwrap_or_else(|| match node.data.kind() {
+                    WidgetKind::View => "View",
+                    WidgetKind::Structure => "Structure",
+                    WidgetKind::Text => "Text",
+                    WidgetKind::Input => "Input",
+                    WidgetKind::Image => "Image",
+                    WidgetKind::Canvas => "Canvas",
+                    WidgetKind::PlatformView => "PlatformView",
+                });
+                let ordinal = if index == 0 {
+                    1
+                } else {
+                    self.nodes[path[index - 1].index()]
+                        .children
+                        .iter()
+                        .position(|&child| child == current)
+                        .map_or(1, |position| position + 1)
+                };
+                format!("{}:{}", name, debug_ordinal(ordinal))
+            })
+            .collect::<Vec<_>>()
+            .join(" > ");
+        format!("Widget({}) {source} > {segments}", id.get())
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn debug_target(&self, target: EventTarget) -> String {
+        match target {
+            EventTarget::Window => "Window".to_owned(),
+            EventTarget::Widget(id) => self.debug_path(id),
+        }
+    }
+
     fn insert(&mut self, widget: Widget) -> Slot {
+        self.insert_with_source(widget, None)
+    }
+
+    fn insert_with_source(&mut self, widget: Widget, inherited: Option<&'static str>) -> Slot {
         let Widget {
             id,
             data,
@@ -220,10 +287,18 @@ impl WidgetTree {
             layer,
             modal,
             effect,
+            #[cfg(debug_assertions)]
+            name,
+            #[cfg(debug_assertions)]
+            source,
         } = widget;
+        #[cfg(debug_assertions)]
+        let source = source.or(inherited);
+        #[cfg(not(debug_assertions))]
+        let source = inherited;
         let mut slots = Vec::with_capacity(children.len());
         for child in children {
-            slots.push(self.insert(child));
+            slots.push(self.insert_with_source(child, source));
         }
         let shown = styles.resolve(state);
         let node = Node {
@@ -240,6 +315,10 @@ impl WidgetTree {
             layer,
             modal,
             effect,
+            #[cfg(debug_assertions)]
+            name,
+            #[cfg(debug_assertions)]
+            source,
             scroll_offset: ScrollOffset::ZERO,
             children: slots,
             transition: None,
@@ -284,6 +363,10 @@ impl WidgetTree {
             layer: node.layer,
             modal: node.modal,
             effect: node.effect.clone(),
+            #[cfg(debug_assertions)]
+            name: node.name,
+            #[cfg(debug_assertions)]
+            source: node.source,
         };
         self.index.remove(&widget.id);
         self.free.push(slot);

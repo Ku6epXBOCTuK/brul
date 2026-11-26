@@ -106,7 +106,7 @@ pub fn canvas_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
             bindings.extend(built.bindings);
             handlers.extend(built.handlers);
             props.extend(built.props);
-            let widget0 = built.widget;
+            let widget0 = built.widget.debug_named("Canvas");
             let _ = build.capability(brul::Capability::hooks(brul::Hooks {
                 target: brul::EventTarget::Widget(widget0.id()),
                 state: brul::StateId::source("canvas_demo", "Canvas/attach:waveform"),
@@ -120,7 +120,7 @@ pub fn canvas_demo_view(theme: Option<ThemeId>, build: &mut brul::Build, compone
                 raw_events: brul::RawEventSet::from([]),
             }));
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

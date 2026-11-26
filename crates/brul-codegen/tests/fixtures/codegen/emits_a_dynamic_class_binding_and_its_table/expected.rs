@@ -88,10 +88,10 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
     }));
     let widget = {
         {
-            let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]);
+            let widget0 = brul::gui::Widget::view(brul::gui::Direction::Row, vec![]).debug_named("Container");
             bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: demo_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?); Ok(value) } }));
             widget0
-        }
+        }.debug_source("input.brul")
     };
     Ok(brul::Built {
         widget,

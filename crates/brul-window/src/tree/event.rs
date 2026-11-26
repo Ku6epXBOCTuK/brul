@@ -16,6 +16,21 @@ use super::{Step, TreeApp};
 
 const SLOW_INPUT: Duration = Duration::from_millis(50);
 
+#[cfg(debug_assertions)]
+fn debug_events(tree: &brul_gui::WidgetTree, events: &[DispatchEvent]) -> String {
+    events
+        .iter()
+        .map(|event| {
+            let payload = match event {
+                DispatchEvent::Raw(event) => format!("{:?}", event.event),
+                DispatchEvent::Semantic(event) => format!("{:?}", event.event),
+            };
+            format!("{} {}", tree.debug_target(event.target()), payload)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 impl TreeApp {
     pub(crate) fn event(&mut self, window_id: WindowId, event: &WindowEvent) -> Step {
         let Some(window) = self
@@ -255,6 +270,12 @@ impl TreeApp {
                 _ => {}
             }
         }
+        #[cfg(debug_assertions)]
+        debug!(
+            events = debug_events(&self.tree.borrow(), &events),
+            "widget events"
+        );
+        #[cfg(not(debug_assertions))]
         debug!(?events, "widget events");
         let commands = (self.handler)(&events);
         debug!(?commands, "window commands");
