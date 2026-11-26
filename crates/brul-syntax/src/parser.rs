@@ -32,7 +32,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     pub fn expect_end(&mut self) -> Result<(), Error> {
-        let token = self.token()?;
+        let token = self.peek()?;
         let span = token.span;
         if token.kind == TokenKind::Eof {
             Ok(())
@@ -42,20 +42,20 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn primary(&mut self) -> Result<Expr, Error> {
-        let token = &self.token()?;
+        let token = self.peek()?;
         let kind = token.kind.clone();
         let span = token.span;
         match kind {
             TokenKind::Number(value) => {
-                self.at += 1;
+                self.bump();
                 Ok(self.located(ExprKind::Number(value), span))
             }
             TokenKind::String(value) => {
-                self.at += 1;
+                self.bump();
                 Ok(self.located(ExprKind::String(value), span))
             }
             TokenKind::Ident(name) => {
-                self.at += 1;
+                self.bump();
                 let kind = match name.as_str() {
                     "true" => ExprKind::Bool(true),
                     "false" => ExprKind::Bool(false),
@@ -68,7 +68,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             TokenKind::TemplateStart => self.template(),
             TokenKind::Punct(Punct::LBrace) => self.object(),
             TokenKind::Punct(Punct::LParen) => {
-                self.at += 1;
+                self.bump();
                 let expr = self.parse_expression()?;
                 self.expect_punct(Punct::RParen, Punct::RParen)?;
                 Ok(expr)
@@ -78,71 +78,72 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn array(&mut self) -> Result<Expr, Error> {
-        let span = self.token()?.span;
-        self.at += 1;
+        let span = self.peek()?.span;
+        self.bump();
         let mut items = Vec::new();
-        if self.token()?.kind == TokenKind::Punct(Punct::RBracket) {
-            self.at += 1;
+        if self.peek()?.kind == TokenKind::Punct(Punct::RBracket) {
+            self.bump();
             return Ok(self.located(ExprKind::Array(items), span));
         }
         loop {
             items.push(self.parse_expression()?);
-            if self.token()?.kind != TokenKind::Punct(Punct::Comma) {
+            if self.peek()?.kind != TokenKind::Punct(Punct::Comma) {
                 break;
             }
-            self.at += 1;
+            self.bump();
         }
         self.expect_punct(Punct::RBracket, Punct::RBracket)?;
         Ok(self.located(ExprKind::Array(items), span))
     }
 
     fn object(&mut self) -> Result<Expr, Error> {
-        let span = self.token()?.span;
-        self.at += 1;
+        let span = self.peek()?.span;
+        self.bump();
         let mut fields = Vec::new();
-        if self.token()?.kind == TokenKind::Punct(Punct::RBrace) {
-            self.at += 1;
+        if self.peek()?.kind == TokenKind::Punct(Punct::RBrace) {
+            self.bump();
             return Ok(self.located(ExprKind::Object(fields), span));
         }
         loop {
             let name = self.expect_ident()?;
             self.expect_punct(Punct::Colon, Punct::Colon)?;
             fields.push((name, self.parse_expression()?));
-            if self.token()?.kind != TokenKind::Punct(Punct::Comma) {
+            if self.peek()?.kind != TokenKind::Punct(Punct::Comma) {
                 break;
             }
-            self.at += 1;
+            self.bump();
         }
         self.expect_punct(Punct::RBrace, Punct::RBrace)?;
         Ok(self.located(ExprKind::Object(fields), span))
     }
 
     fn template(&mut self) -> Result<Expr, Error> {
-        let span = self.token()?.span;
-        self.at += 1;
+        let span = self.peek()?.span;
+        self.bump();
         let mut parts = Vec::new();
         loop {
-            match self.token()?.kind.clone() {
+            match self.peek()?.kind.clone() {
                 TokenKind::TemplateChunk(text) => {
-                    self.at += 1;
+                    self.bump();
                     parts.push(TemplatePart::Text(text));
                 }
                 TokenKind::TemplateInterpStart => {
-                    self.at += 1;
+                    self.bump();
                     let expr = self.parse_expression()?;
-                    if self.token()?.kind != TokenKind::TemplateInterpEnd {
-                        let span = self.token()?.span;
+                    let token = self.peek()?;
+                    let span = token.span;
+                    if token.kind != TokenKind::TemplateInterpEnd {
                         return Err(self.error(span, Expected::Punct(Punct::RBrace)));
                     }
-                    self.at += 1;
+                    self.bump();
                     parts.push(TemplatePart::Expr(Box::new(expr)));
                 }
                 TokenKind::TemplateEnd => {
-                    self.at += 1;
+                    self.bump();
                     break;
                 }
                 _ => {
-                    let span = self.token()?.span;
+                    let span = self.peek()?.span;
                     return Err(self.error(span, Expected::Word("end of template")));
                 }
             }
@@ -152,13 +153,13 @@ impl<'s, 'a> Parser<'s, 'a> {
 
     fn assignment(&mut self) -> Result<Expr, Error> {
         let target = self.ternary()?;
-        let op = match &self.token()?.kind {
+        let op = match &self.peek()?.kind {
             TokenKind::Punct(Punct::Assign) => AssignOp::Set,
             TokenKind::Punct(Punct::PlusAssign) => AssignOp::Add,
             TokenKind::Punct(Punct::MinusAssign) => AssignOp::Sub,
             _ => return Ok(target),
         };
-        self.at += 1;
+        self.bump();
         let value = self.assignment()?;
         let position = target.position;
         Ok(Expr::new(
@@ -173,10 +174,10 @@ impl<'s, 'a> Parser<'s, 'a> {
 
     fn ternary(&mut self) -> Result<Expr, Error> {
         let condition = self.logic_or()?;
-        if self.token()?.kind != TokenKind::Punct(Punct::Question) {
+        if self.peek()?.kind != TokenKind::Punct(Punct::Question) {
             return Ok(condition);
         }
-        self.at += 1;
+        self.bump();
         let then_branch = self.parse_expression()?;
         self.expect_punct(Punct::Colon, Punct::Colon)?;
         let else_branch = self.ternary()?;
@@ -242,11 +243,11 @@ impl<'s, 'a> Parser<'s, 'a> {
         ops: &[(Punct, BinaryOp)],
     ) -> Result<Expr, Error> {
         let mut left = next(self)?;
-        'operators: while let TokenKind::Punct(punct) = &self.token()?.kind {
+        'operators: while let TokenKind::Punct(punct) = &self.peek()?.kind {
             let punct = *punct;
             for &(token, op) in ops {
                 if punct == token {
-                    self.at += 1;
+                    self.bump();
                     let right = next(self)?;
                     let position = left.position;
                     left = Expr::new(
@@ -266,8 +267,8 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn unary(&mut self) -> Result<Expr, Error> {
-        let span = self.token()?.span;
-        let op = match &self.token()?.kind {
+        let span = self.peek()?.span;
+        let op = match &self.peek()?.kind {
             TokenKind::Punct(Punct::Bang) => Some(UnaryOp::Not),
             TokenKind::Punct(Punct::Minus) => Some(UnaryOp::Neg),
             _ => None,
@@ -275,7 +276,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         let Some(op) = op else {
             return self.postfix();
         };
-        self.at += 1;
+        self.bump();
         let operand = self.postfix()?;
         Ok(self.located(
             ExprKind::Unary {
@@ -288,11 +289,11 @@ impl<'s, 'a> Parser<'s, 'a> {
 
     fn postfix(&mut self) -> Result<Expr, Error> {
         let mut expr = self.primary()?;
-        while let TokenKind::Punct(punct) = &self.token()?.kind {
+        while let TokenKind::Punct(punct) = &self.peek()?.kind {
             let punct = *punct;
             match punct {
                 Punct::Dot => {
-                    self.at += 1;
+                    self.bump();
                     let name = self.expect_ident()?;
                     let position = expr.position;
                     expr = Expr::new(
@@ -304,7 +305,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     );
                 }
                 Punct::LBracket => {
-                    self.at += 1;
+                    self.bump();
                     let index = self.parse_expression()?;
                     self.expect_punct(Punct::RBracket, Punct::RBracket)?;
                     let position = expr.position;
@@ -317,7 +318,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     );
                 }
                 Punct::LParen => {
-                    self.at += 1;
+                    self.bump();
                     let args = self.arg_list()?;
                     self.expect_punct(Punct::RParen, Punct::RParen)?;
                     let position = expr.position;
@@ -337,15 +338,15 @@ impl<'s, 'a> Parser<'s, 'a> {
 
     fn arg_list(&mut self) -> Result<Vec<Expr>, Error> {
         let mut args = Vec::new();
-        if self.token()?.kind == TokenKind::Punct(Punct::RParen) {
+        if self.peek()?.kind == TokenKind::Punct(Punct::RParen) {
             return Ok(args);
         }
         loop {
             args.push(self.parse_expression()?);
-            if self.token()?.kind != TokenKind::Punct(Punct::Comma) {
+            if self.peek()?.kind != TokenKind::Punct(Punct::Comma) {
                 break;
             }
-            self.at += 1;
+            self.bump();
         }
         Ok(args)
     }
@@ -373,6 +374,6 @@ pub fn parse_expression_at(source: &str, offset: usize) -> Result<(Expr, usize),
     let mut stream = TokenStream::lazy(source, lexer::Lexer::new(source, offset));
     let mut parser = Parser::new(&mut stream);
     let expr = parser.parse_expression()?;
-    let end = stream.tokens[stream.at - 1].span.end;
+    let end = stream.last_end();
     Ok((expr, end))
 }

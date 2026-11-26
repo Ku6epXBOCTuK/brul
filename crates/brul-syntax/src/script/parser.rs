@@ -15,8 +15,8 @@ pub fn parse(source: &str) -> Result<Program, Error> {
     };
     let mut functions = Vec::new();
     let mut statements = Vec::new();
-    while !parser.at_end() {
-        if parser.at_keyword("function") {
+    while !parser.at_end()? {
+        if parser.at_keyword("function")? {
             functions.push(Arc::new(parser.function()?));
         } else {
             statements.push(parser.statement()?);
@@ -36,7 +36,7 @@ pub fn expression_list_in(source: &str) -> Result<(Vec<Expr>, usize), Error> {
     };
     let mut values = Vec::new();
     loop {
-        let token = parser.token()?;
+        let token = parser.peek()?;
         let span = token.span;
         let kind = token.kind.clone();
         if kind == TokenKind::Eof {
@@ -46,11 +46,11 @@ pub fn expression_list_in(source: &str) -> Result<(Vec<Expr>, usize), Error> {
             return Ok((values, span.start));
         }
         values.push(parser.expression()?);
-        let token = parser.token()?;
+        let token = parser.peek()?;
         let span = token.span;
         let kind = token.kind.clone();
         match kind {
-            TokenKind::Punct(Punct::Comma) => parser.stream.at += 1,
+            TokenKind::Punct(Punct::Comma) => parser.bump(),
             TokenKind::Punct(Punct::Semicolon) | TokenKind::Eof => return Ok((values, span.start)),
             _ => return Err(parser.error(span, Expected::Punct(Punct::Comma))),
         }
@@ -78,22 +78,23 @@ impl DerefMut for Parser<'_> {
 
 impl Parser<'_> {
     fn statement(&mut self) -> Result<Statement, Error> {
-        if self.at_keyword("let") {
+        if self.at_keyword("let")? {
             return self.let_statement(false);
         }
-        if self.at_keyword("const") {
+        if self.at_keyword("const")? {
             return self.let_statement(true);
         }
-        if self.at_keyword("if") {
+        if self.at_keyword("if")? {
             return self.if_statement();
         }
-        if self.at_keyword("return") {
+        if self.at_keyword("return")? {
             return self.return_statement();
         }
-        if self.at_keyword("function") {
-            return Err(self.error(self.tokens[self.at].span, Error::FunctionNotTopLevel));
+        if self.at_keyword("function")? {
+            let span = self.peek()?.span;
+            return Err(self.error(span, Error::FunctionNotTopLevel));
         }
-        if self.tokens[self.at].kind == TokenKind::Punct(Punct::LBrace) {
+        if self.peek()?.kind == TokenKind::Punct(Punct::LBrace) {
             return self.block();
         }
         let expr = self.expression()?;
@@ -102,15 +103,18 @@ impl Parser<'_> {
     }
 
     fn let_statement(&mut self, constant: bool) -> Result<Statement, Error> {
-        self.at += 1;
+        self.bump();
         let name = self.ident(Expected::Word("variable name"))?;
         self.expect_punct(Punct::Colon, Punct::Colon)?;
         let ty = self.type_annotation()?;
-        let value = if self.tokens[self.at].kind == TokenKind::Punct(Punct::Assign) {
-            self.at += 1;
+        let token = self.peek()?;
+        let span = token.span;
+        let has_initializer = token.kind == TokenKind::Punct(Punct::Assign);
+        let value = if has_initializer {
+            self.bump();
             Some(self.expression()?)
         } else if constant {
-            return Err(self.error(self.tokens[self.at].span, Error::ConstNoInitializer));
+            return Err(self.error(span, Error::ConstNoInitializer));
         } else {
             None
         };
@@ -124,13 +128,13 @@ impl Parser<'_> {
     }
 
     fn return_statement(&mut self) -> Result<Statement, Error> {
-        let span = self.token()?.span;
+        let span = self.peek()?.span;
         let position = span.position(self.stream.source);
         if !self.in_function {
             return Err(self.error(span, Error::ReturnOutsideFunction));
         }
-        self.at += 1;
-        let value = if self.tokens[self.at].kind == TokenKind::Punct(Punct::Semicolon) {
+        self.bump();
+        let value = if self.peek()?.kind == TokenKind::Punct(Punct::Semicolon) {
             None
         } else {
             Some(self.expression()?)
@@ -144,16 +148,18 @@ impl Parser<'_> {
         let name = self.ident(Expected::Word("function name"))?;
         self.expect_punct(Punct::LParen, Punct::LParen)?;
         let mut params = Vec::new();
-        if self.tokens[self.at].kind != TokenKind::Punct(Punct::RParen) {
+        let token = self.peek()?;
+        if token.kind != TokenKind::Punct(Punct::RParen) {
             loop {
                 let name = self.ident(Expected::Word("parameter name"))?;
                 self.expect_punct(Punct::Colon, Punct::Colon)?;
                 let ty = self.type_annotation()?;
                 params.push(Param { name, ty });
-                if self.tokens[self.at].kind != TokenKind::Punct(Punct::Comma) {
+                let token = self.peek()?;
+                if token.kind != TokenKind::Punct(Punct::Comma) {
                     break;
                 }
-                self.at += 1;
+                self.bump();
             }
         }
         self.expect_punct(Punct::RParen, Punct::RParen)?;
@@ -171,13 +177,13 @@ impl Parser<'_> {
     }
 
     fn type_annotation(&mut self) -> Result<Type, Error> {
-        let token = self.token()?;
+        let token = self.peek()?;
         let span = token.span;
         let name = match &token.kind {
             TokenKind::Ident(name) => name.clone(),
             _ => return Err(self.error(span, Expected::Word("type"))),
         };
-        self.at += 1;
+        self.bump();
         if name == "Array" {
             self.expect_punct(Punct::Lt, Punct::Lt)?;
             let item = self.type_annotation()?;
@@ -193,9 +199,9 @@ impl Parser<'_> {
         let condition = self.expression()?;
         self.expect_punct(Punct::RParen, Punct::RParen)?;
         let then_branch = self.block_statements()?;
-        let else_branch = if self.at_keyword("else") {
-            self.at += 1;
-            if self.at_keyword("if") {
+        let else_branch = if self.at_keyword("else")? {
+            self.bump();
+            if self.at_keyword("if")? {
                 Some(Box::new(self.if_statement()?))
             } else {
                 Some(Box::new(self.block()?))
@@ -218,17 +224,16 @@ impl Parser<'_> {
         self.expect_punct(Punct::LBrace, Punct::LBrace)?;
         let mut statements = Vec::new();
         loop {
-            let token = &self.tokens[self.at];
-            match token.kind {
-                TokenKind::Punct(Punct::RBrace) => {
-                    self.at += 1;
-                    break;
-                }
-                TokenKind::Eof => {
-                    return Err(self.error(token.span, Expected::Punct(Punct::RBrace)));
-                }
-                _ => statements.push(self.statement()?),
+            let token = self.peek()?;
+            let span = token.span;
+            if token.kind == TokenKind::Punct(Punct::RBrace) {
+                self.bump();
+                break;
             }
+            if token.kind == TokenKind::Eof {
+                return Err(self.error(span, Expected::Punct(Punct::RBrace)));
+            }
+            statements.push(self.statement()?);
         }
         Ok(statements)
     }

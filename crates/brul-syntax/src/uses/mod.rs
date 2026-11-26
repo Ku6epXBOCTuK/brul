@@ -31,8 +31,8 @@ pub fn parse(source: &str) -> Result<Block, Error> {
         stream: TokenStream::new(source, tokens),
     };
     let mut block = Block::default();
-    while !parser.at_end() {
-        if parser.at_keyword("resource") {
+    while !parser.at_end()? {
+        if parser.at_keyword("resource")? {
             block.resources.push(parser.resource_item()?);
         } else {
             block.uses.push(parser.use_item()?);

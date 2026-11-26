@@ -125,8 +125,8 @@ pub struct Token {
 
 pub struct TokenStream<'a> {
     pub(crate) source: &'a str,
-    pub(crate) tokens: Vec<Token>,
-    pub(crate) at: usize,
+    tokens: Vec<Token>,
+    at: usize,
     lexer: Option<Lexer<'a>>,
 }
 
@@ -149,7 +149,7 @@ impl<'a> TokenStream<'a> {
         }
     }
 
-    pub(crate) fn token(&mut self) -> Result<&Token, ParseError> {
+    pub(crate) fn peek(&mut self) -> Result<&Token, ParseError> {
         while self.tokens.len() <= self.at {
             let Some(lexer) = self.lexer.as_mut() else {
                 break;
@@ -163,20 +163,28 @@ impl<'a> TokenStream<'a> {
         Ok(&self.tokens[self.at])
     }
 
-    pub fn at_end(&self) -> bool {
-        self.tokens[self.at].kind == TokenKind::Eof
+    pub(crate) fn bump(&mut self) {
+        self.at += 1;
     }
 
-    pub fn at_keyword(&self, keyword: &str) -> bool {
-        matches!(&self.tokens[self.at].kind, TokenKind::Ident(name) if name == keyword)
+    pub(crate) fn last_end(&self) -> usize {
+        self.tokens[self.at - 1].span.end
+    }
+
+    pub fn at_end(&mut self) -> Result<bool, ParseError> {
+        Ok(self.peek()?.kind == TokenKind::Eof)
+    }
+
+    pub fn at_keyword(&mut self, keyword: &str) -> Result<bool, ParseError> {
+        Ok(matches!(&self.peek()?.kind, TokenKind::Ident(name) if name == keyword))
     }
 
     pub fn expect_keyword(&mut self, keyword: &'static str) -> Result<(), ParseError> {
-        let token = self.token()?;
+        let token = self.peek()?;
         let span = token.span;
         let matches = matches!(&token.kind, TokenKind::Ident(name) if name == keyword);
         if matches {
-            self.at += 1;
+            self.bump();
             Ok(())
         } else {
             Err(self.error(span, Expected::Keyword(keyword)))
@@ -184,11 +192,11 @@ impl<'a> TokenStream<'a> {
     }
 
     pub fn ident(&mut self, expected: impl Into<Expected>) -> Result<String, ParseError> {
-        let token = self.token()?;
+        let token = self.peek()?;
         let span = token.span;
         match token.kind.clone() {
             TokenKind::Ident(name) => {
-                self.at += 1;
+                self.bump();
                 Ok(name)
             }
             _ => Err(self.error(span, expected.into())),
@@ -196,11 +204,11 @@ impl<'a> TokenStream<'a> {
     }
 
     pub fn string(&mut self, expected: impl Into<Expected>) -> Result<String, ParseError> {
-        let token = self.token()?;
+        let token = self.peek()?;
         let span = token.span;
         match token.kind.clone() {
             TokenKind::String(value) => {
-                self.at += 1;
+                self.bump();
                 Ok(value)
             }
             _ => Err(self.error(span, expected.into())),
@@ -212,11 +220,11 @@ impl<'a> TokenStream<'a> {
         punct: Punct,
         expected: impl Into<Expected>,
     ) -> Result<(), ParseError> {
-        let token = self.token()?;
+        let token = self.peek()?;
         let span = token.span;
         let matches = token.kind == TokenKind::Punct(punct);
         if matches {
-            self.at += 1;
+            self.bump();
             Ok(())
         } else {
             Err(self.error(span, expected.into()))
