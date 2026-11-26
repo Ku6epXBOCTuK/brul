@@ -8,7 +8,7 @@ use brul_gui::{KeyModifiers, KeyPress, RawEvent, RawUiEvent};
 use brul_window::WindowCommand;
 
 use crate::ui::AssemblyParts;
-use crate::{Build, Script, Theme, Ui, WindowDef};
+use crate::{Build, BuildParts, Script, Services, Theme, Ui, WindowDef};
 
 trait Generated {
     type Theme: Theme + FromStr;
@@ -26,9 +26,15 @@ fn run_case<G: Generated>(name: &str, source: &str, expected: &[u8], expected_pa
     });
     let component =
         crate::run::generated_component(G::names(), G::script(), &[]).expect("generated component");
-    let mut build = Build::new();
+    let services = Services::default();
+    let mut build = Build::new(services.clone());
     let view = G::windows()[0].view;
     let built = view(theme, &mut build, &component).expect("generated view");
+    let BuildParts {
+        structures,
+        components: nested,
+        capabilities,
+    } = build.finish();
     let commands = Rc::new(RefCell::new(Vec::<WindowCommand>::new()));
     let mut ui = Ui::assemble_with(
         Rc::clone(&component),
@@ -36,11 +42,12 @@ fn run_case<G: Generated>(name: &str, source: &str, expected: &[u8], expected_pa
         view,
         theme,
         AssemblyParts {
-            structures: build.take_structures(),
-            capabilities: build.take_capabilities(),
-            nested: build.take_components(),
-            states: build.take_states(),
+            structures,
+            capabilities,
+            nested,
+            states: services.states,
             event_sink: None,
+            clipboard: None,
         },
         Rc::clone(&commands),
         true,

@@ -13,8 +13,8 @@ use brul_window::{
 use crate::handle::{Handle, Message, ScopedMessage, take};
 use crate::ui::{AssemblyParts, CommandHost};
 use crate::{
-    Build, Built, Component, ComponentHandle, EventSink, Host, Script, StateId, Theme, Ui, Value,
-    ViewError, WindowConfig,
+    Build, BuildParts, Built, Component, ComponentHandle, EventSink, Host, Script, Services,
+    SharedStates, StateId, Theme, Ui, Value, ViewError, WindowConfig,
 };
 
 struct HandleSink(Handle);
@@ -191,9 +191,9 @@ pub(crate) fn generated_built<T: Theme>(
     script: Option<Script>,
 ) -> Result<(ComponentHandle, Built, Vec<crate::Structure>), Box<dyn std::error::Error>> {
     let component = generated_component(names, script, seeds)?;
-    let mut build = Build::new();
+    let mut build = Build::new(Services::default());
     let built = view(theme, &mut build, &component).map_err(std::io::Error::other)?;
-    Ok((component, built, build.take_structures()))
+    Ok((component, built, build.finish().structures))
 }
 
 struct Runtime<T: Theme> {
@@ -317,18 +317,23 @@ impl<T: Theme> Runtime<T> {
             theme = theme.map(Theme::name).unwrap_or("default"),
             "creating window"
         );
-        let mut build = Build::new();
+        let states = SharedStates::default();
         let event_sink = self
             .handle
             .clone()
             .map(|handle| Arc::new(HandleSink(handle)) as Arc<dyn EventSink>);
-        build.set_event_sink(event_sink.clone());
+        let mut build = Build::new(Services {
+            states: Rc::clone(&states),
+            event_sink: event_sink.clone(),
+            clipboard: None,
+        });
         let built =
             view(self.fixed_theme, &mut build, &self.component).map_err(WindowError::app)?;
-        let structures = build.take_structures();
-        let components = build.take_components();
-        let states = build.take_states();
-        let capabilities = build.take_capabilities();
+        let BuildParts {
+            structures,
+            components,
+            capabilities,
+        } = build.finish();
         let mut ui = Ui::assemble_with(
             Rc::clone(&self.component),
             built,
@@ -340,6 +345,7 @@ impl<T: Theme> Runtime<T> {
                 nested: components,
                 states,
                 event_sink,
+                clipboard: None,
             },
             Rc::clone(&self.commands),
             config.scroll,

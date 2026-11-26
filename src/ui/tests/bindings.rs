@@ -133,7 +133,7 @@ pub(super) fn rejecting_view(
     if theme.is_some() {
         return Err(unknown_theme());
     }
-    themed_view(None, &mut Build::new(), component)
+    themed_view(None, &mut Build::new(Services::default()), component)
 }
 
 #[test]

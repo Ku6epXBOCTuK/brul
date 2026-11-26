@@ -94,16 +94,15 @@ pub(super) fn expand_attach(
         #function
 
         pub fn #apply(
-            ctx: &mut ::brul::Build,
-            _state: ::brul::StateId,
+            ctx: &::brul::CapabilityContext,
             params: &[::brul::Dyn],
         ) -> Result<(), ::brul::ViewError> {
             #(#reads)*
-            if ::brul::Build::get_state::<#state_ty>(&*ctx).is_none() {
+            if ::brul::CapabilityContext::get_state::<#state_ty>(ctx).is_none() {
                 let state = #name(ctx, #(Clone::clone(&#values)),*)?;
                 ctx.set_state(state);
             }
-            let cell = ::brul::Build::get_state::<#state_ty>(&*ctx)
+            let cell = ::brul::CapabilityContext::get_state::<#state_ty>(ctx)
                 .expect("attachment state was just created");
             if let Ok(mut state) = cell.try_borrow_mut() {
                 #update
@@ -112,11 +111,10 @@ pub(super) fn expand_attach(
         }
 
         pub fn #event(
-            ctx: &mut ::brul::Build,
-            _state: ::brul::StateId,
+            ctx: &::brul::CapabilityContext,
             event: &::brul::UiEvent,
         ) -> ::brul::Dispatch {
-            let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
+            let Some(cell) = ::brul::CapabilityContext::get_state::<#state_ty>(ctx) else {
                 return ::brul::Dispatch::CONTINUE;
             };
             let Ok(mut state) = cell.try_borrow_mut() else {
@@ -126,11 +124,10 @@ pub(super) fn expand_attach(
         }
 
         pub fn #raw_event(
-            ctx: &mut ::brul::Build,
-            _state: ::brul::StateId,
+            ctx: &::brul::CapabilityContext,
             event: &::brul::RawUiEvent,
         ) -> ::brul::Dispatch {
-            let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx) else {
+            let Some(cell) = ::brul::CapabilityContext::get_state::<#state_ty>(ctx) else {
                 return ::brul::Dispatch::CONTINUE;
             };
             let Ok(mut state) = cell.try_borrow_mut() else {
@@ -139,8 +136,8 @@ pub(super) fn expand_attach(
             #raw_event_call
         }
 
-        pub fn #cleanup(ctx: &mut ::brul::Build, _state: ::brul::StateId) {
-            if let Some(cell) = ::brul::Build::get_state::<#state_ty>(&*ctx)
+        pub fn #cleanup(ctx: &::brul::CapabilityContext) {
+            if let Some(cell) = ::brul::CapabilityContext::get_state::<#state_ty>(ctx)
                 && let Ok(mut state) = cell.try_borrow_mut()
             {
                 #cleanup_call

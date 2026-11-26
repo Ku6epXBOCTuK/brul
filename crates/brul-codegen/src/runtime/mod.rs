@@ -2,6 +2,7 @@ mod binding;
 mod build;
 #[path = "internal/capability.rs"]
 mod capability;
+mod capability_context;
 #[path = "internal/clipboard.rs"]
 mod clipboard;
 mod component;
@@ -28,8 +29,9 @@ pub use brul_event::{Event, EventKind, EventSet, RawEvent, RawEventSet, RawKind}
 pub use brul_gui::{
     ClipboardData, DispatchEvent, EditBuffer, EventTarget, Fragment, Position, RawUiEvent, UiEvent,
 };
-pub use build::Build;
+pub use build::{Build, BuildParts, Services};
 pub use capability::Capability;
+pub use capability_context::CapabilityContext;
 pub use clipboard::Clipboard;
 pub use component::{ComponentHandle, Context, Instance, PropArgument, accepts_prop, instance};
 pub use error::ViewError;

@@ -8,13 +8,13 @@ use brul_gui::{
 };
 use brul_script::{Component, Dyn, Error as ScriptError};
 
-use super::{Build, ComponentHandle, StateId, ViewError};
+use super::{CapabilityContext, ComponentHandle, StateId, ViewError};
 
 pub type Param = fn(&mut Component) -> Result<Dyn, ScriptError>;
-pub type Apply = fn(&mut Build, StateId, &[Dyn]) -> Result<(), ViewError>;
-pub type EventHook = fn(&mut Build, StateId, &UiEvent) -> Dispatch;
-pub type RawEventHook = fn(&mut Build, StateId, &RawUiEvent) -> Dispatch;
-pub type CleanupHook = fn(&mut Build, StateId);
+pub type Apply = fn(&CapabilityContext, &[Dyn]) -> Result<(), ViewError>;
+pub type EventHook = fn(&CapabilityContext, &UiEvent) -> Dispatch;
+pub type RawEventHook = fn(&CapabilityContext, &RawUiEvent) -> Dispatch;
+pub type CleanupHook = fn(&CapabilityContext);
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Dispatch {
@@ -133,12 +133,12 @@ pub struct Hooks {
     pub raw_events: RawEventSet,
 }
 
-pub fn apply(build: &mut Build, params: &[Param], apply: Apply) -> Result<(), ViewError> {
+pub fn apply(context: &CapabilityContext, params: &[Param], apply: Apply) -> Result<(), ViewError> {
     let mut values = Vec::with_capacity(params.len());
     for param in params {
-        values.push(param(&mut build.component().borrow_mut())?);
+        values.push(param(&mut context.component().borrow_mut())?);
     }
-    apply(build, build.state_id(), &values)
+    apply(context, &values)
 }
 
 pub struct PainterGuard {
@@ -311,6 +311,7 @@ impl Element<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::Services;
     use brul_gui::{CanvasPainter, CanvasSpec, PaintCommand, PaintCtx, Widget};
 
     struct Probe;
@@ -326,16 +327,17 @@ mod tests {
         let widget = Widget::canvas(CanvasSpec::new());
         let id = widget.id();
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
-        let mut build = Build::new();
-        build.set_tree(Rc::clone(&tree));
-        build.set_target(
+        let context = CapabilityContext::new(
+            Services::default(),
+            Rc::clone(&tree),
             EventTarget::Widget(id),
             StateId::source("test", "canvas"),
             Rc::new(RefCell::new(Component::new())),
+            None,
         );
         assert!(tree.borrow_mut().take_dirty().full);
 
-        assert!(build.element().invalidate());
+        assert!(context.element().invalidate());
         let dirty = tree.borrow_mut().take_dirty();
         assert!(!dirty.full);
         assert!(dirty.ids.contains(&id));
@@ -346,15 +348,16 @@ mod tests {
         let widget = Widget::canvas(CanvasSpec::new());
         let id = widget.id();
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
-        let mut build = Build::new();
-        build.set_tree(Rc::clone(&tree));
-        build.set_target(
+        let context = CapabilityContext::new(
+            Services::default(),
+            Rc::clone(&tree),
             EventTarget::Widget(id),
             StateId::source("test", "canvas"),
             Rc::new(RefCell::new(Component::new())),
+            None,
         );
         assert!(tree.borrow_mut().take_dirty().full);
-        let guard = build.element().set_painter(Rc::new(Probe));
+        let guard = context.element().set_painter(Rc::new(Probe));
         assert!(tree.borrow_mut().take_dirty().ids.contains(&id));
 
         drop(guard);

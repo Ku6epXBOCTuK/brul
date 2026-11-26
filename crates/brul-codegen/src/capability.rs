@@ -351,7 +351,7 @@ mod tests {
         let mut specs = builtins();
         let function = attach(
             "#[brul::attach(name = \"editor\", raw_events(Key))]\n\
-             pub fn custom(ctx: &mut Build) -> Result<Editor, ViewError> { Ok(Editor) }",
+             pub fn custom(ctx: &CapabilityContext) -> Result<Editor, ViewError> { Ok(Editor) }",
         );
         collect_into(&mut specs, &function).expect("override");
         let spec = &specs["editor"];
@@ -376,12 +376,12 @@ mod tests {
 
         let first = attach(
             "#[brul::attach(name = \"custom\")]\n\
-             pub fn custom(ctx: &mut Build) -> Result<Custom, ViewError> { Ok(Custom) }",
+             pub fn custom(ctx: &CapabilityContext) -> Result<Custom, ViewError> { Ok(Custom) }",
         );
         collect_into(&mut specs, &first).expect("first attachment");
         let second = attach(
             "#[brul::attach(name = \"custom\")]\n\
-             pub fn other(ctx: &mut Build) -> Result<Custom, ViewError> { Ok(Custom) }",
+             pub fn other(ctx: &CapabilityContext) -> Result<Custom, ViewError> { Ok(Custom) }",
         );
         assert!(collect_into(&mut specs, &second).is_err());
     }

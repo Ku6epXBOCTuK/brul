@@ -34,11 +34,11 @@ pub(super) fn handled_is_visible_to_later_capabilities() {
     assert_eq!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
-pub(super) fn ignore_ui_event(_ctx: &mut Build, _state: StateId, _event: &UiEvent) -> Dispatch {
+pub(super) fn ignore_ui_event(_ctx: &CapabilityContext, _event: &UiEvent) -> Dispatch {
     Dispatch::CONTINUE
 }
 
-pub(super) fn emit_raw_on_key(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+pub(super) fn emit_raw_on_key(ctx: &CapabilityContext, event: &RawUiEvent) -> Dispatch {
     if let Some(id) = event.target.widget() {
         ctx.emit_raw_event(RawUiEvent::widget(
             id,
@@ -48,7 +48,7 @@ pub(super) fn emit_raw_on_key(ctx: &mut Build, _state: StateId, event: &RawUiEve
     Dispatch::CONTINUE
 }
 
-pub(super) fn record_raw_paste(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+pub(super) fn record_raw_paste(ctx: &CapabilityContext, event: &RawUiEvent) -> Dispatch {
     if matches!(event.event, brul_gui::RawEvent::Paste { .. }) {
         ctx.component()
             .borrow_mut()
@@ -58,11 +58,7 @@ pub(super) fn record_raw_paste(ctx: &mut Build, _state: StateId, event: &RawUiEv
     Dispatch::CONTINUE
 }
 
-pub(super) fn record_attachment_target(
-    ctx: &mut Build,
-    _state: StateId,
-    event: &UiEvent,
-) -> Dispatch {
+pub(super) fn record_attachment_target(ctx: &CapabilityContext, event: &UiEvent) -> Dispatch {
     if let Some(id) = event.target.widget() {
         ctx.component()
             .borrow_mut()
@@ -72,7 +68,7 @@ pub(super) fn record_attachment_target(
     Dispatch::CONTINUE
 }
 
-pub(super) fn record_raw_target(ctx: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+pub(super) fn record_raw_target(ctx: &CapabilityContext, event: &RawUiEvent) -> Dispatch {
     if let Some(id) = event.target.widget() {
         ctx.component()
             .borrow_mut()
@@ -138,7 +134,7 @@ pub(super) fn one_targeted_event_reaches_the_attachment_and_both_scripts() {
         apply: probe_apply,
         event: record_attachment_target,
         raw_event: ignore_raw_event,
-        cleanup: |_, _| {},
+        cleanup: |_| {},
         events: EventSet::from([EventKind::Key]),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
@@ -153,6 +149,7 @@ pub(super) fn one_targeted_event_reaches_the_attachment_and_both_scripts() {
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,
@@ -188,7 +185,7 @@ pub(super) fn a_window_capability_sees_a_raw_key_and_emits_a_semantic_key() {
         apply: probe_apply,
         event: ignore_ui_event,
         raw_event: window_raw_key,
-        cleanup: |_, _| {},
+        cleanup: |_| {},
         events: EventSet::empty(),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
@@ -200,7 +197,7 @@ pub(super) fn a_window_capability_sees_a_raw_key_and_emits_a_semantic_key() {
         apply: probe_apply,
         event: window_semantic_key,
         raw_event: ignore_raw_event,
-        cleanup: |_, _| {},
+        cleanup: |_| {},
         events: EventSet::from([EventKind::Key]),
         raw_events: RawEventSet::empty(),
     };
@@ -215,6 +212,7 @@ pub(super) fn a_window_capability_sees_a_raw_key_and_emits_a_semantic_key() {
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,
@@ -249,14 +247,14 @@ pub(super) fn a_raw_window_key_stays_with_capabilities() {
         params: Vec::new(),
         apply: probe_apply,
         event: ignore_ui_event,
-        raw_event: |ctx: &mut Build, _: StateId, _: &RawUiEvent| {
+        raw_event: |ctx: &CapabilityContext, _: &RawUiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("attach", Value::Bool(true))
                 .expect("attach");
             Dispatch::CONTINUE
         },
-        cleanup: |_, _| {},
+        cleanup: |_| {},
         events: EventSet::empty(),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
@@ -271,6 +269,7 @@ pub(super) fn a_raw_window_key_stays_with_capabilities() {
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,
@@ -302,21 +301,21 @@ pub(super) fn a_window_capability_can_stop_the_dispatch_chain() {
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: |ctx: &mut Build, _: StateId, _: &UiEvent| {
+        event: |ctx: &CapabilityContext, _: &UiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("attach", Value::Bool(true))
                 .expect("attach");
             Dispatch::stop()
         },
-        raw_event: |ctx: &mut Build, _: StateId, _: &RawUiEvent| {
+        raw_event: |ctx: &CapabilityContext, _: &RawUiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("attach", Value::Bool(true))
                 .expect("attach");
             Dispatch::stop()
         },
-        cleanup: |_, _| {},
+        cleanup: |_| {},
         events: EventSet::from([EventKind::Key]),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
@@ -326,21 +325,21 @@ pub(super) fn a_window_capability_can_stop_the_dispatch_chain() {
         component: Rc::clone(&component),
         params: Vec::new(),
         apply: probe_apply,
-        event: |ctx: &mut Build, _: StateId, _: &UiEvent| {
+        event: |ctx: &CapabilityContext, _: &UiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("off", Value::Bool(true))
                 .expect("off");
             Dispatch::CONTINUE
         },
-        raw_event: |ctx: &mut Build, _: StateId, _: &RawUiEvent| {
+        raw_event: |ctx: &CapabilityContext, _: &RawUiEvent| {
             ctx.component()
                 .borrow_mut()
                 .assign("off", Value::Bool(true))
                 .expect("off");
             Dispatch::CONTINUE
         },
-        cleanup: |_, _| {},
+        cleanup: |_| {},
         events: EventSet::from([EventKind::Key]),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
@@ -355,6 +354,7 @@ pub(super) fn a_window_capability_can_stop_the_dispatch_chain() {
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,
@@ -377,39 +377,39 @@ pub(super) fn a_window_capability_can_stop_the_dispatch_chain() {
     assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
-pub(super) fn mark_first(ctx: &mut Build) {
+pub(super) fn mark_first(ctx: &CapabilityContext) {
     ctx.component()
         .borrow_mut()
         .assign("first", Value::Bool(true))
         .expect("first");
 }
 
-pub(super) fn first_handled(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch {
+pub(super) fn first_handled(ctx: &CapabilityContext, _: &UiEvent) -> Dispatch {
     mark_first(ctx);
     Dispatch::handled()
 }
 
-pub(super) fn first_stop_capabilities(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch {
+pub(super) fn first_stop_capabilities(ctx: &CapabilityContext, _: &UiEvent) -> Dispatch {
     mark_first(ctx);
     Dispatch::stop_capabilities()
 }
 
-pub(super) fn first_stop_scripts(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch {
+pub(super) fn first_stop_scripts(ctx: &CapabilityContext, _: &UiEvent) -> Dispatch {
     mark_first(ctx);
     Dispatch::stop_scripts()
 }
 
-pub(super) fn raw_stop_scripts(ctx: &mut Build, _: StateId, _: &RawUiEvent) -> Dispatch {
+pub(super) fn raw_stop_scripts(ctx: &CapabilityContext, _: &RawUiEvent) -> Dispatch {
     mark_first(ctx);
     Dispatch::stop_scripts()
 }
 
-pub(super) fn raw_first_continue(ctx: &mut Build, _: StateId, _: &RawUiEvent) -> Dispatch {
+pub(super) fn raw_first_continue(ctx: &CapabilityContext, _: &RawUiEvent) -> Dispatch {
     mark_first(ctx);
     Dispatch::CONTINUE
 }
 
-pub(super) fn second_flags(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch {
+pub(super) fn second_flags(ctx: &CapabilityContext, _: &UiEvent) -> Dispatch {
     let mut component = ctx.component().borrow_mut();
     component
         .assign("second", Value::Bool(true))
@@ -422,7 +422,7 @@ pub(super) fn second_flags(ctx: &mut Build, _: StateId, _: &UiEvent) -> Dispatch
     Dispatch::CONTINUE
 }
 
-pub(super) fn second_raw(ctx: &mut Build, _: StateId, _: &RawUiEvent) -> Dispatch {
+pub(super) fn second_raw(ctx: &CapabilityContext, _: &RawUiEvent) -> Dispatch {
     ctx.component()
         .borrow_mut()
         .assign("second", Value::Bool(true))
@@ -431,8 +431,8 @@ pub(super) fn second_raw(ctx: &mut Build, _: StateId, _: &RawUiEvent) -> Dispatc
 }
 
 pub(super) fn flags_ui(
-    first_event: fn(&mut Build, StateId, &UiEvent) -> Dispatch,
-    first_raw: fn(&mut Build, StateId, &RawUiEvent) -> Dispatch,
+    first_event: fn(&CapabilityContext, &UiEvent) -> Dispatch,
+    first_raw: fn(&CapabilityContext, &RawUiEvent) -> Dispatch,
 ) -> (Ui<TestTheme>, ComponentHandle) {
     let component = component_with(&["first", "second", "handled", "ran"]);
     let built = Built {
@@ -449,7 +449,7 @@ pub(super) fn flags_ui(
         apply: probe_apply,
         event: first_event,
         raw_event: first_raw,
-        cleanup: |_, _| {},
+        cleanup: |_| {},
         events: EventSet::from([EventKind::Key]),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
@@ -461,7 +461,7 @@ pub(super) fn flags_ui(
         apply: probe_apply,
         event: second_flags,
         raw_event: second_raw,
-        cleanup: |_, _| {},
+        cleanup: |_| {},
         events: EventSet::from([EventKind::Key]),
         raw_events: RawEventSet::from([brul_gui::RawKind::Key]),
     };
@@ -476,6 +476,7 @@ pub(super) fn flags_ui(
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,

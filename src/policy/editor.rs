@@ -1,5 +1,5 @@
 use crate::{
-    Build, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError,
+    CapabilityContext, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError,
     gui::{EventTarget, ImeKind, KeyModifiers, Position},
 };
 
@@ -10,7 +10,7 @@ pub struct PlainEditor;
     raw_events(Key, Ime, Paste),
     raw_event = editor_raw
 )]
-pub fn editor(_build: &mut Build) -> Result<PlainEditor, ViewError> {
+pub fn editor(_build: &CapabilityContext) -> Result<PlainEditor, ViewError> {
     Ok(PlainEditor)
 }
 
@@ -34,7 +34,7 @@ struct Lines {
     below: Option<usize>,
 }
 
-fn editor_raw(_state: &mut PlainEditor, build: &mut Build, event: &RawUiEvent) -> Dispatch {
+fn editor_raw(_state: &mut PlainEditor, build: &CapabilityContext, event: &RawUiEvent) -> Dispatch {
     if build.handled() {
         return Dispatch::CONTINUE;
     }
@@ -48,7 +48,7 @@ fn editor_raw(_state: &mut PlainEditor, build: &mut Build, event: &RawUiEvent) -
 }
 
 fn editor_key(
-    build: &mut Build,
+    build: &CapabilityContext,
     target: EventTarget,
     key: &crate::gui::KeyPress,
     modifiers: KeyModifiers,
@@ -79,7 +79,7 @@ fn editor_key(
     dispatch(build, id, target, key.code.clone(), modifiers, action)
 }
 
-fn focused_input(build: &Build) -> Option<(crate::gui::WidgetId, bool)> {
+fn focused_input(build: &CapabilityContext) -> Option<(crate::gui::WidgetId, bool)> {
     let id = build.focused()?;
     let element = build.element_for(id)?;
     element.is_input().then_some((id, element.wrap()))
@@ -121,7 +121,7 @@ fn ime_action(kind: &ImeKind, single_line: bool) -> ImeAction {
     }
 }
 
-fn editor_paste(build: &mut Build, target: EventTarget, text: &str) -> Dispatch {
+fn editor_paste(build: &CapabilityContext, target: EventTarget, text: &str) -> Dispatch {
     if text.is_empty() {
         return Dispatch::CONTINUE;
     }
@@ -146,7 +146,7 @@ fn editor_paste(build: &mut Build, target: EventTarget, text: &str) -> Dispatch 
     }
 }
 
-fn editor_ime(build: &mut Build, target: EventTarget, kind: &ImeKind) -> Dispatch {
+fn editor_ime(build: &CapabilityContext, target: EventTarget, kind: &ImeKind) -> Dispatch {
     let Some((id, wrap)) = focused_input(build) else {
         return Dispatch::CONTINUE;
     };
@@ -308,7 +308,7 @@ fn movement_right(text: &str, byte: usize, buffer: &crate::EditBuffer) -> usize 
 }
 
 fn dispatch(
-    build: &mut Build,
+    build: &CapabilityContext,
     id: crate::gui::WidgetId,
     target: EventTarget,
     code: String,
@@ -425,7 +425,7 @@ fn dispatch(
 }
 
 fn with_build<T>(
-    build: &Build,
+    build: &CapabilityContext,
     id: crate::gui::WidgetId,
     edit: impl FnOnce(&mut crate::EditBuffer) -> T,
 ) -> Option<T> {

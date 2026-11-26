@@ -1,5 +1,63 @@
 use super::*;
 #[test]
+pub(super) fn a_capability_gets_the_clipboard_from_the_ui() {
+    struct MemoryClipboard;
+
+    impl Clipboard for MemoryClipboard {
+        fn read(&self) -> Option<crate::gui::ClipboardData> {
+            Some(crate::gui::ClipboardData::from(String::from("copied")))
+        }
+
+        fn write(&self, _data: &crate::gui::ClipboardData) {}
+    }
+
+    fn see_clipboard(ctx: &CapabilityContext, _: &[Dyn]) -> Result<(), ViewError> {
+        ctx.component()
+            .borrow_mut()
+            .assign("seen", Value::Bool(ctx.clipboard().is_some()))
+            .expect("seen");
+        Ok(())
+    }
+
+    let component = component_with(&["seen"]);
+    let hooks = Hooks {
+        target: EventTarget::Window,
+        state: StateId::source("test", "clipboard-capability"),
+        component: Rc::clone(&component),
+        params: Vec::new(),
+        apply: see_clipboard,
+        event: |_, _| Dispatch::CONTINUE,
+        raw_event: |_, _| Dispatch::CONTINUE,
+        cleanup: |_| {},
+        events: EventSet::empty(),
+        raw_events: RawEventSet::empty(),
+    };
+    let mut ui = Ui::assemble_with(
+        Rc::clone(&component),
+        Built {
+            widget: Widget::text(""),
+            bindings: Vec::new(),
+            handlers: Vec::new(),
+            props: Vec::new(),
+        },
+        themed_view,
+        None,
+        AssemblyParts {
+            structures: Vec::new(),
+            capabilities: vec![hooks],
+            nested: Vec::new(),
+            states: Rc::new(RefCell::new(crate::States::default())),
+            event_sink: None,
+            clipboard: Some(Rc::new(MemoryClipboard)),
+        },
+        Rc::new(RefCell::new(Vec::new())),
+        false,
+    );
+    ui.settle();
+    assert_eq!(component.borrow().read("seen"), Ok(Value::Bool(true)));
+}
+
+#[test]
 pub(super) fn dispatch_calls_the_handler_of_the_widget() {
     let component = component_with(&["ran"]);
     let (id, mut ui) = dispatching(&component, Widget::text(""), |id| {
@@ -23,11 +81,7 @@ pub(super) struct ProbeState {
     applied: Vec<String>,
 }
 
-pub(super) fn probe_apply(
-    ctx: &mut Build,
-    state: StateId,
-    params: &[Dyn],
-) -> Result<(), ViewError> {
+pub(super) fn probe_apply(ctx: &CapabilityContext, params: &[Dyn]) -> Result<(), ViewError> {
     if ctx.get_state::<ProbeState>().is_none() {
         ctx.set_state(ProbeState::default());
     }
@@ -38,11 +92,10 @@ pub(super) fn probe_apply(
     if let Some(probe) = ctx.get_state::<ProbeState>() {
         probe.borrow_mut().applied.push(value);
     }
-    let _ = state;
     Ok(())
 }
 
-pub(super) fn probe_event(ctx: &mut Build, _state: StateId, event: &UiEvent) -> Dispatch {
+pub(super) fn probe_event(ctx: &CapabilityContext, event: &UiEvent) -> Dispatch {
     if matches!(event.event, Event::Click { .. }) {
         ctx.component()
             .borrow_mut()
@@ -54,11 +107,11 @@ pub(super) fn probe_event(ctx: &mut Build, _state: StateId, event: &UiEvent) -> 
     }
 }
 
-pub(super) fn ignore_raw_event(_ctx: &mut Build, _state: StateId, _event: &RawUiEvent) -> Dispatch {
+pub(super) fn ignore_raw_event(_ctx: &CapabilityContext, _event: &RawUiEvent) -> Dispatch {
     Dispatch::CONTINUE
 }
 
-pub(super) fn probe_cleanup(ctx: &mut Build, _state: StateId) {
+pub(super) fn probe_cleanup(ctx: &CapabilityContext) {
     ctx.component()
         .borrow_mut()
         .assign("cleaned", Value::Bool(true))
@@ -114,6 +167,7 @@ pub(super) fn attachment_reruns_vetoes_events_and_cleans_up() {
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,
@@ -278,6 +332,7 @@ pub(super) fn a_raw_noop_key_reaches_the_capability_only() {
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,
@@ -343,6 +398,7 @@ pub(super) fn a_capability_can_emit_a_raw_event_to_other_capabilities() {
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,
@@ -361,7 +417,7 @@ pub(super) fn a_capability_can_emit_a_raw_event_to_other_capabilities() {
     assert_ne!(component.read("ran"), Ok(Value::Bool(true)));
 }
 
-pub(super) fn window_raw_key(ctx: &mut Build, _state: StateId, _event: &RawUiEvent) -> Dispatch {
+pub(super) fn window_raw_key(ctx: &CapabilityContext, _event: &RawUiEvent) -> Dispatch {
     ctx.component()
         .borrow_mut()
         .assign("attach", Value::Bool(true))
@@ -373,7 +429,7 @@ pub(super) fn window_raw_key(ctx: &mut Build, _state: StateId, _event: &RawUiEve
     Dispatch::CONTINUE
 }
 
-pub(super) fn window_semantic_key(ctx: &mut Build, _state: StateId, _event: &UiEvent) -> Dispatch {
+pub(super) fn window_semantic_key(ctx: &CapabilityContext, _event: &UiEvent) -> Dispatch {
     ctx.component()
         .borrow_mut()
         .assign("seen", Value::Bool(true))

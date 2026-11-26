@@ -7,7 +7,7 @@
     cleanup = editor_cleanup
 )]
 pub fn custom_editor(
-    ctx: &brul::Build,
+    ctx: &brul::CapabilityContext,
     value: String,
     multiline: bool,
 ) -> Result<EditorState, brul::ViewError> {

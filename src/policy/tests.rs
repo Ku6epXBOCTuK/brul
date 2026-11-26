@@ -11,9 +11,9 @@ use crate::policy::{
 };
 use crate::ui::AssemblyParts;
 use crate::{
-    Build, Built, Component, ComponentHandle, Dispatch, Dyn, Event, EventKind, EventSet,
-    EventTarget, Hooks, RawEvent, RawEventSet, RawKind, RawUiEvent, StateId, TestTheme, Ui,
-    UiEvent, ViewError,
+    Build, Built, CapabilityContext, Component, ComponentHandle, Dispatch, Dyn, Event, EventKind,
+    EventSet, EventTarget, Hooks, RawEvent, RawEventSet, RawKind, RawUiEvent, StateId, TestTheme,
+    Ui, UiEvent, ViewError,
     gui::{
         Dimension, ImeKind, KeyModifiers, KeyPress, LayoutStyle, Size, StyleSet, TextEngine,
         Widget, WidgetId, WidgetStyle,
@@ -28,7 +28,7 @@ fn seen() -> Vec<String> {
     SEEN.with(|seen| seen.borrow().clone())
 }
 
-fn record_event(_build: &mut Build, _state: StateId, event: &UiEvent) -> Dispatch {
+fn record_event(_ctx: &CapabilityContext, event: &UiEvent) -> Dispatch {
     match &event.event {
         Event::Key { key, .. } => {
             SEEN.with(|seen| seen.borrow_mut().push(format!("key:{}", key.code)))
@@ -47,7 +47,7 @@ fn record_event(_build: &mut Build, _state: StateId, event: &UiEvent) -> Dispatc
     Dispatch::CONTINUE
 }
 
-fn record_raw(_build: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+fn record_raw(_ctx: &CapabilityContext, event: &RawUiEvent) -> Dispatch {
     let label = match &event.event {
         RawEvent::KeyNoop { key, .. } => Some(format!("noop:{}", key.code)),
         RawEvent::Paste { text } if text.is_empty() => Some("paste_request".to_owned()),
@@ -76,21 +76,21 @@ struct ClipboardBridge {
     text: Option<String>,
 }
 
-fn clipboard_state(build: &mut Build) -> Rc<RefCell<ClipboardBridge>> {
+fn clipboard_state(build: &CapabilityContext) -> Rc<RefCell<ClipboardBridge>> {
     if build.get_state::<ClipboardBridge>().is_none() {
         build.set_state(ClipboardBridge::default());
     }
     build.get_state().expect("clipboard state")
 }
 
-fn record_copy(build: &mut Build, _state: StateId, event: &UiEvent) -> Dispatch {
+fn record_copy(build: &CapabilityContext, event: &UiEvent) -> Dispatch {
     if let Event::Copy { text } = &event.event {
         clipboard_state(build).borrow_mut().text = Some(text.clone());
     }
     Dispatch::CONTINUE
 }
 
-fn answer_paste(build: &mut Build, _state: StateId, event: &RawUiEvent) -> Dispatch {
+fn answer_paste(build: &CapabilityContext, event: &RawUiEvent) -> Dispatch {
     let RawEvent::Paste { text } = &event.event else {
         return Dispatch::CONTINUE;
     };
@@ -119,21 +119,21 @@ fn clipboard(component: &ComponentHandle) -> Hooks {
     }
 }
 
-fn ignore_event(_build: &mut Build, _state: StateId, _event: &UiEvent) -> Dispatch {
+fn ignore_event(_ctx: &CapabilityContext, _event: &UiEvent) -> Dispatch {
     Dispatch::CONTINUE
 }
 
-fn ignore_raw(_build: &mut Build, _state: StateId, _event: &RawUiEvent) -> Dispatch {
+fn ignore_raw(_ctx: &CapabilityContext, _event: &RawUiEvent) -> Dispatch {
     Dispatch::CONTINUE
 }
 
-fn noop_apply(_build: &mut Build, _state: StateId, _params: &[Dyn]) -> Result<(), ViewError> {
+fn noop_apply(_ctx: &CapabilityContext, _params: &[Dyn]) -> Result<(), ViewError> {
     Ok(())
 }
 
-fn noop_cleanup(_build: &mut Build, _state: StateId) {}
+fn noop_cleanup(_ctx: &CapabilityContext) {}
 
-fn mark_handled(_build: &mut Build, _state: StateId, _event: &RawUiEvent) -> Dispatch {
+fn mark_handled(_ctx: &CapabilityContext, _event: &RawUiEvent) -> Dispatch {
     Dispatch::handled()
 }
 
@@ -287,6 +287,7 @@ fn assemble(widget: Widget, capabilities: Vec<Hooks>) -> Ui<TestTheme> {
             nested: Vec::new(),
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::new(RefCell::new(Vec::new())),
         false,

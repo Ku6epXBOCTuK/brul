@@ -2,14 +2,14 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use brul::gui::{CanvasPainter, Color, PaintCommand, PaintCtx, PaintRect};
-use brul::{Build, PainterGuard, ViewError};
+use brul::{CapabilityContext, PainterGuard, ViewError};
 
 pub struct Waveform {
     _guard: PainterGuard,
 }
 
 #[brul::attach(name = "waveform")]
-pub fn waveform(ctx: &Build) -> Result<Waveform, ViewError> {
+pub fn waveform(ctx: &CapabilityContext) -> Result<Waveform, ViewError> {
     let painter = ctx.element().set_painter(Rc::new(WavePainter::new()));
     Ok(Waveform { _guard: painter })
 }

@@ -1,5 +1,20 @@
 use super::*;
 
+fn context(
+    tree: Rc<RefCell<WidgetTree>>,
+    target: EventTarget,
+    state: &'static str,
+) -> CapabilityContext {
+    CapabilityContext::new(
+        Services::default(),
+        tree,
+        target,
+        StateId::source("test", state),
+        Rc::new(RefCell::new(Component::new())),
+        None,
+    )
+}
+
 #[test]
 fn an_image_binding_loads_the_file_once() {
     let path = concat!(
@@ -63,13 +78,9 @@ fn an_image_binding_shows_an_empty_texture_for_null() {
 
 #[test]
 fn a_window_target_has_no_element() {
-    let mut build = Build::new();
-    build.set_target(
-        EventTarget::Window,
-        StateId::source("test", "one"),
-        Rc::new(RefCell::new(Component::new())),
-    );
-    assert!(build.try_element().is_none());
+    let tree = Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))));
+    let context = context(tree, EventTarget::Window, "one");
+    assert!(context.try_element().is_none());
 }
 
 #[test]
@@ -81,15 +92,9 @@ fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
     let root = Widget::row(vec![input, Widget::text("label")]);
     let root_id = root.id();
     let tree = Rc::new(RefCell::new(WidgetTree::new(root)));
-    let mut build = Build::new();
-    build.set_tree(Rc::clone(&tree));
-    build.set_target(
-        EventTarget::Widget(id),
-        StateId::source("test", "nine"),
-        Rc::new(RefCell::new(Component::new())),
-    );
+    let context = context(Rc::clone(&tree), EventTarget::Widget(id), "nine");
 
-    let element = build.element();
+    let element = context.element();
     assert_eq!(element.edit_buffer().expect("input").text(), "abc");
     let edited = element.with_edit(|buffer| {
         buffer.insert_text(Position::new(0, 0), "x");
@@ -112,15 +117,15 @@ fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
         Position::new(0, 4)..Position::new(0, 4)
     );
 
-    assert_eq!(build.focused(), None);
-    assert!(build.focus(Some(id)));
-    assert_eq!(build.focused(), Some(id));
+    assert_eq!(context.focused(), None);
+    assert!(context.focus(Some(id)));
+    assert_eq!(context.focused(), Some(id));
     assert!(element.focused());
-    assert!(build.focusables().contains(&id));
-    assert_eq!(build.path_to(id), vec![root_id, id]);
-    assert_eq!(build.ancestors(id), vec![root_id]);
-    assert_eq!(build.modal_scope(), None);
-    assert!(build.within_scope(root_id, id));
+    assert!(context.focusables().contains(&id));
+    assert_eq!(context.path_to(id), vec![root_id, id]);
+    assert_eq!(context.ancestors(id), vec![root_id]);
+    assert_eq!(context.modal_scope(), None);
+    assert!(context.within_scope(root_id, id));
 
     assert!(element.set_hovered(true));
     assert!(element.hovered());
@@ -128,7 +133,7 @@ fn attach_primitives_edit_the_field_and_query_focus_and_flags() {
     assert!(element.pressed());
     assert!(element.scroll_by(5));
 
-    build.emit_event(UiEvent::widget(id, Event::click()));
+    context.emit_event(UiEvent::widget(id, Event::click()));
     let Pending::Ui(event) = take_pending().expect("ui event") else {
         panic!("a semantic event was expected");
     };
@@ -169,18 +174,15 @@ fn build_addresses_any_widget_and_hits_the_active_path() {
         )
         .expect("layout");
 
-    let mut build = Build::new();
-    build.set_tree(Rc::clone(&tree));
-    build.set_target(
-        EventTarget::Window,
-        StateId::source("test", "hits"),
-        Rc::new(RefCell::new(Component::new())),
-    );
+    let context = context(Rc::clone(&tree), EventTarget::Window, "hits");
 
-    assert!(build.try_element().is_none());
-    assert_eq!(build.element_for(input_id).map(|e| e.id()), Some(input_id));
-    assert_eq!(build.hit(5, 5), Some(root_id));
-    assert_eq!(build.hit(45, 5), Some(input_id));
+    assert!(context.try_element().is_none());
+    assert_eq!(
+        context.element_for(input_id).map(|e| e.id()),
+        Some(input_id)
+    );
+    assert_eq!(context.hit(5, 5), Some(root_id));
+    assert_eq!(context.hit(45, 5), Some(input_id));
 }
 
 #[test]
@@ -210,15 +212,9 @@ fn an_element_exposes_text_and_scroll_primitives() {
         .expect("layout");
     tree.borrow_mut().set_root_scroll(true);
 
-    let mut build = Build::new();
-    build.set_tree(Rc::clone(&tree));
-    build.set_target(
-        EventTarget::Widget(id),
-        StateId::source("test", "text"),
-        Rc::new(RefCell::new(Component::new())),
-    );
+    let context = context(Rc::clone(&tree), EventTarget::Widget(id), "text");
 
-    let element = build.element();
+    let element = context.element();
     assert!(element.is_input());
     assert!(element.wrap());
     assert_eq!(element.line_start(3), Some(3));
@@ -226,9 +222,9 @@ fn an_element_exposes_text_and_scroll_primitives() {
     assert!(element.caret_above(3).is_some());
     assert!(element.caret_below(0).is_some());
     assert!(!element.scrollable());
-    assert_eq!(build.nearest_scrollable(id), Some(root_id));
-    build.enter_modal_scope();
-    assert_eq!(build.focused(), None);
+    assert_eq!(context.nearest_scrollable(id), Some(root_id));
+    context.enter_modal_scope();
+    assert_eq!(context.focused(), None);
 }
 
 #[test]
@@ -239,37 +235,32 @@ fn clearing_focus_on_another_element_keeps_the_focused_one() {
     let second_id = second.id();
     let root = Widget::row(vec![first, second]);
     let tree = Rc::new(RefCell::new(WidgetTree::new(root)));
-    let mut build = Build::new();
-    build.set_tree(Rc::clone(&tree));
-    build.set_target(
-        EventTarget::Window,
-        StateId::source("test", "focus"),
-        Rc::new(RefCell::new(Component::new())),
-    );
+    let context = context(tree, EventTarget::Window, "focus");
 
-    assert!(build.focus(Some(first_id)));
+    assert!(context.focus(Some(first_id)));
     assert!(
-        !build
+        !context
             .element_for(second_id)
             .expect("second")
             .set_focused(false)
     );
-    assert_eq!(build.focused(), Some(first_id));
+    assert_eq!(context.focused(), Some(first_id));
     assert!(
-        build
+        context
             .element_for(first_id)
             .expect("first")
             .set_focused(false)
     );
-    assert_eq!(build.focused(), None);
+    assert_eq!(context.focused(), None);
 }
 
 #[test]
 fn a_capability_can_queue_a_raw_event() {
     let widget = Widget::text("");
     let id = widget.id();
-    let build = Build::new();
-    build.emit_raw_event(RawUiEvent::widget(
+    let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
+    let context = context(tree, EventTarget::Window, "raw");
+    context.emit_raw_event(RawUiEvent::widget(
         id,
         RawEvent::key_noop(KeyPress::from("Backspace"), KeyModifiers::default()),
     ));
@@ -307,16 +298,10 @@ fn an_element_maps_pixels_to_a_caret_position() {
         )
         .expect("layout");
 
-    let mut build = Build::new();
-    build.set_tree(Rc::clone(&tree));
-    build.set_target(
-        EventTarget::Widget(id),
-        StateId::source("test", "ten"),
-        Rc::new(RefCell::new(Component::new())),
-    );
+    let context = context(Rc::clone(&tree), EventTarget::Widget(id), "ten");
 
     assert_eq!(
-        build.element().caret_at_pixel(1000, 5),
+        context.element().caret_at_pixel(1000, 5),
         Some(Position::new(0, 2))
     );
 }
@@ -335,11 +320,28 @@ fn the_clipboard_port_is_typed_and_optional() {
         }
     }
 
-    let mut build = Build::new();
-    build.set_clipboard(&ClipboardData::from(String::from("copied")));
-    assert!(build.clipboard().is_none());
+    let tree = Rc::new(RefCell::new(WidgetTree::new(Widget::text(""))));
+    let state = StateId::source("test", "clipboard");
+    let component = Rc::new(RefCell::new(Component::new()));
+    let build = |services| {
+        CapabilityContext::new(
+            services,
+            Rc::clone(&tree),
+            EventTarget::Window,
+            state,
+            Rc::clone(&component),
+            None,
+        )
+    };
 
-    build.set_clipboard_bridge(Some(Rc::new(MemoryClipboard(RefCell::new(None)))));
-    build.set_clipboard(&ClipboardData::from(String::from("copied")));
-    assert!(matches!(build.clipboard(), Some(ClipboardData::Text(text)) if text == "copied"));
+    let without = build(Services::default());
+    without.set_clipboard(&ClipboardData::from(String::from("copied")));
+    assert!(without.clipboard().is_none());
+
+    let with = build(Services {
+        clipboard: Some(Rc::new(MemoryClipboard(RefCell::new(None)))),
+        ..Services::default()
+    });
+    with.set_clipboard(&ClipboardData::from(String::from("copied")));
+    assert!(matches!(with.clipboard(), Some(ClipboardData::Text(text)) if text == "copied"));
 }

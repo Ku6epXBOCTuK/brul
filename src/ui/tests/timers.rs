@@ -78,10 +78,13 @@ pub(super) fn nested_timer_view(
 pub(super) fn a_timer_from_a_nested_component_runs_in_its_component() {
     let root = component_with(&["ran"]);
     root.borrow_mut().register_event_call("child_tick", set_ran);
-    let mut build = Build::new();
+    let mut build = Build::new(Services::default());
     let built = nested_timer_view(None, &mut build, &root).expect("view");
-    let nested = build.take_components();
-    let structures = build.take_structures();
+    let BuildParts {
+        structures,
+        components: nested,
+        ..
+    } = build.finish();
     let commands = Rc::new(RefCell::new(Vec::new()));
     let mut ui = Ui::assemble_with(
         Rc::clone(&root),
@@ -94,6 +97,7 @@ pub(super) fn a_timer_from_a_nested_component_runs_in_its_component() {
             nested,
             states: Rc::new(RefCell::new(crate::States::default())),
             event_sink: None,
+            clipboard: None,
         },
         Rc::clone(&commands),
         true,
@@ -124,7 +128,7 @@ pub(super) fn dispatch_runs_a_timer() {
 #[test]
 pub(super) fn owners_are_unique_across_rebuilds() {
     let component = component_with(&[]);
-    let built = themed_view(None, &mut Build::new(), &component).expect("view");
+    let built = themed_view(None, &mut Build::new(Services::default()), &component).expect("view");
     let mut ui = Ui::assemble(component, built, themed_view, None, Vec::new(), None);
     let first = ui.components[0].owner;
     ui.set_theme(TestTheme::Dark).expect("theme changes");
@@ -139,7 +143,7 @@ pub(super) fn owners_are_unique_across_rebuilds() {
 pub(super) fn a_timer_from_a_rebuilt_component_does_not_reach_the_new_one() {
     let component = component_with(&["ran"]);
     component.borrow_mut().every(500.0, "tick").expect("every");
-    let built = themed_view(None, &mut Build::new(), &component).expect("view");
+    let built = themed_view(None, &mut Build::new(Services::default()), &component).expect("view");
     let mut ui = Ui::assemble(component, built, themed_view, None, Vec::new(), None);
     let stale = ui.components[0].owner;
     ui.set_theme(TestTheme::Dark).expect("theme changes");
@@ -260,7 +264,7 @@ pub(super) fn raising_view(
         component: Rc::clone(component),
     }];
     let child = runtime::instance(
-        &mut Build::new(),
+        &mut Build::new(Services::default()),
         component,
         runtime::Instance {
             theme: theme.map(Theme::name),

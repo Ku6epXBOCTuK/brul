@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brul::{
-    Build, Component, ComponentHandle, Dispatch, Dyn, Event, RawUiEvent, SharedStates, StateId,
-    States, UiEvent, ViewError,
+    CapabilityContext, Component, ComponentHandle, Dispatch, Dyn, Event, RawUiEvent, Services,
+    SharedStates, StateId, States, UiEvent, ViewError,
 };
 
 thread_local! {
@@ -26,7 +26,7 @@ struct CounterState {
     cleanup = counter_cleanup
 )]
 fn counter(
-    _ctx: &mut Build,
+    _ctx: &CapabilityContext,
     amount: f64,
     flag: bool,
     label: String,
@@ -41,7 +41,7 @@ fn counter(
 
 fn counter_update(
     state: &mut CounterState,
-    _ctx: &mut Build,
+    _ctx: &CapabilityContext,
     amount: f64,
     flag: bool,
     label: String,
@@ -53,15 +53,19 @@ fn counter_update(
     Ok(())
 }
 
-fn counter_event(_state: &mut CounterState, _ctx: &mut Build, event: &UiEvent) -> bool {
+fn counter_event(_state: &mut CounterState, _ctx: &CapabilityContext, event: &UiEvent) -> bool {
     matches!(event.event, Event::Key { .. })
 }
 
-fn counter_raw_event(_state: &mut CounterState, _ctx: &mut Build, event: &RawUiEvent) -> bool {
+fn counter_raw_event(
+    _state: &mut CounterState,
+    _ctx: &CapabilityContext,
+    event: &RawUiEvent,
+) -> bool {
     matches!(event.event, brul::gui::RawEvent::Key { .. })
 }
 
-fn counter_cleanup(state: &mut CounterState, _ctx: &mut Build) {
+fn counter_cleanup(state: &mut CounterState, _ctx: &CapabilityContext) {
     LOG.with(|log| log.borrow_mut().push(format!("cleanup:{}", state.amount)));
 }
 
@@ -75,19 +79,22 @@ fn attach_shims_create_update_event_and_cleanup_state() {
     )));
     let states: SharedStates = Rc::new(RefCell::new(States::default()));
     let state_id = StateId::source("test", "forty_two");
-    let mut ctx = Build::new();
-    ctx.set_tree(tree);
-    ctx.set_states(Rc::clone(&states));
-    ctx.set_target(
+    let ctx = CapabilityContext::new(
+        Services {
+            states: Rc::clone(&states),
+            ..Services::default()
+        },
+        tree,
         brul::EventTarget::Widget(brul::gui::WidgetId::new(1)),
         state_id,
         Rc::clone(&component),
+        None,
     );
 
     let first = [Dyn::num(1.0), Dyn::flag(false), Dyn::text("first")];
-    __brul_attach_counter_apply(&mut ctx, state_id, &first).expect("first apply");
+    __brul_attach_counter_apply(&ctx, &first).expect("first apply");
     let second = [Dyn::num(2.5), Dyn::flag(true), Dyn::text("second")];
-    __brul_attach_counter_apply(&mut ctx, state_id, &second).expect("second apply");
+    __brul_attach_counter_apply(&ctx, &second).expect("second apply");
 
     let cell = ctx.get_state::<CounterState>().expect("state created");
     assert_eq!(
@@ -114,11 +121,11 @@ fn attach_shims_create_update_event_and_cleanup_state() {
     let modifiers = brul::gui::KeyModifiers::default();
     let key_event = UiEvent::widget(brul::gui::WidgetId::new(1), Event::key(key, modifiers));
     assert_eq!(
-        __brul_attach_counter_event(&mut ctx, state_id, &key_event),
+        __brul_attach_counter_event(&ctx, &key_event),
         Dispatch::stop()
     );
     assert_eq!(
-        __brul_attach_counter_event(&mut ctx, state_id, &UiEvent::window(Event::submit())),
+        __brul_attach_counter_event(&ctx, &UiEvent::window(Event::submit())),
         Dispatch::CONTINUE
     );
 
@@ -130,11 +137,11 @@ fn attach_shims_create_update_event_and_cleanup_state() {
         ),
     );
     assert_eq!(
-        __brul_attach_counter_raw_event(&mut ctx, state_id, &raw_key),
+        __brul_attach_counter_raw_event(&ctx, &raw_key),
         Dispatch::stop()
     );
 
-    __brul_attach_counter_cleanup(&mut ctx, state_id);
+    __brul_attach_counter_cleanup(&ctx);
     assert!(ctx.get_state::<CounterState>().is_none());
 
     let log = LOG.with(|log| log.borrow().clone());

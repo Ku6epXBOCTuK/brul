@@ -166,7 +166,7 @@ TextInput (use: custom_editor(value: draft, multiline: true)) { draft }
 ```rust,ignore
 #[brul::attach(name = "custom_editor", raw_events(Key, Ime, Paste),
                raw_event = editor_raw)]
-fn custom_editor(ctx: &mut brul::Build, value: String, multiline: bool)
+fn custom_editor(ctx: &brul::CapabilityContext, value: String, multiline: bool)
     -> Result<EditorState, brul::ViewError> { /* состояние */ }
 ```
 
@@ -176,30 +176,32 @@ fn custom_editor(ctx: &mut brul::Build, value: String, multiline: bool)
 use-функция на фокусируемом элементе.
 
 `#[brul::attach]` и `#[brul::widget]` регистрируют capability: первая приносит
-хуки, вторая — view. Обе проходят через `Build::capability(...)`, поэтому
-`Build` — единственный контекст Rust-кода на элементе: он даёт
-`Build::get_state::<T>()` / `set_state` / `remove_state`, `element()` для правки
+хуки, вторая — view. Обе проходят через `Build::capability(...)`: view работает
+с сессионным `&mut Build`, а хуки получают обязательный `&CapabilityContext`. Он
+даёт `get_state::<T>()` / `set_state` / `remove_state`, `element()` для правки
 примитива, `emit()` для событий скрипта, `emit_event()` и `emit_raw_event()` для
-семантических и raw-событий и `state_id()`.
+семантических и raw-событий, `state_id()` и `component()`. Сервисы — `states`,
+`event_sink` и `clipboard` — передаются в `Build` конструктором и попадают в
+контекст хуков.
 
 Функция создаёт состояние один раз, `update` вызывается при изменении любого
 параметра. Состояние лежит в слоте `StateId` элемента: отдельный слот на каждый
-экземпляр, в том числе в строках `@each`; хуки получают его через `Build`. Хук
-`event` получает семантические события как `&UiEvent`, `raw_event` — raw-события
-как `&RawUiEvent`; подписка задаётся `events(...)` и `raw_events(...)`. Хук
-возвращает `bool` или `Dispatch`: `true` — то же, что `Dispatch::stop()`,
-поглотить событие и остановить и capability, и `on ...`. `Dispatch::handled()`
-только помечает событие обработанным — остальные capability и `on ...`
-продолжают работать, а следующий хук видит флаг через `Build::handled()`.
-`Dispatch::stop_capabilities()` обрывает capability, но оставляет script, а
-`Dispatch::stop_scripts()` глушит script, но оставляет capability. Для
-raw-событий script не вызывается, поэтому `stop_scripts()` на них не влияет.
-Цель клавиши лежит в конверте: `KeyPress` не несёт идентификатор, raw-событие
-адресуется сфокусированному элементу или окну, и `keyboard` выпускает
-семантический `key` с тем же `target`. Capability обходятся по пути виджет →
-предки → окно; `on ...` вызывается только на целевом виджете, а raw-события
-скрипту недоступны. `cleanup` вызывается при демонтаже элемента или перестройке
-дерева, после чего слот удаляется.
+экземпляр, в том числе в строках `@each`; хуки получают его через
+`CapabilityContext`. Хук `event` получает семантические события как `&UiEvent`,
+`raw_event` — raw-события как `&RawUiEvent`; подписка задаётся `events(...)` и
+`raw_events(...)`. Хук возвращает `bool` или `Dispatch`: `true` — то же, что
+`Dispatch::stop()`, поглотить событие и остановить и capability, и `on ...`.
+`Dispatch::handled()` только помечает событие обработанным — остальные
+capability и `on ...` продолжают работать, а следующий хук видит флаг через
+`CapabilityContext::handled()`. `Dispatch::stop_capabilities()` обрывает
+capability, но оставляет script, а `Dispatch::stop_scripts()` глушит script, но
+оставляет capability. Для raw-событий script не вызывается, поэтому
+`stop_scripts()` на них не влияет. Цель клавиши лежит в конверте: `KeyPress` не
+несёт идентификатор, raw-событие адресуется сфокусированному элементу или окну,
+и `keyboard` выпускает семантический `key` с тем же `target`. Capability
+обходятся по пути виджет → предки → окно; `on ...` вызывается только на целевом
+виджете, а raw-события скрипту недоступны. `cleanup` вызывается при демонтаже
+элемента или перестройке дерева, после чего слот удаляется.
 
 ### Поле ввода
 

@@ -384,7 +384,7 @@ fn a_slot_survives_a_structure_rebuild() {
     let (_component, _built, structures) =
         generated_built(slot_view, NAMES, None, &[], None).expect("launch");
     assert_eq!(structures.len(), 1);
-    let mut build = Build::with_slots(structures[0].slots.clone());
+    let mut build = Build::with_slots(structures[0].slots.clone(), Services::default());
     let rebuilt =
         (structures[0].rebuild)(None, &mut build, &structures[0].component, &[]).expect("rebuild");
     assert_eq!(rebuilt.0.widget.into_children().len(), 1);

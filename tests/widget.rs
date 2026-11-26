@@ -56,7 +56,7 @@ fn a_registered_widget_receives_its_props_and_declares_its_events() {
         .borrow_mut()
         .declare("label", Value::String("load".into()), false)
         .expect("label declared");
-    let mut build = brul::Build::new();
+    let mut build = brul::Build::new(brul::Services::default());
     let props = [
         brul::PropArgument {
             name: "value",

@@ -1,13 +1,17 @@
-use crate::{Build, Dispatch, RawEvent, RawUiEvent, ViewError};
+use crate::{CapabilityContext, Dispatch, RawEvent, RawUiEvent, ViewError};
 
 pub struct ScrollPolicy;
 
 #[brul::attach(name = "scroll", raw_events(Wheel), raw_event = scroll_raw)]
-pub fn scroll(_build: &mut Build) -> Result<ScrollPolicy, ViewError> {
+pub fn scroll(_build: &CapabilityContext) -> Result<ScrollPolicy, ViewError> {
     Ok(ScrollPolicy)
 }
 
-fn scroll_raw(_state: &mut ScrollPolicy, build: &mut Build, event: &RawUiEvent) -> Dispatch {
+fn scroll_raw(
+    _state: &mut ScrollPolicy,
+    build: &CapabilityContext,
+    event: &RawUiEvent,
+) -> Dispatch {
     if build.handled() {
         return Dispatch::CONTINUE;
     }

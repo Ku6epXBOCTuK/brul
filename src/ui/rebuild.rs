@@ -8,7 +8,10 @@ use brul_gui::{WidgetId, WidgetTree};
 use super::registry::owners;
 use super::{ElementOwner, Registry};
 use crate::each::reconcile_each;
-use crate::{Build, Built, ComponentHandle, EventSink, Hooks, RowInfo, SharedStates, Structure};
+use crate::{
+    Build, BuildParts, Built, Clipboard, ComponentHandle, EventSink, Hooks, RowInfo, Services,
+    SharedStates, Structure,
+};
 
 #[derive(Default)]
 pub(super) struct Staged {
@@ -30,6 +33,7 @@ pub(super) struct Pending {
     by_parent: HashMap<WidgetId, Structure>,
     states: SharedStates,
     event_sink: Option<Arc<dyn EventSink>>,
+    clipboard: Option<Rc<dyn Clipboard>>,
     pub(super) staged: Staged,
 }
 
@@ -38,6 +42,7 @@ impl Pending {
         owners: Registry<ElementOwner>,
         states: SharedStates,
         event_sink: Option<Arc<dyn EventSink>>,
+        clipboard: Option<Rc<dyn Clipboard>>,
     ) -> Self {
         let by_parent = owners
             .structures()
@@ -48,6 +53,7 @@ impl Pending {
             by_parent,
             states,
             event_sink,
+            clipboard,
             staged: Staged::default(),
         }
     }
@@ -81,6 +87,7 @@ impl Pending {
             &old_rows,
             Rc::clone(&self.states),
             self.event_sink.clone(),
+            self.clipboard.clone(),
         )
         else {
             if structure.each
@@ -125,17 +132,25 @@ fn rebuild_structure(
     old_rows: &[RowInfo],
     states: SharedStates,
     event_sink: Option<Arc<dyn EventSink>>,
+    clipboard: Option<Rc<dyn Clipboard>>,
 ) -> Option<Rebuilt> {
     let component = Rc::clone(&structure.component);
     let previous = component.borrow().scope().clone();
     component.borrow_mut().set_scope(structure.scope.clone());
-    let mut build = Build::with_slots(structure.slots.clone());
-    build.set_states(states);
-    build.set_event_sink(event_sink);
+    let mut build = Build::with_slots(
+        structure.slots.clone(),
+        Services {
+            states,
+            event_sink,
+            clipboard,
+        },
+    );
     let rebuilt = (structure.rebuild)(theme, &mut build, &component, old_rows);
-    let structures = build.take_structures();
-    let components = build.take_components();
-    let capabilities = build.take_capabilities();
+    let BuildParts {
+        structures,
+        components,
+        capabilities,
+    } = build.finish();
     component.borrow_mut().set_scope(previous);
     let (built, rows) = match rebuilt {
         Ok(result) => result,

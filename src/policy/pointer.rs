@@ -1,4 +1,6 @@
-use crate::{Build, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError, gui::WidgetId};
+use crate::{
+    CapabilityContext, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError, gui::WidgetId,
+};
 
 pub struct PointerPolicy {
     pressed: Option<WidgetId>,
@@ -17,11 +19,15 @@ pub struct PointerPolicy {
     ),
     raw_event = pointer_raw
 )]
-pub fn pointer(_build: &mut Build) -> Result<PointerPolicy, ViewError> {
+pub fn pointer(_build: &CapabilityContext) -> Result<PointerPolicy, ViewError> {
     Ok(PointerPolicy { pressed: None })
 }
 
-fn pointer_raw(state: &mut PointerPolicy, build: &mut Build, event: &RawUiEvent) -> Dispatch {
+fn pointer_raw(
+    state: &mut PointerPolicy,
+    build: &CapabilityContext,
+    event: &RawUiEvent,
+) -> Dispatch {
     if build.handled() {
         return Dispatch::CONTINUE;
     }
@@ -41,7 +47,7 @@ fn pointer_raw(state: &mut PointerPolicy, build: &mut Build, event: &RawUiEvent)
 
 fn press(
     state: &mut PointerPolicy,
-    build: &mut Build,
+    build: &CapabilityContext,
     target: Option<WidgetId>,
     x: i32,
     y: i32,
@@ -64,7 +70,7 @@ fn press(
 
 fn release(
     state: &mut PointerPolicy,
-    build: &mut Build,
+    build: &CapabilityContext,
     target: Option<WidgetId>,
     x: i32,
     y: i32,
@@ -97,7 +103,7 @@ fn release(
 
 fn move_pointer(
     state: &mut PointerPolicy,
-    build: &mut Build,
+    build: &CapabilityContext,
     target: Option<WidgetId>,
     x: i32,
     y: i32,
@@ -111,7 +117,7 @@ fn move_pointer(
     changed(place_caret(build, id, x, y, true))
 }
 
-fn hover(build: &mut Build, target: Option<WidgetId>, value: bool) -> Dispatch {
+fn hover(build: &CapabilityContext, target: Option<WidgetId>, value: bool) -> Dispatch {
     let Some(id) = target else {
         return Dispatch::CONTINUE;
     };
@@ -122,7 +128,11 @@ fn hover(build: &mut Build, target: Option<WidgetId>, value: bool) -> Dispatch {
     )
 }
 
-fn cancel(state: &mut PointerPolicy, build: &mut Build, target: Option<WidgetId>) -> Dispatch {
+fn cancel(
+    state: &mut PointerPolicy,
+    build: &CapabilityContext,
+    target: Option<WidgetId>,
+) -> Dispatch {
     let Some(id) = target else {
         return Dispatch::CONTINUE;
     };
@@ -134,7 +144,7 @@ fn cancel(state: &mut PointerPolicy, build: &mut Build, target: Option<WidgetId>
     )
 }
 
-fn focus(build: &mut Build, id: WidgetId) {
+fn focus(build: &CapabilityContext, id: WidgetId) {
     build.enter_modal_scope();
     let focusables = build.focusables();
     let target = build
@@ -154,7 +164,7 @@ fn focus(build: &mut Build, id: WidgetId) {
     build.focus(target);
 }
 
-fn place_caret(build: &Build, id: WidgetId, x: i32, y: i32, extend: bool) -> bool {
+fn place_caret(build: &CapabilityContext, id: WidgetId, x: i32, y: i32, extend: bool) -> bool {
     let Some(element) = build.element_for(id) else {
         return false;
     };

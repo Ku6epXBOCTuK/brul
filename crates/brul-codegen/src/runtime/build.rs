@@ -1,208 +1,62 @@
-use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use brul_gui::{ClipboardData, EventTarget, RawUiEvent, UiEvent, WidgetId, WidgetTree};
-use brul_script::Value;
-
 use super::component::ComponentHandle;
-use super::event_sink;
-use super::hooks::{Element, Hooks};
+use super::hooks::Hooks;
 use super::slot::Slots;
 use super::state::{SharedStates, StateId};
 use super::structure::Structure;
-use super::{Built, Capability, ViewError};
+use super::{Built, Capability, Clipboard, EventSink, ViewError};
 
-#[derive(Default)]
+#[derive(Clone, Default)]
+pub struct Services {
+    pub states: SharedStates,
+    pub event_sink: Option<Arc<dyn EventSink>>,
+    pub clipboard: Option<Rc<dyn Clipboard>>,
+}
+
+pub struct BuildParts {
+    pub structures: Vec<Structure>,
+    pub components: Vec<ComponentHandle>,
+    pub capabilities: Vec<Hooks>,
+}
+
 pub struct Build {
     slots: Option<Rc<Slots>>,
+    states: SharedStates,
+    event_sink: Option<Arc<dyn EventSink>>,
     structures: Vec<Structure>,
     components: Vec<ComponentHandle>,
     capabilities: Vec<Hooks>,
-    states: SharedStates,
-    event_sink: Option<Arc<dyn super::EventSink>>,
-    clipboard: Option<Rc<dyn super::Clipboard>>,
-    tree: Option<Rc<RefCell<WidgetTree>>>,
-    handled: Option<Rc<Cell<bool>>>,
-    target: Option<EventTarget>,
     state: Option<StateId>,
-    component: Option<ComponentHandle>,
 }
 
 impl Build {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(services: Services) -> Self {
+        Self::with_slots(None, services)
     }
 
-    pub fn with_slots(slots: Option<Rc<Slots>>) -> Self {
+    pub fn with_slots(slots: Option<Rc<Slots>>, services: Services) -> Self {
+        let Services {
+            states, event_sink, ..
+        } = services;
         Self {
             slots,
-            ..Self::default()
+            states,
+            event_sink,
+            structures: Vec::new(),
+            components: Vec::new(),
+            capabilities: Vec::new(),
+            state: None,
         }
     }
 
-    pub fn set_states(&mut self, states: SharedStates) {
-        self.states = states;
-    }
-
-    pub fn take_states(&self) -> SharedStates {
-        Rc::clone(&self.states)
-    }
-
-    pub fn set_event_sink(&mut self, sink: Option<Arc<dyn super::EventSink>>) {
-        self.event_sink = sink;
-    }
-
-    pub fn event_sink(&self) -> Option<Arc<dyn super::EventSink>> {
+    pub fn event_sink(&self) -> Option<Arc<dyn EventSink>> {
         self.event_sink.clone()
     }
 
-    pub fn set_clipboard_bridge(&mut self, clipboard: Option<Rc<dyn super::Clipboard>>) {
-        self.clipboard = clipboard;
-    }
-
-    pub fn clipboard(&self) -> Option<ClipboardData> {
-        self.clipboard
-            .as_ref()
-            .and_then(|clipboard| clipboard.read())
-    }
-
-    pub fn set_clipboard(&self, data: &ClipboardData) {
-        if let Some(clipboard) = &self.clipboard {
-            clipboard.write(data);
-        }
-    }
-
-    pub fn set_tree(&mut self, tree: Rc<RefCell<WidgetTree>>) {
-        self.tree = Some(tree);
-    }
-
-    pub fn set_handled_flag(&mut self, handled: Rc<Cell<bool>>) {
-        self.handled = Some(handled);
-    }
-
-    pub fn handled(&self) -> bool {
-        self.handled.as_ref().is_some_and(|flag| flag.get())
-    }
-
-    pub fn set_target(&mut self, target: EventTarget, state: StateId, component: ComponentHandle) {
-        self.target = Some(target);
-        self.state = Some(state);
-        self.component = Some(component);
-    }
-
-    pub fn component(&self) -> &ComponentHandle {
-        self.component.as_ref().expect("capability component")
-    }
-
     pub fn state_id(&self) -> StateId {
-        self.state.expect("capability state")
-    }
-
-    pub fn element(&self) -> Element<'_> {
-        self.try_element().expect("capability widget")
-    }
-
-    pub fn try_element(&self) -> Option<Element<'_>> {
-        let id = self.target?.widget()?;
-        Some(Element::new(id, self.tree.as_ref()?))
-    }
-
-    pub fn element_for(&self, id: WidgetId) -> Option<Element<'_>> {
-        Some(Element::new(id, self.tree.as_ref()?))
-    }
-
-    pub fn hit(&self, x: i32, y: i32) -> Option<WidgetId> {
-        self.tree.as_ref()?.borrow().hit_active(x, y).ok().flatten()
-    }
-
-    pub fn focused(&self) -> Option<WidgetId> {
-        self.tree
-            .as_ref()
-            .and_then(|tree| tree.borrow().focused_id())
-    }
-
-    pub fn focus(&self, id: Option<WidgetId>) -> bool {
-        self.tree
-            .as_ref()
-            .is_some_and(|tree| tree.borrow_mut().set_focused(id))
-    }
-
-    pub fn enter_modal_scope(&self) {
-        if let Some(tree) = &self.tree {
-            tree.borrow_mut().enter_modal_scope();
-        }
-    }
-
-    pub fn focusables(&self) -> Vec<WidgetId> {
-        self.tree
-            .as_ref()
-            .map_or_else(Vec::new, |tree| tree.borrow().focusables())
-    }
-
-    pub fn path_to(&self, id: WidgetId) -> Vec<WidgetId> {
-        self.tree
-            .as_ref()
-            .map_or_else(Vec::new, |tree| tree.borrow().path_to_id(id))
-    }
-
-    pub fn ancestors(&self, id: WidgetId) -> Vec<WidgetId> {
-        let mut path = self.path_to(id);
-        path.pop();
-        path
-    }
-
-    pub fn modal_scope(&self) -> Option<WidgetId> {
-        self.tree
-            .as_ref()
-            .and_then(|tree| tree.borrow().modal_scope())
-    }
-
-    pub fn within_scope(&self, scope: WidgetId, id: WidgetId) -> bool {
-        self.tree
-            .as_ref()
-            .is_some_and(|tree| tree.borrow().within_scope(scope, id))
-    }
-
-    pub fn nearest_scrollable(&self, id: WidgetId) -> Option<WidgetId> {
-        let path = self.path_to(id);
-        let tree = self.tree.as_ref()?.borrow();
-        let scope = tree.modal_scope();
-        path.into_iter().rev().find(|candidate| {
-            tree.scrollable(*candidate)
-                && scope.is_none_or(|scope| tree.within_scope(scope, *candidate))
-        })
-    }
-
-    pub fn get_state<T: 'static>(&self) -> Option<Rc<RefCell<T>>> {
-        self.states
-            .borrow()
-            .get_cloned::<RefCell<T>>(self.state_id())
-    }
-
-    pub fn set_state<T: 'static>(&mut self, value: T) {
-        let state = self.state_id();
-        self.states.borrow_mut().get::<RefCell<T>>(
-            state,
-            self.component.as_ref().expect("capability component"),
-            || RefCell::new(value),
-        );
-    }
-
-    pub fn remove_state(&self) {
-        self.states.borrow_mut().remove(self.state_id());
-    }
-
-    pub fn emit(&self, event: &str, arguments: Vec<Value>) {
-        event_sink::emit(&self.event_sink, self.state_id(), event, arguments);
-    }
-
-    pub fn emit_event(&self, event: UiEvent) {
-        super::event::push_ui_event(event);
-    }
-
-    pub fn emit_raw_event(&self, event: RawUiEvent) {
-        super::event::push_raw_event(event);
+        self.state.expect("view capability state")
     }
 
     pub fn capability(&mut self, capability: Capability<'_>) -> Result<Option<Built>, ViewError> {
@@ -225,7 +79,7 @@ impl Build {
     }
 
     pub fn state<T: 'static>(
-        &mut self,
+        &self,
         id: StateId,
         owner: &ComponentHandle,
         make: impl FnOnce() -> T,
@@ -245,19 +99,15 @@ impl Build {
         self.structures.push(structure);
     }
 
-    pub fn take_structures(&mut self) -> Vec<Structure> {
-        std::mem::take(&mut self.structures)
-    }
-
     pub fn register_component(&mut self, component: ComponentHandle) {
         self.components.push(component);
     }
 
-    pub fn take_components(&mut self) -> Vec<ComponentHandle> {
-        std::mem::take(&mut self.components)
-    }
-
-    pub fn take_capabilities(&mut self) -> Vec<Hooks> {
-        std::mem::take(&mut self.capabilities)
+    pub fn finish(self) -> BuildParts {
+        BuildParts {
+            structures: self.structures,
+            components: self.components,
+            capabilities: self.capabilities,
+        }
     }
 }

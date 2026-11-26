@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use brul_codegen::runtime::{self, Build, apply_capability};
+use brul_codegen::runtime::{self, CapabilityContext, Clipboard, Services, apply_capability};
 use brul_gui::{EventTarget, WidgetId, WidgetTree};
 use brul_reactive::{Effect, EffectScope};
 
@@ -18,6 +18,7 @@ pub(super) struct Context {
     pub(super) textures: runtime::Textures,
     pub(super) states: SharedStates,
     pub(super) sink: Option<Arc<dyn EventSink>>,
+    pub(super) clipboard: Option<Rc<dyn Clipboard>>,
     pub(super) requests: Rc<RefCell<Vec<WidgetId>>>,
 }
 
@@ -242,23 +243,24 @@ pub(super) fn owners(
 }
 
 pub(super) fn capability_context(
-    tree: &Rc<RefCell<WidgetTree>>,
-    states: &SharedStates,
-    sink: &Option<Arc<dyn EventSink>>,
+    ctx: &Context,
     target: EventTarget,
     state: StateId,
-    component: &ComponentHandle,
+    component: ComponentHandle,
     handled: Option<Rc<Cell<bool>>>,
-) -> Build {
-    let mut build = Build::new();
-    build.set_tree(Rc::clone(tree));
-    build.set_states(Rc::clone(states));
-    build.set_event_sink(sink.clone());
-    build.set_target(target, state, Rc::clone(component));
-    if let Some(handled) = handled {
-        build.set_handled_flag(handled);
-    }
-    build
+) -> CapabilityContext {
+    CapabilityContext::new(
+        Services {
+            states: Rc::clone(&ctx.states),
+            event_sink: ctx.sink.clone(),
+            clipboard: ctx.clipboard.clone(),
+        },
+        Rc::clone(&ctx.tree),
+        target,
+        state,
+        component,
+        handled,
+    )
 }
 
 fn attach_binding(binding: &Binding, scope: &EffectScope, ctx: &Context) {
@@ -316,6 +318,17 @@ fn attach_structure(owner: &StructureOwner, scope: &EffectScope, ctx: &Context) 
     });
 }
 
+fn owned_context(ctx: &Context) -> Context {
+    Context {
+        tree: Rc::clone(&ctx.tree),
+        textures: Rc::clone(&ctx.textures),
+        states: Rc::clone(&ctx.states),
+        sink: ctx.sink.clone(),
+        clipboard: ctx.clipboard.clone(),
+        requests: Rc::clone(&ctx.requests),
+    }
+}
+
 fn attach_capability(owner: &CapabilityOwner, scope: &EffectScope, ctx: &Context) {
     let target = owner.hooks.target;
     let state = owner.state;
@@ -323,43 +336,26 @@ fn attach_capability(owner: &CapabilityOwner, scope: &EffectScope, ctx: &Context
     let cleanup = owner.hooks.cleanup;
     let params = owner.hooks.params.clone();
     let apply = owner.hooks.apply;
-    let tree = Rc::clone(&ctx.tree);
-    let states = Rc::clone(&ctx.states);
-    let sink = ctx.sink.clone();
+    let cleanup_ctx = owned_context(ctx);
     let cleanup_component = Rc::clone(&component);
-    let cleanup_tree = Rc::clone(&tree);
-    let cleanup_states = Rc::clone(&states);
-    let cleanup_sink = sink.clone();
-
     scope.on_cleanup(move || {
-        let mut build = capability_context(
-            &cleanup_tree,
-            &cleanup_states,
-            &cleanup_sink,
+        let context = capability_context(
+            &cleanup_ctx,
             target,
             state,
-            &cleanup_component,
+            Rc::clone(&cleanup_component),
             None,
         );
-        cleanup(&mut build, state);
+        cleanup(&context);
     });
 
+    let apply_ctx = owned_context(ctx);
     let apply_component = Rc::clone(&component);
-    let apply_tree = Rc::clone(&tree);
-    let apply_states = Rc::clone(&states);
-    let apply_sink = sink.clone();
     scope.run(|| {
         Effect::new(move || {
-            let mut build = capability_context(
-                &apply_tree,
-                &apply_states,
-                &apply_sink,
-                target,
-                state,
-                &apply_component,
-                None,
-            );
-            if let Err(message) = apply_capability(&mut build, &params, apply) {
+            let context =
+                capability_context(&apply_ctx, target, state, Rc::clone(&apply_component), None);
+            if let Err(message) = apply_capability(&context, &params, apply) {
                 tracing::error!(%message, "capability failed");
             }
         });
@@ -399,6 +395,7 @@ mod tests {
             textures: runtime::Textures::default(),
             states: Rc::new(RefCell::new(crate::States::default())),
             sink: None,
+            clipboard: None,
             requests: Rc::new(RefCell::new(Vec::new())),
         }
     }

@@ -4,7 +4,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use brul_codegen::runtime::{self, Build, Hooks, accepts_prop};
+use brul_codegen::runtime::{
+    self, Build, BuildParts, CapabilityContext, Clipboard, Hooks, Services, accepts_prop,
+};
 use brul_gui::{DispatchEvent, EventTarget, RawUiEvent, TimerOwner, UiEvent, WidgetId, WidgetTree};
 use brul_ident::TimerId;
 use brul_reactive::EffectScope;
@@ -65,6 +67,7 @@ pub(crate) struct AssemblyParts {
     pub(crate) nested: Vec<ComponentHandle>,
     pub(crate) states: SharedStates,
     pub(crate) event_sink: Option<Arc<dyn EventSink>>,
+    pub(crate) clipboard: Option<Rc<dyn Clipboard>>,
 }
 
 fn timer_command(request: TimerRequest, owner: TimerOwner) -> Option<WindowCommand> {
@@ -145,6 +148,7 @@ pub struct Ui<T: Theme> {
     textures: runtime::Textures,
     pub(crate) states: SharedStates,
     event_sink: Option<Arc<dyn EventSink>>,
+    clipboard: Option<Rc<dyn Clipboard>>,
     scope: EffectScope,
 }
 
@@ -170,6 +174,7 @@ impl<T: Theme> Ui<T> {
                 nested: Vec::new(),
                 states: Rc::new(RefCell::new(crate::States::default())),
                 event_sink: None,
+                clipboard: None,
             },
             Rc::clone(&commands),
             true,
@@ -204,6 +209,7 @@ impl<T: Theme> Ui<T> {
             nested,
             states,
             event_sink,
+            clipboard,
         } = parts;
         let tree = Rc::new(RefCell::new(WidgetTree::new(widget)));
         tree.borrow_mut().set_root_scroll(scroll);
@@ -229,6 +235,7 @@ impl<T: Theme> Ui<T> {
             textures: runtime::Textures::default(),
             states,
             event_sink,
+            clipboard,
             scope: EffectScope::new(),
         };
         for handle in std::iter::once(component).chain(nested) {
@@ -270,6 +277,7 @@ impl<T: Theme> Ui<T> {
             textures: Rc::clone(&self.textures),
             states: Rc::clone(&self.states),
             sink: self.event_sink.clone(),
+            clipboard: self.clipboard.clone(),
             requests: Rc::clone(&self.requests),
         }
     }

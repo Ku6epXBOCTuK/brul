@@ -75,7 +75,7 @@ mod tests {
     }
 
     fn built(component: &brul::ComponentHandle) -> brul::Built {
-        let mut build = brul::Build::new();
+        let mut build = brul::Build::new(brul::Services::default());
         generated::aurora_view(Some(generated::ThemeId::Dark), &mut build, component)
             .expect("generated view")
     }

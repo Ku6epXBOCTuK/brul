@@ -21,12 +21,13 @@ pub mod build {
 }
 
 pub use brul_codegen::runtime::{
-    Binding, BindingTarget, Build, Built, Capability, ClassTable, Clipboard, ComponentEvent,
-    ComponentHandle, DEFAULT_SLOT, Dispatch, Element, EventSink, FlagExpression, Handler, Hooks,
-    Instance, IntoDispatch, NumberExpression, PainterGuard, PropArgument, PropBinding,
-    PropExpression, RawEvent, RawEventHook, RawEventSet, RawKind, Rebuilt, RowInfo, RowKey,
-    SharedStates, SlotArgument, Slots, StateId, States, Structure, TextExpression, View, ViewError,
-    apply_capability, emit_widget_event, instance, register_structure, slot,
+    Binding, BindingTarget, Build, BuildParts, Built, Capability, CapabilityContext, ClassTable,
+    Clipboard, ComponentEvent, ComponentHandle, DEFAULT_SLOT, Dispatch, Element, EventSink,
+    FlagExpression, Handler, Hooks, Instance, IntoDispatch, NumberExpression, PainterGuard,
+    PropArgument, PropBinding, PropExpression, RawEvent, RawEventHook, RawEventSet, RawKind,
+    Rebuilt, RowInfo, RowKey, Services, SharedStates, SlotArgument, Slots, StateId, States,
+    Structure, TextExpression, View, ViewError, apply_capability, emit_widget_event, instance,
+    register_structure, slot,
 };
 pub use brul_gpu::effect;
 pub use brul_gui as gui;

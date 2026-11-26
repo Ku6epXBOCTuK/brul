@@ -1,6 +1,6 @@
 #[brul::attach(name = "custom_editor", events(Input))]
 pub fn custom_editor(
-    _ctx: &brul::Build,
+    _ctx: &brul::CapabilityContext,
     value: String,
 ) -> Result<EditorState, brul::ViewError> {
     let _ = value;

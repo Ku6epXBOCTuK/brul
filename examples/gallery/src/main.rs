@@ -52,7 +52,7 @@ mod tests {
     fn the_generated_view_builds() {
         let component: brul::ComponentHandle = Rc::new(RefCell::new(brul::Component::new()));
         component.borrow_mut().set_names(generated::names());
-        let mut build = brul::Build::new();
+        let mut build = brul::Build::new(brul::Services::default());
         generated::kit_gallery_view(Some(generated::ThemeId::Dark), &mut build, &component)
             .expect("generated gallery view");
     }

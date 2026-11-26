@@ -18,13 +18,17 @@ impl<T: Theme> Ui<T> {
     }
 
     fn rebuild(&mut self) -> Result<(), ViewError> {
-        let mut build = Build::new();
-        build.set_states(Rc::clone(&self.states));
-        build.set_event_sink(self.event_sink.clone());
+        let mut build = Build::new(Services {
+            states: Rc::clone(&self.states),
+            event_sink: self.event_sink.clone(),
+            clipboard: self.clipboard.clone(),
+        });
         let built = (self.view)(self.theme, &mut build, &self.component);
-        let structures = build.take_structures();
-        let nested = build.take_components();
-        let capabilities = build.take_capabilities();
+        let BuildParts {
+            structures,
+            components: nested,
+            capabilities,
+        } = build.finish();
         let built = built?;
         self.components.clear();
         for handle in std::iter::once(Rc::clone(&self.component)).chain(nested) {
@@ -102,7 +106,7 @@ impl<T: Theme> Ui<T> {
             &path,
             event,
             |hooks| hooks.raw_events.contains(kind),
-            |hooks, build, state, event| (hooks.raw_event)(build, state, event),
+            |hooks, context, event| (hooks.raw_event)(context, event),
         );
     }
 
@@ -128,7 +132,7 @@ impl<T: Theme> Ui<T> {
         path: &DispatchPath,
         event: &E,
         accepts: impl Fn(&Hooks) -> bool,
-        invoke: impl Fn(&Hooks, &mut Build, StateId, &E) -> Dispatch,
+        invoke: impl Fn(&Hooks, &CapabilityContext, &E) -> Dispatch,
     ) -> Dispatch {
         let handled = Rc::new(Cell::new(false));
         let mut result = Dispatch::CONTINUE;
@@ -137,16 +141,14 @@ impl<T: Theme> Ui<T> {
                 if !accepts(&owner.hooks) {
                     continue;
                 }
-                let mut build = capability_context(
-                    &self.tree,
-                    &self.states,
-                    &self.event_sink,
+                let context = capability_context(
+                    &self.context(),
                     *target,
                     owner.state,
-                    &owner.hooks.component,
+                    Rc::clone(&owner.hooks.component),
                     Some(Rc::clone(&handled)),
                 );
-                let dispatch = invoke(&owner.hooks, &mut build, owner.state, event);
+                let dispatch = invoke(&owner.hooks, &context, event);
                 if dispatch.is_handled() {
                     handled.set(true);
                 }
@@ -166,7 +168,7 @@ impl<T: Theme> Ui<T> {
             &path,
             event,
             |hooks| hooks.events.contains(kind),
-            |hooks, build, state, event| (hooks.event)(build, state, event),
+            |hooks, context, event| (hooks.event)(context, event),
         );
         if dispatch.stops_scripts() {
             return;
@@ -226,6 +228,7 @@ impl<T: Theme> Ui<T> {
             std::mem::take(&mut self.owners),
             Rc::clone(&self.states),
             self.event_sink.clone(),
+            self.clipboard.clone(),
         );
         let mut changed = false;
         for parent in requests {

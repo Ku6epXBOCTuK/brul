@@ -111,7 +111,7 @@ mod tests {
         }
         drop(state);
 
-        let mut build = brul::Build::new();
+        let mut build = brul::Build::new(brul::Services::default());
         let built = generated::hello_view(Some(generated::ThemeId::Dark), &mut build, &component)
             .expect("generated view");
         brul::gui::WidgetTree::new(built.widget)

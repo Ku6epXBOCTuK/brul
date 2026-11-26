@@ -2,7 +2,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::ExitCode;
 
 use brul::gui::WidgetId;
-use brul::{Build, Dispatch, Event, Position, RawEvent, RawUiEvent, UiEvent, Value, ViewError};
+use brul::{
+    CapabilityContext, Dispatch, Event, Position, RawEvent, RawUiEvent, UiEvent, Value, ViewError,
+};
 
 mod generated;
 
@@ -86,7 +88,7 @@ pub struct Editor {
     mode: Mode,
 }
 
-fn repaint(state: &Editor, build: &Build) {
+fn repaint(state: &Editor, build: &CapabilityContext) {
     let element = build.element();
     element.set_input(state.mode.display(&state.raw));
     let caret = state.mode.display_caret(&state.raw, state.caret);
@@ -103,7 +105,11 @@ fn repaint(state: &Editor, build: &Build) {
     update = editor_update,
     raw_event = editor_raw
 )]
-pub fn masked_editor(_ctx: &mut Build, value: String, mode: String) -> Result<Editor, ViewError> {
+pub fn masked_editor(
+    _ctx: &CapabilityContext,
+    value: String,
+    mode: String,
+) -> Result<Editor, ViewError> {
     Ok(Editor {
         raw: value,
         caret: 0,
@@ -113,7 +119,7 @@ pub fn masked_editor(_ctx: &mut Build, value: String, mode: String) -> Result<Ed
 
 fn editor_update(
     state: &mut Editor,
-    build: &mut Build,
+    build: &CapabilityContext,
     value: String,
     mode: String,
 ) -> Result<(), ViewError> {
@@ -175,7 +181,7 @@ fn classify(event: &RawUiEvent) -> Action {
     }
 }
 
-fn editor_raw(state: &mut Editor, build: &mut Build, event: &RawUiEvent) -> Dispatch {
+fn editor_raw(state: &mut Editor, build: &CapabilityContext, event: &RawUiEvent) -> Dispatch {
     if build.handled() || build.focused() != Some(build.element().id()) {
         return Dispatch::CONTINUE;
     }
@@ -230,7 +236,7 @@ fn editor_raw(state: &mut Editor, build: &mut Build, event: &RawUiEvent) -> Disp
 pub struct Keys;
 
 #[brul::attach(name = "custom_keys", raw_events(Key), raw_event = keys_raw)]
-pub fn custom_keys(_ctx: &mut Build) -> Result<Keys, ViewError> {
+pub fn custom_keys(_ctx: &CapabilityContext) -> Result<Keys, ViewError> {
     Ok(Keys)
 }
 
@@ -250,7 +256,7 @@ fn next_focus(
     }
 }
 
-fn keys_raw(_state: &mut Keys, build: &mut Build, event: &RawUiEvent) -> Dispatch {
+fn keys_raw(_state: &mut Keys, build: &CapabilityContext, event: &RawUiEvent) -> Dispatch {
     if build.handled() {
         return Dispatch::CONTINUE;
     }

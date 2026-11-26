@@ -1,13 +1,19 @@
-use crate::{Build, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError, gui::WidgetId};
+use crate::{
+    CapabilityContext, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError, gui::WidgetId,
+};
 
 pub struct KeyboardPolicy;
 
 #[brul::attach(name = "keyboard", raw_events(Key), raw_event = keyboard_raw)]
-pub fn keyboard(_ctx: &mut Build) -> Result<KeyboardPolicy, ViewError> {
+pub fn keyboard(_ctx: &CapabilityContext) -> Result<KeyboardPolicy, ViewError> {
     Ok(KeyboardPolicy)
 }
 
-fn keyboard_raw(_state: &mut KeyboardPolicy, build: &mut Build, event: &RawUiEvent) -> Dispatch {
+fn keyboard_raw(
+    _state: &mut KeyboardPolicy,
+    build: &CapabilityContext,
+    event: &RawUiEvent,
+) -> Dispatch {
     if build.handled() {
         return Dispatch::CONTINUE;
     }
