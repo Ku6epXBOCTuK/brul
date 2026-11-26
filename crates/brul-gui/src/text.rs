@@ -239,8 +239,12 @@ impl TextEngine {
     }
 
     pub fn with_fonts(fonts: impl IntoIterator<Item = fontdb::Source>) -> Self {
+        Self::with_font_system(FontSystem::new_with_fonts(fonts))
+    }
+
+    pub fn with_font_system(font_system: FontSystem) -> Self {
         Self {
-            font_system: FontSystem::new_with_fonts(fonts),
+            font_system,
             swash: SwashCache::new(),
             atlas: Atlas::new(),
             buffer: None,

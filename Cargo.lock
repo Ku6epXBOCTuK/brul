@@ -266,6 +266,7 @@ name = "brul"
 version = "0.1.0"
 dependencies = [
  "brul-codegen",
+ "brul-display-test",
  "brul-gpu",
  "brul-gui",
  "brul-ident",
@@ -334,6 +335,7 @@ name = "brul-display-test"
 version = "0.1.0"
 dependencies = [
  "brul-gui",
+ "cosmic-text",
  "fontdb",
  "image",
 ]

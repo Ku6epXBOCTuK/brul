@@ -1,9 +1,11 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Cursor;
 use std::sync::Arc;
+use std::time::Duration;
 
 use brul_gui::{Dirty, Frame, Position, Size, TextEngine, Widget, WidgetId, WidgetTree};
+use image::{ImageFormat, RgbaImage};
 
 const FONT: &[u8] = include_bytes!("../fixtures/font/FiraMono-Medium.ttf");
 
@@ -14,26 +16,30 @@ pub trait DisplayScene {
 }
 
 #[derive(Clone, Debug)]
-enum Action {
+pub enum Action {
     Focus(WidgetId),
     Hover(i32, i32),
     Press(i32, i32),
     Release(i32, i32),
     Leave,
+    Key(String),
     Checked(WidgetId, bool),
     Caret(WidgetId, usize, usize),
+    Advance(u64),
     Shot(String),
 }
 
 #[derive(Debug)]
-struct Meta {
-    size: Size,
-    actions: Vec<Action>,
+pub struct Meta {
+    pub size: Size,
+    pub theme: Option<String>,
+    pub actions: Vec<Action>,
 }
 
 impl Meta {
-    fn parse(source: &str) -> Result<Self, String> {
+    pub fn parse(source: &str) -> Result<Self, String> {
         let mut size = None;
+        let mut theme = None;
         let mut actions = Vec::new();
         for (index, line) in source.lines().enumerate() {
             let line = line.trim();
@@ -54,11 +60,16 @@ impl Meta {
                     });
                     continue;
                 }
+                "theme" => {
+                    theme = Some(parts.next().ok_or_else(|| missing(index, verb))?.to_owned());
+                    continue;
+                }
                 "focus" => Action::Focus(id(parts.next(), index)?),
                 "hover" => Action::Hover(xy(parts.next(), index)?, xy(parts.next(), index)?),
                 "press" => Action::Press(xy(parts.next(), index)?, xy(parts.next(), index)?),
                 "release" => Action::Release(xy(parts.next(), index)?, xy(parts.next(), index)?),
                 "leave" => Action::Leave,
+                "key" => Action::Key(parts.next().ok_or_else(|| missing(index, verb))?.to_owned()),
                 "checked" => {
                     let id = id(parts.next(), index)?;
                     let value = parts.next().ok_or_else(|| missing(index, verb))?;
@@ -83,6 +94,13 @@ impl Meta {
                         .map_err(|_| number(index, "offset"))?;
                     Action::Caret(id, fragment, offset)
                 }
+                "advance" => Action::Advance(
+                    parts
+                        .next()
+                        .ok_or_else(|| missing(index, verb))?
+                        .parse()
+                        .map_err(|_| number(index, "milliseconds"))?,
+                ),
                 "shot" => {
                     Action::Shot(parts.next().ok_or_else(|| missing(index, verb))?.to_owned())
                 }
@@ -94,7 +112,11 @@ impl Meta {
             actions.push(action);
         }
         let size = size.ok_or_else(|| "no size line".to_owned())?;
-        Ok(Self { size, actions })
+        Ok(Self {
+            size,
+            theme,
+            actions,
+        })
     }
 }
 
@@ -119,36 +141,127 @@ fn xy(value: Option<&str>, index: usize) -> Result<i32, String> {
     value.parse().map_err(|_| number(index, value))
 }
 
-fn engine() -> TextEngine {
-    TextEngine::with_fonts([fontdb::Source::Binary(Arc::new(FONT))])
+pub struct Display {
+    size: Size,
+    engine: TextEngine,
+    frame: Frame,
+    actual: Vec<u8>,
+    labels: Vec<String>,
+    first: bool,
 }
 
-fn paint(tree: &mut WidgetTree, engine: &mut TextEngine, frame: &mut Frame, first: bool) {
-    let dirty = tree.take_dirty();
-    let snapshot = tree.snapshot().expect("snapshot");
-    if first {
-        frame.paint(snapshot, engine.atlas(), &Dirty::all());
-    } else if !dirty.is_empty() {
-        frame.paint(snapshot, engine.atlas(), &dirty);
+impl Display {
+    pub fn new(size: Size) -> Self {
+        let mut db = fontdb::Database::new();
+        db.load_font_source(fontdb::Source::Binary(Arc::new(FONT)));
+        db.set_sans_serif_family("Fira Mono");
+        db.set_serif_family("Fira Mono");
+        db.set_monospace_family("Fira Mono");
+        let font_system = cosmic_text::FontSystem::new_with_locale_and_db("en".to_owned(), db);
+        Self {
+            size,
+            engine: TextEngine::with_font_system(font_system),
+            frame: Frame::new(size.width, size.height),
+            actual: Vec::new(),
+            labels: Vec::new(),
+            first: true,
+        }
+    }
+
+    pub fn engine_mut(&mut self) -> &mut TextEngine {
+        &mut self.engine
+    }
+
+    pub fn paint(&mut self, tree: &mut WidgetTree) {
+        let dirty = tree.take_dirty();
+        let snapshot = tree.snapshot().expect("snapshot");
+        if self.first {
+            self.frame
+                .paint(snapshot, self.engine.atlas(), &Dirty::all());
+        } else if !dirty.is_empty() {
+            self.frame.paint(snapshot, self.engine.atlas(), &dirty);
+        }
+        self.first = false;
+    }
+
+    pub fn paint_all(&mut self, tree: &mut WidgetTree) {
+        let snapshot = tree.snapshot().expect("snapshot");
+        self.frame
+            .paint(snapshot, self.engine.atlas(), &Dirty::all());
+        self.first = false;
+    }
+
+    pub fn shot(&mut self, label: &str) {
+        self.actual.extend_from_slice(self.frame.pixels());
+        self.labels.push(label.to_owned());
+    }
+
+    pub fn finish(self, name: &str, expected: &[u8], expected_path: &str) {
+        let png = png_bytes(&self.size, &self.actual);
+        if enabled("BRUL_DISPLAY_BLESS") {
+            fs::write(expected_path, &png).expect("bless expected.png");
+            return;
+        }
+        let expected = image::load_from_memory_with_format(expected, ImageFormat::Png)
+            .expect("expected png")
+            .into_rgba8();
+        assert_eq!(expected.width(), self.size.width, "{name}: expected width");
+        assert_eq!(
+            expected.height() % self.size.height,
+            0,
+            "{name}: expected height"
+        );
+        let expected = expected.as_raw().as_slice();
+        if self.actual.as_slice() == expected {
+            return;
+        }
+        assert_eq!(
+            self.actual.len(),
+            expected.len(),
+            "{name}: expected {} bytes, got {}",
+            expected.len(),
+            self.actual.len()
+        );
+        let frame_len = (self.size.width * self.size.height * 4) as usize;
+        assert!(
+            frame_len > 0 && self.actual.len().is_multiple_of(frame_len),
+            "{name}: broken frame size"
+        );
+        let at = self
+            .actual
+            .iter()
+            .zip(expected)
+            .position(|(actual, expected)| actual != expected)
+            .expect("different buffers");
+        let frame = at / frame_len;
+        let within = at % frame_len;
+        let pixel = within / 4;
+        let x = pixel % self.size.width as usize;
+        let y = pixel / self.size.width as usize;
+        let channel = within % 4;
+        panic!(
+            "{name}: frame {} ({}) pixel ({x},{y}) channel {channel}: expected {}, got {}",
+            frame,
+            self.labels.get(frame).map(String::as_str).unwrap_or("?"),
+            expected[at],
+            self.actual[at]
+        );
     }
 }
 
 pub fn run<S: DisplayScene>(name: &str, meta: &str, expected: &[u8], expected_path: &str) {
     let meta = Meta::parse(meta).unwrap_or_else(|error| panic!("{name}: {error}"));
-    let mut engine = engine();
+    let mut display = Display::new(meta.size);
     let mut tree = WidgetTree::new(S::root());
-    S::prepare(&mut tree, &mut engine);
-    tree.layout(&mut engine, meta.size, 1.0).expect("layout");
+    S::prepare(&mut tree, display.engine_mut());
+    tree.layout(display.engine_mut(), meta.size, 1.0)
+        .expect("layout");
 
-    let mut frame = Frame::new(meta.size.width, meta.size.height);
-    let mut actual = Vec::new();
-    let mut shots = Vec::new();
     for action in &meta.actions {
         match action {
             Action::Shot(label) => {
-                paint(&mut tree, &mut engine, &mut frame, shots.is_empty());
-                actual.extend_from_slice(frame.pixels());
-                shots.push(label.as_str());
+                display.paint(&mut tree);
+                display.shot(label);
             }
             Action::Focus(id) => {
                 tree.set_focused(Some(*id));
@@ -165,80 +278,44 @@ pub fn run<S: DisplayScene>(name: &str, meta: &str, expected: &[u8], expected_pa
             Action::Leave => {
                 tree.pointer_raw_leave();
             }
+            Action::Key(code) => {
+                tree.raw_key(code.as_str());
+            }
             Action::Checked(id, checked) => {
                 tree.set_checked(*id, *checked);
             }
             Action::Caret(id, fragment, offset) => {
                 tree.set_caret_position(*id, Position::new(*fragment, *offset));
             }
+            Action::Advance(milliseconds) => {
+                tree.advance(Duration::from_millis(*milliseconds));
+            }
         }
     }
 
-    dump_png(name, &meta, &actual);
-    if enabled("BRUL_DISPLAY_BLESS") {
-        fs::write(expected_path, &actual).expect("bless expected.rgba");
-        return;
-    }
-    if actual == expected {
-        return;
-    }
-    assert_eq!(
-        actual.len(),
-        expected.len(),
-        "{name}: expected {} bytes, got {}",
-        expected.len(),
-        actual.len()
-    );
-    let frame_len = (meta.size.width * meta.size.height * 4) as usize;
-    assert!(
-        frame_len > 0 && actual.len() % frame_len == 0,
-        "{name}: broken frame size"
-    );
-    let at = actual
-        .iter()
-        .zip(expected)
-        .position(|(actual, expected)| actual != expected)
-        .expect("different buffers");
-    let frame = at / frame_len;
-    let within = at % frame_len;
-    let pixel = within / 4;
-    let x = pixel % meta.size.width as usize;
-    let y = pixel / meta.size.width as usize;
-    let channel = within % 4;
-    panic!(
-        "{name}: frame {} ({}) pixel ({x},{y}) channel {channel}: expected {}, got {}",
-        frame,
-        shots.get(frame).copied().unwrap_or("?"),
-        expected[at],
-        actual[at]
-    );
+    display.finish(name, expected, expected_path);
 }
 
 fn enabled(name: &str) -> bool {
     env::var_os(name).is_some_and(|value| !value.is_empty() && value != "0")
 }
 
-fn dump_png(name: &str, meta: &Meta, pixels: &[u8]) {
-    if !enabled("BRUL_DISPLAY_PNG") {
-        return;
-    }
-    let width = meta.size.width;
-    let frames = pixels.len() / (width * meta.size.height * 4) as usize;
-    let image =
-        image::RgbaImage::from_raw(width, meta.size.height * frames as u32, pixels.to_vec())
-            .expect("preview image");
-    let dir = PathBuf::from(
-        env::var_os("BRUL_DISPLAY_PNG_DIR").unwrap_or_else(|| "target/display".into()),
-    );
-    fs::create_dir_all(&dir).expect("preview directory");
+fn png_bytes(size: &Size, pixels: &[u8]) -> Vec<u8> {
+    let frames = pixels.len() / (size.width * size.height * 4) as usize;
+    let image = RgbaImage::from_raw(size.width, size.height * frames as u32, pixels.to_vec())
+        .expect("golden image");
+    let mut bytes = Cursor::new(Vec::new());
     image
-        .save(dir.join(format!("{name}.png")))
-        .expect("preview png");
+        .write_to(&mut bytes, ImageFormat::Png)
+        .expect("golden png");
+    bytes.into_inner()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Meta;
+    use brul_gui::Size;
+
+    use super::{Meta, png_bytes};
 
     #[test]
     fn meta_rejects_an_unknown_action() {
@@ -250,5 +327,25 @@ mod tests {
     fn meta_requires_a_size() {
         let error = Meta::parse("shot base\n").expect_err("missing size");
         assert_eq!(error, "no size line");
+    }
+
+    #[test]
+    fn meta_keeps_the_theme() {
+        let meta = Meta::parse("size 8x8\ntheme light\nshot base\n").expect("meta");
+        assert_eq!(meta.theme.as_deref(), Some("light"));
+    }
+
+    #[test]
+    fn png_round_trips_the_raw_pixels() {
+        let size = Size {
+            width: 2,
+            height: 1,
+        };
+        let pixels = [1, 2, 3, 4, 5, 6, 7, 8];
+        let png = png_bytes(&size, &pixels);
+        let decoded = image::load_from_memory_with_format(&png, image::ImageFormat::Png)
+            .expect("decoded png")
+            .into_rgba8();
+        assert_eq!(decoded.as_raw().as_slice(), pixels.as_slice());
     }
 }

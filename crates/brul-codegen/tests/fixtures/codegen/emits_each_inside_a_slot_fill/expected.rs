@@ -323,16 +323,17 @@ fn demo_slot1(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let mut children = Vec::new();
-    children.push({
-        let (built, _rows) = demo_each1_rebuild(theme, build, component, &[])?;
-        bindings.extend(built.bindings);
-        handlers.extend(built.handlers);
-        props.extend(built.props);
-        let widget0 = built.widget;
-        brul::register_structure(build, component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);
-        widget0
-    });
+    let children = vec![
+        {
+            let (built, _rows) = demo_each1_rebuild(theme, build, component, &[])?;
+            bindings.extend(built.bindings);
+            handlers.extend(built.handlers);
+            props.extend(built.props);
+            let widget0 = built.widget;
+            brul::register_structure(build, component, widget0.id(), true, demo_each1_value, demo_each1_rebuild);
+            widget0
+        },
+    ];
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
     Ok(brul::Built { widget, bindings, handlers, props })
 }

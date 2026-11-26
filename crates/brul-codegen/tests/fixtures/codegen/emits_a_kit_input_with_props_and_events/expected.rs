@@ -313,7 +313,7 @@ pub fn input_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
     let widget = {
         {
             let widget0 = input_styled(brul::gui::Widget::input(""), &[0, 1], theme);
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 17, column: 69 }))?; value }) })));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 17, column: 69 }))? }) })));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Input, input_script_event_changed));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Key, input_script_event_typed));
             widget0

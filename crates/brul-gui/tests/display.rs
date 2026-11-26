@@ -12,8 +12,8 @@ macro_rules! display_cases {
                 run::<$name::Scene>(
                     stringify!($name),
                     include_str!(concat!("fixtures/display/", stringify!($name), "/meta.txt")),
-                    include_bytes!(concat!("fixtures/display/", stringify!($name), "/expected.rgba")),
-                    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/display/", stringify!($name), "/expected.rgba"),
+                    include_bytes!(concat!("fixtures/display/", stringify!($name), "/expected.png")),
+                    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/display/", stringify!($name), "/expected.png"),
                 );
             }
         )+

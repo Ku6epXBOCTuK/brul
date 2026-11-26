@@ -276,14 +276,15 @@ fn demo_slot1(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let mut children = Vec::new();
-    children.push(brul::gui::Widget::text("x"));
+    let children = vec![
+        brul::gui::Widget::text("x"),
+    ];
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
     Ok(brul::Built { widget, bindings, handlers, props })
 }
 
 fn badge_if1_value0(component: &mut brul::Component) -> Result<bool, brul::Error> {
-    Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).map_err(|error| error.at(brul::ast::Position { line: 5, column: 14 }))?; value })
+    Ok({ bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).map_err(|error| error.at(brul::ast::Position { line: 5, column: 14 }))? })
 }
 
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]

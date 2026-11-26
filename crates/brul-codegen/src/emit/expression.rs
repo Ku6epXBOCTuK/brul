@@ -12,6 +12,7 @@ use brul_syntax::script::builtins::Builtin;
 use brul_syntax::types::Type;
 
 use super::names;
+use super::rust_string;
 use super::scopes::{ScopeInfo, Scopes};
 use super::state::State;
 use crate::commands::Command;
@@ -115,7 +116,7 @@ fn prop_typed(
     let id = names::variable_expr(name, position, names)?;
     Ok(Some((
         format!(
-            "{{ let value = {convertor}(brul::Dyn::from(component.read_id({id})?)).map_err(|error| error.at(brul::ast::Position {{ line: {}, column: {} }}))?; value }}",
+            "{{ {convertor}(brul::Dyn::from(component.read_id({id})?)).map_err(|error| error.at(brul::ast::Position {{ line: {}, column: {} }}))? }}",
             position.line, position.column
         ),
         ty.clone(),
@@ -131,7 +132,7 @@ pub(super) fn typed(
 ) -> Result<Option<(String, Type)>, Error> {
     Ok(match &expression.kind {
         ExprKind::Number(value) => Some((format!("{value:?}_f64"), Type::Number)),
-        ExprKind::String(text) => Some((format!("{text:?}.to_owned()"), Type::String)),
+        ExprKind::String(text) => Some((format!("{}.to_owned()", rust_string(text)), Type::String)),
         ExprKind::Bool(value) => Some((value.to_string(), Type::Bool)),
         ExprKind::Null => Some(("()".to_owned(), Type::Null)),
         ExprKind::Ident(name) => {
@@ -430,7 +431,7 @@ pub(super) fn operation_in(
     }
     Ok(match &expression.kind {
         ExprKind::Number(value) => format!("brul::Dyn::num({value:?})"),
-        ExprKind::String(text) => format!("brul::Dyn::text({text:?})"),
+        ExprKind::String(text) => format!("brul::Dyn::text({})", rust_string(text)),
         ExprKind::Bool(value) => format!("brul::Dyn::flag({value})"),
         ExprKind::Null => "brul::Dyn::null()".to_owned(),
         ExprKind::Ident(name) => {
@@ -475,7 +476,9 @@ pub(super) fn operation_in(
             let parts = parts
                 .iter()
                 .map(|part| match part {
-                    TemplatePart::Text(text) => Ok(format!("brul::Dyn::text({text:?})")),
+                    TemplatePart::Text(text) => {
+                        Ok(format!("brul::Dyn::text({})", rust_string(text)))
+                    }
                     TemplatePart::Expr(expression) => {
                         operation_in(expression, names, state, props, scopes)
                     }

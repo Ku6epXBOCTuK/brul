@@ -1,0 +1,12 @@
+size 240x120
+theme dark
+shot base
+hover 40 40
+advance 250
+shot hover
+press 40 40
+advance 250
+shot pressed
+release 40 40
+advance 250
+shot released

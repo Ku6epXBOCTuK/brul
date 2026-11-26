@@ -204,8 +204,8 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                         brul::PropArgument { name: "title", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("Edit".to_owned()) }) },
                     ],
                     defaults: &[
-                        brul::PropArgument { name: "confirm", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("Сохранить".to_owned()) }) },
-                        brul::PropArgument { name: "cancel", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("Отмена".to_owned()) }) },
+                        brul::PropArgument { name: "confirm", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("\u{421}\u{43e}\u{445}\u{440}\u{430}\u{43d}\u{438}\u{442}\u{44c}".to_owned()) }) },
+                        brul::PropArgument { name: "cancel", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("\u{41e}\u{442}\u{43c}\u{435}\u{43d}\u{430}".to_owned()) }) },
                     ],
                     events: &[
                     ],
@@ -415,13 +415,13 @@ pub fn button_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                     children.extend(built.widget.into_children());
                 }                children.push({
                     let widget1 = button_styled(brul::gui::Widget::text(""), &[1], theme);
-                    bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 16, column: 35 }))?; value }) })));
+                    bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 16, column: 35 }))? }) })));
                     widget1
                 });
                 children
             }), &[0], theme).focusable(true);
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 71 }))?; value }) })));
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: button_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(3))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 35 }))?; value }); Ok(value) } }));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 71 }))? }) })));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: button_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(3))?)).map_err(|error| error.at(brul::ast::Position { line: 14, column: 35 }))? }); Ok(value) } }));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Click, button_script_event_press));
             widget0
         }
@@ -942,7 +942,7 @@ pub fn tooltip_view(theme: Option<&str>, build: &mut brul::Build, component: &br
                     tooltip_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                         {
                             let widget1 = tooltip_styled(brul::gui::Widget::text(""), &[3], theme);
-                            bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(5))?)).map_err(|error| error.at(brul::ast::Position { line: 21, column: 42 }))?; value }) })));
+                            bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(5))?)).map_err(|error| error.at(brul::ast::Position { line: 21, column: 42 }))? }) })));
                             widget1
                         },
                     ]), &[2], theme).anchored(brul::gui::Anchor::new(brul::gui::WidgetId::new(2147483648))),
@@ -1233,11 +1233,11 @@ pub fn checkbox_view(theme: Option<&str>, build: &mut brul::Build, component: &b
                     let widget1 = checkbox_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                         {
                             let widget2 = checkbox_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![]), &[2], theme);
-                            bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 19, column: 43 }))?; value }) })));
+                            bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 19, column: 43 }))? }) })));
                             widget2
                         },
                     ]), &[1], theme);
-                    bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Checked(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 18, column: 38 }))?; value }) })));
+                    bindings.push(brul::Binding::new(component, widget1.id(), brul::BindingTarget::Checked(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 18, column: 38 }))? }) })));
                     widget1
                 },
                 {
@@ -1250,7 +1250,7 @@ pub fn checkbox_view(theme: Option<&str>, build: &mut brul::Build, component: &b
                     widget3
                 },
             ]), &[0], theme);
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 17, column: 40 }))?; value }) })));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Disabled(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 17, column: 40 }))? }) })));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Click, checkbox_script_event_toggle));
             widget0
         }
@@ -1481,8 +1481,8 @@ fn checkbox_script_init(component: &mut brul::Component) -> Result<(), brul::Err
 }
 #[allow(unused_mut, unused_variables)]
 fn checkbox_script_fn_toggle(component: &mut brul::Component) -> Result<(), brul::Error> {
-    if !({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 3, column: 14 }))?; value }) {
-    { let value = brul::Dyn::flag(!({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 4, column: 24 }))?; value }));
+    if !({ bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(4))?)).map_err(|error| error.at(brul::ast::Position { line: 3, column: 14 }))? }) {
+    { let value = brul::Dyn::flag(!({ bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(6))?)).map_err(|error| error.at(brul::ast::Position { line: 4, column: 24 }))? }));
 component.assign_id(brul::VariableId::from_index(6), (value.clone()).into())?;
 
 value };
@@ -1543,7 +1543,7 @@ pub fn dialog_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                 dialog_styled(brul::gui::Widget::view(brul::gui::Direction::Row, vec![
                     {
                         let widget2 = dialog_styled(brul::gui::Widget::text(""), &[3], theme);
-                        bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(8))?)).map_err(|error| error.at(brul::ast::Position { line: 30, column: 39 }))?; value }) })));
+                        bindings.push(brul::Binding::new(component, widget2.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(8))?)).map_err(|error| error.at(brul::ast::Position { line: 30, column: 39 }))? }) })));
                         widget2
                     },
                     dialog_styled(brul::gui::Widget::view(brul::gui::Direction::Row, {
@@ -1565,7 +1565,7 @@ pub fn dialog_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                                 name: "Button",
                                 names: names(),
                                 props: &[
-                                    brul::PropArgument { name: "label", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(10))?)).map_err(|error| error.at(brul::ast::Position { line: 33, column: 36 }))?; value }) }) },
+                                    brul::PropArgument { name: "label", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(10))?)).map_err(|error| error.at(brul::ast::Position { line: 33, column: 36 }))? }) }) },
                                 ],
                                 defaults: &[
                                     brul::PropArgument { name: "variant", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("secondary".to_owned()) }) },
@@ -1590,7 +1590,7 @@ pub fn dialog_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                                 name: "Button",
                                 names: names(),
                                 props: &[
-                                    brul::PropArgument { name: "label", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(9))?)).map_err(|error| error.at(brul::ast::Position { line: 34, column: 36 }))?; value }) }) },
+                                    brul::PropArgument { name: "label", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(9))?)).map_err(|error| error.at(brul::ast::Position { line: 34, column: 36 }))? }) }) },
                                     brul::PropArgument { name: "variant", ty: brul::PropType::String, expression: brul::PropExpression::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok("primary".to_owned()) }) },
                                 ],
                                 defaults: &[
@@ -1610,7 +1610,7 @@ pub fn dialog_view(theme: Option<&str>, build: &mut brul::Build, component: &bru
                     ]), &[5], theme),
                 ]), &[2], theme),
             ]), &[0], theme).modal(true);
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ let value = bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(7))?)).map_err(|error| error.at(brul::ast::Position { line: 27, column: 39 }))?; value }) })));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Visible(|component: &mut brul::Component| -> Result<bool, brul::Error> { Ok({ bool::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(7))?)).map_err(|error| error.at(brul::ast::Position { line: 27, column: 39 }))? }) })));
             handlers.push(brul::Handler::new(component, Some(widget0.id()), brul::EventKind::Dismiss, dialog_script_event_dismiss_dialog));
             widget0
         }
@@ -1938,8 +1938,9 @@ fn demo_slot1(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let mut children = Vec::new();
-    children.push(brul::gui::Widget::text("body"));
+    let children = vec![
+        brul::gui::Widget::text("body"),
+    ];
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
     Ok(brul::Built { widget, bindings, handlers, props })
 }
@@ -1949,8 +1950,9 @@ fn demo_slot2(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let mut children = Vec::new();
-    children.push(brul::gui::Widget::text("header"));
+    let children = vec![
+        brul::gui::Widget::text("header"),
+    ];
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
     Ok(brul::Built { widget, bindings, handlers, props })
 }
@@ -1960,8 +1962,9 @@ fn demo_slot3(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let mut children = Vec::new();
-    children.push(brul::gui::Widget::text("footer"));
+    let children = vec![
+        brul::gui::Widget::text("footer"),
+    ];
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
     Ok(brul::Built { widget, bindings, handlers, props })
 }
@@ -1971,8 +1974,9 @@ fn demo_slot4(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let mut children = Vec::new();
-    children.push(brul::gui::Widget::text("trigger"));
+    let children = vec![
+        brul::gui::Widget::text("trigger"),
+    ];
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
     Ok(brul::Built { widget, bindings, handlers, props })
 }
@@ -1982,18 +1986,19 @@ fn demo_slot5(theme: Option<&str>, build: &mut brul::Build, component: &brul::Co
     let mut bindings = Vec::new();
     let mut handlers = Vec::new();
     let mut props = Vec::new();
-    let mut children = Vec::new();
-    children.push({
-        let widget0 = demo_styled(brul::gui::Widget::input(""), &[0, 1], theme);
-        bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<DemoScriptState>().draft.get()) })));
-        widget0
-    });
+    let children = vec![
+        {
+            let widget0 = demo_styled(brul::gui::Widget::input(""), &[0, 1], theme);
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Input(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok(component.state::<DemoScriptState>().draft.get()) })));
+            widget0
+        },
+    ];
     let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
     Ok(brul::Built { widget, bindings, handlers, props })
 }
 
 fn checkbox_if1_value0(component: &mut brul::Component) -> Result<bool, brul::Error> {
-    Ok(({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 21, column: 18 }))?; value }).as_str() != ("".to_owned()).as_str())
+    Ok(({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 21, column: 18 }))? }).as_str() != ("".to_owned()).as_str())
 }
 
 #[allow(unused_mut, unused_variables, clippy::let_and_return)]
@@ -2009,7 +2014,7 @@ fn checkbox_if1_rebuild(theme: Option<&str>, build: &mut brul::Build, component:
             vec![
                 {
                     let widget0 = checkbox_styled(brul::gui::Widget::text(""), &[3], theme);
-                    bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 22, column: 41 }))?; value }) })));
+                    bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(2))?)).map_err(|error| error.at(brul::ast::Position { line: 22, column: 41 }))? }) })));
                     widget0
                 },
             ]

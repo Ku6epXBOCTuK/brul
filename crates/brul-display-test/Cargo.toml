@@ -8,5 +8,6 @@ workspace = true
 
 [dependencies]
 brul-gui = { workspace = true }
+cosmic-text = { workspace = true }
 fontdb = { workspace = true }
 image = { workspace = true, features = ["png"] }

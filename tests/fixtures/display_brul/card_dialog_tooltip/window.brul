@@ -1,0 +1,59 @@
+<use>
+    import Card from "brul:card";
+    import Dialog from "brul:dialog";
+    import Tooltip from "brul:tooltip";
+</use>
+
+<markup>
+    window CardDialogTooltip (
+        title: "card dialog tooltip",
+        width: 480,
+        height: 220
+    ) {
+        Container (root) {
+            Card (panel) {
+                Text (body) { "Body" }
+            }
+            Tooltip (hint, text: "Hint") {
+                Text (label) { "Hover" }
+            }
+            Dialog (modal, open: true, title: "Title") {
+                Text (question) { "Are you sure?" }
+            }
+        }
+    }
+</markup>
+
+<style>
+    theme dark {
+        background: #12141c;
+        surface: #1c2028;
+        surface-hover: #232936;
+        border: #334155;
+        text: #ffffff;
+        muted: #8c94a8;
+        accent: #4c8dff;
+        accent-hover: #6ba0ff;
+    }
+    theme light {
+        background: #f4f6f9;
+        surface: #ffffff;
+        surface-hover: #eef2f7;
+        border: #e2e8f0;
+        text: #0f172a;
+        muted: #64748b;
+        accent: #2563eb;
+        accent-hover: #1d4ed8;
+    }
+    .root {
+        width: 100%;
+        height: 100%;
+        flex-direction: column;
+        padding: 16px;
+        gap: 10px;
+        background: theme.background;
+    }
+    .panel { width: 100%; }
+    .body { color: theme.text; font-size: 13px; }
+    .label { color: theme.muted; font-size: 13px; }
+</style>

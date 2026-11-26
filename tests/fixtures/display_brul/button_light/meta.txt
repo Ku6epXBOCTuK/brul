@@ -1,0 +1,6 @@
+size 240x120
+theme light
+shot base
+hover 40 40
+advance 250
+shot hover

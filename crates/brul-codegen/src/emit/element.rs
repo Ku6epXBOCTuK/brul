@@ -18,6 +18,7 @@ use super::Frame;
 use super::Out;
 use super::anchor;
 use super::classes;
+use super::rust_string;
 use super::{ScopeInfo, StateKey, child, component, events, expression, structure};
 
 pub(super) fn widget(
@@ -564,7 +565,8 @@ fn field_widget(
                 return Ok(Some(expression.clone()));
             };
             out.push(format_args!(
-                "brul::gui::Widget::{constructor}({content:?})"
+                "brul::gui::Widget::{constructor}({})",
+                rust_string(content)
             ));
             Ok(None)
         }

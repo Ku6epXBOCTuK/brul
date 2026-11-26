@@ -1,0 +1,6 @@
+size 320x140
+theme dark
+shot base
+press 20 110
+release 20 110
+shot toggled

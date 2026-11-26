@@ -4,6 +4,7 @@ use brul_syntax::style::{
 };
 
 use super::Out;
+use super::rust_string;
 
 pub(super) fn stylesheet(out: &mut Out<'_>, prefix: &str, sheet: &Stylesheet) {
     out.end();
@@ -132,7 +133,7 @@ fn value(value: &Value) -> String {
         Value::Number(number) => format!("s::Value::Number({number:?})"),
         Value::Px(px) => format!("s::Value::Px({px:?})"),
         Value::Percent(percent) => format!("s::Value::Percent({percent:?})"),
-        Value::String(text) => format!("s::Value::String({text:?}.into())"),
+        Value::String(text) => format!("s::Value::String({}.into())", rust_string(text)),
         Value::Keyword(keyword) => format!("s::Value::Keyword({keyword:?}.into())"),
         Value::Color(color) => format!("s::Value::Color({})", literal(*color)),
         Value::ThemeRef(key) => format!("s::Value::ThemeRef({key:?}.into())"),

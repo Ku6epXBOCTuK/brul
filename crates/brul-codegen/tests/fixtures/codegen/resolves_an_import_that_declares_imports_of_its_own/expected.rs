@@ -363,7 +363,7 @@ pub fn other_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
     let widget = {
         {
             let widget0 = brul::gui::Widget::text("");
-            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ let value = String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).map_err(|error| error.at(brul::ast::Position { line: 4, column: 12 }))?; value }) })));
+            bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Text(|component: &mut brul::Component| -> Result<String, brul::Error> { Ok({ String::try_from(brul::Dyn::from(component.read_id(brul::VariableId::from_index(0))?)).map_err(|error| error.at(brul::ast::Position { line: 4, column: 12 }))? }) })));
             widget0
         }
     };

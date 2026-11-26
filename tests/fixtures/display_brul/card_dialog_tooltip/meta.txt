@@ -1,0 +1,6 @@
+size 480x220
+theme dark
+shot open
+key Escape
+advance 250
+shot after_escape

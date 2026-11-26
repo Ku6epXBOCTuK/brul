@@ -4,6 +4,8 @@ extern crate self as brul;
 
 pub mod builtins;
 pub mod canvas;
+#[cfg(test)]
+mod display_tests;
 mod each;
 mod event;
 mod handle;
