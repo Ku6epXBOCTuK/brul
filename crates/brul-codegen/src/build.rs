@@ -30,6 +30,22 @@ impl fmt::Debug for Error {
     }
 }
 
+pub fn gallery() -> Result<(), Error> {
+    let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    let output = PathBuf::from(env::var("OUT_DIR")?);
+    let entry = output.join("gallery.brul");
+    fs::write(&entry, crate::gallery::source()?)?;
+    for name in crate::kit::names() {
+        println!(
+            "cargo:rerun-if-changed={}",
+            root.join("../../kit")
+                .join(format!("{name}.brul"))
+                .display()
+        );
+    }
+    app(entry)
+}
+
 pub fn app(entry: impl AsRef<Path>) -> Result<(), Error> {
     println!("cargo:rerun-if-env-changed=BRUL_ALLOC_COUNT");
     println!("cargo:rustc-check-cfg=cfg(brul_alloc_count)");

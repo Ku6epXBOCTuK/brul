@@ -17,7 +17,7 @@ mod run;
 mod ui;
 
 pub mod build {
-    pub use brul_codegen::build::{Error, app};
+    pub use brul_codegen::build::{Error, app, gallery};
 }
 
 pub use brul_codegen::runtime::{

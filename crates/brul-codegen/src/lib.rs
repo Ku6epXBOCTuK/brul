@@ -9,6 +9,7 @@ pub mod commands;
 mod diagnostics;
 mod discovery;
 pub mod emit;
+mod gallery;
 mod generate;
 mod kit;
 mod loader;
