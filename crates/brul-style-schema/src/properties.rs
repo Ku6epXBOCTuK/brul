@@ -3,6 +3,10 @@ use crate::{
     TextField, Type,
 };
 
+#[path = "properties/specs.rs"]
+mod specs;
+use specs::*;
+
 pub static PROPERTIES: &[PropertySpec] = &[
     PropertySpec {
         key: PropertyKey::Width,
@@ -464,73 +468,10 @@ pub static PROPERTIES: &[PropertySpec] = &[
         animatable: false,
         default: "false",
     },
-    PropertySpec {
-        key: PropertyKey::Scroll,
-        name: "scroll",
-        field: "scroll",
-        ty: Type::Bool,
-        in_state: Forbidden,
-        target: Style(StyleField::Scroll),
-        animatable: false,
-        default: "false",
-    },
-    PropertySpec {
-        key: PropertyKey::Cursor,
-        name: "cursor",
-        field: "cursor",
-        ty: Type::Keywords(&[
-            "default",
-            "pointer",
-            "text",
-            "grab",
-            "grabbing",
-            "crosshair",
-            "not-allowed",
-            "move",
-        ]),
-        in_state: Visual,
-        target: Style(StyleField::Cursor),
-        animatable: false,
-        default: "default",
-    },
-    PropertySpec {
-        key: PropertyKey::ShadowOffsetX,
-        name: "box-shadow-offset-x",
-        field: "shadow",
-        ty: Type::SignedPx,
-        in_state: Forbidden,
-        target: Style(StyleField::ShadowX),
-        animatable: false,
-        default: "0",
-    },
-    PropertySpec {
-        key: PropertyKey::ShadowOffsetY,
-        name: "box-shadow-offset-y",
-        field: "shadow",
-        ty: Type::SignedPx,
-        in_state: Forbidden,
-        target: Style(StyleField::ShadowY),
-        animatable: false,
-        default: "0",
-    },
-    PropertySpec {
-        key: PropertyKey::ShadowBlur,
-        name: "box-shadow-blur",
-        field: "shadow",
-        ty: Type::Px,
-        in_state: Forbidden,
-        target: Style(StyleField::ShadowBlur),
-        animatable: false,
-        default: "0",
-    },
-    PropertySpec {
-        key: PropertyKey::ShadowColor,
-        name: "box-shadow-color",
-        field: "shadow",
-        ty: Type::Color,
-        in_state: Visual,
-        target: Style(StyleField::ShadowColor),
-        animatable: true,
-        default: "transparent",
-    },
+    scroll(),
+    cursor(),
+    shadow_offset_x(),
+    shadow_offset_y(),
+    shadow_blur(),
+    shadow_color(),
 ];
