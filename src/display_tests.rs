@@ -58,7 +58,7 @@ fn run_case<G: Generated>(name: &str, source: &str, expected: &[u8], expected_pa
         match action {
             Action::Shot(label) => {
                 let mut tree = ui.tree.borrow_mut();
-                display.paint_all(&mut tree);
+                display.paint(&mut tree);
                 display.shot(label);
             }
             Action::Hover(x, y) => {

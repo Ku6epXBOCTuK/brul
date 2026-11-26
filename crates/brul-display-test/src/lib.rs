@@ -184,13 +184,6 @@ impl Display {
         self.first = false;
     }
 
-    pub fn paint_all(&mut self, tree: &mut WidgetTree) {
-        let snapshot = tree.snapshot().expect("snapshot");
-        self.frame
-            .paint(snapshot, self.engine.atlas(), &Dirty::all());
-        self.first = false;
-    }
-
     pub fn shot(&mut self, label: &str) {
         self.actual.extend_from_slice(self.frame.pixels());
         self.labels.push(label.to_owned());

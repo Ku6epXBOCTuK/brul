@@ -232,8 +232,8 @@ impl FrameCache {
 mod tests {
     use super::*;
     use brul_gui::{
-        ClipRect, Color, Dimension, LayoutStyle, Paint, Shadow, Size, StyleSet, TextEngine, Widget,
-        WidgetStyle, WidgetTree,
+        ClipRect, Color, Dimension, LayoutStyle, Paint, Shadow, Size, StyleSet, StyleState,
+        TextEngine, Widget, WidgetStyle, WidgetStylePatch, WidgetTree,
     };
 
     fn snapshot() -> WidgetSnapshot {
@@ -321,6 +321,64 @@ mod tests {
             other_bytes.as_slice()
         );
         assert_eq!(cache.buffer(CLIP), clips.as_slice());
+    }
+
+    #[test]
+    fn a_dirty_parent_updates_the_child_slot() {
+        let child = Widget::column(Vec::new())
+            .with_layout(LayoutStyle {
+                width: Dimension::Px(10),
+                height: Dimension::Px(10),
+                ..LayoutStyle::default()
+            })
+            .with_styles(
+                StyleSet::new(WidgetStyle {
+                    background: Paint::Color(Color::rgb(0, 255, 0)),
+                    ..WidgetStyle::default()
+                })
+                .with(
+                    StyleState::Hovered,
+                    WidgetStylePatch {
+                        background: Some(Paint::Color(Color::rgb(0, 0, 255))),
+                        ..WidgetStylePatch::default()
+                    },
+                ),
+            );
+        let child_id = child.id();
+        let root = Widget::column(vec![child]);
+        let root_id = root.id();
+        let mut engine = TextEngine::new();
+        let mut tree = WidgetTree::new(root);
+        tree.layout(
+            &mut engine,
+            Size {
+                width: 64,
+                height: 64,
+            },
+            1.0,
+        )
+        .expect("layout");
+        tree.take_dirty();
+        let mut cache = FrameCache::default();
+        let before = tree.snapshot().expect("snapshot").clone();
+        cache.update(&before, engine.atlas(), &Dirty::all());
+        let slot = cache.nodes[&child_id].slots[SHAPE];
+        let old = cache.buffer(SHAPE)[slot.start..slot.start + slot.cap * INSTANCE_SIZE as usize]
+            .to_vec();
+
+        tree.set_hovered(child_id, true);
+        tree.snapshot().expect("snapshot");
+        tree.take_dirty();
+        tree.mark_dirty(root_id);
+        let dirty = tree.take_dirty();
+        assert!(dirty.ids.contains(&child_id));
+
+        let after = tree.snapshot().expect("snapshot").clone();
+        cache.update(&after, engine.atlas(), &dirty);
+        let slot = cache.nodes[&child_id].slots[SHAPE];
+        let new = cache.buffer(SHAPE)[slot.start..slot.start + slot.cap * INSTANCE_SIZE as usize]
+            .to_vec();
+        assert_ne!(new, old);
     }
 
     #[test]

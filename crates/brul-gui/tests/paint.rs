@@ -480,6 +480,23 @@ fn removing_a_hovered_shadow_clears_its_tail() {
 }
 
 #[test]
+fn a_dirty_parent_repaints_its_child() {
+    let child = view(Color::rgb(0, 255, 0), 16, 16);
+    let child_id = child.id();
+    let root = padded_root(child);
+    let root_id = root.id();
+    let (mut tree, engine, mut frame) = painted(root);
+
+    tree.mark_dirty(root_id);
+    let dirty = tree.take_dirty();
+    assert!(dirty.ids.contains(&child_id));
+
+    let snapshot = tree.snapshot().expect("snapshot");
+    frame.paint(snapshot, engine.atlas(), &dirty);
+    assert_eq!(pixel(&frame, 16, 16), [0, 255, 0, 255]);
+}
+
+#[test]
 fn clips_children_to_a_rounded_parent() {
     let child = Widget::column(Vec::new())
         .with_layout(LayoutStyle {

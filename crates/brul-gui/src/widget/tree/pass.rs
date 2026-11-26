@@ -5,6 +5,7 @@ use super::*;
 use crate::Rect;
 use crate::layout::{AnchorAlign, AnchorSide, LayoutBox, Size};
 use crate::text::TextEngine;
+use std::collections::HashSet;
 use std::time::Duration;
 
 impl WidgetTree {
@@ -185,9 +186,27 @@ impl WidgetTree {
                 self.dirty.clear();
                 Vec::new()
             } else {
-                self.dirty.drain().collect()
+                let ids = std::mem::take(&mut self.dirty);
+                self.dirty_subtree(ids)
             },
         }
+    }
+
+    fn dirty_subtree(&self, ids: HashSet<WidgetId>) -> Vec<WidgetId> {
+        let mut expanded = HashSet::with_capacity(ids.len());
+        let mut stack: Vec<WidgetId> = ids.into_iter().collect();
+        while let Some(id) = stack.pop() {
+            if !expanded.insert(id) {
+                continue;
+            }
+            let Some(&slot) = self.index.get(&id) else {
+                continue;
+            };
+            for child in &self.nodes[slot.index()].children {
+                stack.push(self.nodes[child.index()].id);
+            }
+        }
+        expanded.into_iter().collect()
     }
 
     pub fn animating(&self) -> bool {
