@@ -1,5 +1,5 @@
 use brul_script::eval::{assign_field, assign_index, read_field, read_index, template as render};
-use brul_script::{Component, Error, Value};
+use brul_script::{Component, Error, Object, Value};
 
 const NAMES: &[&str] = &["browser", "values", "settings"];
 
@@ -9,14 +9,12 @@ fn component() -> Component {
     component
 }
 
-fn object(fields: &[(&str, Value)]) -> Value {
-    Value::Object(
-        fields
-            .iter()
-            .map(|(name, value)| ((*name).to_owned(), value.clone()))
-            .collect::<Vec<_>>()
-            .into(),
-    )
+fn object(fields: &[(&'static str, Value)]) -> Value {
+    let mut builder = Object::builder();
+    for (name, value) in fields {
+        builder = builder.field(name, value.clone());
+    }
+    Value::Object(builder.into())
 }
 
 fn array(values: &[Value]) -> Value {

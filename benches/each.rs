@@ -1,7 +1,7 @@
 use std::hint::black_box;
 use std::time::Duration;
 
-use brul::{Component, Scope, Value};
+use brul::{Component, Object, Scope, Value};
 use brul_gui::{StyleSet, Widget, WidgetStyle};
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -18,13 +18,12 @@ fn component() -> Component {
 
 fn item() -> Value {
     Value::Object(
-        vec![
-            ("icon".to_owned(), Value::String("folder".into())),
-            ("name".to_owned(), Value::String("projects".into())),
-            ("path".to_owned(), Value::String("C:/projects".into())),
-            ("isDefault".to_owned(), Value::Bool(false)),
-        ]
-        .into(),
+        Object::builder()
+            .field("icon", Value::String("folder".into()))
+            .field("name", Value::String("projects".into()))
+            .field("path", Value::String("C:/projects".into()))
+            .field("isDefault", Value::Bool(false))
+            .into(),
     )
 }
 

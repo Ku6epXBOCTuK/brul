@@ -4,7 +4,7 @@ use brul_ident::TimerId;
 use brul_syntax::TypeName;
 use brul_syntax::ast::{BinaryOp, UnaryOp};
 
-use crate::{Error, Items, Value, eval};
+use crate::{Error, Items, Object, Value, eval};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Dyn(Value);
@@ -32,13 +32,8 @@ impl Dyn {
         )))
     }
 
-    pub fn object(fields: Vec<(String, Self)>) -> Self {
-        Self(Value::Object(Arc::new(
-            fields
-                .into_iter()
-                .map(|(name, value)| (name, value.into_value()))
-                .collect(),
-        )))
+    pub fn object(object: impl Into<Object>) -> Self {
+        Self(Value::from(object.into()))
     }
 
     pub fn image_bytes(bytes: &[u8]) -> Self {

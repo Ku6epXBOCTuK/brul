@@ -10,6 +10,7 @@ pub mod eval;
 pub mod host;
 #[path = "internal/names.rs"]
 pub mod names;
+pub mod object;
 #[path = "internal/scope.rs"]
 pub mod scope;
 pub mod value;
@@ -21,6 +22,7 @@ pub use environment::Environment;
 pub use error::Error;
 pub use host::{Host, HostCommand};
 pub use names::{Names, VariableId};
+pub use object::{Object, ObjectBuilder};
 pub use scope::Scope;
 pub use value::{Fields, Value};
 

@@ -46,13 +46,13 @@ pub(super) fn operation_in(expression: &Expr, context: &ExprContext<'_>) -> Resu
                 .iter()
                 .map(|(name, value)| {
                     Ok(format!(
-                        "({name:?}.to_owned(), {})",
+                        ".field({name:?}, {})",
                         operation_in(value, context)?
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?
-                .join(", ");
-            format!("brul::Dyn::object(vec![{fields}])")
+                .concat();
+            format!("brul::Dyn::object(brul::Object::builder(){fields})")
         }
         ExprKind::Template(parts) => {
             let parts = parts

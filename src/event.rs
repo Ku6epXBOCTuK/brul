@@ -1,6 +1,6 @@
 use brul_gui::{Event, EventTarget, KeyCode, UiEvent};
 
-use crate::{ComponentHandle, Dyn, EventCall};
+use crate::{ComponentHandle, Dyn, EventCall, Object};
 
 pub(crate) fn call(component: &ComponentHandle, function: EventCall, arguments: Vec<Dyn>) {
     tracing::debug!(arguments = arguments.len(), "calling script function");
@@ -10,7 +10,7 @@ pub(crate) fn call(component: &ComponentHandle, function: EventCall, arguments: 
 }
 
 pub(crate) fn arguments(event: &UiEvent) -> Vec<Dyn> {
-    let mut object = match &event.event {
+    let object = match &event.event {
         Event::Key { key, modifiers } => {
             let code = match &key.code {
                 KeyCode::Character(text) => Dyn::text(text.clone()),
@@ -19,23 +19,22 @@ pub(crate) fn arguments(event: &UiEvent) -> Vec<Dyn> {
             let physical = key
                 .physical
                 .map_or_else(Dyn::null, |code| Dyn::text(code.to_string()));
-            vec![
-                ("code".to_owned(), code),
-                ("physical".to_owned(), physical),
-                ("ctrl".to_owned(), Dyn::flag(modifiers.control)),
-                ("shift".to_owned(), Dyn::flag(modifiers.shift)),
-                ("alt".to_owned(), Dyn::flag(modifiers.alt)),
-                ("meta".to_owned(), Dyn::flag(modifiers.meta)),
-            ]
+            Object::builder()
+                .field("code", code)
+                .field("physical", physical)
+                .field("ctrl", Dyn::flag(modifiers.control))
+                .field("shift", Dyn::flag(modifiers.shift))
+                .field("alt", Dyn::flag(modifiers.alt))
+                .field("meta", Dyn::flag(modifiers.meta))
         }
-        Event::Input { value, caret } => vec![
-            ("value".to_owned(), Dyn::text(value.as_str())),
-            ("caret".to_owned(), Dyn::num(*caret as f64)),
-        ],
+        Event::Input { value, caret } => Object::builder()
+            .field("value", Dyn::text(value.as_str()))
+            .field("caret", Dyn::num(*caret as f64)),
         _ => return Vec::new(),
     };
-    object.push(("target".to_owned(), target_value(&event.target)));
-    vec![Dyn::object(object)]
+    vec![Dyn::object(
+        object.field("target", target_value(&event.target)),
+    )]
 }
 
 fn target_value(target: &EventTarget) -> Dyn {
@@ -61,11 +60,12 @@ mod tests {
         let arguments = arguments(&UiEvent::widget(id, Event::input("xy".to_owned(), 2)));
         assert_eq!(
             arguments,
-            vec![Dyn::object(vec![
-                ("value".to_owned(), Dyn::text("xy")),
-                ("caret".to_owned(), Dyn::num(2.0)),
-                ("target".to_owned(), target(id)),
-            ])]
+            vec![Dyn::object(
+                Object::builder()
+                    .field("value", Dyn::text("xy"))
+                    .field("caret", Dyn::num(2.0))
+                    .field("target", target(id)),
+            )]
         );
     }
 
@@ -83,15 +83,16 @@ mod tests {
         );
         assert_eq!(
             arguments(&UiEvent::window(event)),
-            vec![Dyn::object(vec![
-                ("code".to_owned(), Dyn::text("Enter")),
-                ("physical".to_owned(), Dyn::text("KeyQ")),
-                ("ctrl".to_owned(), Dyn::flag(true)),
-                ("shift".to_owned(), Dyn::flag(false)),
-                ("alt".to_owned(), Dyn::flag(false)),
-                ("meta".to_owned(), Dyn::flag(false)),
-                ("target".to_owned(), Dyn::null()),
-            ])]
+            vec![Dyn::object(
+                Object::builder()
+                    .field("code", Dyn::text("Enter"))
+                    .field("physical", Dyn::text("KeyQ"))
+                    .field("ctrl", Dyn::flag(true))
+                    .field("shift", Dyn::flag(false))
+                    .field("alt", Dyn::flag(false))
+                    .field("meta", Dyn::flag(false))
+                    .field("target", Dyn::null()),
+            )]
         );
     }
 
@@ -100,15 +101,16 @@ mod tests {
         let event = Event::key(KeyPress::from("a"), KeyModifiers::default());
         assert_eq!(
             arguments(&UiEvent::window(event)),
-            vec![Dyn::object(vec![
-                ("code".to_owned(), Dyn::text("a")),
-                ("physical".to_owned(), Dyn::null()),
-                ("ctrl".to_owned(), Dyn::flag(false)),
-                ("shift".to_owned(), Dyn::flag(false)),
-                ("alt".to_owned(), Dyn::flag(false)),
-                ("meta".to_owned(), Dyn::flag(false)),
-                ("target".to_owned(), Dyn::null()),
-            ])]
+            vec![Dyn::object(
+                Object::builder()
+                    .field("code", Dyn::text("a"))
+                    .field("physical", Dyn::null())
+                    .field("ctrl", Dyn::flag(false))
+                    .field("shift", Dyn::flag(false))
+                    .field("alt", Dyn::flag(false))
+                    .field("meta", Dyn::flag(false))
+                    .field("target", Dyn::null()),
+            )]
         );
     }
 

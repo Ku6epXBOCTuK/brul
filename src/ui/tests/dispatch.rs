@@ -1,4 +1,6 @@
 use super::*;
+use crate::Object;
+
 #[test]
 pub(super) fn a_capability_gets_the_clipboard_from_the_ui() {
     struct MemoryClipboard;
@@ -231,16 +233,15 @@ pub(super) fn dispatch_passes_the_key_code() {
     assert_eq!(
         seen,
         Value::Object(
-            vec![
-                ("code".to_owned(), Value::String("Enter".into())),
-                ("physical".to_owned(), Value::Null),
-                ("ctrl".to_owned(), Value::Bool(false)),
-                ("shift".to_owned(), Value::Bool(false)),
-                ("alt".to_owned(), Value::Bool(false)),
-                ("meta".to_owned(), Value::Bool(false)),
-                ("target".to_owned(), Value::Null),
-            ]
-            .into()
+            Object::builder()
+                .field("code", Value::String("Enter".into()))
+                .field("physical", Value::Null)
+                .field("ctrl", Value::Bool(false))
+                .field("shift", Value::Bool(false))
+                .field("alt", Value::Bool(false))
+                .field("meta", Value::Bool(false))
+                .field("target", Value::Null)
+                .into()
         )
     );
 }
@@ -262,14 +263,11 @@ pub(super) fn dispatch_passes_a_key_to_the_widget_then_the_window() {
         ),
     )]);
     let seen = ui.component.borrow().read("seen").expect("seen");
-    let Value::Object(fields) = seen else {
+    let Value::Object(object) = seen else {
         panic!("key event is not an object");
     };
     assert_eq!(
-        fields
-            .iter()
-            .find(|(name, _)| name == "target")
-            .map(|(_, value)| value),
+        object.get("target"),
         Some(&Value::Number(id.get() as f64)),
         "widget target is preserved"
     );

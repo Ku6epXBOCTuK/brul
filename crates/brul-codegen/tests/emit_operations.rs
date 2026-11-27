@@ -103,7 +103,7 @@ fn emits_value_operations() {
     );
     assert_eq!(
         operated("{ a: 1 }"),
-        "brul::Dyn::object(vec![(\"a\".to_owned(), brul::Dyn::num(1.0_f64))])"
+        "brul::Dyn::object(brul::Object::builder().field(\"a\", brul::Dyn::num(1.0_f64)))"
     );
     assert_eq!(
         operated("`v=${x}`"),

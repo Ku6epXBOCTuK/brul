@@ -1,7 +1,7 @@
 use std::hint::black_box;
 use std::time::Duration;
 
-use brul::{Component, Scope, Value, VariableId};
+use brul::{Component, Object, Scope, Value, VariableId};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 const NAMES: &[&str] = &["item", "position", "icon", "name", "path", "selected"];
@@ -10,13 +10,12 @@ type Row = (Value, f64);
 
 fn item() -> Value {
     Value::Object(
-        vec![
-            ("icon".to_owned(), Value::String("folder".into())),
-            ("name".to_owned(), Value::String("projects".into())),
-            ("path".to_owned(), Value::String("C:/projects".into())),
-            ("isDefault".to_owned(), Value::Bool(false)),
-        ]
-        .into(),
+        Object::builder()
+            .field("icon", Value::String("folder".into()))
+            .field("name", Value::String("projects".into()))
+            .field("path", Value::String("C:/projects".into()))
+            .field("isDefault", Value::Bool(false))
+            .into(),
     )
 }
 

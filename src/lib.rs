@@ -38,8 +38,9 @@ pub use brul_gui::{
 pub use brul_macros::{attach, command, effect, host, widget};
 pub use brul_reactive::Signal;
 pub use brul_script::{
-    Component, Dyn, Error, EventCall, Fields, FunctionName, Host, HostCommand, Items, Scope,
-    Script, TimerId, TimerKind, TimerOwner, TimerRequest, Value, VariableId, items, noop_event,
+    Component, Dyn, Error, EventCall, Fields, FunctionName, Host, HostCommand, Items, Object,
+    ObjectBuilder, Scope, Script, TimerId, TimerKind, TimerOwner, TimerRequest, Value, VariableId,
+    items, noop_event,
 };
 pub use brul_style as style;
 pub use brul_syntax::ast;

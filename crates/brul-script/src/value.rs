@@ -4,7 +4,7 @@ use std::sync::Arc;
 use brul_ident::TimerId;
 use brul_syntax::TypeName;
 
-use crate::{Error, Items};
+use crate::{Error, Items, Object};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -13,7 +13,7 @@ pub enum Value {
     Bool(bool),
     Null,
     Array(Arc<Vec<Value>>),
-    Object(Arc<Vec<(String, Value)>>),
+    Object(Object),
     Image(Arc<str>),
     ImageBytes(Arc<[u8]>),
     Timer(TimerId),
@@ -122,10 +122,7 @@ impl From<f64> for Value {
 pub fn items(value: &Value) -> Items {
     match value {
         Value::Array(items) => items.iter().cloned().map(crate::Dyn::from).collect(),
-        Value::Object(fields) => fields
-            .iter()
-            .map(|(_, value)| crate::Dyn::from(value.clone()))
-            .collect(),
+        Value::Object(object) => object.values().cloned().map(crate::Dyn::from).collect(),
         _ => Vec::new(),
     }
 }
@@ -222,23 +219,21 @@ impl TryFrom<&Value> for usize {
 }
 
 pub struct Fields<'a> {
-    fields: &'a [(String, Value)],
+    object: &'a Object,
 }
 
 impl<'a> Fields<'a> {
     pub fn new(value: &'a Value) -> Result<Self, Error> {
         match value {
-            Value::Object(fields) => Ok(Self { fields }),
+            Value::Object(object) => Ok(Self { object }),
             other => Err(Error::conversion("Object", other)),
         }
     }
 
     pub fn take<T: TryFrom<&'a Value, Error = Error>>(&mut self, name: &str) -> Result<T, Error> {
-        let fields = self.fields;
-        let value = fields
-            .iter()
-            .find(|(field, _)| field == name)
-            .map(|(_, value)| value)
+        let value = self
+            .object
+            .get(name)
             .ok_or_else(|| Error::MissingField(name.to_owned()))?;
         T::try_from(value)
     }
@@ -292,7 +287,7 @@ mod tests {
             Value::Null,
             Value::Number(1.0),
             Value::Array(Vec::new().into()),
-            Value::Object(Vec::new().into()),
+            Value::Object(Object::default()),
             Value::Image("a.png".into()),
         ] {
             assert_eq!(value.as_text(), None, "{value:?}");
@@ -303,7 +298,7 @@ mod tests {
             Value::String("1".into()),
             Value::Bool(true),
             Value::Array(Vec::new().into()),
-            Value::Object(Vec::new().into()),
+            Value::Object(Object::default()),
             Value::Image("a.png".into()),
         ] {
             assert_eq!(value.as_pixels(), None, "{value:?}");
@@ -355,8 +350,12 @@ mod tests {
             fingerprint(&Value::Array(vec![Value::String("1".into())].into()))
         );
         assert_ne!(
-            fingerprint(&Value::Object(vec![("a".into(), Value::Null)].into())),
-            fingerprint(&Value::Object(vec![("b".into(), Value::Null)].into()))
+            fingerprint(&Value::Object(
+                Object::builder().field("a", Value::Null).into()
+            )),
+            fingerprint(&Value::Object(
+                Object::builder().field("b", Value::Null).into()
+            ))
         );
     }
 }

@@ -7,10 +7,9 @@ use super::errors::expected;
 
 pub fn read_field(target: &Value, name: &str) -> Result<Value, Error> {
     match target {
-        Value::Object(fields) => fields
-            .iter()
-            .find(|(field, _)| field == name)
-            .map(|(_, value)| value.clone())
+        Value::Object(object) => object
+            .get(name)
+            .cloned()
             .ok_or_else(|| Error::MissingField(name.to_owned())),
         other => Err(expected(".", "Object", other)),
     }
@@ -18,16 +17,13 @@ pub fn read_field(target: &Value, name: &str) -> Result<Value, Error> {
 
 pub fn assign_field(target: &mut Value, name: &str, value: Value) -> Result<(), Error> {
     match target {
-        Value::Object(fields) => match Arc::make_mut(fields)
-            .iter_mut()
-            .find(|(field, _)| field == name)
-        {
-            Some((_, field)) => {
-                *field = value;
-                Ok(())
-            }
-            None => Err(Error::MissingField(name.to_owned())),
-        },
+        Value::Object(object) => {
+            let field = object
+                .get_mut(name)
+                .ok_or_else(|| Error::MissingField(name.to_owned()))?;
+            *field = value;
+            Ok(())
+        }
         other => Err(expected(".", "Object", other)),
     }
 }
@@ -41,14 +37,13 @@ pub fn read_index(target: &Value, index: &Value) -> Result<Value, Error> {
             let index = array_index(items.len(), index)?;
             Ok(items[index].clone())
         }
-        Value::Object(fields) => {
+        Value::Object(object) => {
             let Value::String(key) = index else {
                 return Err(expected("[]", "String", index));
             };
-            fields
-                .iter()
-                .find(|(field, _)| field.as_str() == key.as_ref())
-                .map(|(_, value)| value.clone())
+            object
+                .get(key.as_ref())
+                .cloned()
                 .ok_or_else(|| Error::MissingField(key.to_string()))
         }
         other => Err(expected("[]", "Array or Object", other)),
@@ -65,20 +60,15 @@ pub fn assign_index(target: &mut Value, index: &Value, value: Value) -> Result<(
             Arc::make_mut(items)[index] = value;
             Ok(())
         }
-        Value::Object(fields) => {
+        Value::Object(object) => {
             let Value::String(key) = index else {
                 return Err(expected("[]", "String", index));
             };
-            match Arc::make_mut(fields)
-                .iter_mut()
-                .find(|(field, _)| field.as_str() == key.as_ref())
-            {
-                Some((_, field)) => {
-                    *field = value;
-                    Ok(())
-                }
-                None => Err(Error::MissingField(key.to_string())),
-            }
+            let field = object
+                .get_mut(key.as_ref())
+                .ok_or_else(|| Error::MissingField(key.to_string()))?;
+            *field = value;
+            Ok(())
         }
         other => Err(expected("[]", "Array or Object", other)),
     }
@@ -101,12 +91,13 @@ fn array_index(length: usize, index: &Value) -> Result<usize, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Object;
 
     #[test]
     fn fields_and_indexes_are_read_and_written() {
         assert_eq!(
             read_field(
-                &Value::Object(vec![("a".to_owned(), Value::Number(1.0))].into()),
+                &Value::Object(Object::builder().field("a", Value::Number(1.0)).into()),
                 "a"
             ),
             Ok(Value::Number(1.0))
@@ -118,7 +109,7 @@ mod tests {
             ),
             Ok(Value::Bool(true))
         );
-        let mut object = Value::Object(vec![("a".to_owned(), Value::Null)].into());
+        let mut object = Value::Object(Object::builder().field("a", Value::Null).into());
         assert_eq!(assign_field(&mut object, "a", Value::Bool(true)), Ok(()));
         assert_eq!(read_field(&object, "a"), Ok(Value::Bool(true)));
     }

@@ -1,4 +1,4 @@
-use brul::{Error, Fields, Host, Value, command, host};
+use brul::{Error, Fields, Host, Object, Value, command, host};
 
 #[derive(Debug, PartialEq)]
 enum Action {
@@ -63,11 +63,11 @@ fn act(
 host! { TestHost: act }
 
 fn draft(port: Option<Value>) -> Value {
-    let mut fields = vec![("name".to_owned(), Value::from("garden"))];
+    let mut object = Object::builder().field("name", Value::from("garden"));
     if let Some(port) = port {
-        fields.push(("port".to_owned(), port));
+        object = object.field("port", port);
     }
-    Value::Object(fields.into())
+    Value::Object(object.into())
 }
 
 fn arguments(action: Value, port: Option<Value>) -> Vec<Value> {
