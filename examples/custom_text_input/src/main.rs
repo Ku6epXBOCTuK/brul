@@ -1,7 +1,7 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::ExitCode;
 
-use brul::gui::WidgetId;
+use brul::gui::{KeyCode, NamedKey, WidgetId};
 use brul::{
     CapabilityContext, Dispatch, Event, Position, RawEvent, RawUiEvent, UiEvent, Value, ViewError,
 };
@@ -151,17 +151,18 @@ fn classify(event: &RawUiEvent) -> Action {
             if modifiers.control || modifiers.alt || modifiers.meta {
                 return Action::Pass;
             }
-            match key.code.as_str() {
-                "Backspace" => Action::DeleteBackward,
-                "Delete" => Action::DeleteForward,
-                "ArrowLeft" => Action::MoveLeft,
-                "ArrowRight" => Action::MoveRight,
-                "Home" => Action::Home,
-                "End" => Action::End,
-                code if code.chars().count() == 1
-                    && !code.chars().next().is_some_and(char::is_control) =>
+            match &key.code {
+                KeyCode::Named(NamedKey::Backspace) => Action::DeleteBackward,
+                KeyCode::Named(NamedKey::Delete) => Action::DeleteForward,
+                KeyCode::Named(NamedKey::ArrowLeft) => Action::MoveLeft,
+                KeyCode::Named(NamedKey::ArrowRight) => Action::MoveRight,
+                KeyCode::Named(NamedKey::Home) => Action::Home,
+                KeyCode::Named(NamedKey::End) => Action::End,
+                KeyCode::Character(text)
+                    if text.chars().count() == 1
+                        && !text.chars().next().is_some_and(char::is_control) =>
                 {
-                    Action::Insert(code.to_owned())
+                    Action::Insert(text.clone())
                 }
                 _ => Action::Pass,
             }
@@ -265,7 +266,7 @@ fn keys_raw(_state: &mut Keys, build: &CapabilityContext, event: &RawUiEvent) ->
         _ => return Dispatch::CONTINUE,
     };
 
-    if key.code == "Tab" {
+    if key.code == KeyCode::Named(NamedKey::Tab) {
         build.enter_modal_scope();
         let focusables = build.focusables();
         let current = build.focused();
@@ -283,7 +284,7 @@ fn keys_raw(_state: &mut Keys, build: &CapabilityContext, event: &RawUiEvent) ->
         return Dispatch::stop();
     }
 
-    if key.code == "Escape" {
+    if key.code == KeyCode::Named(NamedKey::Escape) {
         if let Some(current) = build.focused() {
             build.emit_event(UiEvent::widget(current, Event::blur()));
         }

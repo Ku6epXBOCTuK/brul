@@ -20,7 +20,8 @@ mod tree;
 pub use crate::edit::{ClipboardData, EditBuffer, Fragment, Position};
 pub use crate::text::TextStylePatch;
 pub use brul_event::{
-    Event, EventKind, EventSet, ImeKind, KeyModifiers, KeyPress, RawEvent, RawEventSet, RawKind,
+    Event, EventKind, EventSet, ImeKind, KeyCode, KeyModifiers, KeyPress, NamedKey,
+    PhysicalKeyCode, RawEvent, RawEventSet, RawKind,
 };
 pub use brul_ident::{FunctionName, TimerOwner};
 pub use event::{CaretArea, Dirty, DispatchEvent, EventTarget, RawUiEvent, UiEvent, WidgetError};

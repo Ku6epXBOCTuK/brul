@@ -1,5 +1,6 @@
 use crate::{
-    CapabilityContext, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError, gui::WidgetId,
+    CapabilityContext, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError,
+    gui::{KeyCode, NamedKey, WidgetId},
 };
 
 pub struct KeyboardPolicy;
@@ -24,14 +25,14 @@ fn keyboard_raw(
         _ => return Dispatch::CONTINUE,
     };
 
-    if key.code == "Escape"
+    if key.code == KeyCode::Named(NamedKey::Escape)
         && let Some(scope) = build.modal_scope()
     {
         build.emit_event(UiEvent::widget(scope, Event::dismiss()));
         return Dispatch::stop();
     }
 
-    if key.code == "Tab" {
+    if key.code == KeyCode::Named(NamedKey::Tab) {
         build.enter_modal_scope();
         let focusables = build.focusables();
         let current = build.focused();
@@ -49,7 +50,9 @@ fn keyboard_raw(
         return Dispatch::stop();
     }
 
-    if (key.code == "Enter" || key.code == " ")
+    let activate = key.code == KeyCode::Named(NamedKey::Enter)
+        || matches!(&key.code, KeyCode::Character(text) if text == " ");
+    if activate
         && let Some(focused) = build.focused()
         && build.focusables().contains(&focused)
         && build

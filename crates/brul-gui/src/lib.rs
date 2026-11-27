@@ -120,9 +120,9 @@ pub use texture::{ExternalTexture, Revision, Texture, TextureError, TextureFrame
 pub use theme::{Theme, UnknownTheme};
 pub use widget::{
     Anchor, CaretArea, Class, ClipboardData, Dirty, DispatchEvent, EditBuffer, Event, EventKind,
-    EventSet, EventTarget, Fragment, FunctionName, ImeKind, KeyModifiers, KeyPress, Layers,
-    PlatformViewId, PlatformViewSpec, Position, RawEvent, RawEventSet, RawKind, RawUiEvent,
-    StateId, StyleSet, StyleState, TextStylePatch, TextStyleSet, TimerOwner, Transitions, UiEvent,
-    Widget, WidgetError, WidgetId, WidgetKind, WidgetSnapshot, WidgetSnapshotNode, WidgetState,
-    WidgetStyle, WidgetStylePatch, WidgetTree,
+    EventSet, EventTarget, Fragment, FunctionName, ImeKind, KeyCode, KeyModifiers, KeyPress,
+    Layers, NamedKey, PhysicalKeyCode, PlatformViewId, PlatformViewSpec, Position, RawEvent,
+    RawEventSet, RawKind, RawUiEvent, StateId, StyleSet, StyleState, TextStylePatch, TextStyleSet,
+    TimerOwner, Transitions, UiEvent, Widget, WidgetError, WidgetId, WidgetKind, WidgetSnapshot,
+    WidgetSnapshotNode, WidgetState, WidgetStyle, WidgetStylePatch, WidgetTree,
 };

@@ -1,6 +1,6 @@
 use crate::{
     CapabilityContext, Dispatch, Event, RawEvent, RawUiEvent, UiEvent, ViewError,
-    gui::{EventTarget, ImeKind, KeyModifiers, Position},
+    gui::{EventTarget, ImeKind, KeyCode, KeyModifiers, NamedKey, Position},
 };
 
 pub struct PlainEditor;
@@ -76,7 +76,7 @@ fn editor_key(
         classify(&key.code, modifiers, &buffer, &lines, element.wrap())
     };
 
-    dispatch(build, id, target, key.code.clone(), modifiers, action)
+    dispatch(build, id, target, key, modifiers, action)
 }
 
 fn focused_input(build: &CapabilityContext) -> Option<(crate::gui::WidgetId, bool)> {
@@ -211,7 +211,7 @@ fn editor_ime(build: &CapabilityContext, target: EventTarget, kind: &ImeKind) ->
 }
 
 fn classify(
-    code: &str,
+    code: &KeyCode,
     modifiers: KeyModifiers,
     buffer: &crate::EditBuffer,
     lines: &Lines,
@@ -220,15 +220,18 @@ fn classify(
     let byte = buffer.caret().offset;
     let text = buffer.text();
 
-    if code == "Escape" || code == "Tab" {
+    if matches!(code, KeyCode::Named(NamedKey::Escape | NamedKey::Tab)) {
         return Action::Pass;
     }
     if modifiers.control {
         return match code {
-            "a" => Action::SelectAll,
-            "c" => Action::Copy,
-            "x" => Action::Cut,
-            "v" => Action::Paste,
+            KeyCode::Character(text) => match text.as_str() {
+                "a" => Action::SelectAll,
+                "c" => Action::Copy,
+                "x" => Action::Cut,
+                "v" => Action::Paste,
+                _ => Action::Pass,
+            },
             _ => Action::Pass,
         };
     }
@@ -237,41 +240,47 @@ fn classify(
     }
 
     match code {
-        "Enter" => {
+        KeyCode::Named(NamedKey::Enter) => {
             if wrap {
                 Action::Insert("\n".into())
             } else {
                 Action::Submit
             }
         }
-        "Backspace" => Action::DeleteBackward,
-        "Delete" => Action::DeleteForward,
-        "ArrowLeft" => Action::Move {
+        KeyCode::Named(NamedKey::Backspace) => Action::DeleteBackward,
+        KeyCode::Named(NamedKey::Delete) => Action::DeleteForward,
+        KeyCode::Named(NamedKey::ArrowLeft) => Action::Move {
             byte: movement_left(text, byte, buffer),
             extend: modifiers.shift,
         },
-        "ArrowRight" => Action::Move {
+        KeyCode::Named(NamedKey::ArrowRight) => Action::Move {
             byte: movement_right(text, byte, buffer),
             extend: modifiers.shift,
         },
-        "Home" => Action::Move {
+        KeyCode::Named(NamedKey::Home) => Action::Move {
             byte: lines.start,
             extend: modifiers.shift,
         },
-        "End" => Action::Move {
+        KeyCode::Named(NamedKey::End) => Action::Move {
             byte: lines.end,
             extend: modifiers.shift,
         },
-        "ArrowUp" if wrap => lines.above.map_or(Action::Pass, |byte| Action::Move {
-            byte,
-            extend: modifiers.shift,
-        }),
-        "ArrowDown" if wrap => lines.below.map_or(Action::Pass, |byte| Action::Move {
-            byte,
-            extend: modifiers.shift,
-        }),
-        _ if code.chars().count() == 1 && !code.chars().next().is_some_and(char::is_control) => {
-            Action::Insert(code.into())
+        KeyCode::Named(NamedKey::ArrowUp) if wrap => {
+            lines.above.map_or(Action::Pass, |byte| Action::Move {
+                byte,
+                extend: modifiers.shift,
+            })
+        }
+        KeyCode::Named(NamedKey::ArrowDown) if wrap => {
+            lines.below.map_or(Action::Pass, |byte| Action::Move {
+                byte,
+                extend: modifiers.shift,
+            })
+        }
+        KeyCode::Character(text)
+            if text.chars().count() == 1 && !text.chars().next().is_some_and(char::is_control) =>
+        {
+            Action::Insert(text.clone())
         }
         _ => Action::Pass,
     }
@@ -311,7 +320,7 @@ fn dispatch(
     build: &CapabilityContext,
     id: crate::gui::WidgetId,
     target: EventTarget,
-    code: String,
+    key: &crate::gui::KeyPress,
     modifiers: KeyModifiers,
     action: Action,
 ) -> Dispatch {
@@ -354,7 +363,7 @@ fn dispatch(
             } else {
                 build.emit_raw_event(RawUiEvent::at(
                     target,
-                    RawEvent::key_noop(crate::gui::KeyPress::from(code.as_str()), modifiers),
+                    RawEvent::key_noop(key.clone(), modifiers),
                 ));
                 Dispatch::handled()
             }

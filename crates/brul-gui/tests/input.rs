@@ -1,6 +1,6 @@
 use brul_gui::{
-    Dimension, KeyModifiers, KeyPress, LayoutStyle, Position, RawEvent, RawUiEvent, Size,
-    TextEngine, Widget, WidgetTree,
+    Dimension, KeyCode, KeyModifiers, KeyPress, LayoutStyle, PhysicalKeyCode, Position, RawEvent,
+    RawUiEvent, Size, TextEngine, Widget, WidgetTree,
 };
 
 fn fixed(width: u32, height: u32) -> LayoutStyle {
@@ -155,8 +155,8 @@ fn a_physical_code_reaches_the_window_event() {
     let plain = Widget::text("x").with_layout(fixed(40, 20));
     let mut tree = laid_out(Widget::column(vec![plain]).with_layout(fixed(100, 40)));
     let key = KeyPress {
-        code: "q".to_owned(),
-        physical: Some("KeyQ".to_owned()),
+        code: KeyCode::Character("q".to_owned()),
+        physical: Some(PhysicalKeyCode::KeyQ),
     };
 
     assert_eq!(

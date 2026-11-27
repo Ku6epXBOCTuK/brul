@@ -3,6 +3,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+pub use keyboard_types::{Code as PhysicalKeyCode, Key as KeyCode, NamedKey};
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct KeyModifiers {
     pub shift: bool,
@@ -13,14 +15,16 @@ pub struct KeyModifiers {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct KeyPress {
-    pub code: String,
-    pub physical: Option<String>,
+    pub code: KeyCode,
+    pub physical: Option<PhysicalKeyCode>,
 }
 
 impl From<&str> for KeyPress {
     fn from(code: &str) -> Self {
         Self {
-            code: code.to_owned(),
+            code: code
+                .parse()
+                .unwrap_or_else(|_| KeyCode::Character(code.to_owned())),
             physical: None,
         }
     }
@@ -29,7 +33,7 @@ impl From<&str> for KeyPress {
 impl From<String> for KeyPress {
     fn from(code: String) -> Self {
         Self {
-            code,
+            code: code.parse().unwrap_or(KeyCode::Character(code)),
             physical: None,
         }
     }
@@ -305,5 +309,22 @@ mod tests {
         let set = RawEventSet::from([RawKind::Key]);
         assert!(set.contains(RawKind::KeyNoop));
         assert_eq!(RawKind::KeyNoop.dispatch_kind(), RawKind::Key);
+    }
+
+    #[test]
+    fn a_named_key_is_parsed_from_its_string() {
+        assert_eq!(
+            KeyPress::from("Enter").code,
+            KeyCode::Named(NamedKey::Enter)
+        );
+        assert_eq!(KeyPress::from("F1").code, KeyCode::Named(NamedKey::F1));
+    }
+
+    #[test]
+    fn an_unknown_string_becomes_a_character() {
+        assert_eq!(
+            KeyPress::from("Ennter").code,
+            KeyCode::Character("Ennter".to_owned())
+        );
     }
 }

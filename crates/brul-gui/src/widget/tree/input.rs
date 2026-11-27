@@ -22,21 +22,15 @@ impl WidgetTree {
         self.modifiers = modifiers;
     }
 
-    pub(super) fn key_event(&self, code: &str, physical: Option<&str>) -> DispatchEvent {
+    pub(super) fn key_event(&self, key: &KeyPress) -> DispatchEvent {
         DispatchEvent::Raw(RawUiEvent::at(
             self.event_target(),
-            RawEvent::key(
-                KeyPress {
-                    code: code.to_owned(),
-                    physical: physical.map(str::to_owned),
-                },
-                self.modifiers,
-            ),
+            RawEvent::key(key.clone(), self.modifiers),
         ))
     }
 
     pub fn raw_key(&mut self, key: impl Into<KeyPress>) -> Vec<DispatchEvent> {
         let key = key.into();
-        vec![self.key_event(&key.code, key.physical.as_deref())]
+        vec![self.key_event(&key)]
     }
 }

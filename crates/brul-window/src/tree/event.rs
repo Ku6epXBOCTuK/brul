@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use brul_gui::{DispatchEvent, Event, ImeKind, KeyPress, RawEvent, RawUiEvent, UiEvent};
+use brul_gui::{
+    DispatchEvent, Event, ImeKind, KeyCode, KeyPress, NamedKey, RawEvent, RawUiEvent, UiEvent,
+};
 use tracing::{debug, trace, warn};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::WindowEvent;
@@ -81,7 +83,7 @@ impl TreeApp {
             }
         }
         if self.tree.borrow().focused_platform_view().is_some()
-            && !matches!(&input, Input::Key(key) if key.code == "Tab")
+            && !matches!(&input, Input::Key(key) if key.code == KeyCode::Named(NamedKey::Tab))
             && matches!(&input, Input::Key(_) | Input::Ime(_) | Input::Paste(_))
         {
             return Step::Continue;

@@ -1,6 +1,6 @@
-use brul_gui::{KeyModifiers, KeyPress};
+use brul_gui::{KeyCode, KeyModifiers, KeyPress, PhysicalKeyCode};
 use winit::event::{ButtonSource, ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent};
-use winit::keyboard::{Key, ModifiersState, NamedKey, PhysicalKey};
+use winit::keyboard::{Key, ModifiersState, PhysicalKey};
 use winit::window::Theme;
 
 use crate::window::ColorScheme;
@@ -36,42 +36,27 @@ pub(crate) enum Input {
 
 const LINE_HEIGHT: f64 = 48.0;
 
-const NAMED: &[(NamedKey, &str)] = &[
-    (NamedKey::Escape, "Escape"),
-    (NamedKey::Enter, "Enter"),
-    (NamedKey::Tab, "Tab"),
-    (NamedKey::Backspace, "Backspace"),
-    (NamedKey::Delete, "Delete"),
-    (NamedKey::ArrowUp, "ArrowUp"),
-    (NamedKey::ArrowDown, "ArrowDown"),
-    (NamedKey::ArrowLeft, "ArrowLeft"),
-    (NamedKey::ArrowRight, "ArrowRight"),
-];
-
-pub(crate) fn key_code(key: &Key) -> Option<String> {
+pub(crate) fn key_code(key: &Key) -> Option<KeyCode> {
     match key {
-        Key::Named(named) => NAMED
-            .iter()
-            .find(|(value, _)| value == named)
-            .map(|(_, code)| (*code).to_owned()),
+        Key::Named(named) => Some(KeyCode::Named(*named)),
         Key::Character(text) => {
             let mut characters = text.chars();
             let (Some(character), None) = (characters.next(), characters.next()) else {
-                return Some(text.to_string());
+                return Some(KeyCode::Character(text.to_string()));
             };
             if ('\u{1}'..='\u{1a}').contains(&character) {
                 let letter = b'A' + (character as u8 - 1);
-                return Some(char::from(letter).to_string());
+                return Some(KeyCode::Character(char::from(letter).to_string()));
             }
-            Some(text.to_string())
+            Some(KeyCode::Character(text.to_string()))
         }
         _ => None,
     }
 }
 
-pub(crate) fn physical_code(key: &PhysicalKey) -> Option<String> {
+pub(crate) fn physical_code(key: &PhysicalKey) -> Option<PhysicalKeyCode> {
     match key {
-        PhysicalKey::Code(code) => Some(code.to_string()),
+        PhysicalKey::Code(code) => Some(*code),
         PhysicalKey::Unidentified(_) => None,
     }
 }
@@ -190,12 +175,14 @@ mod tests {
         ButtonSource, ElementState, KeyEvent, Modifiers, MouseButton, PointerKind, PointerSource,
         WindowEvent,
     };
-    use winit::keyboard::{Key, KeyCode, KeyLocation, NamedKey, PhysicalKey};
+    use winit::keyboard::{
+        Key, KeyCode as WinitKeyCode, KeyLocation, NamedKey, NativeKey, PhysicalKey,
+    };
     use winit::window::Theme;
 
     use super::*;
 
-    fn key_event(logical: Key, state: ElementState, physical: KeyCode) -> WindowEvent {
+    fn key_event(logical: Key, state: ElementState, physical: WinitKeyCode) -> WindowEvent {
         WindowEvent::KeyboardInput {
             device_id: None,
             event: KeyEvent {
@@ -287,34 +274,37 @@ mod tests {
     }
 
     #[test]
-    fn every_named_key_has_its_own_code() {
-        let mut codes: Vec<&str> = NAMED.iter().map(|(_, code)| *code).collect();
-        codes.sort_unstable();
-        codes.dedup();
-        assert_eq!(codes.len(), NAMED.len());
-
-        for (named, code) in NAMED {
-            let key = Key::Named(*named);
-            assert_eq!(key_code(&key).as_deref(), Some(*code));
+    fn named_keys_become_typed_codes() {
+        for named in [
+            NamedKey::Escape,
+            NamedKey::Enter,
+            NamedKey::Tab,
+            NamedKey::F1,
+            NamedKey::Home,
+        ] {
+            assert_eq!(key_code(&Key::Named(named)), Some(KeyCode::Named(named)));
         }
     }
 
     #[test]
     fn a_character_key_gives_its_text() {
         let key = Key::Character("\u{439}".into());
-        assert_eq!(key_code(&key).as_deref(), Some("\u{439}"));
+        assert_eq!(
+            key_code(&key),
+            Some(KeyCode::Character("\u{439}".to_owned()))
+        );
     }
 
     #[test]
-    fn a_key_outside_the_table_has_no_code() {
-        assert_eq!(key_code(&Key::Named(NamedKey::F1)), None);
+    fn an_unidentified_key_has_no_code() {
+        assert_eq!(key_code(&Key::Unidentified(NativeKey::Unidentified)), None);
     }
 
     #[test]
     fn a_physical_key_becomes_a_stable_code() {
         assert_eq!(
-            physical_code(&PhysicalKey::Code(KeyCode::KeyQ)).as_deref(),
-            Some("KeyQ")
+            physical_code(&PhysicalKey::Code(WinitKeyCode::KeyQ)),
+            Some(PhysicalKeyCode::KeyQ)
         );
     }
 
@@ -323,13 +313,13 @@ mod tests {
         let event = key_event(
             Key::Character("Q".into()),
             ElementState::Pressed,
-            KeyCode::KeyQ,
+            WinitKeyCode::KeyQ,
         );
         assert_eq!(
             event_input(&event),
             Some(Input::Key(KeyPress {
-                code: "Q".to_owned(),
-                physical: Some("KeyQ".to_owned()),
+                code: KeyCode::Character("Q".to_owned()),
+                physical: Some(PhysicalKeyCode::KeyQ),
             }))
         );
     }
@@ -386,7 +376,7 @@ mod tests {
         let WindowEvent::KeyboardInput { event, .. } = key_event(
             Key::Character("a".into()),
             ElementState::Pressed,
-            KeyCode::KeyA,
+            WinitKeyCode::KeyA,
         ) else {
             panic!("a keyboard event");
         };
@@ -404,7 +394,7 @@ mod tests {
         let event = key_event(
             Key::Character("a".into()),
             ElementState::Released,
-            KeyCode::KeyA,
+            WinitKeyCode::KeyA,
         );
         assert_eq!(event_input(&event), None);
     }

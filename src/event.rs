@@ -1,4 +1,4 @@
-use brul_gui::{Event, EventTarget, UiEvent};
+use brul_gui::{Event, EventTarget, KeyCode, UiEvent};
 
 use crate::{ComponentHandle, Dyn, EventCall};
 
@@ -11,17 +11,23 @@ pub(crate) fn call(component: &ComponentHandle, function: EventCall, arguments: 
 
 pub(crate) fn arguments(event: &UiEvent) -> Vec<Dyn> {
     let mut object = match &event.event {
-        Event::Key { key, modifiers } => vec![
-            ("code".to_owned(), Dyn::text(key.code.as_str())),
-            (
-                "physical".to_owned(),
-                key.physical.as_deref().map_or_else(Dyn::null, Dyn::text),
-            ),
-            ("ctrl".to_owned(), Dyn::flag(modifiers.control)),
-            ("shift".to_owned(), Dyn::flag(modifiers.shift)),
-            ("alt".to_owned(), Dyn::flag(modifiers.alt)),
-            ("meta".to_owned(), Dyn::flag(modifiers.meta)),
-        ],
+        Event::Key { key, modifiers } => {
+            let code = match &key.code {
+                KeyCode::Character(text) => Dyn::text(text.clone()),
+                KeyCode::Named(named) => Dyn::text(named.to_string()),
+            };
+            let physical = key
+                .physical
+                .map_or_else(Dyn::null, |code| Dyn::text(code.to_string()));
+            vec![
+                ("code".to_owned(), code),
+                ("physical".to_owned(), physical),
+                ("ctrl".to_owned(), Dyn::flag(modifiers.control)),
+                ("shift".to_owned(), Dyn::flag(modifiers.shift)),
+                ("alt".to_owned(), Dyn::flag(modifiers.alt)),
+                ("meta".to_owned(), Dyn::flag(modifiers.meta)),
+            ]
+        }
         Event::Input { value, caret } => vec![
             ("value".to_owned(), Dyn::text(value.as_str())),
             ("caret".to_owned(), Dyn::num(*caret as f64)),
@@ -43,7 +49,7 @@ fn target_value(target: &EventTarget) -> Dyn {
 mod tests {
     use super::*;
 
-    use brul_gui::{KeyModifiers, KeyPress, Widget, WidgetId};
+    use brul_gui::{KeyCode, KeyModifiers, KeyPress, NamedKey, PhysicalKeyCode, Widget, WidgetId};
 
     fn target(id: WidgetId) -> Dyn {
         Dyn::num(id.get() as f64)
@@ -67,8 +73,8 @@ mod tests {
     fn a_key_event_carries_the_modifiers() {
         let event = Event::key(
             KeyPress {
-                code: "Enter".to_owned(),
-                physical: Some("KeyQ".to_owned()),
+                code: KeyCode::Named(NamedKey::Enter),
+                physical: Some(PhysicalKeyCode::KeyQ),
             },
             KeyModifiers {
                 control: true,
@@ -104,5 +110,12 @@ mod tests {
                 ("target".to_owned(), Dyn::null()),
             ])]
         );
+    }
+
+    #[test]
+    fn a_function_key_keeps_its_script_string() {
+        let event = Event::key(KeyPress::from("F1"), KeyModifiers::default());
+        let arguments = arguments(&UiEvent::window(event));
+        assert_eq!(arguments[0].field("code").unwrap(), Dyn::text("F1"));
     }
 }

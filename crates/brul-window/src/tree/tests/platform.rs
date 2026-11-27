@@ -157,7 +157,7 @@ fn a_focused_platform_view_swallows_keyboard_input() {
     app.handle(
         &surface,
         Input::Key(KeyPress {
-            code: "A".to_owned(),
+            code: KeyCode::Character("A".to_owned()),
             physical: None,
         }),
     );
