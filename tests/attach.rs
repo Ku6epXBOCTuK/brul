@@ -147,3 +147,96 @@ fn attach_shims_create_update_event_and_cleanup_state() {
     let log = LOG.with(|log| log.borrow().clone());
     assert_eq!(log.last().map(String::as_str), Some("cleanup:2.5"));
 }
+
+fn counter_context() -> CapabilityContext {
+    let component: ComponentHandle = Rc::new(RefCell::new(Component::new()));
+    let tree = Rc::new(RefCell::new(brul::gui::WidgetTree::new(
+        brul::gui::Widget::text("root"),
+    )));
+    CapabilityContext::new(
+        Services {
+            states: Rc::new(RefCell::new(States::default())),
+            ..Services::default()
+        },
+        tree,
+        brul::EventTarget::Widget(brul::gui::WidgetId::new(1)),
+        StateId::source("test", "reentrant"),
+        component,
+        None,
+    )
+}
+
+fn seed_counter(ctx: &CapabilityContext) {
+    let params = [Dyn::num(1.0), Dyn::flag(false), Dyn::text("first")];
+    __brul_attach_counter_apply(ctx, &params).expect("apply");
+}
+
+#[test]
+fn apply_panics_when_state_is_already_borrowed() {
+    let ctx = counter_context();
+    seed_counter(&ctx);
+    let cell = ctx.get_state::<CounterState>().expect("state");
+    let guard = cell.borrow_mut();
+
+    let params = [Dyn::num(2.0), Dyn::flag(true), Dyn::text("second")];
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        __brul_attach_counter_apply(&ctx, &params)
+    }));
+    drop(guard);
+
+    assert!(result.is_err());
+    assert_eq!(cell.borrow().amount, 1.0);
+}
+
+#[test]
+#[should_panic(expected = "already borrowed")]
+fn event_panics_when_state_is_already_borrowed() {
+    let ctx = counter_context();
+    seed_counter(&ctx);
+    let cell = ctx.get_state::<CounterState>().expect("state");
+    let _guard = cell.borrow_mut();
+    let key = UiEvent::widget(
+        brul::gui::WidgetId::new(1),
+        Event::key(
+            brul::gui::KeyPress::from("Enter"),
+            brul::gui::KeyModifiers::default(),
+        ),
+    );
+
+    let _ = __brul_attach_counter_event(&ctx, &key);
+}
+
+#[test]
+#[should_panic(expected = "already borrowed")]
+fn raw_event_panics_when_state_is_already_borrowed() {
+    let ctx = counter_context();
+    seed_counter(&ctx);
+    let cell = ctx.get_state::<CounterState>().expect("state");
+    let _guard = cell.borrow_mut();
+    let raw = RawUiEvent::widget(
+        brul::gui::WidgetId::new(1),
+        brul::gui::RawEvent::key(
+            brul::gui::KeyPress::from("Enter"),
+            brul::gui::KeyModifiers::default(),
+        ),
+    );
+
+    let _ = __brul_attach_counter_raw_event(&ctx, &raw);
+}
+
+#[test]
+fn cleanup_panics_and_keeps_state_when_state_is_already_borrowed() {
+    let ctx = counter_context();
+    seed_counter(&ctx);
+    let cell = ctx.get_state::<CounterState>().expect("state");
+    let guard = cell.borrow_mut();
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        __brul_attach_counter_cleanup(&ctx);
+    }));
+    drop(guard);
+
+    assert!(result.is_err());
+    assert!(ctx.get_state::<CounterState>().is_some());
+    assert_eq!(cell.borrow().amount, 1.0);
+}

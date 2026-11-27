@@ -104,9 +104,8 @@ pub(super) fn expand_attach(
             }
             let cell = ::brul::CapabilityContext::get_state::<#state_ty>(ctx)
                 .expect("attachment state was just created");
-            if let Ok(mut state) = cell.try_borrow_mut() {
-                #update
-            }
+            let mut state = cell.borrow_mut();
+            #update
             Ok(())
         }
 
@@ -117,9 +116,7 @@ pub(super) fn expand_attach(
             let Some(cell) = ::brul::CapabilityContext::get_state::<#state_ty>(ctx) else {
                 return ::brul::Dispatch::CONTINUE;
             };
-            let Ok(mut state) = cell.try_borrow_mut() else {
-                return ::brul::Dispatch::CONTINUE;
-            };
+            let mut state = cell.borrow_mut();
             #event_call
         }
 
@@ -130,16 +127,13 @@ pub(super) fn expand_attach(
             let Some(cell) = ::brul::CapabilityContext::get_state::<#state_ty>(ctx) else {
                 return ::brul::Dispatch::CONTINUE;
             };
-            let Ok(mut state) = cell.try_borrow_mut() else {
-                return ::brul::Dispatch::CONTINUE;
-            };
+            let mut state = cell.borrow_mut();
             #raw_event_call
         }
 
         pub fn #cleanup(ctx: &::brul::CapabilityContext) {
-            if let Some(cell) = ::brul::CapabilityContext::get_state::<#state_ty>(ctx)
-                && let Ok(mut state) = cell.try_borrow_mut()
-            {
+            if let Some(cell) = ::brul::CapabilityContext::get_state::<#state_ty>(ctx) {
+                let mut state = cell.borrow_mut();
                 #cleanup_call
             }
             ctx.remove_state();
