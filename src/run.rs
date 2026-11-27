@@ -112,16 +112,22 @@ pub fn run_generated_with_platform<T: Theme>(
         .map(|(index, window)| (window.name.to_owned(), WindowKey(index as u64)))
         .collect();
     let commands = Rc::new(RefCell::new(Vec::new()));
-    let shown = Rc::new(RefCell::new(theme.map(Theme::name).map(str::to_owned)));
+    let current = Rc::new(RefCell::new(theme.map(Theme::name).map(str::to_owned)));
     component.borrow_mut().set_host(CommandHost {
         commands: Rc::clone(&commands),
         app: host,
         windows: Rc::new(keys),
-        theme: Rc::clone(&shown),
+        theme: Rc::clone(&current),
     });
     let pending = std::mem::take(&mut *commands.borrow_mut());
     let runtime = Rc::new(RefCell::new(Runtime::new(
-        windows, component, commands, theme, shown, pending, None,
+        windows,
+        component,
+        commands,
+        Rc::clone(&current),
+        theme.is_none(),
+        pending,
+        None,
     )));
     runtime.borrow_mut().platform = factory;
 
@@ -201,9 +207,8 @@ struct Runtime<T: Theme> {
     component: ComponentHandle,
     uis: HashMap<WindowKey, Ui<T>>,
     commands: Rc<RefCell<Vec<WindowCommand>>>,
-    fixed_theme: Option<T>,
-    theme: Option<T>,
-    shown: Rc<RefCell<Option<String>>>,
+    theme: Rc<RefCell<Option<String>>>,
+    follows_system: bool,
     pending: Vec<WindowCommand>,
     sink: Option<Box<dyn CommandSink>>,
     handle: Option<Handle>,
@@ -215,8 +220,8 @@ impl<T: Theme> Runtime<T> {
         defs: Vec<WindowDef<T>>,
         component: ComponentHandle,
         commands: Rc<RefCell<Vec<WindowCommand>>>,
-        fixed_theme: Option<T>,
-        shown: Rc<RefCell<Option<String>>>,
+        theme: Rc<RefCell<Option<String>>>,
+        follows_system: bool,
         pending: Vec<WindowCommand>,
         sink: Option<Box<dyn CommandSink>>,
     ) -> Self {
@@ -225,9 +230,8 @@ impl<T: Theme> Runtime<T> {
             component,
             uis: HashMap::new(),
             commands,
-            fixed_theme,
-            theme: None,
-            shown,
+            theme,
+            follows_system,
             pending,
             sink,
             handle: None,
@@ -256,8 +260,8 @@ impl<T: Theme> Runtime<T> {
             return;
         };
         tracing::info!(theme = name, "applying theme");
-        self.theme = Some(theme);
-        *self.shown.borrow_mut() = Some(name.to_owned());
+        self.follows_system = false;
+        *self.theme.borrow_mut() = Some(theme.name().to_owned());
         for ui in self.uis.values_mut() {
             if let Err(error) = ui.set_theme(theme) {
                 tracing::error!(%error, "theme change failed");
@@ -271,9 +275,11 @@ impl<T: Theme> Runtime<T> {
     }
 
     fn theme_for(&self, scheme: ColorScheme) -> Option<T> {
-        self.theme
-            .or(self.fixed_theme)
-            .or_else(|| T::parse(scheme_theme(None, scheme)))
+        if self.follows_system {
+            T::parse(scheme_theme(None, scheme))
+        } else {
+            self.theme.borrow().as_deref().and_then(T::parse)
+        }
     }
 
     fn create(&mut self, key: WindowKey, scheme: ColorScheme) -> Result<WindowSpec, WindowError> {
@@ -286,7 +292,6 @@ impl<T: Theme> Runtime<T> {
             (def.config.clone(), def.view)
         };
         let theme = self.theme_for(scheme);
-        *self.shown.borrow_mut() = theme.map(Theme::name).map(str::to_owned);
         let messages: PlatformMessageHandler = match self.handle.clone() {
             Some(handle) => Arc::new(move |id: PlatformViewId, body: String| {
                 handle.widget(id.state_id(), "message", vec![Value::String(body.into())]);
@@ -295,7 +300,8 @@ impl<T: Theme> Runtime<T> {
         };
         if let Some(ui) = self.uis.get_mut(&key) {
             tracing::debug!(%key, "reusing window");
-            if let Some(theme) = theme {
+            let current = self.theme.borrow().as_deref().and_then(T::parse);
+            if let Some(theme) = theme.filter(|theme| Some(*theme) != current) {
                 ui.set_theme(theme).map_err(WindowError::app)?;
             }
             self.component.borrow_mut().touch();
@@ -317,6 +323,7 @@ impl<T: Theme> Runtime<T> {
             theme = theme.map(Theme::name).unwrap_or("default"),
             "creating window"
         );
+        let initial = self.theme.borrow().as_deref().and_then(T::parse);
         let states = SharedStates::default();
         let event_sink = self
             .handle
@@ -327,18 +334,17 @@ impl<T: Theme> Runtime<T> {
             event_sink: event_sink.clone(),
             clipboard: None,
         });
-        let built =
-            view(self.fixed_theme, &mut build, &self.component).map_err(WindowError::app)?;
+        let built = view(initial, &mut build, &self.component).map_err(WindowError::app)?;
         let BuildParts {
             structures,
             components,
             capabilities,
         } = build.finish();
-        let mut ui = Ui::assemble_with(
+        let mut ui = Ui::assemble_in(
             Rc::clone(&self.component),
             built,
             view,
-            self.fixed_theme,
+            Rc::clone(&self.theme),
             AssemblyParts {
                 structures,
                 capabilities,
@@ -350,7 +356,7 @@ impl<T: Theme> Runtime<T> {
             Rc::clone(&self.commands),
             config.scroll,
         );
-        if let Some(theme) = theme {
+        if let Some(theme) = theme.filter(|theme| Some(*theme) != initial) {
             ui.set_theme(theme).map_err(WindowError::app)?;
         }
         let mut commands = std::mem::take(&mut self.pending);

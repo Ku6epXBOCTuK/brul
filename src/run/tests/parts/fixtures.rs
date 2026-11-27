@@ -74,10 +74,10 @@ pub(super) fn runtime(theme: Option<TestTheme>) -> Runtime<TestTheme> {
         defs(),
         component,
         Rc::new(RefCell::new(Vec::new())),
-        theme,
         Rc::new(RefCell::new(
             theme.map(crate::Theme::name).map(str::to_owned),
         )),
+        theme.is_none(),
         Vec::new(),
         None,
     )

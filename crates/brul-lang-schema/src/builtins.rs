@@ -8,6 +8,7 @@ pub enum ArgSpec {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostSpecial {
     Theme,
+    SetTheme,
     OpenWindow,
 }
 
@@ -75,9 +76,9 @@ pub const BUILTINS: &[BuiltinSpec] = &[
         result: "Void",
         emit: EmitSpec::Host(HostEmit {
             marker: "SetTheme",
-            command: Some("SetTheme"),
+            command: None,
             argument: Some("String"),
-            special: None,
+            special: Some(HostSpecial::SetTheme),
         }),
         note: "switch the theme of all windows",
     },

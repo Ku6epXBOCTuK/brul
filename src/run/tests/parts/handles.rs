@@ -12,8 +12,8 @@ pub(super) fn a_handle_message_reaches_the_component() {
         defs,
         component,
         Rc::new(RefCell::new(Vec::new())),
-        None,
         Rc::new(RefCell::new(None)),
+        true,
         Vec::new(),
         None,
     );
@@ -47,8 +47,8 @@ pub(super) fn a_handle_call_runs_the_script_function() {
         defs,
         component,
         Rc::new(RefCell::new(Vec::new())),
-        None,
         Rc::new(RefCell::new(None)),
+        true,
         Vec::new(),
         None,
     );
@@ -101,8 +101,8 @@ fn a_widget_state_survives_a_rebuild() {
         }],
         component,
         Rc::new(RefCell::new(Vec::new())),
-        Some(TestTheme::Dark),
         Rc::new(RefCell::new(Some("dark".to_owned()))),
+        false,
         Vec::new(),
         None,
     );
@@ -136,8 +136,8 @@ fn a_widget_event_reaches_the_state_owner() {
         }],
         component,
         Rc::new(RefCell::new(Vec::new())),
-        None,
         Rc::new(RefCell::new(None)),
+        true,
         Vec::new(),
         None,
     );
@@ -170,8 +170,8 @@ fn a_handle_call_passes_arguments() {
         defs(),
         component,
         Rc::new(RefCell::new(Vec::new())),
-        None,
         Rc::new(RefCell::new(None)),
+        true,
         Vec::new(),
         None,
     );
@@ -252,8 +252,8 @@ fn a_handle_call_targets_its_window() {
         defs,
         component,
         commands,
-        None,
         Rc::new(RefCell::new(None)),
+        true,
         Vec::new(),
         Some(Box::new(Recorder(Rc::clone(&recorded)))),
     );
@@ -285,8 +285,8 @@ fn a_handle_set_carries_a_list() {
         defs(),
         component,
         Rc::new(RefCell::new(Vec::new())),
-        None,
         Rc::new(RefCell::new(None)),
+        true,
         Vec::new(),
         None,
     );

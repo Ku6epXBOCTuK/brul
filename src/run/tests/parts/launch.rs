@@ -61,7 +61,7 @@ pub(super) fn a_theme_command_reaches_every_open_window() {
 
     assert!(runtime.dispatch(WindowKey(0), &[]).is_empty());
     for ui in runtime.uis.values() {
-        assert_eq!(ui.theme, Some(TestTheme::Light));
+        assert_eq!(ui.theme.borrow().as_deref(), Some("light"));
     }
 }
 
@@ -69,6 +69,7 @@ pub(super) const WIDGET_STATE: StateId = StateId::source("test", "widget");
 
 thread_local! {
     pub(super) static SEEN: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    pub(super) static VIEW_THEMES: RefCell<Vec<Option<&'static str>>> = const { RefCell::new(Vec::new()) };
     pub(super) static WIDGET_CALLS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -83,10 +84,11 @@ pub(super) fn theme_text(component: &mut crate::Component) -> Result<String, cra
 }
 
 pub(super) fn theme_view(
-    _theme: Option<TestTheme>,
+    theme: Option<TestTheme>,
     _build: &mut Build,
     component: &ComponentHandle,
 ) -> Result<Built, ViewError> {
+    VIEW_THEMES.with(|seen| seen.borrow_mut().push(theme.map(TestTheme::name)));
     let widget = Widget::text("");
     let id = widget.id();
     Ok(Built {

@@ -71,6 +71,30 @@ pub(super) fn set_theme_takes_exactly_one_string() {
         *commands.borrow(),
         vec![WindowCommand::SetTheme("dark".to_owned())]
     );
+    assert_eq!(host.theme.borrow().as_deref(), Some("dark"));
+}
+
+#[test]
+pub(super) fn rapid_theme_switches_see_the_pending_theme() {
+    let (mut host, commands) = command_host(None);
+    host.call("setTheme", &[Value::String("dark".into())])
+        .expect("first theme switch");
+    let next = host.call("theme", &[]).expect("theme after the switch");
+    host.call(
+        "setTheme",
+        &[Value::String(match next {
+            Value::String(name) if name.as_ref() == "dark" => "light".into(),
+            _ => "dark".into(),
+        })],
+    )
+    .expect("second theme switch");
+    assert_eq!(
+        *commands.borrow(),
+        vec![
+            WindowCommand::SetTheme("dark".to_owned()),
+            WindowCommand::SetTheme("light".to_owned()),
+        ]
+    );
 }
 
 #[test]
@@ -281,7 +305,7 @@ pub(super) fn dispatch_returns_the_theme_command() {
         ui.dispatch(&[]),
         vec![WindowCommand::SetTheme("dark".to_owned())]
     );
-    assert!(ui.theme.is_none());
+    assert!(ui.theme.borrow().is_none());
 }
 
 pub(super) fn child_view(

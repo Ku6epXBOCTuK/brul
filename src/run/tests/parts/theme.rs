@@ -15,7 +15,8 @@ pub(super) fn a_theme_change_rereads_the_theme_from_the_script() {
         config: WindowConfig::default(),
         view: theme_view,
     }];
-    let mut runtime = Runtime::new(defs, component, commands, None, shown, Vec::new(), None);
+    let caller = Rc::clone(&component);
+    let mut runtime = Runtime::new(defs, component, commands, shown, true, Vec::new(), None);
 
     runtime
         .create(WindowKey(0), ColorScheme::Dark)
@@ -25,14 +26,18 @@ pub(super) fn a_theme_change_rereads_the_theme_from_the_script() {
         Some("dark".to_owned())
     );
 
-    runtime
-        .commands
+    caller
         .borrow_mut()
-        .push(WindowCommand::SetTheme("light".to_owned()));
+        .call("setTheme", &[Value::String("light".into())])
+        .expect("theme command");
     runtime.dispatch(WindowKey(0), &[]);
     assert_eq!(
         SEEN.with(|seen| seen.borrow().last().cloned()),
         Some("light".to_owned())
+    );
+    assert_eq!(
+        VIEW_THEMES.with(|seen| seen.borrow().last().copied()),
+        Some(Some("light"))
     );
 }
 

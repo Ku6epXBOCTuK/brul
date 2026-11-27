@@ -142,7 +142,7 @@ pub(super) fn a_theme_change_rebuilds_the_view() {
         generated_built(themed_view, NAMES, None, &[], None).expect("launch");
     let mut ui = Ui::assemble(component, built, themed_view, None, structures, None);
     ui.set_theme(TestTheme::Dark).expect("theme changes");
-    assert_eq!(ui.theme, Some(TestTheme::Dark));
+    assert_eq!(ui.theme.borrow().as_deref(), Some("dark"));
 }
 
 #[test]
@@ -157,10 +157,8 @@ pub(super) fn a_failed_theme_change_keeps_the_previous_theme() {
         structures,
         None,
     );
-    ui.set_theme(TestTheme::Light)
-        .expect("same theme is a no-op");
     assert!(ui.set_theme(TestTheme::Dark).is_err());
-    assert_eq!(ui.theme, Some(TestTheme::Light));
+    assert_eq!(ui.theme.borrow().as_deref(), Some("light"));
 }
 
 pub(super) fn binding(

@@ -92,8 +92,8 @@ fn a_key_closes_only_the_window_that_received_it() {
         defs,
         component,
         commands,
-        None,
         Rc::new(RefCell::new(None)),
+        true,
         Vec::new(),
         None,
     );

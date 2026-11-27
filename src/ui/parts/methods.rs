@@ -23,7 +23,8 @@ impl<T: Theme> Ui<T> {
             event_sink: self.event_sink.clone(),
             clipboard: self.clipboard.clone(),
         });
-        let built = (self.view)(self.theme, &mut build, &self.component);
+        let theme = self.theme.borrow().as_deref().and_then(T::parse);
+        let built = (self.view)(theme, &mut build, &self.component);
         let BuildParts {
             structures,
             components: nested,
@@ -53,12 +54,9 @@ impl<T: Theme> Ui<T> {
     }
 
     pub(crate) fn set_theme(&mut self, theme: T) -> Result<(), ViewError> {
-        if self.theme == Some(theme) {
-            return Ok(());
-        }
-        let previous = self.theme.replace(theme);
+        let previous = self.theme.borrow_mut().replace(theme.name().to_owned());
         if let Err(error) = self.rebuild() {
-            self.theme = previous;
+            *self.theme.borrow_mut() = previous;
             return Err(error);
         }
         Ok(())
@@ -231,8 +229,9 @@ impl<T: Theme> Ui<T> {
             self.clipboard.clone(),
         );
         let mut changed = false;
+        let theme = self.theme.borrow().clone();
         for parent in requests {
-            changed |= pending.rebuild(parent, &self.tree, self.theme.map(Theme::name));
+            changed |= pending.rebuild(parent, &self.tree, theme.as_deref());
         }
         let Pending { owners, staged, .. } = pending;
         self.owners = owners;

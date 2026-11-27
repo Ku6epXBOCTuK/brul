@@ -144,7 +144,7 @@ pub struct Ui<T: Theme> {
     pub(crate) commands: Rc<RefCell<Vec<WindowCommand>>>,
     requests: Rc<RefCell<Vec<WidgetId>>>,
     view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
-    pub(crate) theme: Option<T>,
+    pub(crate) theme: Rc<RefCell<Option<String>>>,
     textures: runtime::Textures,
     pub(crate) states: SharedStates,
     event_sink: Option<Arc<dyn EventSink>>,
@@ -183,16 +183,30 @@ impl<T: Theme> Ui<T> {
             commands,
             app: host,
             windows: Rc::new(HashMap::new()),
-            theme: Rc::new(RefCell::new(theme.map(Theme::name).map(str::to_owned))),
+            theme: Rc::clone(&ui.theme),
         });
         ui
     }
 
+    #[cfg(test)]
     pub(crate) fn assemble_with(
         component: ComponentHandle,
         built: Built,
         view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
         theme: Option<T>,
+        parts: AssemblyParts,
+        commands: Rc<RefCell<Vec<WindowCommand>>>,
+        scroll: bool,
+    ) -> Self {
+        let current = Rc::new(RefCell::new(theme.map(Theme::name).map(str::to_owned)));
+        Self::assemble_in(component, built, view, current, parts, commands, scroll)
+    }
+
+    pub(crate) fn assemble_in(
+        component: ComponentHandle,
+        built: Built,
+        view: fn(Option<T>, &mut Build, &ComponentHandle) -> Result<Built, ViewError>,
+        theme: Rc<RefCell<Option<String>>>,
         parts: AssemblyParts,
         commands: Rc<RefCell<Vec<WindowCommand>>>,
         scroll: bool,

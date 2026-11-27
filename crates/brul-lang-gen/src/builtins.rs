@@ -159,7 +159,7 @@ pub fn markers() -> TokenStream {
                 let value = component.call(#name, &[])?;
                 String::try_from(&value)
             },
-            Some(HostSpecial::OpenWindow) => quote! {
+            Some(HostSpecial::OpenWindow) | Some(HostSpecial::SetTheme) => quote! {
                 let _ = component.call(#name, #call)?;
                 Ok(())
             },
@@ -224,6 +224,12 @@ pub fn host_dispatch() -> TokenStream {
                     Some(theme) => Value::String(theme.clone().into()),
                     None => Value::Null,
                 })
+            },
+            Some(HostSpecial::SetTheme) => quote! {
+                let name: String = one_argument(arguments, #name)?;
+                *self.theme.borrow_mut() = Some(name.clone());
+                self.commands.borrow_mut().push(WindowCommand::SetTheme(name));
+                Ok(Value::Null)
             },
             Some(HostSpecial::OpenWindow) => quote! {
                 let window: String = one_argument(arguments, #name)?;
