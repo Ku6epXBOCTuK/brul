@@ -1,4 +1,4 @@
-set shell := ["powershell.exe", "-NoProfile", "-Command"]
+set shell := ["pwsh", "-NoProfile", "-Command"]
 
 target_dir := trim(`cargo metadata --format-version 1 --no-deps | ConvertFrom-Json | ForEach-Object target_directory`)
 
@@ -40,6 +40,7 @@ webview:
     cargo run -p webview
 
 check:
+    pnpm run format:check
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
     cargo nextest run --workspace

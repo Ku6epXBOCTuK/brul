@@ -71,30 +71,30 @@ incremental = false
 debug = "line-tables-only"
 
 [workspace.dependencies]
-brul-case = { path = 'crates\brul-case' }
-brul-capability = { path = 'crates\brul-capability' }
-brul-command = { path = 'crates\brul-command' }
-brul-codegen = { path = 'crates\brul-codegen' }
-brul-display-test = { path = 'crates\brul-display-test' }
-brul-event = { path = 'crates\brul-event' }
-brul-gpu = { path = 'crates\brul-gpu' }
-brul-gui = { path = 'crates\brul-gui' }
-brul-ident = { path = 'crates\brul-ident' }
-brul-layout = { path = 'crates\brul-layout' }
-brul-lang-gen = { path = 'crates\brul-lang-gen' }
-brul-lang-schema = { path = 'crates\brul-lang-schema' }
-brul-macros = { path = 'crates\brul-macros' }
-brul-reactive = { path = 'crates\brul-reactive' }
-brul-script = { path = 'crates\brul-script' }
-brul-style = { path = 'crates\brul-style' }
-brul-style-gen = { path = 'crates\brul-style-gen' }
-brul-style-schema = { path = 'crates\brul-style-schema' }
-brul-syntax = { path = 'crates\brul-syntax' }
-brul-video = { path = 'crates\brul-video' }
-brul-webview = { path = 'crates\brul-webview' }
-brul-window = { path = 'crates\brul-window' }
-brul-widget-gen = { path = 'crates\brul-widget-gen' }
-brul-widget-schema = { path = 'crates\brul-widget-schema' }
+brul-case = { path = 'crates/brul-case' }
+brul-capability = { path = 'crates/brul-capability' }
+brul-command = { path = 'crates/brul-command' }
+brul-codegen = { path = 'crates/brul-codegen' }
+brul-display-test = { path = 'crates/brul-display-test' }
+brul-event = { path = 'crates/brul-event' }
+brul-gpu = { path = 'crates/brul-gpu' }
+brul-gui = { path = 'crates/brul-gui' }
+brul-ident = { path = 'crates/brul-ident' }
+brul-layout = { path = 'crates/brul-layout' }
+brul-lang-gen = { path = 'crates/brul-lang-gen' }
+brul-lang-schema = { path = 'crates/brul-lang-schema' }
+brul-macros = { path = 'crates/brul-macros' }
+brul-reactive = { path = 'crates/brul-reactive' }
+brul-script = { path = 'crates/brul-script' }
+brul-style = { path = 'crates/brul-style' }
+brul-style-gen = { path = 'crates/brul-style-gen' }
+brul-style-schema = { path = 'crates/brul-style-schema' }
+brul-syntax = { path = 'crates/brul-syntax' }
+brul-video = { path = 'crates/brul-video' }
+brul-webview = { path = 'crates/brul-webview' }
+brul-window = { path = 'crates/brul-window' }
+brul-widget-gen = { path = 'crates/brul-widget-gen' }
+brul-widget-schema = { path = 'crates/brul-widget-schema' }
 cosmic-text = "0.19.0"
 criterion = { version = "0.8.2", default-features = false }
 fontdb = "0.23.0"

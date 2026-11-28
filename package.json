@@ -7,7 +7,7 @@
 		"format": "biome format --write .",
 		"format:check": "biome format .",
 		"check": "just check",
-		"post-check": "goh comments && pnpm run format && pnpm run check"
+		"post-check": "goh comments --all && just check"
 	},
 	"keywords": [],
 	"author": "",
