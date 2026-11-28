@@ -1,4 +1,18 @@
 use super::*;
+use tracing::warn;
+
+#[derive(Debug, thiserror::Error)]
+enum PlacementError {
+    #[error("no primary monitor")]
+    NoMonitor,
+    #[error("monitor origin is unavailable")]
+    NoOrigin,
+    #[error("monitor video mode is unavailable")]
+    NoVideoMode,
+    #[error("monitor scale factor must be positive and finite, got {0}")]
+    InvalidScale(f64),
+}
+
 pub(crate) fn create_window(
     event_loop: &dyn ActiveEventLoop,
     config: &WindowConfig,
@@ -23,13 +37,34 @@ fn placement(event_loop: &dyn ActiveEventLoop, config: &WindowConfig) -> Option<
     if !config.centered {
         return None;
     }
-    let monitor = event_loop.primary_monitor()?;
+    match center_on_monitor(event_loop, config) {
+        Ok(position) => Some(position),
+        Err(error) => {
+            warn!(%error, "window cannot be centered");
+            None
+        }
+    }
+}
+
+fn center_on_monitor(
+    event_loop: &dyn ActiveEventLoop,
+    config: &WindowConfig,
+) -> Result<Position, PlacementError> {
+    let monitor = event_loop
+        .primary_monitor()
+        .ok_or(PlacementError::NoMonitor)?;
+    let origin = monitor.position().ok_or(PlacementError::NoOrigin)?;
+    let area = monitor
+        .current_video_mode()
+        .ok_or(PlacementError::NoVideoMode)?
+        .size();
     let scale = monitor.scale_factor();
+    if !scale.is_finite() || scale <= 0.0 {
+        return Err(PlacementError::InvalidScale(scale));
+    }
     let width = (f64::from(config.width) * scale).round() as i32;
     let height = (f64::from(config.height) * scale).round() as i32;
-    let origin = monitor.position()?;
-    let area = monitor.current_video_mode()?.size();
-    Some(Position::Physical(centered_position(
+    Ok(Position::Physical(centered_position(
         origin,
         area,
         (width, height),
