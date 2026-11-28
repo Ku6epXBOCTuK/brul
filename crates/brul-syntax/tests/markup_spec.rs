@@ -4,10 +4,9 @@ use brul_syntax::markup::{Widget, parse_file};
 
 const MARKUP: &str = include_str!("../../../docs/lang/markup.md");
 
-const WIDGETS_HEADING: &str =
-    "## \u{412}\u{441}\u{442}\u{440}\u{43e}\u{435}\u{43d}\u{43d}\u{44b}\u{435}";
+const WIDGETS_HEADING: &str = "## Built-in MVP widgets";
 
-const EXPRESSION: &str = "\u{432}\u{44b}\u{440}\u{430}\u{436}\u{435}\u{43d}\u{438}\u{435}";
+const EXPRESSION: &str = "expression";
 
 #[test]
 fn document_examples_parse() {

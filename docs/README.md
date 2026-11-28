@@ -1,32 +1,32 @@
-# Документация BRUL
+# BRUL documentation
 
-Дерево разделено по читателю. Общих страниц нет: повтор факта — ошибка, второй
-экземпляр заменяется ссылкой.
+The tree is split by reader. There are no shared pages. A repeated fact is an
+error. Use a link instead of a second copy.
 
-## Разделы
+## Sections
 
-| Путь                        | Кому                               | Публикуется                     |
-| --------------------------- | ---------------------------------- | ------------------------------- |
-| [dev/](dev/architecture.md) | разработка: почему так и где лежит | нет                             |
-| [lang/](lang/README.md)     | канон трёх языков DSL              | включается в user через include |
+| Path                        | Reader                                          | Publication                               |
+| --------------------------- | ----------------------------------------------- | ----------------------------------------- |
+| [dev/](dev/architecture.md) | Developers: design decisions and file locations | No                                        |
+| [lang/](lang/README.md)     | DSL canon                                       | Included in user docs with mdBook include |
 
-- [dev/architecture.md](dev/architecture.md) — устройство, крейты, пайплайн.
-- [dev/product.md](dev/product.md) — зачем проект, требования к фреймворку и
-  критерий зрелости.
-- [dev/plan.md](dev/plan.md) — временная очередь работ; будет удалён.
-- [dev/workflow.md](dev/workflow.md) — задача, бюджет, отчёт, трекер.
-- [dev/benchmarks.md](dev/benchmarks.md) — снимки замеров и как их сравнивать.
+- [dev/architecture.md](dev/architecture.md): structure, crates, and pipeline.
+- [dev/product.md](dev/product.md): goals, framework requirements, and maturity
+  criteria.
+- [dev/workflow.md](dev/workflow.md): tasks, budget, reports, and tracker.
+- [dev/benchmarks.md](dev/benchmarks.md): measurement snapshots and comparison
+  rules.
 
-## Правила
+## Rules
 
-1. **Один факт — один дом.** Второй экземпляр заменяется ссылкой.
-2. **Проверяемое кодом — не пишется прозой.** Грамматика, дефолты, сигнатуры
-   живут в коде и тестах; дока ссылается.
-3. **У дока есть срок жизни.** Решение меняется тем же коммитом, что и код;
-   историю хранит git, архива решений нет. План и «отложено» удаляются, когда
-   вопрос закрыт. Раздел, переставший быть сложным, сокращается до
-   строки-указателя.
-4. **Статусов в тексте нет.** «Фаза закрыта», «тесты красные» — это `git log` и
-   CI.
-5. **User-доки не переписываются руками.** Только include канона и генерация из
-   rustdoc.
+1. **One fact, one home.** Use a link instead of a second copy.
+2. **Do not describe what code can prove.** Grammar, defaults, and signatures
+   live in code and tests. The docs point to them.
+3. **Docs have a lifetime.** A design change and its code change land in the
+   same commit. Git keeps history. There is no archive of decisions. Remove
+   deferred items when the question is closed. Reduce a section that is no
+   longer complex to a pointer line.
+4. **No status text.** "Phase closed" and "tests are red" belong in `git log`
+   and CI.
+5. **Do not rewrite user docs by hand.** Include the canon and generate text
+   from rustdoc.

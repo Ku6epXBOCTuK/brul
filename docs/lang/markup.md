@@ -1,14 +1,15 @@
-# Язык разметки
+# Markup language
 
-Статус: stable. Канон языка: парсер и кодеген проверяются на этой спеке, примеры
-в конце — фикстуры тестов.
+Status: stable. The canon of the language is this spec. Tests check the parser
+and codegen against it. The examples at the end are test fixtures.
 
-Принципы — [architecture.md §Решения](../dev/architecture.md#решения).
+The principles are in
+[architecture.md, "Decisions"](../dev/architecture.md#decisions).
 
-## Идея
+## Concept
 
-Скобочный DSL вместо HTML-тегов. Элемент — имя, скобки с классами и параметрами,
-фигурные скобки с содержимым:
+Markup is a bracket DSL instead of HTML tags. An element is a name, parentheses
+with classes and parameters, and braces with content:
 
 ```brul
 Container (item-panel, selected: selected, on click: panelClicked) {
@@ -16,75 +17,81 @@ Container (item-panel, selected: selected, on click: panelClicked) {
 }
 ```
 
-- имя — встроенный виджет или компонент;
-- в скобках: голые идентификаторы = **классы стилей**, `имя: выражение` =
-  **параметры**, `on событие: функция` = **обработчик** (только по ссылке, без
-  инлайн-тел);
-- в фигурных скобках: структура — дочерние элементы, `@if`/`@each`; у листовых
-  виджетов (`Text`) — одно выражение-содержимое. Блок `component` — известное
-  исключение: в нём рядом со структурой объявляются `prop` и `event`.
+- The name is a built-in widget or a component.
+- Inside the parentheses, a bare identifier is a **style class**.
+  `name: expression` is a **parameter**. `on event: function` is a **handler**,
+  by reference only, with no inline body.
+- Inside the braces is structure: child elements, `@if`, and `@each`. A leaf
+  widget such as `Text` has one content expression. The `component` block is a
+  known exception. It declares `prop` and `event` next to the structure.
 
-Внешний вид задаётся классами в стилях ([style.md](style.md)), а не
-инлайн-параметрами. Параметры в скобках — только поведение и данные.
+Appearance comes from classes in styles ([style.md](style.md)), not from inline
+parameters. Parentheses hold only behavior and data.
 
-## Лексика
+## Lexicon
 
-- Комментарии: `//` до конца строки. (`/* */` — отложено.)
-- Имена встроенных виджетов и компонентов: `PascalCase`.
-- Классы: `kebab-case`. Свойства/события: `camelCase`. Ключи тем: `kebab-case`.
-- Пробелы и переводы строк незначимы (кроме тел строк-литералов).
-- Ключевые слова: `component`, `window`, `prop`, `event`, `on`, `in`, `import`,
-  `from`; типы пропов — `Bool`, `Number`, `String`, `Image`.
-- Блочные конструкции пишутся с `@`: `@if`, `@else`, `@each`, `@slot`. Маркер
-  отличает их от имён виджетов и компонентов.
-- Ключевые слова не бывают идентификаторами: `on` в скобках начинает обработчик,
-  классом или параметром с этим именем быть нельзя.
+- A comment runs from `//` to the end of the line. `/* */` is deferred.
+- Built-in widget and component names use `PascalCase`.
+- Classes use `kebab-case`. Properties and events use `camelCase`. Theme keys
+  use `kebab-case`.
+- Spaces and line breaks are not significant, except inside string literal
+  bodies.
+- Keywords are `component`, `window`, `prop`, `event`, `on`, `in`, `import`, and
+  `from`. Prop types are `Bool`, `Number`, `String`, and `Image`.
+- Block constructs start with `@`: `@if`, `@else`, `@each`, and `@slot`. The
+  marker separates them from widget and component names.
+- A keyword cannot be an identifier. `on` inside parentheses starts a handler. A
+  class or parameter cannot have that name.
 
-## Грамматика (EBNF)
+## Grammar (EBNF)
 
-Выражения `Expr` — общие со скриптом, см. [script.md](script.md) §«Грамматика».
+`Expr` expressions are shared with script. See
+[script.md, "Grammar"](script.md).
 
 ```ebnf
 {{#include markup.ebnf}}
 ```
 
-Исключение — **листовые виджеты** (`Text`, `TextInput`, `Image` в MVP): их блок
-— одно выражение (содержимое), а не список детей. Правило семантическое, не
-синтаксическое: парсер знает класс виджета.
+The exception is **leaf widgets** (`Text`, `TextInput`, and `Image` in MVP).
+Their block holds one expression, that is content, not a list of children. The
+rule is semantic, not syntactic. The parser knows the widget class.
 
 ```brul
 Text (text-main) { name }
 Text (badge-text) { "По умолчанию" }
 ```
 
-## Семантика
+## Semantics
 
-### Окно
+### Window
 
-`window` — корневой компонент окна. Параметры окна — не стили, а атрибуты
-оконной системы. `frameless`/`transparent` — булевы флаги в параметрах; по
-умолчанию оба `false`, то есть окно обычное, декоративное и непрозрачное.
-`visible: false` создаёт окно скрытым: оно сразу открыто, получает события
-таймеров и показывается через `showWindow()`/`hideWindow()` (см.
-[script.md](script.md)); скрытое окно приложение не завершает.
+`window` is the root component of a window. Window parameters are not styles.
+They are window system attributes. `frameless` and `transparent` are Boolean
+flags in parameters. Both are `false` by default. The window is then normal,
+decorated, and opaque.
 
-`icon: Name` задаёт иконку окна из ресурса, объявленного в `<use>`. Ресурс может
-быть PNG или SVG; SVG растеризуется в 32×32. Без параметра остаётся системная
-иконка.
+`visible: false` creates a hidden window. It is open at once, receives timer
+events, and is shown through `showWindow()` and `hideWindow()` (see
+[script.md](script.md)). A hidden window does not end the application.
 
-Корневой элемент окна прокручивается колесом, когда содержимое выше окна: скролл
-включён по умолчанию, начинается с верхнего края и не требует стиля
-`scroll: true` на корне. `scroll: false` в параметрах окна выключает его;
-вложенный вид со `scroll: true` забирает колесо раньше корня. Колесо
-обрабатывает встроенная политика `scroll`: она выбирает ближайший прокручиваемый
-элемент на пути от цели и не выходит за модальную область.
+`icon: Name` sets the window icon from a resource declared in `<use>`. The
+resource can be PNG or SVG. SVG is rasterized to 32×32. Without the parameter
+the system icon stays.
 
-Положение задаётся парой `x`/`y` — левый верхний угол в логических пикселях,
-отрицательные значения разрешены на мониторах левее и выше основного. `x` без
-`y` (или наоборот) — ошибка. `centered: true` центрирует окно на мониторе, где
-находится указатель; если позицию курсора получить нельзя — на основном, затем
-на первом доступном. Параметр несовместим с `x`/`y`. Без обоих параметров
-положение выбирает оконная система.
+The window root scrolls with the wheel when content is taller than the window.
+Scrolling is on by default. It starts at the top edge and needs no
+`scroll: true` style on the root. `scroll: false` in window parameters turns it
+off. A nested view with `scroll: true` takes the wheel before the root. The
+built-in `scroll` policy handles the wheel. It selects the nearest scrollable
+element on the path from the target. It does not leave the modal area.
+
+Position is set by an `x` and `y` pair. That is the upper-left corner in logical
+pixels. Negative values are allowed for monitors to the left and above the
+primary one. `x` without `y`, or the reverse, is an error. `centered: true`
+centers the window on the monitor that holds the pointer. If the pointer
+position is not available, it uses the primary monitor and then the first
+available monitor. This parameter is not compatible with `x` and `y`. Without
+both parameters the window system chooses the position.
 
 ```brul
 window Picker (title: "picker", width: 488, height: 800,
@@ -97,68 +104,73 @@ window Note (title: "note", width: 520, height: 480, centered: true) {
 }
 ```
 
-В файле ровно одно объявление: `window` или `component`. Дополнительные окна
-выносятся в отдельные файлы и приходят через `<use>`; имена окон уникальны. Окно
-из точки входа — стартовое, остальные открываются командами из скрипта (см.
-[script.md](script.md)). Импортированное окно нельзя использовать как компонент
-внутри разметки.
+A file holds exactly one declaration, either `window` or `component`. Put
+additional windows in separate files. They arrive through `<use>`. Window names
+are unique. The window at the entry point starts first. Script commands open the
+others (see [script.md](script.md)). An imported window cannot be used as a
+component inside markup.
 
-Встроенные события:
+Built-in events:
 
-- `on key: fn` (окно или элемент) — клавиатура; функция получает событие с полем
-  `code` (логический код: `"Escape"`, `"Enter"`, буква с учётом регистра и
-  раскладки), полем `physical` (стабильный код клавиши: `"KeyQ"`, или `null`) и
-  флагами модификаторов `ctrl`, `shift`, `alt`, `meta`. Для сочетаний с буквами
-  сравнивайте `physical`, чтобы не дублировать регистры:
+- `on key: fn` on a window or element handles the keyboard. The function
+  receives an event with a `code` field, a logical code such as `"Escape"`,
+  `"Enter"`, or a letter with case and layout, a `physical` field with a stable
+  key code such as `"KeyQ"`, or `null`, and modifier flags `ctrl`, `shift`,
+  `alt`, and `meta`. For shortcuts with letters compare `physical` so that the
+  cases do not need duplicate handling:
   `function handleKey(ev: Object): Void { if (ev.ctrl && ev.physical == "KeyQ") { show() } }`
-  На элементе обработчик получает семантическую клавишу, которую испустила
-  capability (встроенная — `keyboard`), с полями `code`, `physical`, `ctrl`,
-  `shift`, `alt`, `meta` и `target`. Скрипт вызывается только у адресата
-  события: цепочки `Widget → Window` для `on ...` нет; capability обходятся по
-  пути от целевого виджета через предков к окну. Поля `text_unchanged` нет: если
-  `Backspace`/`Delete` не изменили текст, `editor` посылает raw `KeyNoop`,
-  который попадает в подписку `Key` и становится обычным `key` без отдельного
-  поля.
-- `on close: fn` (окно) — запрос закрытия от оконной системы: крестик, `Alt+F4`.
-  Без обработчика окно закрывается по умолчанию, с обработчиком остаётся
-  открытым, пока скрипт не вызовет `exit()` или `closeWindow()`. Закрытие из
-  скрипта событие не вызывает — иначе вызов зациклился бы. Функция вызывается
-  без аргументов.
-- `on drag: dragWindow` (любой элемент) — начало системного перетаскивания окна;
-  `dragWindow` — встроенная функция. Своя функция может добавить условия и
-  вызвать `dragWindow()` сама. Такой элемент получает встроенный класс
-  `.brul-draggable`: `grab`, а при нажатии `grabbing`; привязка объявлена в
-  `builtin/widgets.brul`, класс можно переопределить в `<style>`.
-- `on focus: fn` / `on blur: fn` (любой элемент) — фокус пришёл или ушёл;
-  функция вызывается без аргументов. События посылают политики `pointer` и
-  `keyboard` при смене фокуса через `Build::emit_event`, дерево меняет только
-  focused-флаг.
-- `on input: fn` / `on submit: fn` (`TextInput`) — текст изменён и нажат
-  `Enter`; аргументы — в §«Поле ввода».
+  On an element, the handler receives a semantic key emitted by a capability.
+  The built-in capability is `keyboard`. The event has `code`, `physical`,
+  `ctrl`, `shift`, `alt`, `meta`, and `target` fields. Script is called only at
+  the event target. There is no `Widget → Window` chain for `on ...`.
+  Capabilities are walked from the target widget through its ancestors to the
+  window. There is no `text_unchanged` field. If `Backspace` or `Delete` does
+  not change the text, `editor` sends a raw `KeyNoop`. That reaches the `Key`
+  subscription and becomes an ordinary `key` without a special field.
+- `on close: fn` on a window handles a close request from the window system: the
+  close button or `Alt+F4`. Without a handler the window closes by default. With
+  a handler it stays open until script calls `exit()` or `closeWindow()`. A
+  close from script does not raise the event. Otherwise the call would loop. The
+  function takes no arguments.
+- `on drag: dragWindow` on any element starts a system window drag. `dragWindow`
+  is a built-in function. A custom function can add conditions and call
+  `dragWindow()` itself. That element receives the built-in class
+  `.brul-draggable`: `grab`, and `grabbing` while pressed. The binding is
+  declared in `builtin/widgets.brul`. You can override the class in `<style>`.
+- `on focus: fn` and `on blur: fn` on any element report focus arrival and loss.
+  The function takes no arguments. The `pointer` and `keyboard` policies send
+  these events on a focus change through `Build::emit_event`. The tree changes
+  only the focused flag.
+- `on input: fn` and `on submit: fn` on `TextInput` report changed text and
+  pressed `Enter`. See "Input field" for the arguments.
 
-### Фокус
+### Focus
 
-Фокус — у окна один: политика `pointer` при нажатии отдаёт фокус ближайшему
-фокусируемому элементу на пути к цели (или снимает, если такого нет). Политика
-`keyboard` по `Tab`/`Shift+Tab` обходит `focusables()` в порядке разметки с
-переходом на первый/последний и останавливает цепочку, поэтому `on key` не
-вызывается. `focusable` — статический флаг (`focusable: true`), выражение в нём
-не принимается: список фокусируемых элементов известен на компиляции. Скрытый
-или `disabled` элемент в список фокусируемых не попадает. Политика `keyboard` на
-`Enter`/Space у сфокусированного не-input элемента посылает `click` отдельно
-самому элементу и каждому предку по пути к корню. В `TextInput` ветка исключает
-ввод: `editor` на `Enter` шлёт `submit` в однострочном поле и вставляет `\n` в
-многострочном, Space вставляет пробел; `click` не посылается.
+A window has one focus. The `pointer` policy gives focus to the nearest
+focusable element on the path to the target on press. It clears focus when there
+is none. The `keyboard` policy walks `focusables()` on `Tab` and `Shift+Tab` in
+markup order. It wraps to the first and last item. It stops the chain, so
+`on key` is not called.
 
-### Код на элементе: `use:`
+`focusable` is a static flag, `focusable: true`. It does not accept an
+expression. The list of focusable elements is known at compile time. A hidden or
+`disabled` element does not enter the list. On `Enter` or Space at a focused
+non-input element, the `keyboard` policy sends `click` to the element and to
+each ancestor on the path to the root. In `TextInput` this branch excludes
+typing. On `Enter`, `editor` sends `submit` in a single-line field and inserts
+`\n` in a multi-line field. Space inserts a space. No `click` is sent.
 
-`use: name(a: expr, ...)` прикрепляет к элементу Rust-функцию. Параметры —
-выражения скрипта, как у пропсов; функция может быть на Element или компоненте.
-Имя ищется в реестре `#[brul::attach]` исходников приложения и среди встроенных
-политик `editor`, `keyboard`, `pointer`, `scroll`. Все четыре подключаются к
-каждому окну невидимо в этом порядке; `use:` с таким же именем заменяет только
-одноимённую встроенную политику. Window идёт последним в цепочке событий,
-поэтому пользовательский attach на элементе срабатывает раньше.
+### Code on an element: `use:`
+
+`use: name(a: expr, ...)` attaches a Rust function to an element. Parameters are
+script expressions, as for props. The function can be on an Element or on a
+component. The name is looked up in the `#[brul::attach]` registry of
+application sources and among the built-in policies `editor`, `keyboard`,
+`pointer`, and `scroll`.
+
+All four attach to each window implicitly in that order. A `use:` with the same
+name replaces only the built-in policy with that name. Window is last in the
+event chain. A user attach on an element therefore runs earlier.
 
 ```brul
 TextInput (use: custom_editor(value: draft, multiline: true)) { draft }
@@ -171,195 +183,214 @@ fn custom_editor(ctx: &brul::CapabilityContext, value: String, multiline: bool)
     -> Result<EditorState, brul::ViewError> { /* состояние */ }
 ```
 
-Полный пример подмены политики ввода — `examples/custom_text_input`: сырой текст
-живёт в состоянии capability, в буфер виджета попадает только display, каретка
-переводится между ними в символах, а `Tab`/`Escape` перехватывает отдельная
-use-функция на фокусируемом элементе.
+A full example of policy replacement is `examples/custom_text_input`. Raw text
+lives in capability state. Only display reaches the widget buffer. The caret is
+translated between them in characters. A separate use function on the focusable
+element catches `Tab` and `Escape`.
 
-`#[brul::attach]` и `#[brul::widget]` регистрируют capability: первая приносит
-хуки, вторая — view. Обе проходят через `Build::capability(...)`: view работает
-с сессионным `&mut Build`, а хуки получают обязательный `&CapabilityContext`. Он
-даёт `get_state::<T>()` / `set_state` / `remove_state`, `element()` для правки
-примитива, `emit()` для событий скрипта, `emit_event()` и `emit_raw_event()` для
-семантических и raw-событий, `state_id()` и `component()`. Сервисы — `states`,
-`event_sink` и `clipboard` — передаются в `Build` конструктором и попадают в
-контекст хуков.
+`#[brul::attach]` and `#[brul::widget]` register capabilities. The first brings
+hooks. The second brings a view. Both go through `Build::capability(...)`. A
+view works with a session `&mut Build`. Hooks receive a mandatory
+`&CapabilityContext`. It provides `get_state::<T>()`, `set_state`, and
+`remove_state`. It provides `element()` to edit the primitive, `emit()` for
+script events, `emit_event()` and `emit_raw_event()` for semantic and raw
+events, and `state_id()` and `component()`.
 
-Функция создаёт состояние один раз, `update` вызывается при изменении любого
-параметра. Состояние лежит в слоте `StateId` элемента: отдельный слот на каждый
-экземпляр, в том числе в строках `@each`; хуки получают его через
-`CapabilityContext`. Состояние монопольно заимствуется на время хука; повторный
-вход в тот же слот — нарушение контракта и паника `RefCell`. Хук `event`
-получает семантические события как `&UiEvent`, `raw_event` — raw-события как
-`&RawUiEvent`; подписка задаётся `events(...)` и `raw_events(...)`. Хук
-возвращает `bool` или `Dispatch`: `true` — то же, что `Dispatch::stop()`,
-поглотить событие и остановить и capability, и `on ...`. `Dispatch::handled()`
-только помечает событие обработанным — остальные capability и `on ...`
-продолжают работать, а следующий хук видит флаг через
-`CapabilityContext::handled()`. `Dispatch::stop_capabilities()` обрывает
-capability, но оставляет script, а `Dispatch::stop_scripts()` глушит script, но
-оставляет capability. Для raw-событий script не вызывается, поэтому
-`stop_scripts()` на них не влияет. Цель клавиши лежит в конверте: `KeyPress` не
-несёт идентификатор, raw-событие адресуется сфокусированному элементу или окну,
-и `keyboard` выпускает семантический `key` с тем же `target`. Capability
-обходятся по пути виджет → предки → окно; `on ...` вызывается только на целевом
-виджете, а raw-события скрипту недоступны. `cleanup` вызывается при демонтаже
-элемента или перестройке дерева, после чего слот удаляется.
+Services are `states`, `event_sink`, and `clipboard`. The `Build` constructor
+passes them, and they reach hook contexts.
 
-### Поле ввода
+The function creates state once. `update` runs when any parameter changes. State
+sits in the element's `StateId` slot. Each instance has its own slot, including
+rows of `@each`. Hooks receive it through `CapabilityContext`. State is borrowed
+exclusively for the hook duration. Re-entering the same slot breaks the contract
+and panics through `RefCell`.
 
-`TextInput` — листовой виджет: блок — одно выражение, начальное значение.
+The `event` hook receives semantic events as `&UiEvent`. The `raw_event` hook
+receives raw events as `&RawUiEvent`. Subscriptions are set with `events(...)`
+and `raw_events(...)`.
+
+A hook returns `bool` or `Dispatch`. `true` is the same as `Dispatch::stop()`:
+consume the event and stop both capabilities and `on ...`. `Dispatch::handled()`
+only marks the event handled. Other capabilities and `on ...` keep running. The
+next hook sees the flag through `CapabilityContext::handled()`.
+`Dispatch::stop_capabilities()` stops capabilities but leaves script.
+`Dispatch::stop_scripts()` silences script but leaves capabilities.
+
+For raw events script is not called, so `stop_scripts()` has no effect on them.
+The key target is in the envelope. `KeyPress` carries no identifier. A raw event
+is addressed to the focused element or window. `keyboard` emits a semantic `key`
+with the same `target`. Capabilities are walked on the path widget → ancestors →
+window. `on ...` is called only on the target widget. Script cannot see raw
+events.
+
+`cleanup` runs when the element is removed or the tree is rebuilt. Then the slot
+is removed.
+
+### Input field
+
+`TextInput` is a leaf widget. Its block holds one expression, the initial value.
 
 ```brul
 TextInput (field) { draft }
 ```
 
-Значение поля — состояние приложения: выражение задаёт его при сборке и при
-изменении, `on input` возвращает новое значение обратно. Каретка, выделение,
-preedit и прокрутка — интерактивное состояние листового виджета; в скрипте его
-нет. Внешняя запись значения заменяет буфер; каретка подтягивается в границы
-нового текста. Поле фокусируемо по умолчанию и получает встроенный класс
-`.brul-input` с курсором `text`; привязка объявлена в `builtin/widgets.brul`,
-класс можно переопределить в `<style>`.
+The field value is application state. The expression sets it at build time and
+on change. `on input` returns the new value. The caret, selection, preedit, and
+scroll are interactive state of the leaf widget. Script does not hold them. An
+external write replaces the buffer and moves the caret to the bounds of the new
+text.
 
-Перечисленные реакции на клавиши, выделение, клипборд и IME реализует встроенная
-политика `editor`: она правит буфер через `with_edit` и шлёт скрипту `input`,
-`submit`, `copy`; свою политику можно подключить через `use:`.
+The field is focusable by default. It receives the built-in class `.brul-input`
+with a `text` cursor. The binding is declared in `builtin/widgets.brul`. You can
+override the class in `<style>`.
 
-- `on input: fn(ev)` — текст изменён; `ev.value` — новая строка, `ev.caret` —
-  позиция каретки в байтах UTF-8. События `input` и `submit` испускает политика
-  `editor`; ядро виджета хранит только буфер, каретку, выделение и preedit.
-- `on key: fn(ev)` — обычная клавиша приходит с тем же набором полей, что и на
-  элементе. Если `Backspace`/`Delete` не изменили текст, `editor` посылает raw
-  `KeyNoop`, который попадает в подписку `Key` и становится обычным `key` без
-  отдельного поля: компонент может обработать клавишу сам, например снять
-  последний тег.
-- `on submit: fn` — нажат `Enter` в однострочном поле.
-- `Escape` и `Tab` редактор пропускает: `keyboard` на `Escape` в модальном слое
-  шлёт `dismiss` на слой и останавливает цепочку, иначе клавиша становится
-  `on key` на том же адресате; `Tab` переключает фокус и в `on key` не попадает.
-  `ArrowUp`/`ArrowDown` редактор обрабатывает только в многострочном поле, в
-  однострочном они приходят как `on key` на поле. `Ctrl+Enter` не обрабатывается
-  редактором ни в одном режиме и тоже приходит как `on key` на поле (`on submit`
-  не вызывается).
+The built-in `editor` policy implements key reactions, selection, clipboard, and
+IME. It edits the buffer through `with_edit` and sends `input`, `submit`, and
+`copy` to script. You can attach a custom policy through `use:`.
 
-`multiline: true` делает поле многострочным: текст переносится по ширине поля,
-`Enter` вставляет перевод строки, `ArrowUp`/`ArrowDown` водят каретку по
-строкам, а поле прокручивается, удерживая каретку в видимой части. В
-однострочном поле строка не переносится: длинный текст обрезается по границе
-поля.
+- `on input: fn(ev)` reports changed text. `ev.value` is the new string.
+  `ev.caret` is the caret position in UTF-8 bytes. The `editor` policy emits
+  `input` and `submit`. The widget core holds only the buffer, caret, selection,
+  and preedit.
+- `on key: fn(ev)` delivers an ordinary key with the same field set as on an
+  element. If `Backspace` or `Delete` does not change the text, `editor` sends a
+  raw `KeyNoop`. That reaches the `Key` subscription and becomes an ordinary
+  `key` without a special field. The component can then handle the key itself,
+  for example to remove the last tag.
+- `on submit: fn` reports `Enter` in a single-line field.
+- The editor passes `Escape` and `Tab` through. On `Escape`, `keyboard` sends
+  `dismiss` to a modal layer and stops the chain. Otherwise the key becomes
+  `on key` at the same target. `Tab` changes focus and does not reach `on key`.
+  The editor handles `ArrowUp` and `ArrowDown` only in a multi-line field. In a
+  single-line field they arrive as `on key` on the field. `Ctrl+Enter` is not
+  handled by the editor in either mode and also arrives as `on key` on the
+  field. `on submit` is not called.
+
+`multiline: true` makes the field multi-line. Text wraps at field width. `Enter`
+inserts a line break. `ArrowUp` and `ArrowDown` move the caret between lines.
+The field scrolls to keep the caret visible. In a single-line field there is no
+wrap. Long text is cut at the field boundary.
 
 ```brul
 TextInput (note, multiline: true) { draft }
 ```
 
-`multiline` — статический флаг (`multiline: true`), как `focusable`.
+`multiline` is a static flag such as `focusable`.
 
-Выделение: `Shift` со стрелками, `Home`, `End` и кликом, протяжка мышью от
-каретки; `Ctrl+A` — весь текст. Выделение подсвечивается, а ввод символа,
-`Backspace` или `Delete` заменяет его. `Home`/`End` в многострочном поле —
-начало и конец текущей строки, в однострочном — всего текста.
+Selection uses `Shift` with arrows, `Home`, `End`, a click, and a mouse drag
+from the caret. `Ctrl+A` selects all text. Selection is highlighted. Typing a
+character, `Backspace`, or `Delete` replaces it. In a multi-line field `Home`
+and `End` go to the start and end of the current line. In a single-line field
+they go to the start and end of all text.
 
-`Ctrl+C` копирует выделение, `Ctrl+X` вырезает его, `Ctrl+V` вставляет из
-системного клипборда вместо выделения. Вставка в однострочное поле теряет
-переводы строк, в многострочное — сохраняет их как `\n`.
+`Ctrl+C` copies the selection. `Ctrl+X` cuts it. `Ctrl+V` pastes from the system
+clipboard in place of the selection. Paste into a single-line field drops line
+breaks. Paste into a multi-line field keeps them as `\n`.
 
-Ввод через IME виден сразу: набор показывается в поле у каретки с подчёркиванием
-и заменяется окончательным текстом при подтверждении. `DeleteSurrounding`
-удаляет символы вокруг каретки, как его просит IME.
+IME input is visible at once. The composition appears in the field at the caret
+and is underlined. Final text replaces it on confirm. `DeleteSurrounding`
+removes characters around the caret as the IME requests.
 
-### Классы и состояния
+### Classes and states
 
-Голый идентификатор в скобках — класс стилей. Один элемент — несколько классов:
-`Container (item-panel, rounded, elevated) { ... }`. `#имя` — не класс, а имя
-якоря ([якорь](#якорь)); это отдельный namespace.
+A bare identifier in parentheses is a style class. One element can have several
+classes: `Container (item-panel, rounded, elevated) { ... }`.
 
-Класс может прийти из данных:
+`#name` is not a class. It is an anchor name ([anchor](#anchor)). It is a
+separate namespace.
+
+A class can come from data:
 `Container (plate, class: tones[index % 4]) { ... }`.
 
-- Класс из выражения идёт **после** статических классов элемента и меняет только
-  свойства, объявленные в его собственном правиле; остальные остаются от
-  статических классов.
-- Пустая строка или `null` — класса нет. Неизвестное имя — ошибка в лог, вид
-  остаётся статическим: имя приходит из данных, проверить его на компиляции
-  нельзя.
-- Компонент класс не принимает: `Button (primary) { }` — ошибка компиляции.
-  Родитель передаёт только пропсы и `on <событие>`; внешний вид задаёт сам
-  компонент. `class:` и `use:` на вызове компонента тоже запрещены.
+- A class from an expression comes **after** the static classes of the element.
+  It changes only properties declared in its own rule. Other properties stay
+  from the static classes.
+- An empty string or `null` means no class. An unknown name is logged as an
+  error. The look stays static. The name comes from data, so compilation cannot
+  check it.
+- A component does not accept a class. `Button (primary) { }` is a compile
+  error. A parent passes only props and `on <event>`. The component defines its
+  own appearance. `class:` and `use:` on a component call are forbidden too.
 
-Данные-зависимые состояния — не через смену класса, а через **встроенные
-параметры-состояния**, переключающие снапшоты
-([лейаут и стили](../dev/architecture.md#лейаут-и-стили)):
+Data-dependent states do not come from a class change. They come from **built-in
+state parameters** that switch snapshots
+([layout and styles](../dev/architecture.md#layout-and-styles)):
 
-| Параметр         | Включаемое состояние | Кто меняет         |
-| ---------------- | -------------------- | ------------------ |
-| `checked: Expr`  | `:checked`           | логика компонента  |
-| `selected: Expr` | `:selected`          | логика компонента  |
-| `disabled: Expr` | `:disabled`          | логика компонента  |
-| —                | `:hover`, `:pressed` | политика `pointer` |
+| Parameter        | State enabled        | Changed by       |
+| ---------------- | -------------------- | ---------------- |
+| `checked: Expr`  | `:checked`           | component logic  |
+| `selected: Expr` | `:selected`          | component logic  |
+| `disabled: Expr` | `:disabled`          | component logic  |
+| —                | `:hover`, `:pressed` | `pointer` policy |
 
-Стили для состояний — в CSS-подобных правилах ([style.md](style.md)),
-компилируются в снапшоты; переключение — замена снапшота, без пересчёта каскада.
+Styles for states are CSS-like rules ([style.md](style.md)). They compile into
+snapshots. A switch replaces the snapshot. The cascade is not recalculated.
 
-### Обработчики
+### Handlers
 
-Обработчик — только именованная функция, присоединяется в скобках:
+A handler is a named function only. Attach it in parentheses:
 
 ```brul
 Container (checkbox, checked: checked, on click: toggle) { }
 ```
 
-Правила:
+Rules:
 
-- имя обязано резолвиться в функцию скрипт-блока этого компонента или во
-  встроенную функцию — иначе ошибка компиляции с позицией;
-- один обработчик на событие; дубликат — ошибка;
-- аргументы события передаются функции параметрами: `event clicked(i: Number);`
-  → `function launch(i: Number): Void { ... }`;
-- инлайн-тела (`on click { ... }`) в MVP **запрещены**: поведение живёт в
-  скрипте, разметка — только структура и объявления компонента
-  ([причина](../dev/architecture.md#ограничения-dsl)).
+- The name must resolve to a function in this component's script block or to a
+  built-in function. Otherwise it is a compile error with a position.
+- One handler per event. A duplicate is an error.
+- Event arguments pass to the function as parameters:
+  `event clicked(i: Number);` maps to
+  `function launch(i: Number): Void { ... }`.
+- Inline bodies such as `on click { ... }` are **forbidden** in MVP. Behavior
+  lives in script. Markup holds only structure and component declarations. See
+  [the reason](../dev/architecture.md#dsl-limits).
 
-### Параметры
+### Parameters
 
-`имя: выражение` в скобках — по порядку приоритета:
+`name: expression` in parentheses follows this priority order:
 
-1. параметр-состояние (`checked`/`selected`/`disabled`);
-2. класс по выражению: `class: Expr`;
-3. встроенная привязка виджета: `visible`, `x`, `y` (абсолютное позиционирование
-   внутри родителя — поверх лейаута);
-4. флаг фокуса: `focusable: Bool` — только литерал `true`/`false`; у `Layer` ещё
-   `modal: Bool` — литерал, ловушка фокуса и `dismiss` по Escape;
-5. свойство компонента (при инстанцировании компонента).
+1. A state parameter: `checked`, `selected`, or `disabled`.
+2. A class from an expression: `class: Expr`.
+3. A built-in widget binding: `visible`, `x`, or `y`. Absolute positioning
+   inside the parent sits above layout.
+4. A focus flag: `focusable: Bool`. Only the literal `true` or `false` is valid.
+   `Layer` also has `modal: Bool`, a literal that traps focus and handles
+   `dismiss` on Escape.
+5. A component property when a component is instantiated.
 
-Выражение параметра — реактивная привязка: изменение зависимых сигналов вызывает
-точечное обновление
-([обновления без VDOM](../dev/architecture.md#обновления-без-vdom)).
+A parameter expression is a reactive binding. A change in its signals causes a
+point update. See
+[updates without VDOM](../dev/architecture.md#updates-without-vdom).
 
-### Свойства и события компонента
+### Component properties and events
 
 ```brul
 prop checked: Bool = false;     // тип обязателен (нужен кодегену для сигнала)
 event clicked(i: Number);       // событие с типизированными аргументами
 ```
 
-- Декларация `prop` или `event` заканчивается `;`; пропуск — ошибка с позицией.
-- Объявления стоят в блоке `component` рядом со структурой, порядок не важен.
-- Значение по умолчанию обязательно для `Bool`/`Number`/`String`; `Image` — по
-  умолчанию пустой (`= null`).
-- `prop … : Image` принимает `empty` (пустая картинка) или значение `Image`:
-  ресурс из `<use>` либо путь, который приходит из данных приложения.
-- Присваивание свойству из обработчика — запись в сигнал.
-- Вызов события: `clicked(index)` — как вызов функции.
+- A `prop` or `event` declaration ends with `;`. Omitting it is an error with a
+  position.
+- Declarations sit in the `component` block next to the structure. Order does
+  not matter.
+- A default value is required for `Bool`, `Number`, and `String`. `Image`
+  defaults to empty, that is `= null`.
+- `prop … : Image` accepts `empty` (an empty image) or an `Image` value: a
+  resource from `<use>` or a path that comes from application data.
+- Assigning to a property from a handler writes a signal.
+- Raising an event uses a call: `clicked(index)`.
 
-### Файлы и импорты
+### Files and imports
 
-Один `.brul`-файл — один SFC. Блоки верхнего уровня в тегах: `<markup>`
-обязателен и единственный, `<use>`, `<style>` и `<script>` опциональны и тоже
-единственны. Порядок блоков свободен, текст вне блоков запрещён. Содержимое
-блока принадлежит своему языку, сплиттер его не разбирает. В `<markup>` ровно
-одно объявление — `window` или `component`. Смешивать их в одном файле нельзя;
-компоненты и дополнительные окна приходят через `<use>`.
+One `.brul` file is one SFC. Top-level blocks use tags. `<markup>` is required
+and appears once. `<use>`, `<style>`, and `<script>` are optional and also
+appear once. Block order is free. Text outside blocks is forbidden.
+
+Block content belongs to its own language. The splitter does not parse it.
+`<markup>` holds exactly one declaration, either `window` or `component`. They
+cannot be mixed in one file. Components and additional windows arrive through
+`<use>`.
 
 ```brul
 <use>
@@ -380,11 +411,12 @@ event clicked(i: Number);       // событие с типизированны�
 </script>
 ```
 
-- `<use>` — зависимости файла: грамматика и семантика — в [use.md](use.md).
-- Инстанцирование: `BrowserItem (index: 0, name: "Chrome") { }`. Дети в блоке
-  вызова попадают в слот компонента — см. «Слоты».
+- `<use>` holds file dependencies. Its grammar and semantics are in
+  [use.md](use.md).
+- Instantiation uses `BrowserItem (index: 0, name: "Chrome") { }`. Children in
+  the call block go to the component slot. See "Slots".
 
-### Управление детьми
+### Child control
 
 ```brul
 @if (isDefault) {
@@ -402,18 +434,19 @@ event clicked(i: Number);       // событие с типизированны�
 }
 ```
 
-- `@if`/`@else if`/`@else` — условное включение поддерева; ветки проверяются по
-  порядку, срабатывает первая истинная.
-- `@each` — повторение по массиву; заголовок в скобках: коллекция, `as` и имя
-  элемента, необязательные имя индекса и выражение ключа. `@else` у `@each` —
-  ветка на пустой массив.
-- Группа `@if`/`@each` — не бокс разметки: её дети раскладываются родителем, как
-  будто группы нет. Пустая ветка не занимает `gap` и не сдвигает соседей.
-- Строка `each` опознаётся ключом: с тем же ключом и тем же элементом она
-  переиспользуется, без ключа — по позиции. Изменённый элемент пересобирает
-  строку целиком.
+- `@if`, `@else if`, and `@else` include a subtree conditionally. Branches are
+  checked in order. The first true branch runs.
+- `@each` repeats over an array. The head in parentheses holds the collection,
+  `as`, the item name, and an optional index name and key expression. `@else` on
+  `@each` is the branch for an empty array.
+- An `@if` or `@each` group is not a markup box. Its children are laid out by
+  the parent as if the group were absent. An empty branch takes no `gap` and
+  does not move neighbors.
+- An `each` row is identified by its key. The same key and the same element
+  reuse the row. Without a key, position identifies it. A changed element
+  rebuilds the whole row.
 
-### Слоты
+### Slots
 
 `card.brul`:
 
@@ -443,88 +476,95 @@ window Demo (title: "demo") {
 </markup>
 ```
 
-- `@slot` — точка вставки default-слота внутри контейнера компонента. Дети из
-  блока вызова, кроме именованных вставок, становятся его содержимым; без детей
-  слот пуст.
-- `@slot(name)` в компоненте — именованная точка вставки. Её содержимое задаётся
-  в блоке вызова элементом `@slot(name) { ... }`; такая вставка должна быть
-  прямым элементом блока вызова.
-- Default-слот один; именованные вставки не повторяются. Неизвестное имя,
-  повторная вставка и дети без объявленного слота — ошибки компиляции.
-- Если у компонента только именованные слоты, обычные дети отклоняются: для них
-  нужен `@slot`. Компонент без слотов детей не принимает.
-- Содержимое слота строится в контексте вызывающего: его привязки, обработчики и
-  параметры работают как в разметке на месте вызова.
-- `@slot` можно ставить внутри `@if`/`@each` компонента: при пересборке
-  структуры дети вызывающего перерисовываются заново.
-- `@slot` и `@slot(name)` можно поставить прямо в корне компонента:
-  `component Card { @slot }`. Такой компонент — фрагмент: он не образует
-  layout-узел и не рисуется, а его дети становятся братьями в раскладке
-  вызывающего. Ноль детей — пусто, N детей — N братьев. Именованные корневые
-  слоты вставляются в порядке объявлений; каждый даёт 0..N братьев.
-- У фрагмента нет виджета, к которому можно привязать `use:` или `#якорь` на
-  вызове, — это ошибка компиляции. Окно, наоборот, обязано иметь ровно один
-  корень-элемент; `@slot` в корне окна запрещён.
-- `@if` и `@each` можно поставить прямо в корне компонента:
-  `@if (shown) { ... }` или `@each (items as item) { ... }`.
-- Корневая структура даёт ноль или несколько братьев. Пустая ветка не даёт ни
-  одного брата и не оставляет зазора.
-- Корневые члены идут в порядке объявления: элементы, вызовы компонентов, `@if`,
-  `@each` и слоты могут стоять вместе.
-- `@if` и `@each` в корне окна — ошибка компиляции.
+- `@slot` is the insertion point of the default slot inside a component
+  container. Children of the call block that are not named insertions become its
+  content. Without children the slot is empty.
+- `@slot(name)` in a component is a named insertion point. The call block sets
+  its content with `@slot(name) { ... }`. Such an insertion must be a direct
+  element of the call block.
+- There is one default slot. Named insertions do not repeat. An unknown name, a
+  repeated insertion, or children without a declared slot are compile errors.
+- If a component has only named slots, ordinary children are rejected. They need
+  a `@slot`. A component without slots accepts no children.
+- Slot content is built in the caller's context. Its bindings, handlers, and
+  parameters work as in markup at the call site.
+- You can place `@slot` inside `@if` or `@each` of a component. When the
+  structure is rebuilt, caller children are redrawn.
+- You can place `@slot` and `@slot(name)` directly at the component root:
+  `component Card { @slot }`. Such a component is a fragment. It forms no layout
+  node and draws nothing. Its children become siblings in the caller's layout.
+  Zero children give nothing. N children give N siblings. Named root slots are
+  inserted in declaration order. Each gives 0 to N siblings.
+- A fragment has no widget to which a call can bind `use:` or `#anchor`. That is
+  a compile error. A window, in contrast, must have exactly one root element.
+  `@slot` at the window root is forbidden.
+- You can place `@if` and `@each` directly at the component root:
+  `@if (shown) { ... }` or `@each (items as item) { ... }`.
+- A root structure gives zero or more siblings. An empty branch gives no sibling
+  and leaves no gap.
+- Root members follow declaration order. Elements, component calls, `@if`,
+  `@each`, and slots can sit together.
+- `@if` and `@each` at the window root are a compile error.
 
-## Встроенные виджеты MVP
+## Built-in MVP widgets
 
-| Виджет      | Дети      | Назначение                                              |
-| ----------- | --------- | ------------------------------------------------------- |
-| `Container` | контейнер | универсальный контейнер (панели, кнопки, карточки)      |
-| `Layer`     | контейнер | слой поверх окна, вне потока                            |
-| `Text`      | выражение | текст (стили: цвет, размер, выравнивание)               |
-| `TextInput` | выражение | поле ввода одной строки с кареткой                      |
-| `Image`     | выражение | картинка (источник — ресурс или `Image`; tint — из CSS) |
-| `Video`     | выражение | кадры из Rust-декодера как внешняя текстура             |
-| `WebView`   | выражение | нативный WebView как дочернее окно (только Windows)     |
-| `Canvas`    | выражение | область рисования с painter-ом на Rust                  |
+| Widget      | Children   | Purpose                                                     |
+| ----------- | ---------- | ----------------------------------------------------------- |
+| `Container` | container  | universal container: panels, buttons, cards                 |
+| `Layer`     | container  | layer above the window, outside the flow                    |
+| `Text`      | expression | text: color, size, and alignment styles                     |
+| `TextInput` | expression | single-line input field with a caret                        |
+| `Image`     | expression | image: source is a resource or `Image`; tint comes from CSS |
+| `Video`     | expression | frames from a Rust decoder as an external texture           |
+| `WebView`   | expression | native WebView as a child window (Windows only)             |
+| `Canvas`    | expression | draw area with a Rust painter                               |
 
-`Container` собирает панели, кнопки, карточки и лейаут-строки/столбцы:
-направление потока задаётся свойством `flex-direction` из стиля (по умолчанию
-`row`, как в CSS), gap и padding — тоже из стиля.
+`Container` builds panels, buttons, cards, and layout rows or columns. Flow
+direction comes from the `flex-direction` style property. It defaults to `row`,
+as in CSS. Gap and padding also come from styles.
 
-`Text`/`TextInput`/`Image` — «листовые»: текст и ресурсы не участвуют в лейауте
-([лейаут и стили](../dev/architecture.md#лейаут-и-стили) — контейнер не содержит
-сырого текста).
+`Text`, `TextInput`, and `Image` are leaf widgets. Text and resources do not
+take part in layout. See
+[layout and styles](../dev/architecture.md#layout-and-styles). A container holds
+no raw text.
 
-### Слой
+### Layer
 
-`Layer` занимает всё окно независимо от padding родителя и не участвует в
-потоке: соседи не сдвигаются, размер и место слоя от содержимого не зависят.
-Дети слоя рисуются и получают ввод после обычного содержимого того же родителя,
-в порядке объявления: следующий ребёнок оказывается выше предыдущего и первым
-получает клик. Порядок между слоями — тоже порядок объявления.
+A `Layer` fills the whole window regardless of parent padding. It does not join
+the flow. Neighbors do not move. Its size and place do not depend on content.
 
-Сам слой ввод не принимает: клики проходят сквозь пустое место к содержимому
-ниже. Перехват — это ребёнок слоя: полноразмерная подложка гасит клики под
-содержимым, поэтому диалог и tooltip собираются из одного элемента.
-`visible: false` убирает слой из кадра и из попадания целиком.
+Layer children draw and receive input after the normal content of the same
+parent, in declaration order. A later child sits above an earlier one and
+receives the click first. Order between layers also follows declaration order.
 
-`modal: true` (только литерал, только у `Layer`) добавляет слою ловушку фокуса.
-Пока он видим, Tab и Shift+Tab ходят только по фокусируемым виджетам внутри
-него, а Escape не доходит до окна: вместо этого приходит событие `dismiss` на
-сам слой — его и слушает диалог. Политика `keyboard` вызывает
-`enter_modal_scope()`, поэтому `focusables()` ограничены слоем, а `Escape`
-превращается в `dismiss` и останавливает цепочку. Политика `pointer` входит в
-область при клике, политика `scroll` не пускает колесо к содержимому ниже. При
-появлении слоя фокус переходит на первый фокусируемый виджет внутри, при скрытии
-возвращается туда, где был до открытия. Клики по содержимому ниже по-прежнему
-гасит подложка, а не сам слой. Колесо прокрутки модальный слой тоже не
-пропускает: содержимое ниже стоит на месте, крутится только то, что внутри слоя.
+The layer itself does not accept input. Clicks pass through empty space to the
+content below. Interception comes from a child of the layer. A full-size
+backdrop consumes clicks under the content. A dialog and a tooltip are built
+from one element. `visible: false` removes the layer from the frame and from hit
+testing altogether.
 
-### Якорь
+`modal: true` is valid only as a literal and only on `Layer`. It adds a focus
+trap. While the layer is visible, Tab and Shift+Tab walk only focusable widgets
+inside it. Escape does not reach the window. Instead the layer receives a
+`dismiss` event, which the dialog listens for.
 
-Элемент внутри `Layer` можно привязать к измеренному прямоугольнику другого
-элемента. Цель объявляется статическим именем `#имя` в аргументах элемента,
-`anchor: @имя` ссылается на него; вся геометрия живёт в стилях привязанного
-элемента:
+The `keyboard` policy calls `enter_modal_scope()`. Therefore `focusables()` are
+limited to the layer. `Escape` becomes `dismiss` and stops the chain. The
+`pointer` policy enters the area on a click. The `scroll` policy does not let
+the wheel reach content below. When the layer appears, focus moves to the first
+focusable widget inside it. When it hides, focus returns to where it was before
+the layer opened.
+
+The backdrop, not the layer itself, still consumes clicks on content below. A
+modal layer does not pass the mouse wheel through either. Content below stays
+still. Only content inside the layer scrolls.
+
+### Anchor
+
+An element inside a `Layer` can attach to the measured rectangle of another
+element. The target is declared with a static name `#name` in the element
+arguments. `anchor: @name` refers to it. All geometry lives in the styles of the
+attached element:
 
 ```brul
 Container (tooltip, #tip-target) {
@@ -546,98 +586,102 @@ Layer (visible: shown) {
 }
 ```
 
-`#tip-target` — статическое имя якоря, а не класс: оно не участвует в подборе
-стилей, поэтому переименование класса `tooltip` не ломает привязку. Голый
-идентификатор в скобках по-прежнему класс, `@tip-target` — ссылка на имя, а не
-скриптовая переменная и не класс. Цель может быть объявлена позже ссылки.
+`#tip-target` is a static anchor name, not a class. It does not take part in
+style matching. Renaming the `tooltip` class does not break the binding. A bare
+identifier in parentheses is still a class. `@tip-target` is a name reference,
+not a script variable and not a class. The target can be declared after the
+reference.
 
-Имя не обязано быть уникальным: один и тот же вызов компонента или строка
-`@each` даёт несколько экземпляров с одним именем, и каждый якорь резолвится к
-ближайшему экземпляру своего поддерева — от привязанного элемента вверх по общим
-предкам. Два имени на соседних элементах одного блока — ошибка компиляции: для
-них нет общего предка, который различал бы экземпляры.
+The name need not be unique. One component call or one `@each` row can create
+several instances with the same name. Each anchor resolves to the nearest
+instance in its own subtree, walking up from the attached element through common
+ancestors. Two names on neighboring elements of one block are a compile error.
+They have no common ancestor to tell the instances apart.
 
-Свойства стиля: `anchor-side` — `top`, `bottom` (по умолчанию), `left`, `right`;
-`anchor-gap` — знаковое расстояние, по умолчанию `0`; `anchor-align` — `start`,
-`center` (по умолчанию), `end`; `anchor-flip` — по умолчанию `true`, переносит
-элемент на противоположную сторону, если он не помещается, после чего координаты
-ограничиваются размерами окна.
+Style properties: `anchor-side` is `top`, `bottom` by default, `left`, or
+`right`. `anchor-gap` is a signed distance, `0` by default. `anchor-align` is
+`start`, `center` by default, or `end`. `anchor-flip` is `true` by default. It
+moves the element to the opposite side if it does not fit. Then coordinates are
+limited to window size.
 
-Позиция считается после лейаута: прямоугольник якоря берётся из готового кадра,
-весь подграф привязанного элемента сдвигается целиком, второй проход лейаута не
-запускается. С layer-потомков сдвиг не распространяется — они остаются
-полноэкранными.
+Position is computed after layout. The anchor rectangle comes from the finished
+frame. The whole subgraph of the attached element moves as one. No second layout
+pass runs. Layer descendants do not inherit the shift. They stay full-screen.
 
-`anchor` нельзя сочетать с `x` или `y`: это два разных способа задать положение.
-Геометрия не доступна скрипту, поэтому привязка не создаёт цикла «лейаут →
-скрипт → лейаут». Слои с якорём не перехватывают ввод в пустом месте; закрытие
-по клику вне элемента — отдельная задача.
+`anchor` cannot be combined with `x` or `y`. These are two ways to set position.
+Script has no access to geometry, so an anchor creates no "layout → script →
+layout" cycle. Layers with an anchor do not intercept input in empty space.
+Close on click outside the element is a separate task.
 
-## MVP-подмножество — итог
+## MVP subset summary
 
-- Всё в «Грамматике» выше + 5 встроенных виджетов + 3 параметра-состояния +
-  `class`, `visible`/`x`/`y`, `focusable`, `modal`.
-- Импорт: `import Name from "./path";` или кит через `brul:name`
-  ([use.md](use.md)); ресурс: `resource Name from "./path.png";`.
+- Everything in "Grammar" above plus 5 built-in widgets, 3 state parameters, and
+  `class`, `visible`/`x`/`y`, `focusable`, and `modal`.
+- Import: `import Name from "./path";` or a kit through `brul:name`
+  ([use.md](use.md)). Resource: `resource Name from "./path.png";`.
 
-## Видео
+## Video
 
-`Video` — встроенный элемент, который держит декодер, такт воспроизведения и
-текущий кадр в Rust. Источник задаётся пропсом `source` (путь к `.gif` или
-статичной картинке), `playing` включает и останавливает воспроизведение:
+`Video` is a built-in element. It holds a decoder, playback clock, and current
+frame in Rust. The `source` prop sets the source, a path to a `.gif` or a static
+image. `playing` starts and stops playback.
 
 ```brul
 Video (source: "clip.gif", playing: true, on ended: finished, on error: failed)
 ```
 
-Кадры приходят в слоты состояния виджета как внешняя текстура: GPU получает
-новый кадр по изменению ревизии, программный рендер использует тот же кадр.
-События `ended` и `error` адресуются конкретному элементу и приходят в его
-`.brul`-скрипт. Свои декодеры реализуют `brul::video::Decoder`.
+Frames arrive in widget state slots as an external texture. GPU gets a new frame
+when the revision changes. Software rendering uses the same frame.
+
+`ended` and `error` events are addressed to the specific element and reach its
+`.brul` script. Custom decoders implement `brul::video::Decoder`.
 
 ## WebView
 
-`WebView` — встроенный элемент для нативного веб-содержимого. В отличие от
-`Video`, он не рисуется BRUL: бэкенд создаёт дочернее нативное окно и
-синхронизирует его геометрию с лейаутом после каждого кадра.
+`WebView` is a built-in element for native web content. Unlike `Video`, BRUL
+does not draw it. The backend creates a child native window and syncs its
+geometry with layout after every frame.
 
 ```brul
 WebView (source: "https://example.com", visible: true, on message: received)
 ```
 
-Пропс `source` задаёт URL, `visible` управляет видимостью. Вызов
-`window.ipc.postMessage("...")` из JavaScript приходит как событие `message` с
-одним аргументом-строкой в `.brul`-скрипт элемента. Приложение подключает бэкенд
-через
+The `source` prop sets the URL. `visible` controls visibility. A
+`window.ipc.postMessage("...")` call from JavaScript arrives as a `message`
+event with one string argument in the element's `.brul` script.
+
+The application attaches a backend through
 `brul::run_generated_with_platform(..., brul::PlatformRunOptions { factory: brul::webview::factory(), ready: Box::new(|_| {}) })`.
 
-Первая итерация поддерживает Windows и непрозрачный GPU-бэкенд. Дочернее окно
-всегда лежит над пикселями BRUL: его нельзя обрезать, закрыть другим виджетом,
-наложить эффект или нарисовать поверх него. software/layered-бэкенд и Wayland не
-поддерживаются.
+The first iteration supports Windows and an opaque GPU backend. The child window
+always sits above BRUL pixels. It cannot be clipped, covered by another widget,
+given an effect, or drawn over. The software and layered backend and Wayland are
+not supported.
 
 ## Canvas
 
-`Canvas` — листовой элемент, который рисует painter из Rust в своём
-прямоугольнике. Пропс `animated` (по умолчанию `false`) включает перерисовку
-каждого кадра; геометрия, стиль, классы и clip задаются в разметке и CSS.
+`Canvas` is a leaf element. It draws a Rust painter inside its rectangle. The
+`animated` prop, `false` by default, enables a redraw each frame. Geometry,
+style, classes, and clip are set in markup and CSS.
 
 ```brul
 Canvas (plot, animated: true, use: waveform)
 ```
 
-`waveform` — `#[brul::attach]`-функция, которая через
-`ctx.element().set_painter(..)` регистрирует `brul::gui::CanvasPainter` и хранит
-возвращённый `brul::PainterGuard`. Painter получает `PaintCtx` с прямоугольником
-содержимого и стилем элемента, а возвращает `Vec<PaintCommand>`: команды
-преобразуются в обычные команды отрисовки с clip и прозрачностью узла. Когда
-данные изменились, attach вызывает `element.invalidate()`.
+`waveform` is a `#[brul::attach]` function. Through
+`ctx.element().set_painter(..)` it registers a `brul::gui::CanvasPainter` and
+stores the returned `brul::PainterGuard`.
 
-## Свои виджеты на Rust
+The painter receives a `PaintCtx` with the content rectangle and the element
+style. It returns `Vec<PaintCommand>`. Commands turn into ordinary draw commands
+with clip and node opacity. When data changes, the attach calls
+`element.invalidate()`.
 
-Элемент разметки можно объявить в исходниках приложения атрибутом
-`#[brul::widget]`. Сборщик находит такие функции в `src/**/*.rs` и добавляет их
-в каталог рядом со встроенными элементами:
+## Custom widgets in Rust
+
+You can declare a markup element in application sources with `#[brul::widget]`.
+The builder finds such functions in `src/**/*.rs` and adds them to the catalog
+next to built-in elements:
 
 ```rust
 #[brul::widget(name = "Gauge", events(changed: [Number]))]
@@ -652,36 +696,40 @@ pub fn gauge(
 }
 ```
 
-Первые три аргумента — контекст вызова, остальные становятся типизированными
-пропсами: `f64`, `i*` и `u*` дают `Number`, `String` — `String`, `bool` —
-`Bool`. В разметке виджет вызывается обычным элементом, пропсы задаются
-именованными аргументами, события — через `on`:
+The first three arguments are the call context. The rest become typed props.
+`f64`, `i*`, and `u*` give `Number`. `String` gives `String`. `bool` gives
+`Bool`.
+
+In markup the widget is called as an ordinary element. Props use named
+arguments. Events use `on`:
 
 ```brul
 Gauge (value: 42, label: "load", on changed: changed)
 ```
 
-Тело возвращает `Built` из существующих виджетов `brul::gui`; отдельный скрипт у
-такого элемента отсутствует. Событие объявляется в атрибуте и отправляется через
-`component.borrow_mut().call("changed", &[...])`. Идентификатор слота состояния
-элемента доступен как `build.state_id()` — через него view хранит своё
-Rust-состояние без синтетического пропса в разметке. Дочерние элементы пока не
-поддерживаются; неизвестное имя элемента, пропса или события — ошибка сборки с
-позицией в файле.
+The body returns `Built` from existing `brul::gui` widgets. Such an element has
+no script of its own. The event is declared in the attribute and sent through
+`component.borrow_mut().call("changed", &[...])`.
 
-## Отложено (v3+)
+The element state slot id is available as `build.state_id()`. Through it a view
+stores its Rust state without a synthetic prop in markup.
 
-- `inherit`-наследование компонентов.
-- `each`-ключи для keyed-reuse, анимации.
-- Инлайн-переопределение стилей в разметке (осознанно запрещено —
-  [лейаут и стили](../dev/architecture.md#лейаут-и-стили)).
-- Вызов функций компонента из выражений разметки.
+Child elements are not supported yet. An unknown element, prop, or event name is
+a build error with a file position.
 
-## Тест-примеры (покрывают грамматику; сцены упрощены)
+## Deferred (v3+)
 
-### 1. CheckRow (чекбокс-строка)
+- `inherit` component inheritance.
+- `each` keys for keyed reuse and animations.
+- Inline style overrides in markup. This is intentionally forbidden, see
+  [layout and styles](../dev/architecture.md#layout-and-styles).
+- Calls of component functions from markup expressions.
 
-Скрипт-блок файла:
+## Test examples (cover the grammar; scenes are simplified)
+
+### 1. CheckRow (checkbox row)
+
+The script block of the file:
 
 ```js
 function toggle(): Void {
@@ -690,7 +738,7 @@ function toggle(): Void {
 }
 ```
 
-Разметка:
+The markup:
 
 ```brul
 component CheckRow {
@@ -705,9 +753,9 @@ component CheckRow {
 }
 ```
 
-### 2. BrowserItem (строка списка браузеров)
+### 2. BrowserItem (a browser list row)
 
-Скрипт-блок файла:
+The script block of the file:
 
 ```js
 function itemClicked(): Void {
@@ -715,7 +763,7 @@ function itemClicked(): Void {
 }
 ```
 
-Разметка:
+The markup:
 
 ```brul
 component BrowserItem {
@@ -756,7 +804,7 @@ component BrowserItem {
 }
 ```
 
-### 3. Header (шапка)
+### 3. Header (title bar)
 
 ```brul
 component Header {
@@ -782,7 +830,7 @@ component Header {
 }
 ```
 
-### 4. Окно (сборка)
+### 4. Window (assembly)
 
 ```brul
 window Picker (title: "picker", width: 488, height: 800,
@@ -800,13 +848,13 @@ window Picker (title: "picker", width: 488, height: 800,
 }
 ```
 
-Соответствующий скрипт:
+The matching script:
 `function handleKey(ev: Object): Void { if (ev.code == "Escape") { exit() } }`,
 `function launch(i: Number): Void { ... }`.
 
-Свойства `checkSvg`, `currentUrl` и т.п. — входные данные примера.
+Properties such as `checkSvg` and `currentUrl` are example input data.
 
-### 5. Canvas (свой painter)
+### 5. Canvas (custom painter)
 
 ```brul
 window CanvasDemo (title: "canvas") {
@@ -814,5 +862,5 @@ window CanvasDemo (title: "canvas") {
 }
 ```
 
-`plot` — класс с размерами, `waveform` — attach на Rust, который регистрирует
-`CanvasPainter` и обновляет его данные через `invalidate()`.
+`plot` is a class with sizes. `waveform` is a Rust attach that registers
+`CanvasPainter` and updates its data through `invalidate()`.

@@ -1,128 +1,132 @@
-# Процесс
+# Process
 
-Работа идёт задачами: ревью видит всё изменение целиком, а ошибка стоит одной
-задачи.
+Work is split into tasks. Review sees each change as a whole. One error belongs
+to one task.
 
-## Задача
+## Task
 
-Задача — одно проверяемое поведение: то, что принимается или отклоняется за одно
-чтение диффа. Описание задачи самодостаточно: план для неё не нужен.
+A task is one checkable behavior. A reviewer accepts or rejects it in one diff
+read. A task description is self-contained. It does not need a plan.
 
-Границы задачи:
+Task boundaries:
 
-- не тянет правки, без которых изменение не работает;
-- не смешивает поведение и механику: перенос файлов, переименование, переезд
-  крейта — отдельной задачей, даже если файлов много;
-- не форматирует и не чинит соседний код попутно.
+- Do not include changes without which the result does not work.
+- Do not mix behavior with mechanics. File moves, renames, and crate moves are
+  separate tasks, even when many files are involved.
+- Do not format or fix nearby code in passing.
 
-Механическая правка может задеть сколько угодно файлов, но её объём называется
-до начала работы, а не после.
+A mechanical change may touch any number of files. State its volume before you
+start, not after.
 
-Сложность убирается прежде, чем добавляется: если задача решается удалением, а
-не добавлением, решается удалением. Симптом не лечится защитой — воспроизведи,
-найди причину, исправь причину. Две правки на одной посылке провалились
-одинаково — третья не пишется: посылка формулируется одной фразой и правится
-она.
+Remove complexity before you add it. If a task is solved by deletion, solve it
+by deletion. Do not treat a symptom with a guard. Reproduce it, find the cause,
+and fix the cause. If two attempts on the same premise fail in the same way, do
+not write a third. State the premise in one sentence and fix it.
 
-Задача заканчивается готовым результатом, а не первым диффом: исправления и
-доделки по ней входят в неё же. Исправление по ревью, уточнение формулировки и
-доделка в той же области остаются в текущей задаче; новый номер — только для
-отдельного проверяемого поведения. Правка, которая не меняет поведение или
-контракт задачи, задачу не заводит.
+A task ends with a finished result, not with a first diff. Fixes and follow-up
+work belong to the same task. A review fix, a refined wording, and a follow-up
+in the same area stay in the current task. A new number is for separate
+checkable behavior only. A change that does not alter behavior or the task
+contract does not open a task.
 
-Проверки: `just check` — форматирование, clippy и тесты workspace. Что не влезло
-— отдельная задача в трекере, а не расширение текущей.
+Checks: `just check` runs formatting, clippy, and workspace tests. What does not
+fit goes into a new tracker task, not into the current one.
 
-## Ориентиры
+## Guidelines
 
-Чужие библиотеки и приложения — источник best practices, а не шаблон: смотрим,
-как они решают задачу, но API и структуру BRUL не копируем целиком.
+Treat other libraries and applications as a source of good practice, not as a
+template. See how they solve a problem. Do not copy their API and structure into
+BRUL.
 
-Тесты приложения проверяют поведение — конфиг, выбор, что сгенерированный код
-собирается и строится. Числа внутренностей кодогена (структуры, биндинги, дети,
-пропсы) живут в тестах движка: снимок, который ломается от правки разметки,
-ничего не проверяет.
+Application tests check behavior: configuration, selection, whether generated
+code builds and works. Numbers from codegen internals, such as structures,
+bindings, children, and props, belong to engine tests. A snapshot that breaks on
+a markup edit tests nothing.
 
-## Шероховатости
+## Work order
 
-Шероховатость фреймворка, найденная в работе, заводится в BRUL в тот же момент:
-что пришлось написать вместо очевидного, где это место, как увидеть. Обход её не
-заменяет, а отчёт называет, что обойдено. `just check` покрывает крейты и
-`examples/`.
+Do first what becomes cheaper if you do it now. Remove coupling first. Then
+remove the daily tax. Then improve readability. Then do cosmetic work.
 
-## Долг
+## Rough edges
 
-Долг не чинится попутно: попутная чистка — это второй размах в одном ревью.
-Рецепты замера — в [justfile](../../justfile):
+File a rough edge in the BRUL tracker as soon as you find it in work. State what
+you had to write instead of the obvious code, where it is, and how to see it. A
+workaround does not replace the report, and the report names what was bypassed.
+`just check` covers crates and `examples/`.
 
-- `just cov` — покрытие в `target/lcov.info`;
-- `just crap` — пересчитывает покрытие и сравнивает CRAP с порогом 15;
-- `just mutants` — мутации в диффе от `main`;
-- `just debt` — всё вместе.
+## Debt
 
-- CRAP ≥ 15 — функция сложная и слабо покрытая: разбить или покрыть тестом. При
-  полном покрытии CRAP равен цикломатике, поэтому порог — это потолок сложности:
-  15 оставляет таблицы разбора с матчем на 10–14 ветвей, где дробить нечего.
-  Исключение — точки входа winit и wgpu: методы `ApplicationHandler`,
-  `Gpu::new`, `Gpu::present_frame`, `run`, `run_tree_themed`. Им нужны настоящее
-  окно, цикл событий и GPU, поэтому покрыть их нечем; логика из них должна быть
-  вынесена в тестируемые функции, а находки CRAP по самим точкам входа долгом не
-  считаются. Второе исключение — таблицы-диспетчеры над перечислениями:
-  `Error::fmt` (18 вариантов) и `eval_expression` (15 видов выражений). Их
-  сложность равна числу вариантов enum и растёт только вместе с ним, поэтому они
-  живут в `allow` файла `.cargo-crap.toml`, а не в пороге: порог на них пришлось
-  бы поднимать с каждым новым вариантом. Записи в `allow` сравниваются по имени
-  функции на весь workspace, так что `*::fmt` накрывает все `Display` — это и
-  нужно, каждое сообщение об ошибке остаётся таблицей строк. Build-скрипты
-  измеряются `--include-build-script`: без флага cargo не передаёт им
-  `RUSTFLAGS`, и `build.rs` попадает в отчёт с нулевым покрытием, хотя
-  исполняется на каждой сборке.
-- Выжившая мутация — тест, который проходит при сломанном коде: убить её тестом
-  или удалить тест.
-- Дублирование ищется там, где форма повторяется трижды: парсеры, кодоген,
-  фикстуры.
+Do not fix debt in passing. A side cleanup is a second sweep in one review.
 
-Замер не правит код: находка — задача в трекере, по одной. Долг, который мешает
-текущей задаче, обходится узко и называется в отчёте.
+Recipes for measurements are in the [justfile](../../justfile):
 
-## Коммит
+- `just cov` writes coverage to `target/lcov.info`.
+- `just crap` recomputes coverage and compares CRAP with the threshold of 15.
+- `just mutants` runs mutation testing on the diff from `main`.
+- `just debt` runs all of them.
 
-Одна задача — один коммит. Коммитит пользователь после ревью; агент не коммитит
-и не пушит.
+- CRAP ≥ 15 means a function is complex and weakly covered. Split it or cover it
+  with a test. At full coverage CRAP equals cyclomatic complexity, so the
+  threshold is a complexity ceiling. A value of 15 keeps parse tables with a
+  match of 10 to 14 branches, where splitting is not useful. The first exception
+  is winit and wgpu entry points: `ApplicationHandler`, `Gpu::new`,
+  `Gpu::present_frame`, `run`, and `run_tree_themed`. They need a real window,
+  an event loop, and a GPU, so nothing can cover them. Keep logic outside them
+  in testable functions. CRAP findings on the entry points themselves are not
+  debt. The second exception is dispatcher tables over enums: `Error::fmt` with
+  18 variants and `eval_expression` with 15 expression kinds. Their complexity
+  equals the number of variants and grows only with it. They live in the `allow`
+  list of `.cargo-crap.toml`, not under the threshold. Raising the threshold for
+  them would require a new raise with every variant. Allow entries are matched
+  by function name across the workspace, so `*::fmt` covers all `Display`
+  implementations. That is intended: each error message stays a table of
+  strings. Build scripts are measured with `--include-build-script`. Without the
+  flag cargo does not pass `RUSTFLAGS` to them, and `build.rs` appears in the
+  report with zero coverage although every build runs it.
+- A surviving mutation is a test that passes on broken code. Kill it with a test
+  or remove the test.
+- Look for duplication where a form repeats three times: parsers, codegen,
+  fixtures.
 
-## Отчёт
+A measurement does not change code. Each finding becomes a tracker task. Debt
+that blocks the current task is bypassed narrowly and named in the report.
 
-После задачи — одна строка: что было изменено и как это проверить
+## Commit
 
-## Неоднозначность
+One task means one commit. The user commits after review. The agent does not
+commit and does not push.
 
-Стоп и вопрос. Вопрос, а не выбор за пользователя: неоднозначность спеки и любое
-открытое решение. Внешняя зависимость вопросом не является: она называется до
-правки — что убирает и почему популярная библиотека лучше своего кода, — и
-внедряется, если выгода есть.
+## Report
 
-Новый крейт — граница, а не «ещё одна папка», и выделяется по необходимости
-границы, а не по числу потребителей: у GUI-фреймворка потребителей будет много,
-ждать второго нечего. Граница нужна, если у модуля свой набор зависимостей, если
-без неё код ложится в чужой слой или замыкает цикл, или если он должен
-компилироваться отдельно. Крейт называется до правки — имя, ответственность, что
-переезжает и что остаётся, — и создаётся без разрешения: переезд идёт своей
-задачей и своим коммитом, поведение в тот же коммит не подмешивается.
+After a task, write one line: what changed and how to check it.
 
-## Трекер
+## Ambiguity
 
-Трекер `BRUL` — источник правды: задача описывает, что сделать и зачем, и
-читается без плана. Задача заводится на работу, которую надо довести до конца, а
-не на мелочь из одной строки; номеров пунктов плана в ней нет. Задача
-закрывается, когда работа готова и проверки зелёные.
+Stop and ask. Ask a question instead of choosing for the user. Ask about spec
+ambiguity and any open decision. An external dependency is not a question. Name
+it before the change, state what code it removes and why the popular library is
+better than local code, then use it if it helps.
 
-Правка спеки, меняющая контракт (как обязательный `;`), — отдельная задача.
-Разрешения она не требует: если спека мешает DX, Rust-way или
-производительности, меняется спека, а отчёт называет что и зачем. Правка,
-приводящая текст в соответствие с уже принятым контрактом, задачу не заводит:
-это строка в отчёте или комментарий к задаче, которая контракт ввела.
+A new crate is a boundary, not just another folder. Create one when a boundary
+is needed, not when a certain number of consumers exists. A GUI framework has
+many consumers, so do not wait for a second one. A boundary is needed when a
+module has its own dependencies, when without it code falls into the wrong layer
+or closes a cycle, or when it must compile on its own. Name the crate before the
+change: its name, its responsibility, what moves, and what stays. Create it
+without asking for permission. The move is its own task and its own commit. Do
+not mix behavior into that commit.
 
-[plan.md](plan.md) — временная очередь, по строке на задачу. Выполненный пункт
-отмечается `[x]`, историю хранит git. План будет удалён, поэтому ссылок на него
-из трекера нет. Пока план жив, он задаёт порядок работ; при расхождении с
-трекером прав трекер.
+## Tracker
+
+The `BRUL` tracker is the source of truth. A task states what to do and why. A
+reader must understand it on its own. Open a task for work that must be
+finished, not for a one-line detail. Close a task when the work is finished and
+the checks are green.
+
+A spec change that alters the contract, such as making `;` mandatory, is a
+separate task. It needs no permission. If a spec blocks DX, Rust-way, or
+performance, change the spec and state what changed and why in the report. A
+change that only brings text in line with an already accepted contract does not
+open a task. State it in the report or in a comment on the task that introduced
+the contract.

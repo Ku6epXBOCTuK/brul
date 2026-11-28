@@ -1,46 +1,52 @@
-# Продукт
+# Product
 
-BRUL — фреймворк нативных десктоп-приложений на Rust. Продукт — сам фреймворк:
-на нём надо писать быстро, читаемо и без потерь в скорости.
+BRUL is a framework for native desktop applications in Rust. The product is the
+framework. Applications must be fast to write, easy to read, and fast to run.
 
-## Требования к фреймворку
+## Framework requirements
 
-Три требования проверяются на ревью каждой задачи, а не отдельным этапом.
+Review checks three requirements on every task. There is no separate stage for
+them.
 
 ### DX
 
-Идеальный DX при написании приложений: минимум бойлерплейта, реактивность из
-коробки, «магия в языке» только понятная — правило, которое нельзя объяснить
-одним предложением, не нужно. Инструменты разработки закладываются на этом же
-фундаменте, а не приделываются потом: LSP, форматтер и линтер растут из тех же
-AST и стилей, что и кодоген, поэтому DSL обязан разбираться без исполнения.
-Обвязка, которая повторяется от приложения к приложению, уезжает в `brul`, а не
-копируется.
+Application development must have ideal DX. Use as little boilerplate as
+possible. Provide reactivity out of the box. Allow only magic that a developer
+can understand. Do not keep a rule that one sentence cannot explain.
+
+Build developer tools on the same foundation. Do not attach them later. LSP, the
+formatter, and the linter grow from the same AST and styles as codegen.
+Therefore the DSL must parse without execution.
+
+Move boilerplate that repeats across applications into `brul`. Do not copy it.
 
 ### Rust-way
 
-Фреймворк и сгенерированные им `.rs` читаются как обычный Rust: тип на границе,
-`match` по перечислению, ошибка публичной границы — тип, а не `String`. Модуль
-из кодогена проходит то же ревью, что ручной код: имена из исходника, без
-нумерованных обёрток и запечённых AST. Пожелания к коду —
-[AGENTS.md](../../AGENTS.md#rust-way).
+The framework and the `.rs` files it generates read as ordinary Rust. Use a type
+at a boundary. Match on an enum. Return a type, not `String`, from a public
+boundary.
 
-### Производительность
+A module from codegen passes the same review as hand-written code. Names come
+from the source. There are no numbered wrappers and no baked-in ASTs. Code
+preferences are in [AGENTS.md](../../AGENTS.md#rust-way).
 
-Скорость полученных приложений — часть контракта, а не оптимизация после:
-холодный старт, память и кадр входят в приёмку. Реактивность не должна тянуть
-перерисовку, которой не было в данных. Замеры и правила сравнения —
-[benchmarks.md](benchmarks.md).
+### Performance
 
-## Пример
+Speed of the resulting applications is part of the contract, not an optimization
+for later. Cold start, memory, and frame time are part of acceptance. Reactivity
+must not trigger a redraw that the data did not cause.
 
-`examples/hello` — потребитель в рабочей копии: одно окно, одна хост-команда,
-кит и тест раскладки. Что в нём есть — в
-[его README](../../examples/hello/README.md).
+Measurements and comparison rules are in [benchmarks.md](benchmarks.md).
 
-## Критерий зрелости
+## Example
 
-Фреймворк зрел, когда три требования выше держатся на настоящих сценариях:
-приложение собирается и запускается без обвязки сверх `build.rs`, `main.rs` и
-`.brul`, читается как обычный Rust и проходит замеры холодного старта, памяти и
-кадра. Что проверено, а что осталось — в задачах трекера.
+`examples/hello` is a consumer in the working copy. It has one window, one host
+command, a kit, and a layout test. See
+[its README](../../examples/hello/README.md) for its contents.
+
+## Maturity criteria
+
+The framework is mature when these three requirements hold in real scenarios. An
+application builds and starts without boilerplate beyond `build.rs`, `main.rs`,
+and `.brul`. It reads as ordinary Rust. It passes cold start, memory, and frame
+measurements. Tracker tasks show what is verified and what remains.

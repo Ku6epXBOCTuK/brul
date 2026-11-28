@@ -1,15 +1,16 @@
-# Язык стилей
+# Style language
 
-Статус: stable. Канон языка: парсер и кодеген проверяются на этой спеке, примеры
-в конце — фикстуры тестов.
+Status: stable. The canon of the language is this spec. Tests check the parser
+and codegen against it. The examples at the end are test fixtures.
 
-Причина ограничений — [лейаут и стили](../dev/architecture.md#лейаут-и-стили).
+The reason for the limits is in
+[architecture.md, "Layout and styles"](../dev/architecture.md#layout-and-styles).
 
-## Идея
+## Concept
 
-Подмножество CSS по синтаксису, очищенное от наследия веба. Стили компилируются
-в **неизменяемые снапшоты**; рантайм только переключает указатели на снапшоты
-(состояния) — пересчётов стилей в кадре нет.
+Styles are a CSS syntax subset without web legacy. Styles compile into
+**immutable snapshots**. At runtime only snapshot pointers change for states.
+There is no style recalculation in a frame.
 
 ```css
 .checkbox {
@@ -24,123 +25,136 @@
 }
 ```
 
-`.class { ... }` — базовый снапшот класса; `.class:state` — переопределение для
-состояния. Переопределять можно только **визуальные** свойства (цвет,
-прозрачность, картинка), не геометрию — нарушение ловит компилятор. Исключение —
-`font-weight` у `Text`: смена веса перешейпит лист, не задевая лейаут
-контейнеров ([текстовые метрики](#текстовые-метрики)).
+`.class { ... }` is the base snapshot of a class. `.class:state` is an override
+for a state. An override can change only **visual** properties: color, opacity,
+and image. It cannot change geometry. The compiler catches a violation. The
+exception is `font-weight` on `Text`. A weight change reshapes the leaf without
+touching container layout. See [text metrics](#text-metrics).
 
-## Лексика
+## Lexicon
 
-- Комментарии: `//` до конца строки.
-- Селекторы: `.ident` + необязательный `:state`. Свойства: `kebab-case`.
-- Точка с запятой обязательна после каждого свойства.
-- Числа: `f32`. Единицы: `px` (длина), `%` (доля от родителя), `ms`
-  (длительность перехода). Безразмерные: множители (opacity, flex-grow,
-  flex-shrink).
-- Цвета: `#rgb`, `#rrggbb`, `#rrggbbaa` (альфа в конце). Ключевые слова цветов
-  (`white`, `transparent`) — минимальный набор.
-- Ссылки на тему: `theme.имя-ключа`.
-- Производные цвета: `alpha`, `mix`, `lighten`, `darken` — см.
-  [Производные цвета](#производные-цвета).
+- A comment runs from `//` to the end of the line.
+- A selector is `.ident` with an optional `:state`. Properties use `kebab-case`.
+- A semicolon is required after every property.
+- Numbers are `f32`. Units are `px` for length, `%` for a fraction of the
+  parent, and `ms` for transition duration. Unitless values are multipliers:
+  opacity, flex-grow, flex-shrink.
+- Colors are `#rgb`, `#rrggbb`, and `#rrggbbaa`, with alpha last. A minimal
+  keyword set includes `white` and `transparent`.
+- A theme reference is `theme.key-name`.
+- Derived colors are `alpha`, `mix`, `lighten`, and `darken`. See
+  [derived colors](#derived-colors).
 
-## Грамматика (EBNF)
+## Grammar (EBNF)
 
 ```ebnf
 {{#include style.ebnf}}
 ```
 
-## Свойства
+## Properties
 
-[Таблица свойств](style_properties.md) генерируется из `brul-style-schema`:
-имена, типы, дефолты, политика состояний, цель и анимируемость.
+The [property table](style_properties.md) is generated from `brul-style-schema`.
+It holds names, types, defaults, state policy, target, and animatability.
 
-Колонка `State` таблицы — разрешено ли свойство в `.class:state`. `Forbidden`
-компилятор запрещает: переключение снапшота не должно вызывать релайаут.
-Исключение — `TextWeight`: вместо релайаута он перешейпит `Text`, правила ниже.
+The `State` column says whether a property is allowed in `.class:state`. The
+compiler forbids `Forbidden`. A snapshot switch must not cause a re-layout. The
+exception is `TextWeight`. Instead of a re-layout it reshapes `Text`. The rules
+below describe it.
 
-`flex-grow` и `flex-shrink` — веса главной оси, `flex-basis` — её база. Без
-`flex-basis` база равна заданному размеру или контенту, поэтому `flex-grow: 1`
-делит только остаток; `flex-grow: 1; flex-basis: 0` делит всё место поровну.
-`flex-basis` перекрывает `width`/`height` по главной оси. `flex-shrink` по
-умолчанию 0: заданный размер не сжимается, переполнение остаётся переполнением.
+`flex-grow` and `flex-shrink` are weights on the main axis. `flex-basis` is its
+base. Without `flex-basis` the base is the set size or content. Therefore
+`flex-grow: 1` divides only the remainder. `flex-grow: 1; flex-basis: 0` divides
+all space evenly. `flex-basis` overrides `width` and `height` on the main axis.
+`flex-shrink` is 0 by default. A set size does not shrink. Overflow stays
+overflow.
 
-`width` и `height` в процентах — доля content-box родителя, как в CSS: процент
-считается от уже полученного размера родителя, а в min-content вклад не входит.
-У `auto`-родителя процент разрешается от его итоговой ширины, то есть от
-содержимого, и не растягивает его до доступного места. `flex-basis` в процентах
-считается от content-box родителя по главной оси.
+`width` and `height` in percent are a fraction of the parent content box, as in
+CSS. The percent is resolved against the parent size already known. It does not
+contribute to min-content. With an `auto` parent the percent resolves against
+its final width, that is its content. It does not stretch the parent to
+available space. A `flex-basis` percent is resolved against the parent content
+box on the main axis.
 
-`padding` — шорткат как в CSS: одно значение — все стороны, два — вертикаль и
-горизонталь, три — верх, горизонталь, низ, четыре — верх, право, низ, лево.
-`border-width` и `border-color` — такие же шорткаты на 1–4 значения в том же
-порядке: верх, право, низ, лево. `border: 2px theme.border-main` — шорткат из
-одной ширины и одного цвета: оба значения раскрываются на все четыре стороны.
-Все шорткаты разворачиваются при парсинге, поэтому длинные свойства
-`border-top-width` / `border-top-color` и остальные по сторонам неотличимы от
-написанных вручную.
+`padding` is a CSS shorthand: one value sets all sides, two set vertical and
+horizontal, three set top, horizontal, and bottom, and four set top, right,
+bottom, and left.
 
-Ширины — геометрия: `border-width`, `border-*-width` и `border` в `.class:state`
-запрещены. Цвета — визуальные: `border-color` и `border-*-color` можно менять по
-состоянию; чтобы перекрасить только верхнюю границу, используй
+`border-width` and `border-color` use the same 1 to 4 value shorthands in the
+same order: top, right, bottom, left. `border: 2px theme.border-main` is a
+shorthand of one width and one color. Both values expand to all four sides.
+
+All shorthands expand at parse time. Therefore long properties such as
+`border-top-width` and `border-top-color` are no different from hand-written
+ones.
+
+Widths are geometry. `border-width`, `border-*-width`, and `border` are
+forbidden in `.class:state`. Colors are visual. You can change `border-color`
+and `border-*-color` by state. To recolor only the top border use
 `border-top-color`.
 
-`box-shadow` — шорткат из смещения по x, смещения по y, размытия и цвета:
-`box-shadow: 0px 10px 15px #3b82f640`. Смещения и размытие — px, смещения могут
-быть отрицательными; цвет — Color или `theme.*`. Тень рисуется под border-box
-узла с тем же `border-radius`, без «spread» и без `inset`. Геометрия тени в
-`.class:state` запрещена, как у `border`: по состоянию меняется только
-`box-shadow-color`, поэтому тень появляется и исчезает без релайаута.
+`box-shadow` is a shorthand of x offset, y offset, blur, and color:
+`box-shadow: 0px 10px 15px #3b82f640`. Offsets and blur are px. Offsets can be
+negative. Color is `Color` or `theme.*`. The shadow draws under the node
+border-box with the same `border-radius`. There is no spread and no inset.
+Shadow geometry is forbidden in `.class:state`, as for `border`. Only
+`box-shadow-color` changes by state, so the shadow appears and disappears
+without a re-layout.
 
-`linear-gradient` принимает ровно два цвета; угол — как в CSS: `0deg` смотрит
-вверх, `90deg` — вправо, дальше по часовой. `to`-синтаксиса нет.
+`linear-gradient` takes exactly two colors. The angle follows CSS: `0deg` points
+up, `90deg` points right, then clockwise. There is no `to` syntax.
 
-Каждый из двух цветов может быть ссылкой `theme.<ключ>`: ключ темы обязан быть
-цветом, и при смене темы градиент пересобирается из новых цветов. Сами ключи
-темы по-прежнему хранят только цвет или px, а не градиент.
+Either color can be a `theme.<key>` reference. The theme key must be a color. On
+a theme change the gradient is rebuilt from the new colors. Theme keys
+themselves still hold only a color or px, never a gradient.
 
-`clip: true` режет содержимое по border-box узла; скругление — по его
+`clip: true` cuts content to the node border-box. Rounding follows its
 `border-radius`.
 
-`scroll: true` делает контейнер прокручиваемым колесом: содержимое уезжает вверх
-внутри его `clip`, смещение ограничено размером содержимого. Нужен `clip: true`;
-из скрипта смещение не задаётся.
+`scroll: true` makes a container scrollable with the wheel. Content moves up
+inside its `clip`. The offset is limited by content size. `clip: true` is
+required. Script cannot set the offset.
 
-`cursor` задаёт курсор мыши над узлом: `default`, `pointer`, `text`, `grab`,
-`grabbing`, `crosshair`, `not-allowed`, `move`. Как в CSS, значение идёт от
-ближайшего узла на пути наведения: первое не-`default` значение от кончика пути
-к корню побеждает. Свойство визуальное — его можно менять в `.class:state`, но
-оно не интерполируется в переходах и не вызывает релайаут.
+`cursor` sets the mouse cursor over a node: `default`, `pointer`, `text`,
+`grab`, `grabbing`, `crosshair`, `not-allowed`, and `move`. As in CSS, the value
+comes from the nearest node on the hover path. The first non-`default` value
+from the path tip to the root wins. The property is visual. You can change it in
+`.class:state`. It does not interpolate in transitions and causes no re-layout.
 
-## Встроенные классы
+## Built-in classes
 
-`builtin/widgets.brul` — обычная таблица стилей BRUL плюс объявления привязки:
-`@apply TextInput brul-input;` и `@apply on drag brul-draggable;`. Директива
-`@apply` связывает имя класса с примитивом или событием без селекторов; `on`
-отличает событие от имени элемента. Привязка и правила лежат в одном файле, и по
-нему видно, какие классы накладываются неявно.
+`builtin/widgets.brul` is an ordinary BRUL style table plus binding
+declarations: `@apply TextInput brul-input;` and
+`@apply on drag brul-draggable;`.
 
-| Класс             | Когда применяется   | Значение                                  |
-| ----------------- | ------------------- | ----------------------------------------- |
-| `.brul-input`     | `TextInput`         | `cursor: text`                            |
-| `.brul-draggable` | элемент с `on drag` | `cursor: grab`, в `:pressed` — `grabbing` |
+`@apply` binds a class name to a primitive or an event without selectors. `on`
+separates an event from an element name. The binding and the rules sit in one
+file. You can see which classes apply implicitly.
 
-Правила встроенного файла проходят тот же парсер и ту же проверку значений и
-состояний, что и `<style>` пользователя; файл разбирается с палитрой точки
-входа, поэтому его правила могут пользоваться темами. Слои не склеиваются в
-исходниках: загрузчик применяет привязки к разметке до генерации, а правила
-встроенного файла и пользователя собирает в одну таблицу на границе выдачи кода.
-В собранной таблице встроенные правила идут первыми, а более поздний класс
-побеждает ранний, поэтому `.field { cursor: pointer; }` в `<style>`
-переопределяет встроенный курсор. Имена с префиксом `brul-` зарезервированы:
-такой класс в пользовательском `<style>` — ошибка компиляции. Механизм `cursor`,
-разрешение состояний и установка иконки окна от этих правил не зависят: это ещё
-один слой стиля.
+| Class             | When applied           | Value                                    |
+| ----------------- | ---------------------- | ---------------------------------------- |
+| `.brul-input`     | `TextInput`            | `cursor: text`                           |
+| `.brul-draggable` | element with `on drag` | `cursor: grab`; `grabbing` in `:pressed` |
 
-## Переходы
+Rules in the built-in file pass the same parser and the same value and state
+checks as user `<style>`. The loader parses the file with the entry-point
+palette, so its rules can use themes.
 
-`animate <свойство>: <число>ms;` задаёт длительность перехода в базовом классе:
-при смене состояния свойство интерполируется между снапшотами, а не прыгает.
+Layers are not merged in sources. The loader applies bindings to markup before
+generation. It combines built-in and user rules into one table at the code
+output boundary. Built-in rules come first in the combined table. A later class
+wins over an earlier one. Therefore `.field { cursor: pointer; }` in `<style>`
+overrides the built-in cursor.
+
+Names with the `brul-` prefix are reserved. Such a class in user `<style>` is a
+compile error.
+
+The cursor mechanism, state permission, and window icon setup do not depend on
+these rules. They are another style layer.
+
+## Transitions
+
+`animate <property>: <number>ms;` sets transition duration in a base class. On a
+state change the property interpolates between snapshots instead of jumping.
 
 ```css
 .button {
@@ -151,44 +165,55 @@
 .button:hover { background: theme.surface-hover; }
 ```
 
-- Анимируются только цветовые визуальные свойства: `color`, `border-color`,
-  `border-*-color`, `background` (сплошной цвет), `box-shadow-color`, `tint`,
-  `opacity`. Градиент сменяется мгновенно: промежуточных градиентов нет.
-- У каждого свойства своя длительность: объявлений `animate` столько, сколько
-  свойств. Повтор по тому же свойству в одном классе — выигрывает более позднее
-  объявление, между классами — более поздний класс.
-- Кривая одна — `ease-out`: быстрый старт и мягкое торможение.
-- Смена состояния посреди перехода продолжает с текущего значения, без скачка;
-  свойство без `animate` меняется мгновенно.
-- `animate` в `.class:state`, неизвестное свойство или единица не `ms` — ошибка
-  компиляции: длительность принадлежит базе.
+Only color visual properties animate: `color`, `border-color`, `border-*-color`,
+`background` as a solid color, `box-shadow-color`, `tint`, and `opacity`.
 
-## Текстовые метрики
+A gradient switches at once. There are no intermediate gradients.
 
-`font-weight` в `.class:state` разрешён только для `Text` с заданными `width` и
-`height`: при смене состояния текст перешейпится и переложится внутри своего
-бокса, контейнеры остаются нетронутыми. Класс с таким переопределением без
-фиксированного размера — ошибка компиляции. `font-size` и `font-family` в
-состоянии запрещены: размер и гарнитура — свойство компоновки, а не состояния.
+Each property has its own duration. There is one `animate` declaration per
+property. A repeat for the same property in one class uses the later
+declaration. Between classes the later class wins.
 
-Направление потока контейнера задаётся свойством `flex-direction` (дефолт
-`row`); `display` принимает `flex` (по умолчанию) или `grid`. Остальные имена
-выравнивания тоже из CSS flexbox: `justify-content` — главная ось, `align-items`
-— поперечная. Значения: `start|center|end|space-between` (justify) и
-`start|center|end|stretch` (align); остальные значения flexbox отложены.
+There is one curve: `ease-out`, a fast start and a soft stop.
 
-Для `grid` треки задаются списком `px`, `%`, `fr`, `minmax(a, b)` и
-`repeat(n, ...)` / `repeat(auto-fill, ...)` / `repeat(auto-fit, ...)`. Дети
-привязываются к линиям через `grid-column` / `grid-row` (`auto`, номер линии,
-`span N`, пара через `/`). Именованные области задаются `grid-template-areas`
-списком строк в кавычках: повторяющиеся имена образуют прямоугольник, `.` —
-пустая ячейка. Ребёнок попадает в область через `grid-area: имя` (или `auto`).
+A state change in the middle of a transition continues from the current value.
+There is no jump. A property without `animate` changes at once.
 
-Зазоры между детьми задаёт `gap`; `row-gap` и `column-gap` задают ось отдельно и
-перекрывают шорткат. `column-gap` — горизонтальный зазор, `row-gap` —
-вертикальный.
+`animate` in `.class:state`, an unknown property, or a unit other than `ms` is a
+compile error. Duration belongs to the base.
 
-## Темы
+## Text metrics
+
+`font-weight` in `.class:state` is allowed only on `Text` with a fixed `width`
+and `height`. On a state change text is reshaped and relaid out inside its box.
+Containers stay untouched.
+
+A class with such an override and no fixed size is a compile error. `font-size`
+and `font-family` in a state are forbidden. Size and font family are layout
+properties, not state properties.
+
+Container flow direction comes from `flex-direction`. It defaults to `row`.
+`display` accepts `flex`, the default, or `grid`.
+
+Other alignment names also come from CSS flexbox. `justify-content` works on the
+main axis. `align-items` works on the cross axis. Values are
+`start|center|end|space-between` for justify and `start|center|end|stretch` for
+align. Other flexbox values are deferred.
+
+For `grid`, tracks are a list of `px`, `%`, `fr`, `minmax(a, b)`, and
+`repeat(n, ...)`, `repeat(auto-fill, ...)`, or `repeat(auto-fit, ...)`. Children
+bind to lines through `grid-column` and `grid-row`: `auto`, a line number,
+`span N`, or a pair with `/`.
+
+Named areas are set with `grid-template-areas` as a list of quoted rows.
+Repeated names form a rectangle. A `.` is an empty cell. A child enters an area
+through `grid-area: name` or `auto`.
+
+`gap` sets the space between children. `row-gap` and `column-gap` set one axis
+each and override the shorthand. `column-gap` is horizontal. `row-gap` is
+vertical.
+
+## Themes
 
 ```css
 theme light {
@@ -207,32 +232,44 @@ theme dark {
 }
 ```
 
-- Ключи тем — произвольные `kebab-case` идентификаторы; значение — `Color` или
-  производное выражение из ключей этой же темы. Прямая ссылка `theme.<ключ>` без
-  выражения — ошибка: это была бы копия ключа. Длины и шрифты в теме — позже.
-- Ссылки внутри темы проверяются на сборке: неизвестный ключ, ссылка на не-цвет
-  и цикл (`a → b → a`) — ошибки с файлом и позицией.
-- Палитра объявляется один раз — в `<style>` корневого окна. Импортированные
-  файлы её наследуют и своих `theme`-блоков не имеют; `theme.<ключ>` в них
-  проверяется на сборке против этой палитры, ошибка называет файл и позицию.
-- Активная тема — рантайм-состояние; переключение — `setTheme("dark")`
-  (встроенная функция скрипта). Цвета тем приходят из палитры, которую
-  сгенерированный код выбирает по имени темы, поэтому переключение мгновенное.
-- Дефолт — первая объявленная тема.
-- Имена палитры становятся типом: кодоген печатает `ThemeId` и `impl FromStr` с
-  ошибкой `brul::UnknownTheme`. Граница приложения (`run_generated`,
-  `WindowDef`, `Ui`) принимает `Option<ThemeId>`, поэтому неверная тема из
-  конфига падает при разборе с её именем, а не белым окном; скриптовый
-  `setTheme("…")` разбирает строку в `ThemeId` и логирует ту же ошибку.
-- Набор ключей и типы значений у всех тем одинаковые (валидация компилятора).
-- Статические классы разметки разрешаются на сборке: на каждую тему генерируется
-  таблица `[Class; N]`, а разметка ссылается на неё индексом. В рантайме
-  остаётся выбрать таблицу по имени темы, поэтому `setTheme` пересобирает вид
-  без резолва правил. Динамическое `class:` резолвится в рантайме.
+Theme keys are arbitrary `kebab-case` identifiers. A value is a `Color` or a
+derived expression from keys of the same theme. A direct `theme.<key>` reference
+without an expression is an error. It would only copy the key. Lengths and fonts
+in a theme come later.
 
-## Производные цвета
+References inside a theme are checked at build time. An unknown key, a reference
+to a non-color, and a cycle such as `a → b → a` are errors with file and
+position.
 
-Цвет в правиле — литерал, `theme.ключ` или выражение из них:
+A palette is declared once, in the `<style>` of the root window. Imported files
+inherit it and have no `theme` blocks of their own. A `theme.<key>` in them is
+checked at build time against that palette. The error names the file and
+position.
+
+The active theme is runtime state. `setTheme("dark")` switches it. That is a
+built-in script function. Theme colors come from the palette. Generated code
+selects the palette by theme name, so a switch is instant.
+
+The default is the first declared theme.
+
+Palette names become a type. Codegen prints `ThemeId` and `impl FromStr` with
+`brul::UnknownTheme`.
+
+The application boundary, that is `run_generated`, `WindowDef`, and `Ui`,
+accepts `Option<ThemeId>`. A wrong theme from config fails during parsing with
+its name, not with a blank window. Script `setTheme("…")` parses the string into
+`ThemeId` and logs the same error.
+
+All themes have the same key set and value types. The compiler validates this.
+
+Static markup classes are resolved at build time. Codegen emits a `[Class; N]`
+table for each theme. Markup refers to it by index. At runtime only the table
+for the theme must be selected. Therefore `setTheme` rebuilds the view without
+resolving rules. Dynamic `class:` resolves at runtime.
+
+## Derived colors
+
+A color in a rule is a literal, `theme.key`, or an expression of them:
 
 ```css
 .card:hover {
@@ -242,31 +279,36 @@ theme dark {
 }
 ```
 
-| Выражение        | Что делает                                       |
-| ---------------- | ------------------------------------------------ |
-| `alpha(c, p%)`   | ставит альфу `p%` от 255, каналы RGB не трогает  |
-| `mix(a, b, p%)`  | смешивает в CAM16-UCS, доля `p%` у второго цвета |
-| `lighten(c, p%)` | поднимает tone на `p` пунктов по шкале 0–100     |
-| `darken(c, p%)`  | опускает tone на `p` пунктов                     |
+| Expression       | Effect                                                    |
+| ---------------- | --------------------------------------------------------- |
+| `alpha(c, p%)`   | sets alpha to `p%` of 255; leaves RGB channels unchanged  |
+| `mix(a, b, p%)`  | mixes in CAM16-UCS with a `p%` share for the second color |
+| `lighten(c, p%)` | raises tone by `p` points on the 0–100 scale              |
+| `darken(c, p%)`  | lowers tone by `p` points                                 |
 
-- Проценты абсолютные: `lighten(c, 20%)` — это `tone + 20`, а не пятая часть
-  остатка до 100. Поэтому `lighten` и `darken` с одним числом симметричны, а
-  темы `light` и `dark` собираются одинаковыми ступенями.
-- Тон и насыщенность в HCT независимы: осветление не выцветает, а выход за sRGB
-  поджимается уменьшением chroma, а не клиппингом каналов.
-- Альфа в HCT не входит. `mix` считает каналы через CAM16-UCS, а альфу —
-  линейно, поэтому `mix(c, transparent, 50%)` совпадает с `alpha(c, 50%)`.
-- Аргумент — литерал, `theme.ключ` или вложенное выражение, глубина до 8.
-  Неизвестный ключ, ключ не цвета и превышение глубины — ошибки сборки с файлом
-  и позицией.
-- Выражение разрешается на сборке вместе с `theme.*`: статический класс получает
-  готовый `Color` в таблице темы. Стопы `linear-gradient` принимают те же
-  выражения.
+Percent values are absolute. `lighten(c, 20%)` means `tone + 20`, not one fifth
+of the remainder to 100. Therefore `lighten` and `darken` with the same number
+are symmetric. The `light` and `dark` themes use the same steps.
 
-## Переопределение компонента
+Tone and chroma are independent in HCT. Lightening does not wash out. Going
+outside sRGB compresses chroma instead of clipping channels.
 
-Классы компонента из `<use>` доступны снаружи: в `<style>` корневого окна блок
-`override` называет имя из `<use>` и дописывает правила к правилам компонента.
+Alpha is not part of HCT. `mix` computes channels through CAM16-UCS and alpha
+linearly. Therefore `mix(c, transparent, 50%)` equals `alpha(c, 50%)`.
+
+An argument is a literal, `theme.key`, or a nested expression up to 8 levels
+deep. An unknown key, a non-color key, and a depth violation are build errors
+with file and position.
+
+An expression resolves at build time together with `theme.*`. A static class
+gets a ready `Color` in the theme table. `linear-gradient` stops accept the same
+expressions.
+
+## Component override
+
+Classes of a component from `<use>` are visible from outside. In the root window
+`<style>`, an `override` block names the `<use>` import and appends rules to the
+component rules.
 
 ```css
 override Button {
@@ -275,90 +317,92 @@ override Button {
 }
 ```
 
-- Правила компонента идут первыми, правила `override` — за ними; при совпадении
-  класса и состояния выигрывает более позднее объявление. Каскада и
-  специфичности нет.
-- Переопределение действует на все вхождения компонента; разница экземпляров
-  остаётся за `variant` и `class:`.
-- Класс, состояние и свойство берутся те же, что у компонента: неизвестный
-  класс, свойство, анимация или геометрия в состоянии — ошибка сборки с
-  позицией. Состояние требует базового класса в компоненте или в самом
-  переопределении.
-- `override` объявляется только в корневом `<style>`; в импортированном файле
-  это ошибка.
+Component rules come first. `override` rules follow them. When class and state
+match, the later declaration wins. There is no cascade and no specificity.
 
-## Совместимость с CSS
+An override applies to all uses of the component. Instance differences stay with
+`variant` and `class:`.
 
-Имя и смысл свойства берутся из CSS, если понятие там есть. Отклонения только
-осознанные, и каждое записано здесь.
+Class, state, and property names are the same as in the component. An unknown
+class, property, animation, or geometry in a state is a build error with a
+position. A state requires a base class in the component or in the override
+itself.
 
-- **Совпадает:** `width`/`height`, `padding`, `flex-grow`/`flex-shrink`/
-  `flex-basis`, `display`, `flex-direction`, `justify-content`, `align-items`,
-  `gap`/`row-gap`/`column-gap`, `border`, `border-width`/`border-color` (1–4
-  значения), `border-*-width`/`border-*-color`, `border-radius`, `background`,
+`override` is declared only in the root `<style>`. In an imported file it is an
+error.
+
+## CSS compatibility
+
+A property keeps its CSS name and meaning when CSS has the concept. Deviations
+are intentional and each one is recorded here.
+
+- **Same:** `width`/`height`, `padding`, `flex-grow`/`flex-shrink`/`flex-basis`,
+  `display`, `flex-direction`, `justify-content`, `align-items`,
+  `gap`/`row-gap`/`column-gap`, `border`, `border-width`/`border-color` with 1
+  to 4 values, `border-*-width`/`border-*-color`, `border-radius`, `background`,
   `color`, `opacity`, `grid-template-columns`/`grid-template-rows`,
-  `grid-column`/`grid-row`, `grid-auto-flow`, `grid-template-areas`,
+  `grid-column`/`grid-row`, `grid-auto-flow`, `grid-template-areas`, and
   `grid-area`.
-- **Иначе:** border-box вместо content-box; `flex-shrink` по умолчанию 0, а не
-  1; `flex-direction: column` не растягивает детей по ширине; `border` и
-  шорткаты раскрываются на четыре стороны, при смене состояния можно менять
-  только цвет; нет каскада, специфичности, наследования и `!important`; нет
-  именованных линий вне `grid-template-areas`.
-- **Не берём:** inline-форматирование, схлопывание margin, `float`,
+- **Different:** border-box instead of content-box. `flex-shrink` defaults to 0,
+  not 1. `flex-direction: column` does not stretch children across width.
+  `border` and shorthands expand to four sides. Only color can change on a state
+  change. There is no cascade, specificity, inheritance, or `!important`. There
+  are no named lines outside `grid-template-areas`.
+- **Not taken:** inline formatting, margin collapse, `float`,
   `em`/`rem`/`vw`/`vh`/`calc`.
 
-Свойства, чьи имена ещё не совпадают, переименовываются отдельными задачами.
-Шорткаты остаются сахаром парсера и раскрываются в длинные свойства; `flex`
-появится, когда будет чем проверить его сброс базы. Спорные места CSS
-(автоматический минимум flex-элемента) решаются отдельно и сюда не попадают
-молча.
+Properties whose names do not yet match are renamed in separate tasks.
+Shorthands stay parser sugar and expand into long properties. `flex` will appear
+when there is a way to check its base reset. Disputed CSS behavior, such as the
+automatic flex item minimum, is decided separately and does not enter silently.
 
-## Что не поддерживается
+## Not supported
 
-Синтаксис CSS взят целиком там, где он не тянет за собой механику веба: правила
-`.class`, hex-цвета, `linear-gradient`, шорткаты, проценты.
+CSS syntax is taken as a whole where it does not bring web mechanics with it:
+`.class` rules, hex colors, `linear-gradient`, shorthands, and percent values.
 
-Не поддерживается и не будет ([причина](../dev/architecture.md#лейаут-и-стили)):
+The following are not supported and will not be. See
+[the reason](../dev/architecture.md#layout-and-styles).
 
-- каскад, специфичность, наследование, `!important`;
-- схлопывание margin — вместо него `gap` и `padding`;
-- `float` — вместо него зоны исключения;
-- состояния через пересчёт каскада;
-- устаревшие свойства веба.
+- Cascade, specificity, inheritance, and `!important`.
+- Margin collapse. Use `gap` and `padding`.
+- `float`. Use exclusion zones.
+- States through cascade recalculation.
+- Obsolete web properties.
 
-Не поддерживается из-за единственного контекста масштабирования (px + % + DPI):
-`em`, `rem`, `vw`, `vh`, `pt`, `calc()`.
+The following are not supported because there is only one scaling context: px
+plus % plus DPI. They are `em`, `rem`, `vw`, `vh`, `pt`, and `calc()`.
 
-Отложено (v3+, не «выброшено»):
+Deferred for v3+, not discarded:
 
-- `transform` (scale/translate/rotate) — любые изменения размера в рантайме
-  только визуальной трансформацией, без инвалидации лейаута; на нём будут
-  анимации перемещения (вход и выход, FLIP);
-- скругление отдельных углов, `:focus`, media-queries, CSS-переменные (замена —
-  темы), `position: absolute` в стилях (в MVP абсолют — параметры `x`/`y` в
-  разметке).
+- `transform` with scale, translate, and rotate. Any runtime size change becomes
+  a visual transform with no layout invalidation. Move animations, enter and
+  exit, and FLIP will use it.
+- Rounding of individual corners, `:focus`, media queries, CSS variables,
+  replaced by themes, and `position: absolute` in styles. In MVP absolute
+  position uses `x` and `y` in markup.
 
-## Семантика выполнения
+## Execution semantics
 
-- Парсинг, разрешение `theme.*` и построение снапшотов — **один раз** при
-  компиляции/запуске. Снапшот = плоский набор значений свойств.
-- Несколько классов на элементе: значения мержатся слева направо, правый класс
-  выигрывает при конфликте (вместо специфичности — порядок).
-- `.class:state` валиден, только если есть базовый `.class`.
-- Состояния накладываются на базу слоями: `:selected`, `:checked`, `:hover`,
-  `:focus`, `:pressed`, `:disabled`. Правило состояния меняет только те
-  свойства, которые объявлены в нём самом, остальные остаются от базы и нижних
-  слоёв, поэтому `:hover` не стирает рамку `:selected`.
-- Класс по выражению (`class: Expr`) даёт один класс поверх статических. Он тоже
-  меняет только свойства своего правила, а лейаут из него требует повторной
-  раскладки. Пустое значение — класса нет; неизвестное имя — ошибка в лог один
-  раз, вид остаётся статическим.
-- Неизвестное свойство, значение или ключ темы — **ошибка компиляции** с
-  позицией.
+- Parsing, resolution of `theme.*`, and snapshot building run **once** at
+  compile time or startup. A snapshot is a flat set of property values.
+- Several classes on one element merge left to right. The right class wins a
+  conflict. Order replaces specificity.
+- `.class:state` is valid only when a base `.class` exists.
+- States apply on the base in layers: `:selected`, `:checked`, `:hover`,
+  `:focus`, `:pressed`, and `:disabled`. A state rule changes only properties
+  declared in it. Other properties stay from the base and lower layers.
+  Therefore `:hover` does not erase a `:selected` border.
+- A class from an expression (`class: Expr`) adds one class over the static
+  classes. It also changes only its own rule properties. Layout from it requires
+  a second layout pass. An empty value means no class. An unknown name is logged
+  once as an error. The look stays static.
+- An unknown property, value, or theme key is a **compile error** with a
+  position.
 
-## Тест-примеры (покрывают грамматику)
+## Test examples (cover the grammar)
 
-### 1. Стили CheckRow (из markup.md)
+### 1. CheckRow styles (from markup.md)
 
 ```css
 .check-row { width: 100%; gap: 12px; padding: 4px; }
@@ -376,7 +420,7 @@ override Button {
 .text-muted { color: theme.text-muted; font-size: 14px; }
 ```
 
-### 2. Стили BrowserItem
+### 2. BrowserItem styles
 
 ```css
 .browser-item { height: 84px; background: transparent; }
@@ -411,7 +455,7 @@ override Button {
 .text-main:hover { font-weight: 600; }
 ```
 
-### 3. Темы (фрагмент)
+### 3. Themes (fragment)
 
 ```css
 theme light {
@@ -434,7 +478,7 @@ theme dark {
 }
 ```
 
-### 4. Градиент (иконка приложения)
+### 4. Gradient (application icon)
 
 ```css
 .app-icon {
@@ -445,7 +489,7 @@ theme dark {
 }
 ```
 
-### 5. Тень по наведению
+### 5. Shadow on hover
 
 ```css
 .raised {
@@ -463,7 +507,7 @@ theme dark {
 }
 ```
 
-### 6. Производные цвета
+### 6. Derived colors
 
 ```css
 .card {
@@ -476,7 +520,7 @@ theme dark {
 }
 ```
 
-### 7. Сетка
+### 7. Grid
 
 ```css
 .grid {

@@ -1,11 +1,12 @@
-# Язык скрипта
+# Script language
 
-Статус: stable. Канон языка: парсер и генератор проверяются на этой спеке,
-примеры в конце — фикстуры тестов.
+Status: stable. The canon of the language is this spec. Tests check the parser
+and the generator against it. The examples at the end are test fixtures.
 
-Принципы — [ограничения DSL](../dev/architecture.md#ограничения-dsl).
+The principles are in
+[architecture.md, "DSL limits"](../dev/architecture.md#dsl-limits).
 
-## Идея
+## Concept
 
 ```script
 let remembered: Object = loadRemembered();
@@ -15,160 +16,179 @@ if (remembered[domain]) {
 }
 ```
 
-Статическая типизация: тип указывается в аннотации, вывода типов нет. Скрипт
-компилируется в Rust-функции и исполняется на UI-потоке. Скрипт оперирует
-**свойствами компонента**: чтение — чтение сигнала, присваивание — запись
-сигнала (обновления UI точечные, через brul-reactive).
+Script uses static typing. A type is given in an annotation. There is no type
+inference.
 
-## Значения и типы
+Script compiles into Rust functions and runs on the UI thread. Script works with
+**component properties**. A read reads a signal. An assignment writes a signal.
+UI updates are point updates through brul-reactive.
 
-[Таблица типов](types.md) генерируется из `brul-lang-schema`: имена, литералы и
-примечания.
+## Values and types
 
-Составные: **массивы** `[a, b, c]` (`Array<T>`) и **объекты**
-`{ name: "Chrome", flags: "" }` (`Object`, нужны для моделей `each` и
-конфигураций). Обращение: `item.name`, `arr[0]`, `len(arr)` — см. встроенные
-функции. Пустой массив получает тип из аннотации:
-`let items: Array<String> = [];`. `null` имеет тип `Null` и несовместим с
-другими типами, включая `Image`.
+The [type table](types.md) is generated from `brul-lang-schema`. It holds names,
+literals, and notes.
 
-**`Image`** — путь к PNG или SVG: значение создаёт приложение (seed), скрипт его
-только передаёт в разметку. Пустая картинка — отдельный литерал `empty`:
-`let icon: Image = empty;`. `null` с типом `Image` несовместим.
+Compound types are **arrays** `[a, b, c]` (`Array<T>`) and **objects**
+`{ name: "Chrome", flags: "" }` (`Object`). Objects are needed for `each` models
+and configurations. Access is `item.name`, `arr[0]`, and `len(arr)`. See the
+built-in functions. An empty array takes its type from the annotation:
+`let items: Array<String> = [];`.
 
-**`Void`** — только возврат функции без значения; переменных и параметров типа
-`Void` нет. Поля `Object` имеют тип `Any`: обращение `ev.code` не проверяется
-статически, но запись в prop или передача в типизированную функцию требует
-явного преобразования (`String(ev.code)`).
+`null` has type `Null`. It is not compatible with other types, including
+`Image`.
 
-Тип объявляется везде: в `let`/`const`, параметрах и возврате функции. Свойство
-компонента типизировано в разметке (`prop checked: Bool;`); аннотация скрипта
-должна совпадать с типом пропа. Сгенерированный модуль работает с конкретными
-типами: `Value`, `read_id` и `assign_id` в нём не остаётся, динамические
-значения проходят через фасад `brul::Dyn`.
+**`Image`** is a path to PNG or SVG. The value is created by the application as
+a seed. Script only passes it to markup. An empty image has its own literal
+`empty`: `let icon: Image = empty;`. `null` is not compatible with `Image`.
 
-## Лексика
+**`Void`** is only the return type of a function without a value. There are no
+`Void` variables and no `Void` parameters.
 
-- Комментарии: `//` до конца строки.
-- Идентификаторы: `camelCase`.
-- Точка с запятой **обязательна** в конце инструкции. ASI (авто-вставка)
-  отсутствует.
-- Ключевые слова: `let`, `const`, `if`, `else`, `function`, `return`, `true`,
-  `false`, `null`, `empty`.
+`Object` fields have type `Any`. An access such as `ev.code` is not checked
+statically. Writing it to a prop or passing it to a typed function needs an
+explicit conversion: `String(ev.code)`.
 
-## Грамматика (EBNF)
+A type is declared everywhere: in `let` and `const`, in parameters, and in
+function returns. A component property is typed in markup
+(`prop checked: Bool;`). The script annotation must match the prop type.
 
-Выражения общие с разметкой; точка входа из разметки — `Expr`. Приоритет — от
-слабого к сильному.
+The generated module uses concrete types. `Value`, `read_id`, and `assign_id` do
+not remain there. Dynamic values pass through the `brul::Dyn` facade.
+
+## Lexicon
+
+- A comment runs from `//` to the end of the line.
+- Identifiers use `camelCase`.
+- A semicolon is **required** at the end of a statement. There is no ASI, that
+  is no automatic insertion.
+- Keywords are `let`, `const`, `if`, `else`, `function`, `return`, `true`,
+  `false`, `null`, and `empty`.
+
+## Grammar (EBNF)
+
+Expressions are shared with markup. The entry point from markup is `Expr`.
+Precedence runs from weak to strong.
 
 ```ebnf
 {{#include script.ebnf}}
 ```
 
-- `+` — сложение чисел; для строк — конкатенация; смешанные типы — **ошибка**
-  (явные преобразования через встроенные функции, никакого JS-автокастинга).
-- Присваивание валидно только на: свойство компонента (`checked = ...`),
-  переменную (`let`/`const`), элемент массива/объекта. Тип значения должен
-  совпадать с типом цели присваивания.
-- Функции — только на верхнем уровне скрипт-блока, без вложенности (MVP).
-- Аннотация типа обязательна в каждом `let`/`const`, каждом параметре и в
-  возврате каждой функции. Вывода типов нет: `let x = 1;`, `function f(x) {}` и
-  `function f(x: Number) {}` (без `: Void`) — ошибки сборки с позицией.
-- Неопределённая переменная/свойство/функция и несовпадение типов — **ошибки
-  сборки** с позицией (все имена и типы резолвятся статически: пропсы
-  компонента, локальные `let`, функции, встроенные и хост-функции).
-- `return value;` завершает функцию и возвращает значение аннотированного типа;
-  `return;` допустим только в `Void` (и `Null`). `return` вне функции,
-  несовпадение типа возврата и возврат значения из `Void` — ошибки сборки.
+- `+` adds numbers. For strings it concatenates. Mixed types are an **error**.
+  Use explicit conversions through built-in functions. There is no JavaScript
+  auto-casting.
+- Assignment is valid only on a component property (`checked = ...`), a variable
+  (`let` or `const`), or an array or object element. The value type must match
+  the assignment target type.
+- Functions exist only at the top level of a script block. Nesting is not
+  allowed in MVP.
+- A type annotation is required in every `let` and `const`, every parameter, and
+  every function return. There is no type inference. `let x = 1;`,
+  `function f(x) {}`, and `function f(x: Number) {}` without `: Void` are build
+  errors with a position.
+- An undefined variable, property, or function and a type mismatch are **build
+  errors** with a position. All names and types are resolved statically:
+  component props, local `let` names, functions, built-in functions, and host
+  functions.
+- `return value;` ends a function and returns a value of the annotated type.
+  `return;` is valid only in `Void` and `Null`. `return` outside a function, a
+  wrong return type, and returning a value from `Void` are build errors.
 
-## Семантика выполнения
+## Execution semantics
 
-- **Контекст:** скрипт-блок компонента выполняется один раз при создании
-  компонента (инициализация `let`-переменных и начальных значений); обработчики
-  и функции — при событии/вызове, с доступом ко всем именам компонента.
-- **Переменные:** `let` допускает повторное присваивание, `const` — нет
-  (повторная запись — ошибка сборки). `const` требует инициализатор:
-  `const x: Number;` — ошибка сборки. `let x: Number;` без инициализатора
-  допустимо только на верхнем уровне: оно объявляет seed приложения, значение
-  которого должно иметь тип `Number`; внутри функций такое объявление — ошибка
-  сборки.
-- **Функции:** только верхний уровень, без замыканий в MVP. Тело исполняется в
-  контексте компонента. Параметры и возврат типизированы аннотациями;
-  несовпадение аргументов при вызове — ошибка сборки. `return` возвращает
-  значение аннотированного типа, `Void` завершается как `return;`. Рекурсия
-  допустима: аннотация возврата делает сигнатуру известной до обхода тела.
-  Функции доступны разметке как обработчики; вызов функций из _выражений_
-  разметки — вне MVP (только встроенные функции).
-- **Сигнатуры хост-функций:** задаются на Rust-стороне в `#[command]`
-  (`fn foo_bar(x: String) -> bool` доступна как `fooBar(x: String): Bool`).
-  `build.rs` читает их из Rust-исходников, генератор сверяет вызовы и печатает
-  ошибку с путём и номером строки `.brul`. Сгенерированный код вызывает команду
-  через типизированный маркер, минуя `Host::call(&str, &[Value])`.
-- **Свойства = сигналы:** чтение внутри выражения разметки создаёт зависимость
-  (трекинг brul-reactive); присваивание — запись сигнала и точечное обновление
-  UI. Чтение внутри обработчика — без трекинга.
-- **Приведение при записи:** только точные совпадения типов; несовпадение —
-  ошибка сборки с позицией. `Number` из `String` — только через `Number(x)`
-  явно.
-- **Ошибки исполнения** (индекс вне массива, деление на ноль): обработчик
-  прерывается, ошибка логируется с позицией, приложение не падает.
-- **Поток:** весь скрипт — на UI-потоке. Долгие операции — на Rust-стороне
-  (tokio), скрипт получает результат через сигнал; обещания — v3+.
-- **Таймеры:** `every(ms, fn)` вызывает функцию раз в `ms` миллисекунд на
-  UI-потоке, в контексте компонента; первый вызов — через `ms`. `after(ms, fn)`
-  вызывает её один раз. Обе функции возвращают дескриптор `Timer`, который
-  принимает `cancel(timer)`; отмена до первого вызова подавляет его полностью.
-  `fn` — имя функции верхнего уровня с сигнатурой `(): Void`, как у
-  обработчиков; функции-как-значения остаются вне MVP. Таймер живёт в скоупе
-  компонента, который его создал: когда компонент исчезает при пересборке дерева
-  или закрытии окна, таймер отменяется. Старый дескриптор не срабатывает в новом
-  компоненте, даже если тот получил такой же `TimerId`.
+- **Context:** a component script block runs once when the component is created.
+  That initializes `let` variables and initial values. Handlers and functions
+  run on an event or a call. They can access all names of the component.
+- **Variables:** `let` allows reassignment. `const` does not. A second write to
+  a `const` is a build error. `const` requires an initializer.
+  `const x: Number;` is a build error. `let x: Number;` without an initializer
+  is valid only at the top level. It declares an application seed whose value
+  must have type `Number`. Inside a function such a declaration is a build
+  error.
+- **Functions:** only at the top level. MVP has no closures. The body runs in
+  the component context. Parameters and return values are typed by annotations.
+  A wrong argument type at a call is a build error. `return` gives a value of
+  the annotated type. `Void` ends with `return;`. Recursion is allowed. The
+  return annotation makes the signature known before the body walk.
+- Markup can use functions as handlers. Calling functions from markup
+  _expressions_ is outside MVP. Only built-in functions work there.
+- **Host function signatures:** they are set on the Rust side in `#[command]`.
+  For example `fn foo_bar(x: String) -> bool` is available as
+  `fooBar(x: String): Bool`.
+- `build.rs` reads these signatures from Rust sources. The generator checks
+  calls and prints an error with a `.brul` path and line number. Generated code
+  calls a command through a typed marker. It does not use
+  `Host::call(&str, &[Value])`.
+- **Properties are signals:** a read inside a markup expression creates a
+  dependency, that is brul-reactive tracking. An assignment writes a signal and
+  updates the UI at that point. A read inside a handler has no tracking.
+- **Write conversion:** only exact type matches are valid. A mismatch is a build
+  error with a position. Getting a `Number` from a `String` needs an explicit
+  `Number(x)`.
+- **Runtime errors:** an index outside an array or division by zero interrupts
+  the handler. The error is logged with a position. The application does not
+  crash.
+- **Thread:** all script runs on the UI thread. Long operations run on the Rust
+  side with tokio. Script receives the result through a signal. Promises come in
+  v3+.
+- **Timers:** `every(ms, fn)` calls a function every `ms` milliseconds on the UI
+  thread in the component context. The first call is after `ms`. `after(ms, fn)`
+  calls it once. Both return a `Timer` handle. `cancel(timer)` accepts it.
+  Cancel before the first call suppresses it fully. `fn` is the name of a
+  top-level function with signature `(): Void`, as for handlers. Functions as
+  values are outside MVP.
+- A timer lives in the scope of the component that created it. When the
+  component disappears after a tree rebuild or window close, the timer is
+  cancelled. An old handle does not fire in a new component, even if it got the
+  same `TimerId`.
 
-## Встроенные функции (MVP)
+## Built-in functions (MVP)
 
-[Таблица встроенных функций](builtins.md) генерируется из `brul-lang-schema`.
+The [built-in function table](builtins.md) is generated from `brul-lang-schema`.
 
-`Any`, `Function`, `Timer` — псевдотипы только в таблице сигнатур: в аннотациях
-скрипта они недопустимы. Набор минимален; хост расширяет его без изменения
-языка.
+`Any`, `Function`, and `Timer` are pseudo-types used only in the signature
+table. They are not valid in script annotations.
 
-## Таблица «конструкция → статус»
+The set is minimal. The host extends it without changing the language.
 
-| Конструкция                                                                                        | Статус                                  |
-| -------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `let`/`const`, литералы, операторы, тернарник, вызовы, `if/else`, массивы, объекты, шаблоны-строки | **MVP**                                 |
-| Аннотации типов в `let`/`const`, параметрах и возврате                                             | **MVP**                                 |
-| Вывод типов, аннотации по желанию                                                                  | никогда                                 |
-| Объявления функций верхнего уровня (`function`)                                                    | **MVP**                                 |
-| `for`/`while` в скрипте                                                                            | v3+ (повторение UI — `each` в разметке) |
-| Замыкания, вложенные функции, функции-как-значения                                                 | v3+                                     |
-| `try`/`catch`                                                                                      | v3+                                     |
-| `async`/`await`                                                                                    | v3+ (обещания)                          |
-| Классы, `this`, прототипы, `new`                                                                   | никогда                                 |
-| `var`, ASI, неявные приведения, `==` с приведением типов (`==` строгий)                            | никогда                                 |
-| Методы массивов (`map`/`filter`/...)                                                               | v3+ по потребности                      |
-| Модули-экспорты (`export`)                                                                         | v3+ (сейчас — один компонент на файл)   |
+## Construct status table
 
-Детали, зафиксированные как норма:
+| Construct                                                                                        | Status                                   |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `let`/`const`, literals, operators, ternary, calls, `if/else`, arrays, objects, string templates | **MVP**                                  |
+| Type annotations in `let`/`const`, parameters, and returns                                       | **MVP**                                  |
+| Type inference and optional annotations                                                          | never                                    |
+| Top-level function declarations (`function`)                                                     | **MVP**                                  |
+| `for`/`while` in script                                                                          | v3+; UI repetition uses `each` in markup |
+| Closures, nested functions, functions as values                                                  | v3+                                      |
+| `try`/`catch`                                                                                    | v3+                                      |
+| `async`/`await`                                                                                  | v3+; promises                            |
+| Classes, `this`, prototypes, `new`                                                               | never                                    |
+| `var`, ASI, implicit casts, `==` with type conversion (`==` is strict)                           | never                                    |
+| Array methods (`map`/`filter`/...)                                                               | v3+ as needed                            |
+| Export modules (`export`)                                                                        | v3+; now one component per file          |
 
-- Изменение моделей — присваиванием нового массива свойству
-  (`browsers = [...]`); методов `push`/`pop` нет.
-- `{` в позиции инструкции — блок (правило JS); объектный литерал в позиции
-  инструкции — ошибка компиляции.
-- Запись по индексу `arr[i] = x` разрешена.
-- Идентификаторы — только `camelCase`: `-` невозможен (конфликт с вычитанием).
-  Данные конфига читаются строковым индексом без преобразований:
-  `settings["always-ask"]`, `browser["profile-dir"]`.
+Details fixed as norm:
 
-## Тест-примеры (покрывают грамматику)
+- Change a model by assigning a new array to the property (`browsers = [...]`).
+  There are no `push` or `pop` methods.
+- `{` in statement position starts a block, as in JavaScript. An object literal
+  in statement position is a compile error.
+- Indexed writes `arr[i] = x` are allowed.
+- Identifiers use only `camelCase`. A hyphen is not possible because it
+  conflicts with subtraction.
 
-### 1. Скрипт компонента пикера
+Configuration data is read with a string index and no conversion:
+`settings["always-ask"]`, `browser["profile-dir"]`.
 
-Сигнатуры хост-функций примера: `loadBrowsers(): Array<Object>`,
-`loadRemembered(): Object`, `openWith(path: String, flags: String): Void`.
+## Test examples (cover the grammar)
 
-Примеры с аннотациями помечены `ignore`: парсер начнёт их проверять вместе с
-поддержкой аннотаций типов.
+### 1. Script of the picker component
+
+The host function signatures in the example are `loadBrowsers(): Array<Object>`,
+`loadRemembered(): Object`, and `openWith(path: String, flags: String): Void`.
+
+Examples with annotations are marked `ignore`. The parser will check them when
+it supports type annotations.
 
 ```script,ignore
 let browsers: Array<Object> = loadBrowsers();
@@ -187,7 +207,7 @@ function launch(i: Number): Void {
 }
 ```
 
-### 2. Обработчики (только именованные функции, инлайнов нет)
+### 2. Handlers (named functions only, no inline bodies)
 
 ```script,ignore
 function handleKey(ev: Object): Void {
@@ -197,16 +217,19 @@ function handleKey(ev: Object): Void {
 }
 ```
 
-Присоединение в разметке окна: `on key: handleKey`; проверка кода клавиши — в
-скрипте, без спец-грамматики под отдельные клавиши. Для сочетаний с буквами
-сравнивайте `ev.physical` (`"KeyQ"`): этот код не зависит от регистра и
-раскладки, тогда как `ev.code` может быть и `"q"`, и `"Q"`. Обработчик окна
-получает `key` и при сфокусированном элементе: клавиша адресуется элементу,
-затем доходит до окна. Клавиши, поглощённые политикой, в `on key` не попадают:
-`Tab` меняет фокус, `Enter`/Space у кнопки дают `click`, а в модальном слое
-`Escape` приходит как `dismiss` на слой.
+The markup attachment in the window is `on key: handleKey`. Script checks the
+key code. There is no special grammar for individual keys.
 
-### 3. Выражения разметки (те же выражения, другой потребитель)
+For shortcuts with letters, compare `ev.physical`, for example `"KeyQ"`. That
+code does not depend on case or keyboard layout. `ev.code` can be `"q"` or
+`"Q"`.
+
+A window handler receives `key` even when an element has focus. The key goes to
+the element first and then to the window. Keys consumed by a policy do not reach
+`on key`. `Tab` changes focus. `Enter` and Space on a button produce `click`. In
+a modal layer, `Escape` reaches the layer as `dismiss`.
+
+### 3. Markup expressions (the same expressions, another consumer)
 
 ```script,ignore
 Text (url-text) { currentUrl }
@@ -215,7 +238,7 @@ Image (check-icon, visible: selected) { checkSvg }
 Container (item-panel, selected: i == selectedIndex) { }
 ```
 
-### 4. Таймер обновления статусов
+### 4. Timer for status refresh
 
 ```script,ignore
 function refresh(): Void {
@@ -225,10 +248,10 @@ function refresh(): Void {
 every(3000, refresh);
 ```
 
-`reloadServices(): Void` — хост-функция панели служб: запускает чтение статусов
-на Rust-стороне, результат приходит в свойство `services`.
+`reloadServices(): Void` is a host function of the service panel. It starts
+status reads on the Rust side. The result arrives in the `services` property.
 
-### 5. Вызов без объявлений (разбирается текущим парсером)
+### 5. Call without declarations (the current parser handles it)
 
 ```script
 exit();

@@ -1,423 +1,507 @@
-# Архитектура
+# Architecture
 
-BRUL — фреймворк нативных десктоп-приложений на Rust: декларативный UI в
-собственных DSL (разметка, стили, скрипт в одном `.brul`), компилируемый в
-виджеты на winit/wgpu. BRUL не рендерит HTML: WebView подключается как
-платформенное вью.
+BRUL is a framework for native desktop applications in Rust. It provides a
+declarative UI in its own DSLs. Markup, styles, and script live in one `.brul`
+file. The compiler turns them into widgets on winit and wgpu. BRUL does not
+render HTML. A WebView attaches as a platform view.
 
-## Крейты
-
-```sh
-brul                   фасад: `Ui`, запуск, привязки и встроенные политики ввода (`src/policy`)
-brul-codegen           загрузка и кодоген DSL: resolve/import, стили, эмиссия Rust
-brul-event             словарь raw- и семантических событий
-brul-gui               примитивы, текст и виджеты
-brul-layout            геометрия: типы раскладки и адаптер taffy
-brul-reactive          сигналы/memo/effect — минимальное ядро
-brul-script            интерпретатор AST: значения, окружение, выполнение на компоненте
-brul-style             модель стиля: свойства, значения, правила и каскад
-brul-syntax            SFC-сплиттер, лексер и парсеры DSL в AST
-brul-window            winit+wgpu: окно, цикл событий, перевод ввода в raw-события
-examples/hello         пример: окно, хост-команда, кнопки из кита
-```
-
-Правило: крейт — граница, и он выделяется, когда граница нужна, а не когда
-появился второй потребитель. Имя, ответственность и что переезжает называются до
-правки; разрешение не спрашивается, переезд — отдельная задача. Внешняя
-зависимость тоже решается по выгоде, а не по разрешению.
-
-## Пайплайн
+## Crates
 
 ```sh
-app.brul ─ SFC-сплиттер ─> markup | style | script
-  markup ─ парсер ─> AST ─ кодоген ─> Rust-модуль ─> виджеты, привязки, структуры
-  style  ─ парсер ─> снапшоты (константы компиляции)
-  script ─ парсер ─> AST ─ эмиссия в тот же модуль, исполнение на компоненте
-signals ─> effect ─> привязки и структуры ─> brul-gui ─> кадр
+brul                   facade: `Ui`, startup, bindings, and built-in input policies (`src/policy`)
+brul-codegen           DSL loading and codegen: resolve/import, styles, Rust emission
+brul-event             dictionary of raw and semantic events
+brul-gui               primitives, text, and widgets
+brul-layout            geometry: layout types and the taffy adapter
+brul-reactive          minimal core: signals/memo/effect
+brul-script            AST interpreter: values, environment, execution on a component
+brul-style             style model: properties, values, rules, and cascade
+brul-syntax            SFC splitter, lexer, and DSL parsers that build the AST
+brul-window            winit+wgpu: window, event loop, translation of input into raw events
+examples/hello         example: a window, a host command, and kit buttons
 ```
 
-- Типизированное состояние живёт в приложении, а не в виджетах.
-- Интерактивное состояние ввода — каретка, выделение, preedit, прокрутка и
-  геометрия каретки — живёт в листовом виджете: у приложения нет ни границ
-  UTF-8, ни IME-геометрии, чтобы хранить его вместо виджета.
-- Фоновые задачи — tokio; результат приходит в UI через канал, потому что
-  реактивный граф однопоточный.
-- Несколько окон: каждое со своим корнем дерева, общие сигналы — через владельца
-  приложения.
+A crate is a boundary. Create one when a boundary is needed, not when a second
+consumer appears. Name the crate, its responsibility, and what moves before the
+change. Do not ask for permission. The move is a separate task. An external
+dependency is also decided by benefit, not by permission.
 
-## Решения
+## Pipeline
 
-Только текущее состояние: решение меняется тем же коммитом, что и код, а историю
-правок и прежние варианты хранит `git`.
+```sh
+app.brul ─ SFC splitter ─> markup | style | script
+  markup ─ parser ─> AST ─ codegen ─> Rust module ─> widgets, bindings, structures
+  style  ─ parser ─> snapshots (compile-time constants)
+  script ─ parser ─> AST ─ emission into the same module, execution on a component
+signals ─> effect ─> bindings and structures ─> brul-gui ─> frame
+```
 
-### Лейаут и стили
+- Typed state lives in the application, not in widgets.
+- Interactive input state, that is caret, selection, preedit, scroll, and caret
+  geometry, lives in the leaf widget. The application has no UTF-8 boundaries
+  and no IME geometry to store it instead.
+- Background tasks use tokio. Results reach the UI through a channel, because
+  the reactive graph is single-threaded.
+- Several windows each have their own tree root. Shared signals go through the
+  application owner.
 
-Контейнер `Container` отвечает только за геометрию, направление потока он берёт
-из `flex-direction` в стиле; текст инкапсулирован в `Text` и отдельный текстовый
-движок. Текстовые блоки — `Text` с классами, внутри — семантические роли
-(`Accent`, `Term`, `DropCap`); внешний вид роли задают стили, а не тег. Модель
-коробки одна — border-box: заданный размер окончателен и включает padding и
-границу. Отступы аддитивны, `margin` нет. Стили парсятся один раз в неизменяемые
-снапшоты; состояние переключает указатель на снапшот, поэтому по состоянию
-меняются только визуальные свойства, а не геометрия. Исключение — вес шрифта:
-смена `font-weight` перешейпит `Text` внутри его бокса, лейаут контейнеров не
-пересчитывается ([правила](../lang/style.md#текстовые-метрики)). Вместо `float`
-— зоны исключения: текстовый рендерер сокращает строки, пересекающиеся с
-объектами.
+## Decisions
 
-Встроенные стили — отдельный слой: привязки классов к примитивам и событиям
-объявлены в `builtin/widgets.brul` директивами `@apply`, рядом с правилами. Файл
-разбирается с палитрой точки входа, поэтому встроенные правила тоже могут
-зависеть от темы. Загрузчик применяет привязки к разметке до кодогенерации, а
-таблицы слоёв компонует на границе выдачи кода: генератор не знает о встроенных
-классах и выводит только упорядоченный список индексов.
+This page holds only the current state. A decision changes in the same commit as
+its code. Git keeps the edit history and earlier options.
 
-Раскладку считает `brul-layout`: `taffy` — flexbox с сеткой и переносом.
-Публичные типы BRUL остаются своими: крейт переводит `LayoutStyle` в
-`taffy::Style`, где CSS-длинные свойства `flex-grow`, `flex-shrink`,
-`flex-basis` и `gap` переходят как есть, а абсолютные `x`/`y` — в
-`position: absolute`; сетка и перенос включаются, когда свойство появится в
-разметке. Округление делает `taffy` по узлам, наружу уходят целые физические
-пиксели. Размеры — auto, px или процент от content-бокса родителя; процент
-разрешает `taffy` от уже полученного размера родителя и не вносит вклад в
-min-content, как в CSS. `justify-content` и `align-items` двигают по главной и
-поперечной осям, `space-between` и `stretch` — их крайние значения.
+### Layout and styles
 
-`WidgetTree` обходит узлы и пишет боксы прямо в слоты: `Text` измеряет
-`TextEngine` по ширине контента, `Image` берёт размер текстуры, `Container`
-становится flex-узлом с направлением из `flex-direction`. Снапшот — плоский
-список в порядке обхода: геометрия, разрешённый стиль, глифы и текстура, поэтому
-отрисовка не ходит по виджетам. Hit-test идёт по прямоугольникам, raw
-`Press`/`Release` приходят по пути от листа к корню, а семантический `click`
-испускает политика `pointer` отдельно на каждом элементе пути при отпускании над
-исходным виджетом; выключенный виджет и его поддерево событий не получают. Слой
-(`Layer`) — узел вне потока размером с окно: снапшот и hit-test обходят детей
-слоя после обычных детей в обратном порядке объявления, поэтому слой рисуется
-поверх содержимого и первым получает ввод, а сам ввод не перехватывает — это
-делает его ребёнок. Модальную область накладывает `focusables()` дерева;
-политики `keyboard`, `pointer` и `scroll` вызывают `enter_modal_scope()`, шлют
-`dismiss` по Escape и ограничивают колесо областью. Фокус сохраняется и
-возвращается при скрытии слоя.
+The `Container` handles geometry only. It takes flow direction from
+`flex-direction` in the style. Text is encapsulated in `Text` and a separate
+text engine.
 
-Снапшот рисует `Frame` — RGBA8 premultiplied CPU-кадр. Полный кадр очищает всё и
-проходит снапшот; частичный берёт bbox dirty-узлов, чистит его и перерисовывает
-пересекающиеся узлы в порядке обхода. Кадр уходит на wgpu-поверхность одной
-текстурой; отдельного GPU-пайплайна для примитивов и текста нет. Смена размера,
-DPI и лейаута — полный кадр.
+A text block is `Text` with classes. Inside it are semantic roles: `Accent`,
+`Term`, and `DropCap`. Styles, not tags, define the look of a role.
 
-Сам снапшот собирается один раз: смена состояния, класса или ховера правит
-только записи dirty-узлов на месте, а вектор и геометрия остаются прежними.
-Структурная смена, лейаут и смена фокуса собирают его заново — у них меняется
-состав и клипы детей. Узел по id ищется через индекс, а не перебором.
+There is one box model: border-box. A set size is final and includes padding and
+border. Offsets are additive. There is no `margin`.
 
-Почему: разработчик всегда знает итоговый размер элемента, а кадр стоит столько,
-сколько изменилось, а не сколько весит дерево. Стили компонента не протекают в
-соседние.
+Styles are parsed once into immutable snapshots. A state switches the snapshot
+pointer. Therefore only visual properties change with state, not geometry. The
+exception is font weight. A `font-weight` change reshapes `Text` inside its box
+without recalculating container layout. See
+[the text metrics rules](../lang/style.md#text-metrics).
 
-Отвергнуто: HTML-модель, где элемент одновременно контейнер и держит текст, и
-CSS-каскад со специфичностью на каждое движение мыши.
+Instead of `float`, use exclusion zones. The text renderer shortens lines that
+cross objects.
 
-Норма: [style.md](../lang/style.md), [markup.md](../lang/markup.md).
+Built-in styles form a separate layer. `@apply` directives in
+`builtin/widgets.brul` bind classes to primitives and events. The directives sit
+next to the rules. The loader parses the file with the entry-point palette, so
+built-in rules can also depend on the theme. The loader applies the bindings to
+markup before codegen. It composes layer tables at the code output boundary. The
+generator knows nothing about built-in classes. It emits only an ordered list of
+indices.
 
-### Текст
+`brul-layout` computes layout. `taffy` provides flexbox with grid and wrapping.
+BRUL public types stay its own. The crate converts `LayoutStyle` to
+`taffy::Style`. CSS length properties `flex-grow`, `flex-shrink`, `flex-basis`,
+and `gap` pass through. Absolute `x` and `y` become `position: absolute`. Grid
+and wrapping switch on when the property appears in markup. `taffy` rounds per
+node. Whole physical pixels leave the crate.
 
-Шейпинг, фолбэк и растеризация — `cosmic-text`: системные шрифты, кириллица и
-эмодзи закрыты без своего шейпера. Движок отдаёт атлас RGBA8 1024×1024 и список
-глифов; ячейки лежат полками с зазором 1 px и переиспользуются по ключу
-растеризации, в который входят размер и DPI. Стиль задан в логических пикселях,
-`scale` переводит его в физические, наружу уходят целые физические координаты.
-Субпиксельное сглаживание сведено к маске, цвет обычного глифа задаёт
-отрисовщик, цветной эмодзи лежит в атласе как RGBA.
+Sizes are auto, px, or a percent of the parent content box. `taffy` resolves a
+percent against the parent size it already has. It does not contribute to
+min-content, unlike CSS. `justify-content` moves items on the main axis.
+`align-items` moves them on the cross axis. `space-between` and `stretch` are
+the extreme values.
 
-Почему: `cosmic-text` уже решает фолбэк и эмодзи, а атлас отделяет шейпинг от
-GPU. Атлас MVP не растёт: когда места нет, `layout` возвращает ошибку.
+`WidgetTree` walks nodes and writes boxes straight into slots. `Text` measures
+with `TextEngine` at content width. `Image` takes the texture size. `Container`
+becomes a flex node with direction from `flex-direction`.
 
-Отвергнуто: свой шейпер и своя загрузка шрифтов.
+A snapshot is a flat list in walk order: geometry, resolved style, glyphs, and
+texture. Rendering does not walk widgets.
 
-Семантика — контракт `brul-gui`: crate-doc и тесты.
+Hit testing uses rectangles. Raw `Press` and `Release` follow the path from leaf
+to root. The `pointer` policy emits a semantic `click` on each element of the
+path when release happens over the original widget. A disabled widget and its
+subtree receive no events.
 
-### Примитивы
+A `Layer` is a node outside the flow and sized to the window. The snapshot and
+hit test walk layer children after normal children, in reverse declaration
+order. Therefore the layer draws over content and receives input first. The
+layer does not capture input itself. Its child does.
 
-Геометрия — целые физические пиксели: `Rect` хранит x/y, ширину и высоту,
-радиус, заливку и границу. Граница лежит внутри заданного размера (border-box),
-радиус не больше половины меньшей стороны, цвет — RGBA8. Скругление, заливка и
-граница описываются одной SDF-формулой; её проверяет сэмплер по центру пикселя,
-и тот же `Rect::sample` использует CPU-кадр.
+The tree's `focusables()` applies the modal area. The `keyboard`, `pointer`, and
+`scroll` policies call `enter_modal_scope()`, send `dismiss` on Escape, and
+limit the wheel to the area. Focus is saved and restored when the layer hides.
 
-Картинка — `Texture`: PNG декодируется в RGBA8, tint хранится рядом с пикселями
-и умножает RGBA при выборке, поэтому смена темы не перекодирует картинку.
-Декодируется только PNG; другие форматы — позже.
+`Frame` draws the snapshot. It is an RGBA8 premultiplied CPU frame. A full frame
+clears everything and walks the snapshot. A partial frame takes the bounding box
+of dirty nodes, clears it, and redraws intersecting nodes in walk order. The
+frame goes to the wgpu surface as one texture. There is no separate GPU pipeline
+for primitives and text. A size, DPI, or layout change produces a full frame.
 
-Почему: целые координаты совпадают с лейаутом и не дают дрожания на границах;
-одна формула не позволяет CPU-проверке и отрисовке разойтись, а tint-параметр не
-заставляет держать несколько копий одних пикселей.
+The snapshot is built once. A state, class, or hover change edits only the dirty
+node records in place. The vector and geometry stay as they are. A structural
+change, layout, or focus change rebuilds it, because children and clips change.
+An index finds a node by id, not by a linear walk.
 
-### Окно
+Why: a developer always knows the final size of an element. A frame costs what
+changed, not the size of the tree. Component styles do not leak into neighbors.
 
-Окно — winit 0.31-beta.4 с точной прибивкой версии и wgpu 30. Конфиг задан в
-логических пикселях, winit отдаёт физический размер поверхности. `frameless`
-делает окно без рамки, прозрачным (если задан `transparent`) и фиксированного
-размера; без него окно декоративное и ресайзится. Перетаскивание за хедер
-работает у любого окна, системное закрытие закрывает окно. winit спрятан в
-`brul-window`: остальной код видит `WindowConfig`, `WindowKey`, `WindowSpec` и
-`WindowError`.
+Rejected: the HTML model, where an element is both a container and holds text.
+Also rejected: a CSS cascade with specificity on every mouse move.
 
-Один `EventLoop` держит несколько окон: `run_windows` принимает стартовый ключ,
-фабрику содержимого окна и обработчик событий, по ключу. У каждого окна своя
-поверхность, рендерер, текстовый движок, таймеры и курсор; общими остаются цикл,
-устройство wgpu и системная тема. Команды `Open(key)` и `Close` из обработчика
-создают и закрывают окна, закрытие последнего завершает цикл. `run_tree` и
-`run_tree_themed` — обёртки на одно окно.
+Norm: [style.md](../lang/style.md), [markup.md](../lang/markup.md).
 
-Поверхность создаётся в `can_create_surfaces`, режим альфы выбирается из
-возможностей поверхности (PreMultiplied, затем PostMultiplied, Inherit, Auto), а
-задержка кадра выставлена в 1. `run` очищает фон, `run_tree` рисует снапшот и
-отдаёт готовый CPU-кадр на поверхность; отдельного GPU-рендера примитивов нет.
-Текстура кадра уходит на поверхность только когда есть что показать: непустой
-dirty после пересборки, первый показ, смена размера или поверхность потеряла
-кадр. Пробуждение цикла без изменений не копирует RGBA-буфер и не блитит его.
-Каждое окно создаёт свой `wgpu::Instance` и устройство; общий контекст —
-отдельная задача.
+### Text
 
-Платформенное вью — узел снапшота со своим `PlatformViewId` и источником. BRUL
-не рисует его содержимое и не владеет его пикселями; `brul-window` после layout
-синхронизирует bounds и видимость, передаёт фокус дочернему окну и убирает ввод
-и IME из дерева, пока это окно в фокусе. Перехват WndProc и ручная маршрутизация
-`WM_*` не используются: дочернее окно получает указатель и клавиатуру само.
-Первая итерация — изолированное дочернее окно поверх BRUL: оно всегда выше
-пикселей BRUL, его нельзя клиппировать, а скругления, эффекты и оверлеи на него
-не действуют; software/layered и Wayland не поддерживаются.
+`cosmic-text` handles shaping, fallback, and rasterization. It covers system
+fonts, Cyrillic, and emoji without a custom shaper. The engine returns a
+1024×1024 RGBA8 atlas and a glyph list. Cells sit in shelves with a 1 px gap and
+are reused by a rasterization key that includes size and DPI.
 
-`WebView` — первый бэкенд платформенного вью: `brul-webview` через wry создаёт
-дочернее окно `build_as_child`, не тянет winit в рантайм и не пишет WebView2 COM
-вручную. Фабрика задаётся в `run_generated_with_platform`; bounds из снапшота
-уже физические. Сообщения IPC идут через `PlatformMessageHandler` в `EventSink`
-и `Handle::widget`, то есть в событие `message` элемента. Первая итерация —
-Windows и непрозрачный GPU-холст.
+A style is set in logical pixels. `scale` converts it to physical pixels. Whole
+physical coordinates leave the engine. Subpixel antialiasing is reduced to a
+mask. The renderer sets the color of a normal glyph. A color emoji sits in the
+atlas as RGBA.
 
-Почему бета: 0.31 разделяет создание поверхности и `resumed`, даёт общий путь
-указателя для мыши, пера и тача и чинит Windows-баги с DPI, IME и
-перетаскиванием. Версия прибита, поэтому обновление API не приходит вместе с
+Why: `cosmic-text` already solves fallback and emoji. The atlas separates
+shaping from GPU work. The MVP atlas does not grow. When there is no space,
+`layout` returns an error.
+
+Rejected: a custom shaper and custom font loading.
+
+The semantics are the contract of `brul-gui`: crate-doc and tests.
+
+### Primitives
+
+Geometry uses whole physical pixels. `Rect` stores x and y, width and height,
+radius, fill, and border. The border sits inside the set size, as in border-box.
+The radius is at most half the shorter side. Color is RGBA8.
+
+One SDF formula describes rounding, fill, and border. A sampler checks it at the
+pixel center. The CPU frame uses the same `Rect::sample`.
+
+An image is a `Texture`. PNG is decoded to RGBA8. Tint is stored next to the
+pixels and multiplies RGBA at sample time. A theme change does not re-encode the
+image. Only PNG is decoded. Other formats come later.
+
+Why: whole coordinates match layout and do not shake at boundaries. One formula
+keeps CPU checks and rendering in agreement. A tint parameter avoids several
+copies of the same pixels.
+
+### Window
+
+A window uses winit 0.31-beta.4 with an exact version pin and wgpu 30. Config is
+in logical pixels. winit returns the physical surface size.
+
+`frameless` makes the window borderless, transparent when `transparent` is set,
+and fixed in size. Without it the window is decorated and resizable. Header drag
+works on any window. System close closes the window.
+
+winit is hidden in `brul-window`. The rest of the code sees `WindowConfig`,
+`WindowKey`, `WindowSpec`, and `WindowError`.
+
+One `EventLoop` holds several windows. `run_windows` takes a start key, a window
+content factory, and an event handler by key. Each window has its own surface,
+renderer, text engine, timers, and cursor. The loop, the wgpu device, and the
+system theme stay shared.
+
+`Open(key)` and `Close` commands from the handler create and close windows.
+Closing the last window ends the loop. `run_tree` and `run_tree_themed` are
+single-window wrappers.
+
+The surface is created in `can_create_surfaces`. The alpha mode comes from
+surface capabilities in this order: PreMultiplied, PostMultiplied, Inherit,
+Auto. Frame latency is set to 1.
+
+`run` clears the background. `run_tree` draws the snapshot and hands the
+finished CPU frame to the surface. There is no separate GPU renderer for
+primitives.
+
+The frame texture goes to the surface only when there is something to show:
+non-empty dirty after a rebuild, first display, a size change, or a lost frame.
+Waking the loop without changes copies no RGBA buffer and performs no blit.
+
+Each window creates its own `wgpu::Instance` and device. A shared context is a
+separate task.
+
+A platform view is a snapshot node with its own `PlatformViewId` and source.
+BRUL neither draws its content nor owns its pixels. After layout, `brul-window`
+syncs bounds and visibility, passes focus to the child window, and removes input
+and IME from the tree while that window has focus. WndProc interception and
+manual `WM_*` routing are not used. The child window receives pointer and
+keyboard input itself.
+
+The first iteration is an isolated child window above BRUL. It is always above
+BRUL pixels. It cannot be clipped. Rounding, effects, and overlays do not affect
+it. Software and layered modes and Wayland are not supported.
+
+`WebView` is the first platform view backend. `brul-webview` uses wry to create
+a child window with `build_as_child`. It does not pull winit into the runtime
+and does not write WebView2 COM by hand. The factory is set in
+`run_generated_with_platform`. Bounds from the snapshot are already physical.
+
+IPC messages go through `PlatformMessageHandler` to `EventSink` and
+`Handle::widget`, that is to the `message` event of the element. The first
+iteration targets Windows and an opaque GPU canvas.
+
+Why the beta: version 0.31 separates surface creation from `resumed`. It gives
+one pointer path for mouse, pen, and touch. It fixes Windows bugs with DPI, IME,
+and drag. The version is pinned, so an API change cannot arrive with
 `cargo update`.
 
-Отвергнуто: `softbuffer` — не умеет попиксельную прозрачность; Windows-only
-DirectComposition — теряет поддержку других платформ.
+Rejected: `softbuffer`, which has no per-pixel transparency. Also rejected:
+Windows-only DirectComposition, which drops other platforms.
 
-### Сборка и окна
+### Build and windows
 
-`build.rs` приложения — один вызов `brul::build::app("src/window.brul")`:
-`view.rs`, модуль `bc_<stem>` на каждый подключённый `.brul` и исходник его
-`<script>` рядом (`.script`) ложатся в `OUT_DIR` и включаются в бинарь.
-Компоненты кита (`brul:button`) приходят из таблицы, встроенной в кодоген при
-сборке BRUL, поэтому копии `kit/` в приложении нет. `main.rs` запускает
-сгенерированное через `brul::run_generated`, начальные значения передаются
-seed-объектами, а действия окна приходят в хост-команды (`#[command]`). Аргумент
-команды — любой тип с `TryFrom<&brul::Value, Error = brul::Error>`: скаляры
-(`&str`, `String`, `f64`, `bool`, `usize`) реализованы в `brul-script`, enum и
-структура описываются этим трейтом, поля объекта читает `brul::Fields`. Ошибка
-конверсии приходит в DSL как `Error::Argument` с именем команды.
+The application `build.rs` makes one call:
+`brul::build::app("src/window.brul")`. It writes `view.rs`, a `bc_<stem>` module
+for each included `.brul` file, and its `<script>` source as a sibling `.script`
+file into `OUT_DIR`. The build includes them in the binary.
 
-`run_generated` создаёт один `Component` и по `Ui` на каждое открытое окно: у
-окон общий скрипт и сигналы, но свои деревья, обработчики и очередь команд.
-Событие окна приписывается этому окну; `openWindow(name)` открывает объявление
-по имени, уже открытое поднимает на передний план; `exit()` и `closeWindow()`
-закрывают текущее окно, закрытие последнего завершает цикл. Тема общая:
-`setTheme` пересобирает все открытые окна и запоминается для будущих.
+Kit components such as `brul:button` come from a table embedded in codegen when
+BRUL is built. The application has no `kit/` copy.
 
-Тема задаётся при запуске: `Dark`/`Light` передаются в `view` именем темы,
-системная — `None`, и тогда окно следует за winit `ColorScheme` и
-`ThemeChanged`, пересобирая дерево при смене схемы.
+`main.rs` starts generated code through `brul::run_generated`. Initial values
+arrive as seed objects. Window actions arrive as host commands marked with
+`#[command]`.
 
-`run_generated_with` отличается от `run_generated` только последним аргументом:
-до старта цикла он отдаёт `brul::Handle`. Им фоновый поток пишет переменную DSL
-(`handle.set("live", true)`) или зовёт функцию скрипта (`handle.call("hide")`, с
-аргументами — `handle.call_with("show", vec!["main".into()])`). Строка остаётся
-низкоуровневым путём. `Handle` клонируется и переживает поток, а сообщения
-применяются в цикле событий после пробуждения и перерисовывают окна. После
-выхода из цикла `wake` ничего не делает, так что висящий поток не паникует.
+A command argument is any type with
+`TryFrom<&brul::Value, Error = brul::Error>`. `brul-script` implements it for
+scalars: `&str`, `String`, `f64`, `bool`, and `usize`. Enums and structs
+implement the trait. `brul::Fields` reads object fields. A conversion error
+reaches the DSL as `Error::Argument` with the command name.
 
-Кодоген печатает рядом `generated::Script` — обёртку над `Handle`, где на каждую
-функцию скрипта есть метод с её аргументами (`script.say_hello()`,
-`script.bump(2)`). Метод отправляет типизированное сообщение; опечатка в имени
-через обёртку не компилируется. Динамические значения проходят через
-`brul::Dyn`, а конвертация в runtime-представление остаётся внутри `brul`.
+`run_generated` creates one `Component` and one `Ui` per open window. Windows
+share script and signals but have their own trees, handlers, and command queues.
+A window event is attributed to that window.
 
-Сигнатуры `#[command]` читаются `build.rs` из Rust-исходников, поэтому
-`script::validate_build` сверяет имена и типы вызовов на этапе сборки: опечатка
-или неверный тип останавливают `cargo build` с путём и номером строки `.brul`.
-Сгенерированный вызов идёт через типизированный маркер `HostCommand`;
-`Host::call(&str, &[Value])` остаётся низкоуровневым путём для динамических
-вызовов.
+`openWindow(name)` opens the declaration by name. An already open window moves
+to the front. `exit()` and `closeWindow()` close the current window. Closing the
+last window ends the loop. The theme is shared. `setTheme` rebuilds all open
+windows and remembers the choice for future windows.
 
-Почему: смена темы проверяет весь путь до переписывания DSL, а выбор,
-hover/press от политики `pointer`, чекбоксы и запуск идут через общий путь
-событий виджетов.
+The theme is set at startup. `Dark` and `Light` pass a theme name into `view`.
+The system theme is `None`. Then the window follows winit `ColorScheme` and
+`ThemeChanged` and rebuilds the tree when the scheme changes.
 
-### Обновления без VDOM
+`run_generated_with` differs from `run_generated` only in its last argument.
+Before the loop starts, it gives the caller a `brul::Handle`. A background
+thread uses it to write a DSL variable (`handle.set("live", true)`) or call a
+script function (`handle.call("hide")`, and with arguments
+`handle.call_with("show", vec!["main".into()])`). The string path stays
+low-level.
 
-Привязка «элемент ↔ выражение» известна на этапе компиляции. Кодеген создаёт
-функцию прямого обновления для каждой привязки; сигнал будит только затронутые
-функции, рендер перерисовывает только dirty-виджеты. Эффекты выполняются раз в
-кадр, перед отрисовкой, после батча событий.
+`Handle` is cloneable and outlives the thread. Messages are applied in the event
+loop after wake-up and redraw windows. After the loop exits, `wake` does
+nothing, so a hanging thread does not panic.
 
-Свойство — сигнал: чтение в выражении подписывает привязку на него, запись будит
-только этих читателей. Переменные окружения и хост-функции сигналами не
-являются: их чтение подписывает на общий сигнал `external`, который двигают
-запись переменной и `touch()`.
+Codegen prints `generated::Script` next to the module. It wraps `Handle` with
+one method per script function and its arguments, for example
+`script.say_hello()` and `script.bump(2)`. A method sends a typed message. A
+typo in a name does not compile through the wrapper. Dynamic values pass through
+`brul::Dyn`. Conversion to the runtime representation stays inside `brul`.
 
-Значения привязок считают сгенерированные замыкания: модуль содержит операции
-`brul::Dyn::{binary, unary, template}`, `component.call_dynamic` и чтение
-свойств через `component.read_id`, без запечённого AST. Структуры `if`/`each`
-компилируются в функции `value` и `rebuild`: эффект следит за условием и ставит
-структуру в очередь, а поддерево заменяет `Ui::settle` после `flush`. `rebuild`
-получает строки прошлого прохода: строку `each` опознаёт `RowKey` — явный ключ
-или позиция, — а `RowMatcher` находит пару по хешу ключа и сверяет элемент
-равенством в найденном ведре, поэтому совпавшая строка возвращается без сборки,
-и `settle` забирает её виджеты из старого дерева — пересобираются только
-изменившиеся строки. `settle` находит структуру по хешу родителя, а дерево берёт
-взаймы один раз на проход — не на каждую привязку и обработчик.
+`build.rs` reads `#[command]` signatures from Rust sources.
+`script::validate_build` checks call names and types at build time. A typo or a
+wrong type stops `cargo build` with a path and line number from the `.brul`
+file. The generated call goes through the typed marker `HostCommand`.
+`Host::call(&str, &[Value])` remains the low-level path for dynamic calls.
 
-Событие находит хендлер по индексу «виджет и вид события», а не перебором
-списка: список меняется только в пересборке и в её хвосте, там же
-перестраивается индекс. Raw-события указателя несут координаты и модификаторы
-для политик, но скрипт по ним не вызывается, поэтому объект аргументов не
-аллоцируется; объект аргументов собирается только для семантических `key` и
-`input`.
+Why: a theme change tests the whole path before rewriting DSL. Selection, hover
+and press from the `pointer` policy, checkboxes, and startup all go through the
+same widget event path.
 
-Сборка идёт через явный контекст: `view` и `rebuild` получают
-`&mut brul::Build`, в котором лежат слоты текущего компонента, сервисы
-(`states`, `event_sink`, `clipboard`) и список зарегистрированных структур.
-Вложенный компонент и вид слота получают тот же контекст, а `Ui` забирает из
-него результат вызова через `finish()`. Хуки capability работают
-`&brul::CapabilityContext`: сервисы, цель, состояние и компонент.
+### Updates without VDOM
 
-Почему: у узла есть адрес на всё время жизни — хендл и привязка, известные
-компилятору, поэтому обновить значение значит записать свойство узла, а не
-пересобрать поддерево. Единица изменения совпадает с единицей инвалидации:
-сигнал будит ровно те функции привязок, которые его читают, и кадр стоит по
-изменениям, а не по дереву. Состояние живёт снаружи виджетов, поэтому «данные
-новые, виджет старый» невозможно по построению. Точки смерти поддерева известны
-компилятору, и скоуп эффекта гасится вместе с виджетами без рантайм-диффа.
-Сгенерированный код — конкретные типы и прямые вызовы, без боксинга и
-generic-билдеров. Зарегистрированные в Rust виджеты — те же `View`-функции:
-кодогенератор проверяет их пропсы и события по объявлению, а `Built` собирается
-из существующих примитивов, без трейт-объектов.
+An "element ↔ expression" binding is known at compile time. Codegen emits one
+direct update function per binding. A signal wakes only the affected functions.
+Rendering redraws only dirty widgets.
 
-Отвергнуто: виртуальное дерево и diffing; императивные билдеры в духе gpui, где
-элемент — временное значение без адреса: обновить его там можно только
-пересборкой поддерева и сверкой движком, а инвалидация грубее сигнала.
+Effects run once per frame, before drawing, after a batch of events.
 
-Следствие: привязку нельзя создать в рантайме из строки, и состояние приложения
-живёт снаружи виджетов — виджет лишь отражает его. Исключение — временное
-состояние ввода: каретка, выделение, preedit и прокрутка принадлежат листовому
-виджету вместе с геометрией IME, а значение поля остаётся состоянием приложения
-и синхронизируется через `value:` и `on input`.
+A property is a signal. Reading it in an expression subscribes the binding to
+it. Writing it wakes only those readers.
 
-### Реактивное ядро
+Environment variables and host functions are not signals. Reading them
+subscribes to one shared `external` signal. A variable write and `touch()` move
+that signal.
 
-Своё минимальное ядро: ленивый пересчёт и push-pull, как в
-[alien-signals](https://github.com/stackblitz-labs/alien-signals). Публичный API
-— `Signal`, `Memo`, `Effect`, `EffectScope`, `batch`, `untrack`, `flush`.
-Реализация — арена `Vec<Node>` + `u32`-индексы, списки подписок в `Vec`, явный
-стек для пометки; стек и очередь эффектов — буферы самой арены, поэтому толчок
-сигнала без новых подписчиков не аллоцирует. Значения и замыкания — в
-типизированных ячейках `Rc<RefCell<...>>`. Слот остановленного эффекта уходит в
-список свободных и достаётся следующему узлу, поэтому пересборки `if`/`each` и
-смена темы арену не растят. Сравнения версий и флага `Watched` нет: запись жадно
-помечает весь низ графа. Граф однопоточный и живёт на UI-потоке, фоновые
-tokio-задачи присылают обновления через канал.
+Generated closures compute binding values. The module uses
+`brul::Dyn::{binary, unary, template}`, `component.call_dynamic`, and property
+reads through `component.read_id`. There is no baked-in AST.
 
-Владение: `EffectScope` — владелец эффектов и очисток `on_cleanup`: скоупы
-иерархичны (`child` ссылается на родителя), `dispose` гасит детей, идемпотентен
-и вызывается из `Drop`, поэтому пропустить очистку нечем. У `Ui` один корневой
-скоуп, а каждая привязка, проп и структура получают дочерний: эффект живёт, пока
-живы его виджеты, и гасится вместе с ними. Каждый усыновлённый `Ui` компонент
-тоже получает дочерний скоуп и свежего `TimerOwner`: старый владелец больше не
-может адресовать нового после пересборки. Сигналы и memo скоуп не держит — их
-освобождает последний владелец `Rc`. Таймер `every` уходит хосту окна командой,
-но числится за скоупом компонента: когда компонент исчезает, скоуп посылает
-`Cancel` для всех его `TimerId`. Общее состояние приложения (тема, второе окно)
-создаётся до окна, а проп получает уже вычисленное значение.
+`if` and `each` structures compile into `value` and `rebuild` functions. An
+effect watches the condition and queues the structure. `Ui::settle` replaces the
+subtree after `flush`.
 
-Почему: точки уничтожения поддерева известны компилятору заранее — закрытие
-окна, смена ветки `if`, удаление строки `each`, удаление компонента. RAII на
-скоупе даёт ту же гарантию, что RAII на каждом узле, и оставляет дескрипторы
-`Copy`: значение не клонируется в каждое замыкание. Отвергнуто: RAII на
-дескрипторах — проп пишет родитель и читает ребёнок, то есть у сигнала два
-владельца, а порядок дропа стал бы источником тихо застывших виджетов.
+`rebuild` receives rows from the previous pass. `RowKey` identifies an `each`
+row by an explicit key or by position. `RowMatcher` finds a pair by key hash and
+checks the element with equality in that bucket. A matching row is returned
+without a build. `settle` takes its widgets from the old tree. Only changed rows
+are rebuilt.
 
-Дедупликация: сравнение стоит на границе записи, а не в графе. Сеттер виджета не
-помечает узел dirty при равном значении, а хост не пишет в сигнал неизменившийся
-результат опроса. Ядро версии не сравнивает: `notify` ставит эффект в очередь до
-пересчёта memo, поэтому факт «значение прежнее» к моменту `flush` уже потерян, а
-флаг `changed` или версии стоят больше, чем экономят.
+`settle` finds a structure by parent hash. The tree is borrowed once per pass,
+not once per binding and handler.
 
-Почему: дорогие операции — решейпинг `Text` и перерисовка, а не сам проход
-эффекта; сравнивать на границе дешевле и достаточно.
+An event finds its handler through a "widget and event kind" index, not by
+walking a list. The list changes only during a rebuild and at its tail. The
+index is rebuilt there too.
 
-Почему: чужое ядро тянет owners, contexts и `Arc<RwLock>` — оверхэд ради
-возможностей, которых в BRUL нет. `alien-signals` и `reactive_graph` — источники
-best practices, а не шаблон API.
+Raw pointer events carry coordinates and modifiers for policies. Script is not
+called from them, so no argument object is allocated. An argument object is
+built only for semantic `key` and `input` events.
 
-Отвергнуто: `reactive_graph` (движок Leptos), `sycamore-reactive` (lifetimes под
-чужой фреймворк, нестабильные релизы), `futures-signals` (push-only,
-эффекты-фьючерсы не стыкуются с flush-ом кадра), сигналы Dioxus (не выделены в
-standalone-крейт).
+Builds use an explicit context. `view` and `rebuild` receive `&mut brul::Build`.
+It holds the current component slots, services (`states`, `event_sink`,
+`clipboard`), and the list of registered structures. A nested component and a
+slot view receive the same context. `Ui` takes the call result from it through
+`finish()`.
 
-Семантика — контракт крейта `brul-reactive`: crate-doc и doc-тесты, а не проза
-здесь. Дифф-обновления списков в духе `SignalVec` — после MVP.
+Capability hooks work with `&brul::CapabilityContext`: services, target, state,
+and component.
 
-### Парсеры и tooling
+Why: a node has an address for its whole lifetime, with a handle and a binding
+known to the compiler. Updating a value means writing a node property, not
+rebuilding a subtree. The unit of change matches the unit of invalidation. A
+signal wakes exactly the binding functions that read it. A frame costs changes,
+not the tree. State lives outside widgets, so "new data, old widget" is
+impossible by construction. Subtree death points are known to the compiler, and
+an effect scope ends with its widgets without a runtime diff.
 
-SFC-сплиттер (разбиение `.brul` на блоки) — pest. Три языка — hand-written
-recursive descent по EBNF из `lang/*.ebnf`: ошибки с позицией, контроль
-восстановления, обучение. Спека — контракт: примеры извлекаются тестами и служат
-фикстурами, списки продукций генерируются из EBNF (`just generate-rules`) и
-сверяются с файлами тестом, негативы помечены в спеке. Поэтому парсер не может
-разойтись со спекой молча ни в одну сторону.
+Generated code uses concrete types and direct calls, without boxing or generic
+builders. Widgets registered in Rust are the same `View` functions. Codegen
+checks their props and events against the declaration. `Built` is assembled from
+existing primitives, without trait objects.
 
-Почему: pest хорош для регулярной структуры блоков, а языкам нужны
-восстановление после ошибок и точные позиции.
+Rejected: a virtual tree and diffing. Also rejected: imperative builders in the
+style of gpui, where an element is a temporary value with no address. There an
+update requires a subtree rebuild and an engine comparison, and invalidation is
+coarser than a signal.
 
-Отложено: готовые LSP, форматтер и линтер — после стабилизации языков на
-практике. Фундамент для них не откладывается: AST строится без исполнения, у
-узла есть позиция, спека — контракт. Формат для кодогена и LSP (ungrammar,
-tree-sitter, ANTLR) не выбран; критерий — из одного описания строятся и парсер,
-и LSP.
+Consequence: a binding cannot be created at runtime from a string. Application
+state lives outside widgets, and a widget only reflects it. The exception is
+temporary input state: caret, selection, preedit, and scroll belong to the leaf
+widget together with IME geometry. The field value stays application state and
+syncs through `value:` and `on input`.
 
-Норма: [lang/](../lang/README.md).
+### Reactive core
 
-### Ограничения DSL
+BRUL has its own minimal core with lazy recomputation and push-pull, as in
+[alien-signals](https://github.com/stackblitz-labs/alien-signals). The public
+API is `Signal`, `Memo`, `Effect`, `EffectScope`, `batch`, `untrack`, and
+`flush`.
 
-Разметка скобочная, без тегов: структура отделена от логики и оформления.
-Универсальный контейнер — `Container`, листовые — `Text` и `Image`. Обработчик —
-только именованная функция, инлайн-тела запрещены. Повторение — `each`, условие
-— `if`; ключ элемента пишется в структуру строки, и пересборка `each`
-переиспользует виджеты по ключу. Компоненты принимают детей через `@slot`, в том
-числе в корне: такой компонент — фрагмент без layout-узла, его дети ложатся в
-раскладку вызывающего. Класс на вызове компонента не принимается. Скрипт —
-JS-подобный минимум без классов, `this`, `new`, ASI и автокастинга; модель
-меняется присваиванием нового значения. Стили — CSS-подобный синтаксис без
-каскада, наследования и специфичности. `PascalCase` — виджеты и компоненты,
-`kebab-case` — классы и ключи тем, `camelCase` — свойства и события.
+The implementation is an arena of `Vec<Node>` with `u32` indices. Subscription
+lists are `Vec`s. An explicit stack handles marking. The stack and the effect
+queue are buffers of the arena itself, so pushing a signal with no new
+subscribers allocates nothing. Values and closures live in typed
+`Rc<RefCell<...>>` cells.
 
-Почему: узнаваемый синтаксис при малом объёме реализации; ошибка типа и
-структуры видна на месте, а не в глубине выражения.
+A stopped effect slot goes to the free list and is reused by the next node.
+Therefore `if` and `each` rebuilds and theme changes do not grow the arena.
 
-Отвергнуто: HTML-теги (смешивают смысл и оформление), TS-подмножество (лишний
-объём для обработчиков компонента).
+There is no version comparison and no `Watched` flag. A write eagerly marks the
+whole graph below it. The graph is single-threaded and lives on the UI thread.
+Background tokio tasks send updates through a channel.
 
-Норма: [lang/](../lang/README.md).
+Ownership: `EffectScope` owns effects and `on_cleanup` callbacks. Scopes are
+hierarchical. A `child` refers to its parent. `dispose` ends children, is
+idempotent, and is called from `Drop`. Therefore no cleanup can be missed.
 
-### Границы MVP
+`Ui` has one root scope. Each binding, prop, and structure gets a child scope.
+An effect lives while its widgets live and ends with them. Each adopted `Ui`
+component also gets a child scope and a fresh `TimerOwner`. The old owner cannot
+address the new one after a rebuild.
 
-Цель — фреймворк: требования к нему и критерий зрелости —
-[product.md](product.md). Платформа MVP — Windows, архитектура не закрывает
-другие платформы. Сроков нет: порядок шагов важнее дат. Не блокируют MVP:
-готовые LSP, форматтер и линтер (фундамент для них — требование, см.
-product.md), анимации, SVG, полировка скролла, второе окно.
+A scope does not hold signals and memos. The last `Rc` owner frees them.
 
-Почему: ежедневное использование — единственная проверка, что фреймворк
-работоспособен, а не только красив в примерах.
+An `every` timer goes to the window host as a command. It is registered with the
+component scope. When the component disappears, the scope sends `Cancel` for all
+its `TimerId`s.
 
-Отложено: всё из списка «не блокирует» — после MVP.
+Shared application state, such as theme and a second window, is created before
+the window. A prop receives the computed value.
+
+Why: subtree destruction points are known before compilation: window close, `if`
+branch change, `each` row removal, component removal. RAII on a scope gives the
+same guarantee as RAII on every node and keeps handles `Copy`. A value is not
+cloned into every closure.
+
+Rejected: RAII on handles. A parent writes a prop and a child reads it, so a
+signal has two owners. Drop order would become a source of silently frozen
+widgets.
+
+Deduplication sits at the write boundary, not in the graph. A widget setter does
+not mark a node dirty on an equal value. The host does not write an unchanged
+poll result into a signal.
+
+The core does not compare versions. `notify` queues an effect before memo
+recomputation, so the fact that a value is unchanged is already lost by `flush`.
+A `changed` flag or versions cost more than they save.
+
+Why: expensive operations are `Text` reshaping and redraw, not the effect walk
+itself. Comparing at the boundary is cheaper and sufficient.
+
+Why: a foreign core pulls in owners, contexts, and `Arc<RwLock>`. That is
+overhead for features BRUL does not use. `alien-signals` and `reactive_graph`
+are sources of good practice, not an API template.
+
+Rejected: `reactive_graph` from Leptos. Also rejected: `sycamore-reactive`,
+which uses lifetimes tied to another framework and has unstable releases. Also
+rejected: `futures-signals`, which is push-only and whose future effects do not
+fit a frame flush. Also rejected: Dioxus signals, which are not a standalone
+crate.
+
+The semantics are the contract of `brul-reactive`: crate-doc and doc tests, not
+prose here. List diff updates in the style of `SignalVec` come after MVP.
+
+### Parsers and tooling
+
+The SFC splitter, which divides `.brul` into blocks, uses pest. The three
+languages use hand-written recursive descent over the EBNF in `lang/*.ebnf`.
+Errors carry positions. Recovery is controlled. The code is easy to teach.
+
+The spec is the contract. Tests extract its examples and use them as fixtures.
+`just generate-rules` generates production lists from EBNF. A test checks them
+against the files. Negative cases are marked in the spec. Therefore the parser
+cannot silently drift from the spec in either direction.
+
+Why: pest is good for the regular structure of blocks. The languages need error
+recovery and exact positions.
+
+Deferred: ready-made LSP, formatter, and linter come after the languages
+stabilize in practice. Their foundation is not deferred. The AST is built
+without execution. Nodes have positions. The spec is the contract.
+
+The format for codegen and LSP is not chosen: ungrammar, tree-sitter, or ANTLR.
+The criterion is that one description builds both the parser and the LSP.
+
+Norm: [lang/](../lang/README.md).
+
+### DSL limits
+
+Markup uses brackets, not tags. Structure is separate from logic and
+presentation. The universal container is `Container`. Leaf widgets are `Text`
+and `Image`.
+
+A handler is a named function only. Inline bodies are not allowed. Repetition is
+`each`. A condition is `if`. An item key goes into the row structure. An `each`
+rebuild reuses widgets by key.
+
+Components receive children through `@slot`, including at the root. Such a
+component is a fragment with no layout node. Its children go into the caller's
+layout. A class on a component call is not accepted.
+
+Script is a small JS-like language. It has no classes, no `this`, no `new`, no
+ASI, and no automatic casts. A change of model happens by assigning a new value.
+
+Styles use CSS-like syntax without cascade, inheritance, or specificity.
+`PascalCase` names widgets and components. `kebab-case` names classes and theme
+keys. `camelCase` names properties and events.
+
+Why: a familiar syntax with little implementation work. A type or structure
+error is visible in place, not deep inside an expression.
+
+Rejected: HTML tags, which mix meaning and presentation. Also rejected: a
+TypeScript subset, which adds work for component handlers.
+
+Norm: [lang/](../lang/README.md).
+
+### MVP boundaries
+
+The goal is the framework. Its requirements and maturity criteria are in
+[product.md](product.md).
+
+The MVP platform is Windows. The architecture does not close other platforms.
+There are no dates. The order of steps matters more.
+
+These items do not block MVP: a ready-made LSP, formatter, and linter (their
+foundation is a requirement, see product.md), animations, SVG, scroll polishing,
+and a second window.
+
+Why: daily use is the only check that a framework works and not just looks good
+in examples.
+
+Deferred: all items from the "does not block" list, after MVP.

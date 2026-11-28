@@ -1,41 +1,46 @@
-# Канон языков DSL
+# DSL canon
 
-Четыре языка описания UI. Спека — контракт: примеры из неё парсятся тестами, то
-есть одновременно служат фикстурами.
+Four languages describe the UI. The spec is the contract. Tests parse its
+examples, so the examples also act as fixtures.
 
-- [markup.md](markup.md) — разметка: структура UI, компоненты, привязки.
-- [style.md](style.md) — стили: классы, состояния, темы.
-- [script.md](script.md) — скрипт: функции-обработчики, выражения.
-- [use.md](use.md) — импорты: блок `<use>`, относительный путь и кит через
-  `brul:name`.
+- [markup.md](markup.md): markup, that is UI structure, components, and
+  bindings.
+- [style.md](style.md): styles, that is classes, states, and themes.
+- [script.md](script.md): script, that is handler functions and expressions.
+- [use.md](use.md): imports, that is the `<use>` block, relative paths, and kits
+  through `brul:name`.
 
-## Расположение
+## Location
 
-Канон живёт здесь: `markup.ebnf`, `style.ebnf`, `script.ebnf`, `use.ebnf`.
-Markdown-спеки включают их через mdBook include, копий не появляется. Вместе с
-парсером файлы переезжают в `crates/brul-syntax/lang/` без правок.
+The canon lives here: `markup.ebnf`, `style.ebnf`, `script.ebnf`, `use.ebnf`.
+Markdown specs include these files through mdBook include. No copies appear. The
+parser moves the files to `crates/brul-syntax/lang/` without edits.
 
-## Общие договорённости
+## Shared conventions
 
-- Выражения в разметке и скрипт — один язык выражений. Грамматика выражений
-  живёт в [script.ebnf](script.ebnf) и не дублируется в
+- Expressions in markup and script use one expression language. The grammar
+  lives in [script.ebnf](script.ebnf). Do not repeat it in
   [markup.ebnf](markup.ebnf).
-- Импорты компонентов — отдельный блок `<use>` файла; форма — `Use`, имя
-  доступно разметке.
-- Имя универсального контейнера — `Container`.
-- Версионирование: draft меняется свободно; stable — когда парсер проходит все
-  примеры спеки и примеры не менялись после первой рабочей интеграции. Обратная
-  несовместимость после stable — только новым разделом в спеке с обоснованием.
+- A component import is a separate `<use>` block in a file. The syntax is `Use`.
+  Markup can use the name.
+- The universal container is `Container`.
+- Versioning: a draft can change freely. A spec is stable when the parser passes
+  all spec examples and the examples have not changed since the first working
+  integration. After a spec is stable, a breaking change needs a new spec
+  section with a reason.
 
-## Диалект EBNF
+## EBNF dialect
 
-- `=`, `;` — правило; `|` — альтернатива; пробел — конкатенация.
-- `[ … ]` — необязательная часть, `{ … }` — повторение, `( … )` — группа.
-- `"…"` — терминальная строка, `? … ?` — терминальный класс символов.
-- `(* … *)` — комментарий.
-- Правило другого файла — `Script.Expr`; без префикса — правило своего файла.
-- Терминалы объявлены в конце файла; одинаковые имена в разных файлах не
-  связаны.
+- `=` and `;` define a rule. `|` marks an alternative. A space marks
+  concatenation.
+- `[ … ]` marks an optional part. `{ … }` marks repetition. `( … )` marks a
+  group.
+- `"…"` marks a terminal string. `? … ?` marks a terminal character class.
+- `(* … *)` marks a comment.
+- A rule from another file uses `Script.Expr`. A rule without a prefix belongs
+  to the current file.
+- Terminals are declared at the end of a file. Identical names in different
+  files are not linked.
 
-Стратегия парсеров —
-[architecture.md §Парсеры и tooling](../dev/architecture.md#парсеры-и-tooling).
+The parser strategy is in
+[architecture.md, "Parsers and tooling"](../dev/architecture.md#parsers-and-tooling).

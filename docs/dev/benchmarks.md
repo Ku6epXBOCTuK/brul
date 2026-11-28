@@ -1,45 +1,45 @@
-# Замеры
+# Measurements
 
-Снимок одной машины, а не критерий приёмки: сравнивать можно только прогоны на
-той же машине и toolchain. Сценарии и код — в
-`crates/brul-reactive/benches/reactive.rs`, `benches/each.rs` и
-`benches/read.rs`; контракт ядра — в
-[architecture.md](architecture.md#реактивное-ядро).
+A snapshot is from one machine. It is not an acceptance criterion. Compare only
+runs on the same machine and toolchain. Scenarios and code are in
+`crates/brul-reactive/benches/reactive.rs`, `benches/each.rs`, and
+`benches/read.rs`. The core contract is in
+[architecture.md, "Reactive core"](architecture.md#reactive-core).
 
-Все снимки ниже сняты на одной машине:
+All snapshots below come from one machine:
 
-- CPU: Intel Core i7-8700K, 6 ядер / 12 потоков.
-- ОС: Windows 10 Home, 10.0.19045, x86_64.
+- CPU: Intel Core i7-8700K, 6 cores and 12 threads.
+- OS: Windows 10 Home, 10.0.19045, x86_64.
 - Toolchain: `nightly-2026-10-15`, rustc 1.101.0-nightly (7df81381d 2026-10-14),
   cargo 1.101.0-nightly.
-- Режим Criterion: 50 сэмплов, прогрев 1 с, измерение 2 с для `brul-reactive` и
-  3 с для `brul`.
+- Criterion mode: 50 samples, 1 s warm-up, 2 s measurement for `brul-reactive`
+  and 3 s for `brul`.
 
-Время — центральная оценка Criterion; разброс и выбросы остаются в отчёте
-прогона.
+Time is the Criterion estimate. Spread and outliers stay in the run report.
 
-## 2026-11-17 — после перф-серии (BRUL-415…489)
+## 2026-11-17, after the performance series (BRUL-415 to BRUL-489)
 
-Прогоны той же машины и toolchain, что и раньше; снимок заменяет два прошлых
-раздела о ядре и чтении, шаги серии до BRUL-415 остались в истории файла.
+Runs use the same machine and toolchain as before. This snapshot replaces two
+earlier sections on the core and on reads. Earlier steps of the series stay in
+the file history.
 
 `cargo bench -p brul-reactive`
 
-| Сценарий         | Размер |   Время |
-| ---------------- | -----: | ------: |
-| chain            |     10 |  637 ns |
-| chain            |    100 | 5.43 µs |
-| chain            |   1000 | 55.6 µs |
-| diamond          |      — |  262 ns |
-| many_subscribers |     10 |  649 ns |
-| many_subscribers |    100 | 11.3 µs |
-| many_subscribers |   1000 |  557 µs |
-| batched_writes   |     10 |  410 ns |
-| batched_writes   |    100 | 3.69 µs |
+| Scenario         | Size |    Time |
+| ---------------- | ---: | ------: |
+| chain            |   10 |  637 ns |
+| chain            |  100 | 5.43 µs |
+| chain            | 1000 | 55.6 µs |
+| diamond          |    — |  262 ns |
+| many_subscribers |   10 |  649 ns |
+| many_subscribers |  100 | 11.3 µs |
+| many_subscribers | 1000 |  557 µs |
+| batched_writes   |   10 |  410 ns |
+| batched_writes   |  100 | 3.69 µs |
 
 `cargo bench -p brul --bench read`
 
-| Сценарий                  |   Время |
+| Scenario                  |    Time |
 | ------------------------- | ------: |
 | read/property_string      | 32.6 ns |
 | read/property_string_id   | 20.9 ns |
@@ -53,7 +53,7 @@
 
 `cargo bench -p brul --bench each`
 
-| Сценарий                   |   Время |
+| Scenario                   |    Time |
 | -------------------------- | ------: |
 | each_row/scopes_6_bindings | 1.16 µs |
 | each_row/widgets           |  888 ns |
@@ -65,179 +65,193 @@
 
 `cargo bench -p brul --bench layout`
 
-| Сценарий             |   Время |
+| Scenario             |    Time |
 | -------------------- | ------: |
 | layout/window        | 83.4 µs |
 | layout/synthetic-500 |  551 µs |
 
-`row_match/keyed_N` — сборка `RowMatcher` по N строкам и по одному поиску на
-строку: 0.27 µs на строку при 100 и 0.30 µs при 1000, от N не зависит. Хеш
-считается по ключу строки, элемент сверяется равенством только в найденном
-ведре.
+`row_match/keyed_N` builds a `RowMatcher` over N rows and makes one lookup per
+row. That is 0.27 µs per row at 100 rows and 0.30 µs at 1000 rows. The cost does
+not depend on N. The hash uses the row key. Equality checks the element only in
+the found bucket.
 
-Что изменилось с прошлого снимка:
+What changed since the last snapshot:
 
-- BRUL-415 — свойство читается своим сигналом, а не общей ревизией компонента:
-  `chain/1000` 182 → 55.6 µs, `diamond` 0.99 → 0.26 µs, `batched_writes/100`
-  16.5 → 3.69 µs. Плата — чтение переменной окружения: она подписывается на
-  грубый сигнал `external`, и чтение стало сигнальным,
-  `read/variable_in_frame_id` 10.3 → 24.5 ns. Контроль `binding/frame_only`
-  вырос на 10%, поэтому меньше чем на 3 ns разницу не читать.
-- BRUL-416 и BRUL-485, BRUL-489 — арена переиспользует слоты, помечивание идёт
-  своим стеком и очередью, список зависимостей не теряет ёмкость. Время толчка
-  бенч не выделяет, гарантию держат `brul-reactive/tests/alloc_notify.rs` и
-  раздел о пересборке ниже.
-- BRUL-419 и BRUL-118 — совпавшая строка `each` не собирается вовсе, а ключ
-  хешируется отдельно от элемента: `row_match` 81.0 → 27.4 µs на 100 строках и
-  765 → 296 µs на 1000. Прежние `each_row/*` остались как были.
+- BRUL-415: a property is read through its own signal, not through a shared
+  component revision. `chain/1000` went from 182 to 55.6 µs. `diamond` went from
+  0.99 to 0.26 µs. `batched_writes/100` went from 16.5 to 3.69 µs. The cost is
+  an environment variable read. It subscribes to the coarse `external` signal,
+  so the read became a signal read. `read/variable_in_frame_id` went from 10.3
+  to 24.5 ns. The control `binding/frame_only` grew by 10%. Do not read
+  differences below 3 ns.
+- BRUL-416, BRUL-485, and BRUL-489: the arena reuses slots. Marking uses its own
+  stack and queue. The dependency list does not lose capacity. The bench does
+  not allocate a push. `brul-reactive/tests/alloc_notify.rs` and the rebuild
+  section below hold that guarantee.
+- BRUL-419 and BRUL-118: a matching `each` row is not built at all. The key is
+  hashed separately from the element. For `row_match`, 100 rows went from 81.0
+  to 27.4 µs and 1000 rows went from 765 to 296 µs. Earlier `each_row/*` results
+  stayed as they were.
 
-Разброс между двумя прогонами `read` и `each` — до 15% по разным строкам, шум
-прогона выше разницы в единицы наносекунд.
+Two runs of `read` and `each` differ by up to 15% across rows. Run noise is
+above a difference of a few nanoseconds.
 
-## Счётчик аллокаций в приложении (BRUL-232)
+## Allocation counter in an application (BRUL-232)
 
-Счётчик включается на сборке приложения и живёт в сгенерированном модуле:
+The counter is enabled for an application build. It lives in the generated
+module:
 
 ```powershell
 $env:BRUL_ALLOC_COUNT = "1"
 cargo build --release
 ```
 
-Без переменной блок вырезан на `#[cfg(brul_alloc_count)]`. С включённой
-переменной `alloc` и `realloc` считаются раздельно, `dealloc` только
-пробрасывается, а в байты идёт запрошенный размер каждого вызова. Счётчики
-обнуляются после первого кадра: инициализация окна и шрифтов не смешивается с
-интерфейсом. Итог уходит в лог приложения (`~/.config/brul/<exe>.log`) строкой
-такого вида:
+Without the variable, the block is cut out by `#[cfg(brul_alloc_count)]`. With
+the variable enabled, `alloc` and `realloc` are counted separately. `dealloc`
+only passes through. Bytes are the requested size of each call.
+
+Counters reset after the first frame. Window and font initialization does not
+mix with the UI. The result goes to the application log at
+`~/.config/brul/<exe>.log` as a line of this form:
 
 ```text
 brul allocations: init <allocs> allocs, <reallocs> reallocs, <bytes> bytes; ui ...
 ```
 
-`init` — старт до первого кадра, `ui` — всё после него. Строка печатается только
-при выходе через цикл событий: убитый процесс отчёта не даёт.
+`init` is startup before the first frame. `ui` is everything after it. The line
+is printed only on exit through the event loop. A killed process gives no
+report.
 
-## 2026-11-16 — холодный старт и конфиг (BRUL-196)
+## 2026-11-16, cold start and config (BRUL-196)
 
-Метод холодного старта: `cargo build --release`, затем пять запусков с
-`$env:BRUL_STARTUP_LOG = "1"`; процесс поднимается, через 2.5 с снимается, из
-`~/.config/brul/<exe>.log` берётся строка `brul startup: first frame in ...`.
+Cold start method: run `cargo build --release`, then start the application five
+times with `$env:BRUL_STARTUP_LOG = "1"`. Stop the process after 2.5 s. Take the
+line `brul startup: first frame in ...` from `~/.config/brul/<exe>.log`.
 
-Замер идёт от входа в цикл событий (`run_windows`) до первого показанного кадра:
-в него входят создание окна, GPU-контекст, шрифты и построение дерева. Загрузка
-exe и инициализация лога в число не входят, поэтому к «времени от клика» надо
-добавить запуск процесса. Строку печатает только `BRUL_STARTUP_LOG`, по
-умолчанию её нет. Повышенный процесс не наследует окружение вызывающего:
-переменную приходится ставить в профиле пользователя.
+The measurement runs from entry into the event loop (`run_windows`) to the first
+shown frame. It includes window creation, GPU context, fonts, and tree building.
+EXE loading and log initialization are not included. Add process startup to get
+the "time from click". Only `BRUL_STARTUP_LOG` prints the line. By default there
+is no line. An elevated process does not inherit the caller's environment. Set
+the variable in the user profile.
 
-Метод проверки конфига: файл заменяется на заведомо битый TOML
-(`unclosed array`), приложение запускается, снимается код возврата и хвост лога.
-Разбор и номер строки пишутся в `~/.config/brul/<exe>.log` с уровнем `WARN`,
-приложение стартует на умолчаниях. Битый файл не перезаписывается: его заменит
-ближайшее сохранение настроек.
+Config check method: replace the file with broken TOML (`unclosed array`). Start
+the application. Capture the exit code and the tail of the log. The parse error
+and line number go to `~/.config/brul/<exe>.log` at `WARN` level. The
+application starts with defaults. The broken file is not overwritten. The next
+settings save replaces it.
 
-## 2026-11-17 — DPI: текст и атлас (BRUL-196)
+## 2026-11-17, DPI: text and atlas (BRUL-196)
 
-Масштаб монитора не менялся: оба экрана 2560×1440 на 100%, а winit берёт масштаб
-только из системы. Замер снят на одной сборке через
-`cargo bench -p brul --bench dpi`: 16 строк интерфейса в четырёх размерах
-(14/16/18/24), масштабы 1.00/1.25/1.50/2.00.
+The monitor scale did not change. Both screens are 2560×1440 at 100%. winit
+takes scale only from the system. One build was measured with
+`cargo bench -p brul --bench dpi`: 16 UI rows at four sizes (14/16/18/24), at
+scales 1.00/1.25/1.50/2.00.
 
-| Масштаб | Холодная раскладка | Повторная | Записей атласа |
-| ------- | -----------------: | --------: | -------------: |
-| 1.00    |            11.6 мс |    651 µs |            428 |
-| 1.25    |            11.3 мс |    627 µs |            430 |
-| 1.50    |            13.1 мс |    631 µs |            425 |
-| 2.00    |            13.1 мс |    649 µs |            427 |
+| Scale | Cold layout | Repeat | Atlas entries |
+| ----- | ----------: | -----: | ------------: |
+| 1.00  |     11.6 ms | 651 µs |           428 |
+| 1.25  |     11.3 ms | 627 µs |           430 |
+| 1.50  |     13.1 ms | 631 µs |           425 |
+| 2.00  |     13.1 ms | 649 µs |           427 |
 
-Холодная раскладка — новый `TextEngine` на каждую итерацию, шейпинг и
-растеризация всех 64 пар «строка × размер»; загрузка шрифтов в число не входит,
-движок создаётся в подготовке итерации. Повторная — те же строки по готовому
-атласу.
+Cold layout uses a new `TextEngine` on each iteration. It shapes and rasterizes
+all 64 "row × size" pairs. Font loading is not included. Iteration setup creates
+the engine.
 
-Что видно:
+Repeat uses the same rows against a ready atlas.
 
-- Растеризация на 150–200% дороже на 13%: глифов столько же, но каждый крупнее.
-- Повторная раскладка от масштаба не зависит — это попадания в атлас.
-- Атлас 1024×1024 вмещает весь набор и на 200%: 4 МиБ RGBA при любом масштабе.
+What the data shows:
 
-Не замерено: реальный старт окна при дробном масштабе — для этого нужен экран с
-настройкой ≠100%. Что поверхность и раскладка идут по `config × scale`, держат
-тесты `brul-gui` (метрики текста) и `brul-window` (поверхность и кадр).
+- Rasterization at 150–200% costs 13% more. There are the same glyphs, but each
+  is larger.
+- Repeat layout does not depend on scale. It is atlas hits.
+- A 1024×1024 atlas holds the whole set even at 200%. That is 4 MiB of RGBA at
+  any scale.
 
-## 2026-11-17 — пересборка без роста арены (BRUL-416)
+Not measured: real window startup at a fractional scale. That needs a screen
+with a setting other than 100%. Tests in `brul-gui` (text metrics) and
+`brul-window` (surface and frame) hold that surface and layout follow
+`config × scale`.
 
-Временный тест со счётчиком на глобальном аллокаторе: 2000 пересборок, в каждой
-скоуп с десятью эффектами и `EffectScope::dispose`; `alloc` и `realloc`
-считаются раздельно, в байты идёт запрошенный размер.
+## 2026-11-17, rebuild without arena growth (BRUL-416)
 
-| Сборка                | allocs | reallocs |   bytes |
-| --------------------- | -----: | -------: | ------: |
-| без переиспользования |  66003 |     4015 | 6462176 |
-| переиспользование     |  66004 |     4006 | 1746000 |
+A temporary test counts allocations in the global allocator. It makes 2000
+rebuilds. Each has a scope with ten effects and `EffectScope::dispose`. `alloc`
+and `realloc` are counted separately. Bytes are the requested size.
 
-Вызовов столько же — эффект и его замыкание аллоцируются как раньше; уходит рост
-`Vec<Node>`: 20 000 созданных и остановленных эффектов просят 1.7 МБ вместо 6.5
-МБ.
+| Build         | Allocs | Reallocs |   Bytes |
+| ------------- | -----: | -------: | ------: |
+| without reuse |  66003 |     4015 | 6462176 |
+| reuse         |  66004 |     4006 | 1746000 |
 
-## 2026-11-18 — старт example на двух бэкендах (BRUL-530)
+The call counts are the same. An effect and its closure are allocated as before.
+What disappears is `Vec<Node>` growth. 20 000 created and stopped effects
+request 1.7 MiB instead of 6.5 MB.
 
-Один бинарник `hello` переключается переменной `BRUL_EXAMPLE_BACKEND`
-(`software` или `gpu`), которая пишется в `WindowConfig.backend` до
-`run_generated`. Замер делает `docs/dev/scripts/measure-startup.ps1`: сборка
-`cargo build --release -p hello`, пять запусков на бэкенд, удаление лога перед
-каждым запуском, ожидание строки
-`brul startup: first frame in ... ms, backend ...` и остановка процесса. Путь к
-бинарнику берётся из `cargo metadata`: в этой копии target-dir —
+## 2026-11-18, example start on two backends (BRUL-530)
+
+One `hello` binary switches backends through `BRUL_EXAMPLE_BACKEND`, which is
+`software` or `gpu`. It writes to `WindowConfig.backend` before `run_generated`.
+
+`docs/dev/scripts/measure-startup.ps1` makes the measurement: build with
+`cargo build --release -p hello`, run five times per backend, delete the log
+before each run, wait for the line
+`brul startup: first frame in ... ms, backend ...`, then stop the process. The
+binary path comes from `cargo metadata`. In this copy the target directory is
 `F:/Cache/cargo-target/brul`.
 
 ```powershell
 .\docs\dev\scripts\measure-startup.ps1
 ```
 
-| Бэкенд   | first frame, медиана |        min / max | от запуска до строки, медиана |
-| -------- | -------------------: | ---------------: | ----------------------------: |
-| software |              69.7 мс |   63.1 / 75.1 мс |                      193.4 мс |
-| gpu      |             629.9 мс | 602.9 / 689.0 мс |                      746.6 мс |
+| Backend  | First frame, median |        Min / max | From start to line, median |
+| -------- | ------------------: | ---------------: | -------------------------: |
+| software |             69.7 ms |   63.1 / 75.1 ms |                   193.4 ms |
+| gpu      |            629.9 ms | 602.9 / 689.0 ms |                   746.6 ms |
 
-Внутренняя метка — от входа в цикл событий до первого кадра; внешняя — от
-запуска процесса до появления строки в логе. Софтверный путь не ищет адаптер и
-не создаёт GPU-контекст, поэтому до первого кадра примерно в 9 раз быстрее.
+The inner mark runs from entry into the event loop to the first frame. The outer
+mark runs from process start to the log line.
 
-Числа сняты на одной машине и не переносятся на другую. Повышенный процесс не
-наследует окружение вызывающего: `BRUL_STARTUP_LOG` и `BRUL_EXAMPLE_BACKEND`
-нужно задать в профиле пользователя. Совпадение кадров двух путей не
-проверялось: сравнивалось только время до первого кадра.
+The software path does not search for an adapter and does not create a GPU
+context. It reaches the first frame about 9 times faster.
 
-## 2026-11-18 — кадр GPU против CPU (BRUL-537, BRUL-546)
+The numbers come from one machine. They do not transfer to another. An elevated
+process does not inherit the caller's environment. Set `BRUL_STARTUP_LOG` and
+`BRUL_EXAMPLE_BACKEND` in the user profile. Frame equality between the two paths
+was not checked. Only time to first frame was compared.
 
-Dev-проверка не идёт в CI: адаптер ненадёжен, сравнение делается на машине с
-окном. Сборка и прогон:
+## 2026-11-18, GPU frame against CPU frame (BRUL-537, BRUL-546)
+
+This dev check does not run in CI. The adapter is not reliable, so compare on a
+machine with a window. Build and run:
 
 ```powershell
 cargo build --release -p hello
 .\docs\dev\scripts\compare-frames.ps1
 ```
 
-Скрипт по очереди поднимает `hello` на бэкендах `software` и `gpu`. Переменные
-`BRUL_STARTUP_LOG=1` заставляют приложение перерисовывать кадр каждые 16 мс и
-печатать метки старта и растеризации; `BRUL_FRAME_DUMP` задаёт путь к кадру в
-RGBA после 60 перерисовок — к моменту затухания анимаций, `BRUL_LOG_FILE` уводит
-лог в `target/frame-compare` вместо пользовательского каталога. Скрипт закрывает
-окно через `CloseMainWindow`, чтобы метка растеризации успела записаться, затем
-меняет R и B в GPU-дампе, если поверхность BGRA, и считает побайтовую разницу.
+The script starts `hello` on the `software` and `gpu` backends in turn.
+`BRUL_STARTUP_LOG=1` makes the application redraw every 16 ms and print startup
+and raster marks. `BRUL_FRAME_DUMP` sets the path to an RGBA frame after 60
+redraws, when animations have settled. `BRUL_LOG_FILE` sends the log to
+`target/frame-compare` instead of the user directory. The script closes the
+window with `CloseMainWindow` so the raster mark can be written. Then it swaps R
+and B in the GPU dump if the surface is BGRA. It counts a byte-by-byte
+difference.
 
-| Бэкенд   | first frame | raster first | raster steady, медиана | кадров |
-| -------- | ----------: | -----------: | ---------------------: | -----: |
-| software |      192 мс |       7.2 мс |                 8.5 мс |    384 |
-| gpu      |     1279 мс |      10.8 мс |                16.5 мс |    241 |
+| Backend  | First frame | Raster first | Raster steady, median | Frames |
+| -------- | ----------: | -----------: | --------------------: | -----: |
+| software |      192 ms |       7.2 ms |                8.5 ms |    384 |
+| gpu      |     1279 ms |      10.8 ms |               16.5 ms |    241 |
 
-`raster steady` — время `renderer.render` без первого кадра. Повторный прогон
-даёт тот же порядок: софтверный бэкенд быстрее стартует, но медленнее рисует
-установившийся кадр.
+`raster steady` is `renderer.render` time without the first frame.
 
-## Как обновлять
+A repeat run gives the same order. The software backend starts faster. It draws
+a steady frame more slowly.
 
-Новый снимок заменяет старый, историю хранит git. Прогон на другой машине или
-toolchain открывает свой раздел с собственной шапкой: числа из разных разделов
-сравнивать нельзя.
+## How to update
+
+A new snapshot replaces the old one. Git keeps history. A run on another machine
+or toolchain opens its own section with its own header. Do not compare numbers
+from different sections.

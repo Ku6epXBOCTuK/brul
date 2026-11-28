@@ -3,8 +3,7 @@ const STYLE: &str = include_str!("../../../docs/lang/style.md");
 const SCRIPT: &str = include_str!("../../../docs/lang/script.md");
 const LOCK: &str = include_str!("fixtures/spec_examples.lock");
 
-const EXAMPLES_HEADING: &str =
-    "## \u{422}\u{435}\u{441}\u{442}-\u{43f}\u{440}\u{438}\u{43c}\u{435}\u{440}\u{44b}";
+const EXAMPLES_HEADING: &str = "## Test examples";
 
 #[derive(Clone, Copy, PartialEq)]
 enum Kind {

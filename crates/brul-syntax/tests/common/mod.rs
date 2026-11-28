@@ -1,7 +1,6 @@
 use std::fmt::{Debug, Display};
 
-pub const EXAMPLES_HEADING: &str =
-    "## \u{422}\u{435}\u{441}\u{442}-\u{43f}\u{440}\u{438}\u{43c}\u{435}\u{440}\u{44b}";
+pub const EXAMPLES_HEADING: &str = "## Test examples";
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Kind {
