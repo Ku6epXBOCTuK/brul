@@ -38,12 +38,48 @@ fn a_non_finite_position_is_rejected() {
 fn a_window_is_centered_on_its_monitor() {
     let monitor = super::PhysicalPosition::new(0, 0);
     let area = super::PhysicalSize::new(1920, 1080);
-    let centered = super::centered_position(monitor, area, (488, 800));
+    let centered = super::centered_position(monitor, area, super::PhysicalSize::new(488, 800));
     assert_eq!((centered.x, centered.y), (716, 140));
 
     let second = super::PhysicalPosition::new(1920, 0);
-    let centered = super::centered_position(second, area, (488, 800));
+    let centered = super::centered_position(second, area, super::PhysicalSize::new(488, 800));
     assert_eq!((centered.x, centered.y), (2636, 140));
+}
+
+#[test]
+fn a_point_selects_the_monitor_it_falls_on() {
+    let area = super::PhysicalSize::new(1920, 1080);
+    let monitors = [
+        (
+            0,
+            super::MonitorRect {
+                origin: super::PhysicalPosition::new(0, 0),
+                size: area,
+            },
+        ),
+        (
+            1,
+            super::MonitorRect {
+                origin: super::PhysicalPosition::new(1920, 0),
+                size: area,
+            },
+        ),
+    ];
+
+    let pick = |x, y| {
+        super::monitor_at_point(monitors.iter().copied(), super::PhysicalPosition::new(x, y))
+    };
+    assert_eq!(pick(100, 100), Some(0));
+    assert_eq!(pick(2000, 100), Some(1));
+    assert_eq!(pick(1920, 100), Some(1));
+    assert_eq!(pick(-10, 500), Some(0));
+    assert_eq!(
+        super::monitor_at_point(
+            std::iter::empty::<(u32, super::MonitorRect)>(),
+            super::PhysicalPosition::new(0, 0),
+        ),
+        None
+    );
 }
 
 #[test]

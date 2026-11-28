@@ -1,9 +1,11 @@
+use super::pointer::pointer_position;
 use super::*;
 use tracing::warn;
+use winit::monitor::MonitorHandle;
 
 #[derive(Debug, thiserror::Error)]
-enum PlacementError {
-    #[error("no primary monitor")]
+pub(super) enum PlacementError {
+    #[error("no monitor is available")]
     NoMonitor,
     #[error("monitor origin is unavailable")]
     NoOrigin,
@@ -11,6 +13,64 @@ enum PlacementError {
     NoVideoMode,
     #[error("monitor scale factor must be positive and finite, got {0}")]
     InvalidScale(f64),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct MonitorRect {
+    pub(super) origin: PhysicalPosition<i32>,
+    pub(super) size: PhysicalSize<u32>,
+}
+
+impl TryFrom<&MonitorHandle> for MonitorRect {
+    type Error = PlacementError;
+
+    fn try_from(monitor: &MonitorHandle) -> Result<Self, Self::Error> {
+        Ok(Self {
+            origin: monitor.position().ok_or(PlacementError::NoOrigin)?,
+            size: monitor
+                .current_video_mode()
+                .ok_or(PlacementError::NoVideoMode)?
+                .size(),
+        })
+    }
+}
+
+impl MonitorRect {
+    fn contains(&self, point: PhysicalPosition<i32>) -> bool {
+        let (left, right, top, bottom) = self.bounds();
+        let x = i64::from(point.x);
+        let y = i64::from(point.y);
+        x >= left && x < right && y >= top && y < bottom
+    }
+
+    fn distance(&self, point: PhysicalPosition<i32>) -> i64 {
+        let (left, right, top, bottom) = self.bounds();
+        let x = i64::from(point.x);
+        let y = i64::from(point.y);
+        let dx = (left - x).max(x - right).max(0);
+        let dy = (top - y).max(y - bottom).max(0);
+        dx * dx + dy * dy
+    }
+
+    fn bounds(&self) -> (i64, i64, i64, i64) {
+        let left = i64::from(self.origin.x);
+        let top = i64::from(self.origin.y);
+        (
+            left,
+            left + i64::from(self.size.width),
+            top,
+            top + i64::from(self.size.height),
+        )
+    }
+}
+
+pub(super) fn monitor_at_point<T>(
+    monitors: impl Iterator<Item = (T, MonitorRect)>,
+    point: PhysicalPosition<i32>,
+) -> Option<T> {
+    monitors
+        .min_by_key(|(_, rect)| (!rect.contains(point), rect.distance(point)))
+        .map(|(monitor, _)| monitor)
 }
 
 pub(crate) fn create_window(
@@ -50,34 +110,37 @@ fn center_on_monitor(
     event_loop: &dyn ActiveEventLoop,
     config: &WindowConfig,
 ) -> Result<Position, PlacementError> {
-    let monitor = event_loop
-        .primary_monitor()
+    let candidates = event_loop.available_monitors().filter_map(|monitor| {
+        MonitorRect::try_from(&monitor)
+            .ok()
+            .map(|rect| (monitor, rect))
+    });
+    let monitor = pointer_position()
+        .and_then(|point| monitor_at_point(candidates, point))
+        .or_else(|| event_loop.primary_monitor())
+        .or_else(|| event_loop.available_monitors().next())
         .ok_or(PlacementError::NoMonitor)?;
-    let origin = monitor.position().ok_or(PlacementError::NoOrigin)?;
-    let area = monitor
-        .current_video_mode()
-        .ok_or(PlacementError::NoVideoMode)?
-        .size();
+    let rect = MonitorRect::try_from(&monitor)?;
     let scale = monitor.scale_factor();
     if !scale.is_finite() || scale <= 0.0 {
         return Err(PlacementError::InvalidScale(scale));
     }
-    let width = (f64::from(config.width) * scale).round() as i32;
-    let height = (f64::from(config.height) * scale).round() as i32;
+    let window =
+        LogicalSize::new(f64::from(config.width), f64::from(config.height)).to_physical(scale);
     Ok(Position::Physical(centered_position(
-        origin,
-        area,
-        (width, height),
+        rect.origin,
+        rect.size,
+        window,
     )))
 }
 
 pub(super) fn centered_position(
     origin: PhysicalPosition<i32>,
     area: PhysicalSize<u32>,
-    window: (i32, i32),
+    window: PhysicalSize<u32>,
 ) -> PhysicalPosition<i32> {
-    let x = origin.x + (area.width as i32 - window.0) / 2;
-    let y = origin.y + (area.height as i32 - window.1) / 2;
+    let x = origin.x + (area.width as i32 - window.width as i32) / 2;
+    let y = origin.y + (area.height as i32 - window.height as i32) / 2;
     PhysicalPosition::new(x, y)
 }
 

@@ -1,9 +1,11 @@
 #[path = "parts/window_app.rs"]
 mod app;
+#[path = "parts/pointer.rs"]
+mod pointer;
 use app::App;
 pub(crate) use app::create_window;
 #[cfg(test)]
-use app::{attributes, centered_position};
+use app::{MonitorRect, attributes, centered_position, monitor_at_point};
 
 #[cfg(test)]
 #[path = "parts/window_tests.rs"]
