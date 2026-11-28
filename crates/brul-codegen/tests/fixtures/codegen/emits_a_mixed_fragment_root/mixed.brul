@@ -1,0 +1,27 @@
+<use>
+    import Badge from "./badge.brul";
+</use>
+
+<markup>
+component Row {
+    Text (first) { "one" }
+    Badge { Text { "component" } }
+    @if (shown) {
+        Text (conditional, #root-anchor) { "two" }
+    } @else {
+        Text (fallback) { "none" }
+    }
+    @each (items as item) {
+        TextInput (field) { item }
+    }
+    Text (target, anchor: @root-anchor) { "anchored" }
+    Text (third) { "three" }
+    @slot(header)
+    Text (fourth) { "four" }
+    @if (shown) {
+        Text (fifth) { "five" }
+    }
+    Badge { Text { "second" } }
+    Text (sixth) { "six" }
+}
+</markup>

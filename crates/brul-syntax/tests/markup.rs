@@ -475,3 +475,20 @@ fn a_slot_can_be_the_component_root() {
     ));
     assert_eq!(members.len(), 2);
 }
+
+#[test]
+fn structures_can_be_the_component_root() {
+    let source =
+        "component Card { @if (shown) { Text { \"a\" } } @each (items as item) { Text { item } } }";
+    let file = parse_file(source).unwrap();
+    let members = &file.declaration.unwrap().members;
+    assert!(matches!(&members[0], Member::If(_)));
+    assert!(matches!(&members[1], Member::Each(_)));
+    assert_eq!(members.len(), 2);
+
+    let error = parse_file("component Card { if (shown) { Text { \"a\" } } }").unwrap_err();
+    assert_eq!(
+        error.message(),
+        "expected '@if': block constructs start with '@'"
+    );
+}

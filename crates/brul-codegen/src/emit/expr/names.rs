@@ -1,7 +1,9 @@
 use brul_script::{Names, VariableId};
 use brul_syntax::ast::{Expr, ExprKind, Position};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Block, BlockItem, Element, Member, Prop};
+use brul_syntax::markup::{
+    Arg, Block, BlockItem, EachBlock, Element, IfBlock, Member, Prop, StructureRef,
+};
 use brul_syntax::script::{Builtin, Function, Program, Statement, builtin};
 
 use crate::capability::CapabilityTable;
@@ -36,8 +38,23 @@ pub(super) fn table<'a>(
 
 fn widget_names<'a>(members: &'a [Member], widgets: &'a CapabilityTable, names: &mut Names<'a>) {
     for member in members {
-        if let Member::Element(element) = member {
-            element_widget_names(element, widgets, names);
+        match member.structure() {
+            Some(StructureRef::Element(element)) => element_widget_names(element, widgets, names),
+            Some(StructureRef::If(block)) => {
+                for branch in &block.branches {
+                    block_widget_names(&branch.block, widgets, names);
+                }
+                if let Some(else_block) = &block.else_block {
+                    block_widget_names(else_block, widgets, names);
+                }
+            }
+            Some(StructureRef::Each(block)) => {
+                block_widget_names(&block.block, widgets, names);
+                if let Some(else_block) = &block.else_block {
+                    block_widget_names(else_block, widgets, names);
+                }
+            }
+            Some(StructureRef::Slot(_)) | None => {}
         }
     }
 }
@@ -134,10 +151,14 @@ pub(super) fn variable_expr(
 
 fn members<'a>(members: &'a [Member], names: &mut Names<'a>) {
     for member in members {
-        match member {
-            Member::Prop(prop) => prop_node(prop, names),
-            Member::Event(_) | Member::Slot(_) => {}
-            Member::Element(element) => element_node(element, names),
+        if let Member::Prop(prop) = member {
+            prop_node(prop, names);
+        }
+        match member.structure() {
+            Some(StructureRef::Element(element)) => element_node(element, names),
+            Some(StructureRef::If(block)) => if_node(block, names),
+            Some(StructureRef::Each(block)) => each_node(block, names),
+            Some(StructureRef::Slot(_)) | None => {}
         }
     }
 }
@@ -162,29 +183,8 @@ fn block_node<'a>(block: &'a Block, names: &mut Names<'a>) {
     for item in &block.items {
         match item {
             BlockItem::Element(element) => element_node(element, names),
-            BlockItem::If(block) => {
-                for branch in &block.branches {
-                    expression(&branch.condition, names);
-                    block_node(&branch.block, names);
-                }
-                if let Some(else_block) = &block.else_block {
-                    block_node(else_block, names);
-                }
-            }
-            BlockItem::Each(each) => {
-                expression(&each.collection, names);
-                names.intern(&each.item);
-                if let Some(index) = &each.index {
-                    names.intern(index);
-                }
-                if let Some(key) = &each.key {
-                    expression(key, names);
-                }
-                block_node(&each.block, names);
-                if let Some(else_block) = &each.else_block {
-                    block_node(else_block, names);
-                }
-            }
+            BlockItem::If(block) => if_node(block, names),
+            BlockItem::Each(each) => each_node(each, names),
             BlockItem::Expr(expr) => expression(expr, names),
             BlockItem::Slot(slot) => {
                 if let Some(block) = &slot.block {
@@ -192,6 +192,31 @@ fn block_node<'a>(block: &'a Block, names: &mut Names<'a>) {
                 }
             }
         }
+    }
+}
+
+fn if_node<'a>(block: &'a IfBlock, names: &mut Names<'a>) {
+    for branch in &block.branches {
+        expression(&branch.condition, names);
+        block_node(&branch.block, names);
+    }
+    if let Some(else_block) = &block.else_block {
+        block_node(else_block, names);
+    }
+}
+
+fn each_node<'a>(block: &'a EachBlock, names: &mut Names<'a>) {
+    expression(&block.collection, names);
+    names.intern(&block.item);
+    if let Some(index) = &block.index {
+        names.intern(index);
+    }
+    if let Some(key) = &block.key {
+        expression(key, names);
+    }
+    block_node(&block.block, names);
+    if let Some(else_block) = &block.else_block {
+        block_node(else_block, names);
     }
 }
 

@@ -1,5 +1,5 @@
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Block, BlockItem, Element, Member};
+use brul_syntax::markup::{Block, BlockItem, Element, StructureRef};
 
 use crate::window::AttachArg;
 
@@ -13,7 +13,7 @@ use super::module::ViewKind;
 
 pub(super) enum ViewRoot<'a> {
     Element(&'a Element),
-    Members(Vec<&'a Member>),
+    Members(Vec<StructureRef<'a>>),
 }
 
 pub(super) struct ViewSpec<'a> {
@@ -79,14 +79,7 @@ pub(super) fn view(
                 out.indented(|out| widget(out, element, emit, frame, &mut counter))?;
             }
             ViewRoot::Members(members) => {
-                let items: Vec<BlockItem> = members
-                    .iter()
-                    .filter_map(|member| match member {
-                        Member::Element(element) => Some(BlockItem::Element((*element).clone())),
-                        Member::Slot(slot) => Some(BlockItem::Slot((*slot).clone())),
-                        Member::Prop(_) | Member::Event(_) => None,
-                    })
-                    .collect();
+                let items: Vec<_> = members.iter().copied().map(BlockItem::from).collect();
                 let block = Block { items };
                 out.indented(|out| -> Result<(), Error> {
                     out.line(format_args!("let mut children = Vec::new();"));

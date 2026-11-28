@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use brul_syntax::error::Error;
-use brul_syntax::markup::{AnchorName, Arg, Block, BlockItem, Declaration, Element, Member};
+use brul_syntax::markup::{AnchorName, Arg, Block, BlockItem, Declaration, Element, StructureRef};
 
 use crate::{Definition, Source, error_at};
 
@@ -78,8 +78,25 @@ fn declaration_targets<'a>(
 ) -> Result<(), Error> {
     let mut siblings = HashSet::new();
     for member in &declaration.members {
-        if let Member::Element(element) = member {
-            element_targets(element, targets, names, &mut siblings)?;
+        match member.structure() {
+            Some(StructureRef::Element(element)) => {
+                element_targets(element, targets, names, &mut siblings)?;
+            }
+            Some(StructureRef::If(block)) => {
+                for branch in &block.branches {
+                    block_targets(&branch.block, targets, names)?;
+                }
+                if let Some(else_block) = &block.else_block {
+                    block_targets(else_block, targets, names)?;
+                }
+            }
+            Some(StructureRef::Each(block)) => {
+                block_targets(&block.block, targets, names)?;
+                if let Some(else_block) = &block.else_block {
+                    block_targets(else_block, targets, names)?;
+                }
+            }
+            Some(StructureRef::Slot(_)) | None => {}
         }
     }
     Ok(())

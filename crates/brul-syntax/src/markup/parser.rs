@@ -81,10 +81,15 @@ impl Cursor<'_> {
             let name = self.ident()?;
             return match name.as_str() {
                 "slot" => Ok(Member::Slot(self.slot(start)?)),
+                "if" => Ok(Member::If(self.if_block(start)?)),
+                "each" => Ok(Member::Each(self.each_block(start)?)),
                 _ => Err(self.error_at(start, Error::UnexpectedDirective(name.clone()))),
             };
         }
         let name = self.ident()?;
+        if matches!(name.as_str(), "if" | "each" | "else" | "slot") {
+            return Err(self.error_at(start, Error::ExpectedAtDirective(name.clone())));
+        }
         match name.as_str() {
             "prop" => self.prop(),
             "event" => self.event(),

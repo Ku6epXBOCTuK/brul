@@ -15,8 +15,23 @@ pub fn apply(declaration: &mut Declaration, registry: &mut Registry, bindings: &
 }
 
 fn walk_member(member: &mut Member, bindings: &[Binding]) {
-    if let Member::Element(element) = member {
-        walk_element(element, bindings);
+    match member {
+        Member::Element(element) => walk_element(element, bindings),
+        Member::If(block) => {
+            for branch in &mut block.branches {
+                walk_block(&mut branch.block, bindings);
+            }
+            if let Some(else_block) = &mut block.else_block {
+                walk_block(else_block, bindings);
+            }
+        }
+        Member::Each(block) => {
+            walk_block(&mut block.block, bindings);
+            if let Some(else_block) = &mut block.else_block {
+                walk_block(else_block, bindings);
+            }
+        }
+        Member::Prop(_) | Member::Event(_) | Member::Slot(_) => {}
     }
 }
 

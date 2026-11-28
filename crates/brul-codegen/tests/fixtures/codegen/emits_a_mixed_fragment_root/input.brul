@@ -1,0 +1,11 @@
+<use>
+    import Row from "./mixed.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Container {
+        Row { @slot(header) { Text { "head" } } }
+    }
+}
+</markup>

@@ -2,7 +2,7 @@ File          = [ ComponentDecl | WindowDecl ] ;
 ComponentDecl = "component" Ident "{" { Member } "}" ;
 WindowDecl    = "window" Ident "(" ArgList ")" "{" { Member } "}" ;
 
-Member        = PropDecl | EventDecl | Element | Slot ;
+Member        = PropDecl | EventDecl | Element | Slot | IfBlock | EachBlock ;
 PropDecl      = "prop" Ident ":" PropType [ "=" Script.Expr ] ";" ;
 PropType      = Script.Type ;
 EventDecl     = "event" Ident [ "(" [ EventParamList ] ")" ] ";" ;

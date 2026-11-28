@@ -48,6 +48,20 @@ pub enum Member {
     Event(Event),
     Element(Element),
     Slot(Slot),
+    If(IfBlock),
+    Each(EachBlock),
+}
+
+impl Member {
+    pub fn structure(&self) -> Option<StructureRef<'_>> {
+        match self {
+            Member::Element(element) => Some(StructureRef::Element(element)),
+            Member::Slot(slot) => Some(StructureRef::Slot(slot)),
+            Member::If(block) => Some(StructureRef::If(block)),
+            Member::Each(block) => Some(StructureRef::Each(block)),
+            Member::Prop(_) | Member::Event(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +94,25 @@ pub enum BlockItem {
     Each(EachBlock),
     Slot(Slot),
     Expr(Expr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StructureRef<'a> {
+    Element(&'a Element),
+    Slot(&'a Slot),
+    If(&'a IfBlock),
+    Each(&'a EachBlock),
+}
+
+impl From<StructureRef<'_>> for BlockItem {
+    fn from(item: StructureRef<'_>) -> Self {
+        match item {
+            StructureRef::Element(element) => Self::Element(element.clone()),
+            StructureRef::Slot(slot) => Self::Slot(slot.clone()),
+            StructureRef::If(block) => Self::If(block.clone()),
+            StructureRef::Each(block) => Self::Each(block.clone()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,6 +1,8 @@
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Block, BlockItem, Element, Event, Member, Prop, PropType, Slot};
+use brul_syntax::markup::{
+    Arg, Block, BlockItem, Element, Event, Member, Prop, PropType, Slot, StructureRef,
+};
 
 use crate::error_at;
 use crate::loader::Definition;
@@ -171,10 +173,24 @@ fn fills<'a>(
 fn declared_slots(definition: &Definition) -> Result<Declared<'_>, Error> {
     let mut declared = Declared::default();
     for member in &definition.declaration.members {
-        match member {
-            Member::Element(root) => walk_slots(root, definition, &mut declared)?,
-            Member::Slot(slot) => declare_slot(slot, &mut declared)?,
-            Member::Prop(_) | Member::Event(_) => {}
+        match member.structure() {
+            Some(StructureRef::Element(root)) => walk_slots(root, definition, &mut declared)?,
+            Some(StructureRef::Slot(slot)) => declare_slot(slot, &mut declared)?,
+            Some(StructureRef::If(block)) => {
+                for branch in &block.branches {
+                    walk_block(&branch.block, definition, &mut declared, false)?;
+                }
+                if let Some(else_block) = &block.else_block {
+                    walk_block(else_block, definition, &mut declared, false)?;
+                }
+            }
+            Some(StructureRef::Each(block)) => {
+                walk_block(&block.block, definition, &mut declared, false)?;
+                if let Some(else_block) = &block.else_block {
+                    walk_block(else_block, definition, &mut declared, false)?;
+                }
+            }
+            None => {}
         }
     }
     Ok(declared)
