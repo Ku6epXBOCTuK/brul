@@ -1,6 +1,6 @@
 use brul_syntax::ast::Expr;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Block, BlockItem, Element, Event, Member, Prop, PropType};
+use brul_syntax::markup::{Arg, Block, BlockItem, Element, Event, Member, Prop, PropType, Slot};
 
 use crate::error_at;
 use crate::loader::Definition;
@@ -24,8 +24,6 @@ pub(super) struct Call<'a> {
     pub(super) defaults: Props<'a>,
     pub(super) events: Events<'a>,
     pub(super) slots: Vec<SlotFill<'a>>,
-    pub(super) classes: Vec<&'a str>,
-    pub(super) class: Option<&'a Expr>,
     pub(super) suffix: String,
 }
 
@@ -62,18 +60,32 @@ pub(super) fn component(
         ));
     }
     let name = &definition.name;
-    let classes = element
-        .args
-        .iter()
-        .filter_map(|arg| match arg {
-            Arg::Class(class) => Some(class.as_str()),
-            _ => None,
-        })
-        .collect();
-    let class = element.args.iter().find_map(|arg| match arg {
-        Arg::Named { name, value } if name == "class" => Some(value),
-        _ => None,
-    });
+    if element.args.iter().any(|arg| {
+        matches!(arg, Arg::Class(_)) || matches!(arg, Arg::Named { name, .. } if name == "class")
+    }) {
+        return Err(error_at(
+            element.position,
+            format!("component '{name}' does not accept classes"),
+        ));
+    }
+    if matches!(
+        crate::root::root_shape(&definition.declaration)?,
+        crate::root::RootShape::Fragment(_)
+    ) {
+        for arg in &element.args {
+            let position = match arg {
+                Arg::Attach { position, .. } => Some(*position),
+                Arg::Name(anchor) | Arg::Anchor(anchor) => Some(anchor.position),
+                _ => None,
+            };
+            if let Some(position) = position {
+                return Err(error_at(
+                    position,
+                    format!("component '{name}' has no widget for this argument"),
+                ));
+            }
+        }
+    }
     let mut suffix = anchor::suffix(element, emit)?;
     suffix.push_str(&element::debug_named(element));
     let (props, events) = collect(element, definition, name, emit)?;
@@ -94,8 +106,6 @@ pub(super) fn component(
             defaults,
             events,
             slots,
-            classes,
-            class,
             suffix,
         },
         counter,
@@ -161,11 +171,27 @@ fn fills<'a>(
 fn declared_slots(definition: &Definition) -> Result<Declared<'_>, Error> {
     let mut declared = Declared::default();
     for member in &definition.declaration.members {
-        if let Member::Element(root) = member {
-            walk_slots(root, definition, &mut declared)?;
+        match member {
+            Member::Element(root) => walk_slots(root, definition, &mut declared)?,
+            Member::Slot(slot) => declare_slot(slot, &mut declared)?,
+            Member::Prop(_) | Member::Event(_) => {}
         }
     }
     Ok(declared)
+}
+
+fn declare_slot<'a>(slot: &'a Slot, declared: &mut Declared<'a>) -> Result<(), Error> {
+    if slot.block.is_some() {
+        return Err(error_at(
+            slot.position,
+            "slot content is written at the call site",
+        ));
+    }
+    match &slot.name {
+        Some(name) => declared.named.push(name.as_str()),
+        None => declared.default = true,
+    }
+    Ok(())
 }
 
 fn walk_slots<'a>(

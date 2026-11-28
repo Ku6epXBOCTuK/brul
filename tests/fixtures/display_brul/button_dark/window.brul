@@ -10,9 +10,9 @@
     ) {
         Container (root) {
             Container (row) {
-                Button (primary, label: "Save", variant: "primary") { }
-                Button (secondary, label: "Clear") { }
-                Button (ghost, label: "Close", variant: "ghost") { }
+                Button (label: "Save", variant: "primary") { }
+                Button (label: "Clear") { }
+                Button (label: "Close", variant: "ghost") { }
             }
         }
     }

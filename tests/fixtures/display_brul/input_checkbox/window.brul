@@ -10,9 +10,9 @@
         height: 140
     ) {
         Container (root) {
-            Input (field, value: "ab") { }
-            Checkbox (remember, label: "Remember", checked: true) { }
-            Checkbox (notify, label: "Notify") { }
+            Input (value: "ab") { }
+            Checkbox (label: "Remember", checked: true) { }
+            Checkbox (label: "Notify") { }
         }
     }
 </markup>

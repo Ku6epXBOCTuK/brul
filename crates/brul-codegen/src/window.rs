@@ -1,6 +1,6 @@
 use brul_syntax::ast::{Expr, ExprKind, Position, UnaryOp};
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Declaration, Element, Member};
+use brul_syntax::markup::{Arg, Declaration, Element};
 use brul_window::{WindowConfig, WindowPosition};
 
 use crate::error_at;
@@ -152,23 +152,7 @@ fn apply(config: &mut WindowConfig, name: &str, value: &Expr) -> Result<(), Erro
 }
 
 pub fn root(declaration: &Declaration) -> Result<&Element, Error> {
-    let mut roots = declaration
-        .members
-        .iter()
-        .filter_map(|member| match member {
-            Member::Element(element) => Some(element),
-            Member::Prop(_) | Member::Event(_) => None,
-        });
-    let root = roots
-        .next()
-        .ok_or_else(|| error_at(declaration.position, "window has no root element"))?;
-    if roots.next().is_some() {
-        return Err(error_at(
-            declaration.position,
-            "window has more than one root element",
-        ));
-    }
-    Ok(root)
+    crate::root::window_root(declaration)
 }
 
 fn string(value: &Expr, name: &str) -> Result<String, Error> {

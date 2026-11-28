@@ -19,6 +19,7 @@ mod generate;
 #[path = "internal/kit.rs"]
 mod kit;
 mod loader;
+mod root;
 pub mod runtime;
 mod source;
 pub mod styles;

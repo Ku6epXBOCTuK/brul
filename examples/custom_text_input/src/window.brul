@@ -44,7 +44,6 @@
                 Button (label: "digest", on clicked: useDigest) { }
             }
             CustomTextInput (
-                field,
                 value: secret,
                 mode: mode,
                 on input: changed,

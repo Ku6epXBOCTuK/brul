@@ -463,3 +463,15 @@ fn if_else_blocks_parse() {
         })]
     );
 }
+
+#[test]
+fn a_slot_can_be_the_component_root() {
+    let file = parse_file("component Card { @slot @slot(header) }").unwrap();
+    let members = &file.declaration.unwrap().members;
+    assert!(matches!(&members[0], Member::Slot(slot) if slot.name.is_none()));
+    assert!(matches!(
+        &members[1],
+        Member::Slot(slot) if slot.name.as_deref() == Some("header")
+    ));
+    assert_eq!(members.len(), 2);
+}

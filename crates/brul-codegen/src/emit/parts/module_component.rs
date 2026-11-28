@@ -18,13 +18,11 @@ use super::StateIds;
 use super::StructureNames;
 use super::anchor::AnchorIds;
 use super::classes::ClassNames;
-use super::view::ViewSpec;
+use super::view::{ViewRoot, ViewSpec};
 use super::{names, resources, script, state};
 
 use super::module::{GeneratedFile, HEADER};
-use super::module_windows::{
-    definition_root, emit_tail, emit_view, prop_types, push_script, state_type,
-};
+use super::module_windows::{emit_tail, emit_view, prop_types, push_script, state_type};
 
 pub(super) struct WindowView<'a> {
     pub(super) declaration: &'a Declaration,
@@ -87,7 +85,10 @@ pub(super) fn emit_component(
         anchor_ids,
         state_ids,
     } = sources;
-    let root = definition_root(definition)?;
+    let root = match crate::root::root_shape(&definition.declaration)? {
+        crate::root::RootShape::Single(element) => ViewRoot::Element(element),
+        crate::root::RootShape::Fragment(members) => ViewRoot::Members(members),
+    };
     let prefix = format!("{base}_");
     let name = format!("bc_{base}");
     let mut body = String::new();

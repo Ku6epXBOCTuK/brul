@@ -21,7 +21,6 @@ pub(super) fn write(
     frame: Frame<'_>,
 ) -> Result<(), Error> {
     let bases = emit.bases;
-    let prefix = emit.context.resource_prefix;
     let scopes = &emit.scope_defs;
     let scope = frame.scope;
     let base = bases[index].as_str();
@@ -32,8 +31,6 @@ pub(super) fn write(
         defaults,
         events,
         slots,
-        classes,
-        class,
         suffix,
     } = call;
     let widget = format!("widget{}", *counter);
@@ -90,27 +87,7 @@ pub(super) fn write(
         for field in ["bindings", "handlers", "props"] {
             out.line(format_args!("{field}.extend(built.{field});"));
         }
-        if classes.is_empty() {
-            out.line(format_args!("let {widget} = built.widget{suffix};"));
-        } else {
-            let classes = classes
-                .iter()
-                .map(|class| super::classes::index(emit.classes, class).to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            out.line(format_args!(
-                "let {widget} = {prefix}styled(built.widget{suffix}, &[{classes}], theme);"
-            ));
-        }
-        if let Some(value) = class {
-            let expression =
-                expression::closure(value, &emit.context.expr_context(), scopes, scope)?;
-            let dynamic_classes = &mut *emit.dynamic_classes;
-            *dynamic_classes = true;
-            out.line(format_args!(
-                "bindings.push(brul::Binding::new(component, {widget}.id(), brul::BindingTarget::Class {{ table: {prefix}class_table(theme), expression: {expression} }}));"
-            ));
-        }
+        out.line(format_args!("let {widget} = built.widget{suffix};"));
         element::attachment_bindings(out, element, &widget, emit.context, scopes, scope)?;
         out.line(format_args!("{widget}"));
         Ok(())

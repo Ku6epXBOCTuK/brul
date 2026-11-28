@@ -11,13 +11,13 @@
         height: 220
     ) {
         Container (root) {
-            Card (panel) {
+            Card {
                 Text (body) { "Body" }
             }
-            Tooltip (hint, text: "Hint") {
+            Tooltip (text: "Hint") {
                 Text (label) { "Hover" }
             }
-            Dialog (modal, open: true, title: "Title") {
+            Dialog (open: true, title: "Title") {
                 Text (question) { "Are you sure?" }
             }
         }

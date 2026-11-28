@@ -140,8 +140,6 @@ pub enum Error {
     ReturnOutsideFunction,
     #[error("const requires an initializer")]
     ConstNoInitializer,
-    #[error("slot is not allowed at the component root: wrap it in a container")]
-    SlotAtRoot,
     #[error("{0} is a leaf widget: nested elements are not allowed")]
     LeafWidget(String),
 

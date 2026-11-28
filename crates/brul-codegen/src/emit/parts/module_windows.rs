@@ -4,14 +4,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use brul_case::pascal;
-use brul_syntax::ast::Position;
 use brul_syntax::error::Error;
-use brul_syntax::markup::{Arg, Declaration, Element, Member};
+use brul_syntax::markup::{Arg, Declaration, Member};
 use brul_syntax::style::Stylesheet;
 use brul_syntax::types::Type;
 
+use crate::Resource;
 use crate::error_at;
-use crate::{Definition, Resource};
 
 use super::CodegenContext;
 use super::Emit;
@@ -112,34 +111,6 @@ pub(super) fn unique(name: &str, used: &mut HashSet<String>) -> String {
         index += 1;
     }
     candidate
-}
-
-pub(super) fn definition_root(definition: &Definition) -> Result<&Element, Error> {
-    let position = Position { line: 1, column: 1 };
-    let mut roots = definition
-        .declaration
-        .members
-        .iter()
-        .filter_map(|member| match member {
-            Member::Element(element) => Some(element),
-            Member::Prop(_) | Member::Event(_) => None,
-        });
-    let Some(root) = roots.next() else {
-        return Err(error_at(
-            position,
-            format!("component '{}' has no root element", definition.name),
-        ));
-    };
-    if roots.next().is_some() {
-        return Err(error_at(
-            position,
-            format!(
-                "component '{}' has more than one root element",
-                definition.name
-            ),
-        ));
-    }
-    Ok(root)
 }
 
 pub(super) fn icon_resource<'a>(

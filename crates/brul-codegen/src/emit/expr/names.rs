@@ -136,7 +136,7 @@ fn members<'a>(members: &'a [Member], names: &mut Names<'a>) {
     for member in members {
         match member {
             Member::Prop(prop) => prop_node(prop, names),
-            Member::Event(_) => {}
+            Member::Event(_) | Member::Slot(_) => {}
             Member::Element(element) => element_node(element, names),
         }
     }

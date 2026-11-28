@@ -47,6 +47,7 @@ pub enum Member {
     Prop(Prop),
     Event(Event),
     Element(Element),
+    Slot(Slot),
 }
 
 #[derive(Debug, Clone)]

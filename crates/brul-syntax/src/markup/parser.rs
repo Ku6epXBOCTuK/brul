@@ -79,11 +79,10 @@ impl Cursor<'_> {
         let start = self.pos();
         if self.eat('@') {
             let name = self.ident()?;
-            let reason = match name.as_str() {
-                "slot" => Error::SlotAtRoot,
-                _ => return Err(self.error_at(start, Error::UnexpectedDirective(name.clone()))),
+            return match name.as_str() {
+                "slot" => Ok(Member::Slot(self.slot(start)?)),
+                _ => Err(self.error_at(start, Error::UnexpectedDirective(name.clone()))),
             };
-            return Err(self.error_at(start, reason));
         }
         let name = self.ident()?;
         match name.as_str() {
@@ -243,7 +242,7 @@ impl Cursor<'_> {
             return match name.as_str() {
                 "if" => self.if_block(start).map(BlockItem::If),
                 "each" => self.each_block(start).map(BlockItem::Each),
-                "slot" => self.slot(start),
+                "slot" => self.slot(start).map(BlockItem::Slot),
                 _ => Err(self.error_at(start, Error::UnexpectedDirective(name.clone()))),
             };
         }
@@ -254,7 +253,7 @@ impl Cursor<'_> {
         self.element(name, start).map(BlockItem::Element)
     }
 
-    fn slot(&mut self, start: usize) -> Result<BlockItem, Error> {
+    fn slot(&mut self, start: usize) -> Result<Slot, Error> {
         let name = if self.peek() == Some('(') {
             self.bump();
             let name = self.ident()?;
@@ -269,11 +268,11 @@ impl Cursor<'_> {
         } else {
             None
         };
-        Ok(BlockItem::Slot(Slot {
+        Ok(Slot {
             name,
             block,
             position: position(self, start),
-        }))
+        })
     }
 
     fn eat_directive(&mut self, name: &str) -> bool {

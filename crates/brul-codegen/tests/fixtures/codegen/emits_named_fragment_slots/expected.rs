@@ -101,13 +101,15 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
                     ],
                     events: &[
                     ],
-                    slots: &[],
+                    slots: &[
+                        brul::SlotArgument { name: "header", view: demo_slot1 },
+                        brul::SlotArgument { name: "footer", view: demo_slot2 },
+                    ],
                 })?;
                 bindings.extend(built.bindings);
                 handlers.extend(built.handlers);
                 props.extend(built.props);
-                let widget0 = demo_styled(built.widget.debug_named("Badge"), &[0], theme);
-                bindings.push(brul::Binding::new(component, widget0.id(), brul::BindingTarget::Class { table: demo_class_table(theme), expression: |component: &mut brul::Component| -> Result<brul::Dyn, brul::Error> { let value = brul::Dyn::text("tone".to_owned()); Ok(value) } }));
+                let widget0 = built.widget.debug_named("Badge");
                 widget0
             },
         ]).debug_named("Container").debug_source("input.brul")
@@ -121,26 +123,11 @@ pub fn demo_view(theme: Option<ThemeId>, build: &mut brul::Build, component: &br
 }
 
 #[allow(dead_code)]
-static DEMO_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 1]> = std::sync::LazyLock::new(|| [
-    brul::gui::Class {
-        layout: brul::gui::LayoutPatch { width: Some(brul::gui::Dimension::Px(10)), ..brul::gui::LayoutPatch::DEFAULT },
-        style: brul::gui::Layers::new(brul::gui::WidgetStylePatch { ..brul::gui::WidgetStylePatch::DEFAULT }),
-        text: brul::gui::Layers::new(brul::gui::TextStylePatch { ..brul::gui::TextStylePatch::DEFAULT }),
-        transitions: brul::gui::Transitions { ..brul::gui::Transitions::DEFAULT },
-    },
+static DEMO_CLASSES_NONE: std::sync::LazyLock<[brul::gui::Class; 0]> = std::sync::LazyLock::new(|| [
 ]);
 
 fn demo_classes(_theme: Option<&str>) -> &'static [brul::gui::Class] {
     &*DEMO_CLASSES_NONE
-}
-
-#[allow(dead_code)]
-fn demo_class_none(name: &str) -> Option<brul::gui::Class> {
-    brul::gui::style::class(demo_styles(), name, None).ok()
-}
-
-fn demo_class_table(_theme: Option<&str>) -> brul::ClassTable {
-    demo_class_none
 }
 
 #[allow(dead_code)]
@@ -174,22 +161,6 @@ fn demo_styles() -> &'static brul::style::Stylesheet {
                 ],
                 animations: vec![],
             },
-            s::ClassRule {
-                class: "primary".into(),
-                state: None,
-                properties: vec![
-                    s::Property { kind: s::Kind::Width, value: s::Value::Px(10.0) },
-                ],
-                animations: vec![],
-            },
-            s::ClassRule {
-                class: "tone".into(),
-                state: None,
-                properties: vec![
-                    s::Property { kind: s::Kind::Width, value: s::Value::Px(20.0) },
-                ],
-                animations: vec![],
-            },
         ],
     });
     &STYLES
@@ -218,7 +189,22 @@ pub fn badge_view(theme: Option<&str>, build: &mut brul::Build, component: &brul
     let mut handlers = Vec::new();
     let mut props = Vec::new();
     let widget = {
-        brul::gui::Widget::text("badge").debug_named("Text").debug_source("badge.brul")
+        let mut children = Vec::new();
+        {
+            let built = brul::slot(theme, build, "header")?;
+            bindings.extend(built.bindings);
+            handlers.extend(built.handlers);
+            props.extend(built.props);
+            children.extend(built.widget.into_children());
+        }        {
+            let built = brul::slot(theme, build, "footer")?;
+            bindings.extend(built.bindings);
+            handlers.extend(built.handlers);
+            props.extend(built.props);
+            children.extend(built.widget.into_children());
+        }
+        brul::gui::Widget::structure(children)
+.debug_source("badge.brul")
     };
     Ok(brul::Built {
         widget,
@@ -286,6 +272,30 @@ fn badge_styled(
 
 pub fn badge_script() -> Option<brul::Script> {
     None
+}
+
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+fn demo_slot1(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
+    let mut props = Vec::new();
+    let children = vec![
+        brul::gui::Widget::text("head").debug_named("Text"),
+    ];
+    let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
+    Ok(brul::Built { widget, bindings, handlers, props })
+}
+
+#[allow(unused_mut, unused_variables, clippy::let_and_return)]
+fn demo_slot2(theme: Option<&str>, build: &mut brul::Build, component: &brul::ComponentHandle) -> Result<brul::Built, brul::ViewError> {
+    let mut bindings = Vec::new();
+    let mut handlers = Vec::new();
+    let mut props = Vec::new();
+    let children = vec![
+        brul::gui::Widget::text("foot").debug_named("Text"),
+    ];
+    let widget = brul::gui::Widget::view(brul::gui::Direction::Column, children);
+    Ok(brul::Built { widget, bindings, handlers, props })
 }
 
 pub fn __brul_effects() -> brul::effect::Effects {

@@ -24,7 +24,7 @@ use super::StateKey;
 use super::StructureNames;
 use super::anchor;
 use super::classes::ClassNames;
-use super::view::ViewSpec;
+use super::view::{ViewRoot, ViewSpec};
 use super::{alloc, events, names, resources, script, state, theme};
 
 pub(super) use super::module_component::ViewKind;
@@ -301,7 +301,7 @@ fn module_at(
             ViewSpec {
                 name: &format!("{}_view", view.base),
                 source: &view.source,
-                root,
+                root: ViewRoot::Element(root),
                 handlers: &window_handlers,
                 attaches: &window_args.attaches,
                 attach_states: &attach_states,

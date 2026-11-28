@@ -219,7 +219,7 @@ fn window(components: &[Component]) -> String {
     {
         line(
             &mut out,
-            "            Button (theme-toggle, label: \"Switch theme\", on clicked: toggleTheme) { }",
+            "            Button (label: \"Switch theme\", on clicked: toggleTheme) { }",
         );
     }
     for component in components {

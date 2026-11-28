@@ -1,5 +1,5 @@
 use brul_syntax::error::Error;
-use brul_syntax::markup::Element;
+use brul_syntax::markup::{Block, BlockItem, Element, Member};
 
 use crate::window::AttachArg;
 
@@ -7,14 +7,19 @@ use super::Emit;
 use super::Frame;
 use super::Out;
 use super::StateKey;
-use super::element::{HooksSpec, hooks_binding, widget};
+use super::element::{HooksSpec, hooks_binding, items_spliced, widget};
 use super::events::HandlerSpec;
 use super::module::ViewKind;
+
+pub(super) enum ViewRoot<'a> {
+    Element(&'a Element),
+    Members(Vec<&'a Member>),
+}
 
 pub(super) struct ViewSpec<'a> {
     pub(super) name: &'a str,
     pub(super) source: &'a str,
-    pub(super) root: &'a Element,
+    pub(super) root: ViewRoot<'a>,
     pub(super) handlers: &'a [HandlerSpec],
     pub(super) attaches: &'a [AttachArg],
     pub(super) attach_states: &'a [StateKey],
@@ -69,7 +74,31 @@ pub(super) fn view(
         }
         out.line(format_args!("let widget = {{"));
         let mut counter = 0;
-        out.indented(|out| widget(out, root, emit, frame, &mut counter))?;
+        match root {
+            ViewRoot::Element(element) => {
+                out.indented(|out| widget(out, element, emit, frame, &mut counter))?;
+            }
+            ViewRoot::Members(members) => {
+                let items: Vec<BlockItem> = members
+                    .iter()
+                    .filter_map(|member| match member {
+                        Member::Element(element) => Some(BlockItem::Element((*element).clone())),
+                        Member::Slot(slot) => Some(BlockItem::Slot((*slot).clone())),
+                        Member::Prop(_) | Member::Event(_) => None,
+                    })
+                    .collect();
+                let block = Block { items };
+                out.indented(|out| -> Result<(), Error> {
+                    out.line(format_args!("let mut children = Vec::new();"));
+                    items_spliced(out, &block, emit, frame, &mut counter)?;
+                    if !block.items.is_empty() {
+                        out.end();
+                    }
+                    out.line(format_args!("brul::gui::Widget::structure(children)"));
+                    Ok(())
+                })?;
+            }
+        }
         out.push(format_args!(".debug_source({source:?})"));
         out.end();
         out.line(format_args!("}};"));

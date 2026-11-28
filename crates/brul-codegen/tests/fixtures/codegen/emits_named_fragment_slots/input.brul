@@ -1,0 +1,14 @@
+<use>
+    import Badge from "./badge.brul";
+</use>
+
+<markup>
+window Demo (title: "demo") {
+    Container {
+        Badge {
+            @slot(header) { Text { "head" } }
+            @slot(footer) { Text { "foot" } }
+        }
+    }
+}
+</markup>
